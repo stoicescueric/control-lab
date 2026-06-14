@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glossary &amp; Cheat Sheet — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" />
+</head>
+<body data-page="glossary">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">📖 Reference</span>
+          <h1>Glossary &amp; Cheat Sheet</h1>
+          <p class="sub">Every term from this site, in one place, in plain English.</p>
+        </div>
+
+        <h2>🧭 Which tool should I use?</h2>
+        <p>A rough field guide. Real engineering mixes and matches, but this is a sane starting point.</p>
+
+        <h3>Picking a filter (to clean up measurements)</h3>
+        <table class="tidy">
+          <tr><th>If you…</th><th>Reach for</th></tr>
+          <tr><td>Just need quick, cheap smoothing of one shaky value</td><td><strong>Low-pass filter</strong></td></tr>
+          <tr><td>Want to flatten steady random jitter and don't mind some lag</td><td><strong>Moving average</strong></td></tr>
+          <tr><td>Have two sensors good in opposite ways (e.g. gyro + accelerometer)</td><td><strong>Complementary filter</strong></td></tr>
+          <tr><td>Need the best possible estimate of something moving predictably</td><td><strong>Kalman filter</strong></td></tr>
+          <tr><td>Same, but the sensor or motion is curvy/nonlinear (angles, GPS)</td><td><strong>Extended Kalman filter</strong></td></tr>
+        </table>
+
+        <h3>Picking a controller (to decide actions)</h3>
+        <table class="tidy">
+          <tr><th>If you…</th><th>Reach for</th></tr>
+          <tr><td>Have an actuator that's only ON/OFF and a slow system (heater, fridge)</td><td><strong>Bang-bang</strong></td></tr>
+          <tr><td>Need smooth, accurate control of most things (motors, drones, temperature)</td><td><strong>PID</strong></td></tr>
+          <tr><td>Must respect hard limits, plan ahead, or juggle several controls at once</td><td><strong>MPC</strong></td></tr>
+        </table>
+
+        <h3>On an FTC/FRC robot, specifically</h3>
+        <table class="tidy">
+          <tr><th>If you want to…</th><th>Reach for</th></tr>
+          <tr><td>Hold a steady speed or angle accurately and snappily</td><td><strong>Feedforward + PID</strong></td></tr>
+          <tr><td>Move a slide/arm/robot smoothly to a spot (no slamming)</td><td><strong>Motion profile</strong> + feedforward</td></tr>
+          <tr><td>Turn a joystick into wheel commands</td><td><strong>Drive kinematics</strong></td></tr>
+          <tr><td>Know where the robot is on the field</td><td><strong>Odometry</strong> (corrected by vision)</td></tr>
+          <tr><td>Follow a planned route in autonomous</td><td><strong>Pure pursuit</strong> / trajectory follower</td></tr>
+          <tr><td>Put a multi-joint arm's hand at a point</td><td><strong>Inverse kinematics</strong></td></tr>
+        </table>
+
+        <h2>📖 Glossary</h2>
+        <div id="glossary"></div>
+
+        <h2>🤖 Robotics terms (FTC/FRC)</h2>
+        <div id="glossary-robo"></div>
+
+        <h2>🧠 The big picture in one breath</h2>
+        <div class="callout idea">
+          <span class="ic">🌟</span>
+          <div>A sensor gives you a <strong>noisy measurement</strong>. A <strong>filter</strong> turns it
+          into a trustworthy <strong>estimate</strong>. A <strong>controller</strong> compares that estimate
+          to your <strong>setpoint</strong>, computes the <strong>error</strong>, and chooses an
+          <strong>action</strong> for the <strong>actuator</strong>. The world changes, the sensor reads
+          again, and the whole <strong>feedback loop</strong> repeats — many times a second, forever. That's
+          control theory.</div>
+        </div>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script>
+    const TERMS = [
+      ["Actuator","The part that physically changes the world: a motor, heater, valve, or thruster. The controller's 'muscle'."],
+      ["Bang-bang control","A controller with only two outputs — full on or full off — with a deadband to stop frantic switching. Your thermostat."],
+      ["Closed loop","A system that measures its own result and corrects itself. The opposite of open loop. Synonym for feedback control."],
+      ["Complementary filter","A simple way to fuse two sensors that fail in opposite ways (one noisy, one drifty) into one good estimate."],
+      ["Controller","The rule that turns error into an action. PID, bang-bang, and MPC are all controllers."],
+      ["Cost function","In MPC, the scorecard that defines 'good': usually close to target + smooth + low effort. MPC picks the lowest-cost plan."],
+      ["Deadband / Hysteresis","A small gap around the target where a bang-bang controller does nothing, to prevent rapid on/off chattering."],
+      ["Derivative (D) term","The part of PID that reacts to how fast the error is changing — it eases off early to prevent overshoot. The 'brakes'."],
+      ["Drift","A slow, sneaky error that builds up over time, especially when you add up (integrate) a sensor's readings, like a gyroscope."],
+      ["Error","Setpoint minus measurement — how far off you currently are. The fuel for almost every controller."],
+      ["Estimate","A filter's best guess of the true value, cleaner than any single raw measurement."],
+      ["Extended Kalman Filter (EKF)","A Kalman filter upgraded for nonlinear (curvy) systems by approximating the curve with a straight line at each step."],
+      ["Feedback","Using the measured result to influence the next action. The core idea of all closed-loop control."],
+      ["Filter","Anything that turns noisy measurements into a cleaner estimate of the truth."],
+      ["Gain","A tuning number that sets how strongly a controller reacts (Kp, Ki, Kd in PID; the Kalman gain K in a Kalman filter)."],
+      ["Horizon","In MPC, how many steps into the future the controller plans. Longer horizon = more foresight."],
+      ["Integral (I) term","The part of PID that adds up past error over time, building effort until stubborn leftover error disappears."],
+      ["Jacobian","The 'local slope' of a curve. The EKF uses it to straighten nonlinear math near the current guess (just a bit of calculus)."],
+      ["Kalman filter","An optimal filter that repeatedly predicts then corrects, automatically balancing trust between its model and each measurement."],
+      ["Kalman gain (K)","The number the Kalman filter computes each step to decide how much to trust the new measurement vs. its prediction."],
+      ["Linear / Nonlinear","Linear = straight-line, simple-proportion relationships. Nonlinear = curves, angles, squaring — the harder, real-world case."],
+      ["Low-pass filter","A filter that lets slow changes through and blocks fast ones — perfect for removing fast, jittery noise."],
+      ["Measurement","What a sensor actually reports: the true value plus noise. Never perfectly trustworthy."],
+      ["Model","A formula that predicts how a system will respond to an action. The brain of a Kalman filter and of MPC."],
+      ["Model Predictive Control (MPC)","A controller that simulates several future plans each step, picks the best, takes one step, and re-plans. The chess player."],
+      ["Moving average","A filter that reports the average of the last N readings, sliding the window forward as new data arrives."],
+      ["Noise","The random junk added on top of the true signal: jitter, spikes, and drift."],
+      ["Open loop","Acting without checking the result (a microwave timer). Simple, but helpless against surprises."],
+      ["Overshoot","When a controller blows past the target before settling — usually from too much gain or too little damping."],
+      ["PID controller","Proportional + Integral + Derivative: three reactions to error, added together. The world's most-used controller."],
+      ["Proportional (P) term","The part of PID that pushes in proportion to the current error: bigger gap, harder push."],
+      ["Receding horizon","MPC's habit of always re-planning from the present moment — the plan's window keeps sliding forward."],
+      ["Sampling / Sample rate","Reading a sensor at regular instants (e.g. 100 times a second) instead of continuously."],
+      ["Sensor","A device that measures something about the world — and always adds a little noise while doing it."],
+      ["Setpoint","The value you want the system to reach and hold. Also called the target or reference."],
+      ["Settling time","How long a system takes to get close to the target and stay there after a change."],
+      ["Signal","A value that changes over time — temperature, height, speed — that we try to measure and control."],
+      ["Steady-state error","A leftover, permanent gap between where you are and the target. The integral (I) term exists to kill it."],
+      ["Uncertainty / Covariance","How unsure a filter is about its estimate. The Kalman filter tracks this and uses it to weigh new measurements."],
+    ];
+    const ROBO_TERMS = [
+      ["AprilTag","A printed square marker on the field. A camera that spots one gets an exact position fix — used to correct drifting odometry."],
+      ["Characterization","Measuring a mechanism's real kS, kV, kA constants by driving it through test moves. FRC's tool for this is called SysId."],
+      ["Dead wheel (odometry pod)","An unpowered omni wheel with its own encoder that just measures true ground travel, so drive-wheel slip can't corrupt odometry."],
+      ["Encoder","A sensor on a motor/shaft that counts 'ticks' as it turns, so you can work out distance, angle, and speed."],
+      ["Feedforward","Sending the motor the effort you already know it needs (to fight gravity, friction, drag) instead of waiting for error. Pairs with PID."],
+      ["Forward kinematics","Wheel/joint motions → where the robot or hand ends up. The 'easy direction.'"],
+      ["Gear ratio","How much the final output is geared up or down from the motor. Multiplies into your ticks-per-revolution math."],
+      ["IMU / Gyro","An onboard sensor that measures rotation. Usually the most trustworthy source of the robot's heading."],
+      ["Inverse kinematics (IK)","A target position → the joint angles (or wheel commands) that achieve it. The 'hard, useful direction.'"],
+      ["kS, kV, kA","The three feedforward constants: static friction volts, volts-per-speed, and volts-per-acceleration."],
+      ["Kinematics","The math linking how the chassis (or arm) moves to how each wheel (or joint) must move."],
+      ["Lookahead distance","In pure pursuit, how far ahead on the path the robot aims. Small = twitchy; large = cuts corners."],
+      ["Mecanum","A 4-wheel drive with diagonal rollers that can drive, strafe sideways, and turn. The common FTC drivetrain."],
+      ["Motion profile","A smooth, moment-by-moment schedule of position/velocity/acceleration that respects the mechanism's limits."],
+      ["Odometry","Tracking the robot's pose by adding up tiny movements measured by encoders and the gyro. Drifts over time."],
+      ["Pedro Pathing / Road Runner","Popular FTC libraries that build trajectories and follow paths for you, on top of odometry."],
+      ["Pose","The robot's position and heading together: (x, y, θ) on the field."],
+      ["Pure pursuit","A simple path follower: always steer toward a point a fixed distance ahead on the path."],
+      ["Swerve","A drivetrain where each corner module independently steers and drives — go any direction while facing any way."],
+      ["Tick","One count from an encoder. Convert ticks → metres using counts-per-rev, gear ratio, and wheel size."],
+      ["Trajectory","A path plus timing — where to be AND how fast — usually a path with a motion profile applied."],
+      ["Trapezoidal profile","The most common motion profile: ramp speed up, cruise, ramp down. Its velocity graph is a trapezoid."],
+      ["WPILib","The official FRC software library (Java/C++/Python) with ready-made PID, feedforward, kinematics, and odometry."],
+    ];
+    const render = (id, list) => {
+      document.getElementById(id).innerHTML = '<table class="tidy"><tbody>' +
+        list.map(([t,d]) => `<tr><td style="white-space:nowrap;font-weight:700">${t}</td><td>${d}</td></tr>`).join("") +
+        '</tbody></table>';
+    };
+    render("glossary", TERMS);
+    render("glossary-robo", ROBO_TERMS);
+  </script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control &amp; Feedback — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔁</text></svg>" />
+</head>
+<body data-page="intro">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🔁 Foundations · Lesson 1</span>
+          <h1>Control &amp; Feedback</h1>
+          <p class="sub">The big idea behind every self-correcting machine — from a thermostat to a Mars lander.</p>
+        </div>
+
+        <p>
+          <strong>Control theory</strong> is the science of making something behave the way you want.
+          You have a <em>goal</em> (a room at 21°C, a drone hovering at 2 m, a car at 100 km/h)
+          and you have a <em>knob</em> you can turn (a heater, a motor, the gas pedal). Control
+          theory answers one question: <strong>how should I turn the knob, moment to moment, to
+          hit my goal and stay there — even when the world pushes back?</strong>
+        </p>
+
+        <div class="analogy">
+          <strong>🚿 Everyday analogy.</strong> Adjusting a shower is control theory. You feel the
+          water (a <em>measurement</em>), compare it to "comfy" (your <em>goal</em>), and nudge the
+          tap (your <em>action</em>). Too cold → turn toward hot. Too hot → back off. You repeat this
+          loop a few times a second without thinking. That loop is the heart of everything here.
+        </div>
+
+        <h2>The five words you'll see everywhere</h2>
+        <table class="tidy">
+          <tr><th>Word</th><th>Plain meaning</th><th>Shower example</th></tr>
+          <tr><td><strong>Setpoint</strong></td><td>The value you want</td><td>"Comfy" temperature</td></tr>
+          <tr><td><strong>Measurement</strong></td><td>What a sensor tells you right now</td><td>How the water feels</td></tr>
+          <tr><td><strong>Error</strong></td><td>Setpoint − measurement (how far off you are)</td><td>"It's 5° too cold"</td></tr>
+          <tr><td><strong>Controller</strong></td><td>The rule that turns error into an action</td><td>Your brain's "turn the tap" rule</td></tr>
+          <tr><td><strong>Actuator</strong></td><td>The thing that actually changes the world</td><td>The tap / valve</td></tr>
+        </table>
+
+        <h2>Open loop vs. closed loop</h2>
+        <p>
+          There are two ways to control something. The difference is whether the machine
+          <strong>looks at the result</strong> and corrects itself.
+        </p>
+
+        <figure class="figure">
+          <svg viewBox="0 0 720 320" role="img" aria-label="Open loop and closed loop block diagrams">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#56617a"/>
+              </marker>
+              <marker id="arrowB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7"/>
+              </marker>
+            </defs>
+            <style>
+              .box{fill:#fff;stroke:#cdd6ea;stroke-width:2;rx:12}
+              .lbl{font:600 14px Inter,sans-serif;fill:#1c2333}
+              .cap{font:700 13px Inter,sans-serif;fill:#56617a}
+              .wire{stroke:#56617a;stroke-width:2;fill:none}
+              .wireB{stroke:#4f6cf7;stroke-width:2.5;fill:none}
+              .tiny{font:500 11px Inter,sans-serif;fill:#8a93a8}
+            </style>
+
+            <!-- OPEN LOOP -->
+            <text x="20" y="28" class="cap">OPEN LOOP — "fire and hope"</text>
+            <rect class="box" x="40"  y="50" width="120" height="48" rx="12"/>
+            <text x="100" y="79" class="lbl" text-anchor="middle">Controller</text>
+            <rect class="box" x="230" y="50" width="120" height="48" rx="12"/>
+            <text x="290" y="79" class="lbl" text-anchor="middle">System</text>
+            <line class="wire" x1="160" y1="74" x2="228" y2="74" marker-end="url(#arrow)"/>
+            <line class="wire" x1="350" y1="74" x2="430" y2="74" marker-end="url(#arrow)"/>
+            <text x="440" y="79" class="lbl">Output</text>
+            <text x="195" y="42" class="tiny" text-anchor="middle">action</text>
+            <text x="560" y="76" class="tiny">no one checks the result ✗</text>
+
+            <!-- CLOSED LOOP -->
+            <text x="20" y="160" class="cap" style="fill:#3a52d6">CLOSED LOOP — "look and correct" ✓</text>
+            <circle cx="70" cy="205" r="16" fill="#fff" stroke="#4f6cf7" stroke-width="2"/>
+            <text x="70" y="210" class="lbl" text-anchor="middle">∑</text>
+            <text x="70" y="180" class="tiny" text-anchor="middle">setpoint</text>
+            <line class="wireB" x1="20" y1="205" x2="52" y2="205" marker-end="url(#arrowB)"/>
+            <rect class="box" x="110" y="181" width="120" height="48" rx="12" style="stroke:#4f6cf7"/>
+            <text x="170" y="210" class="lbl" text-anchor="middle">Controller</text>
+            <line class="wireB" x1="86" y1="205" x2="108" y2="205" marker-end="url(#arrowB)"/>
+            <text x="98" y="198" class="tiny">error</text>
+            <rect class="box" x="290" y="181" width="120" height="48" rx="12" style="stroke:#4f6cf7"/>
+            <text x="350" y="210" class="lbl" text-anchor="middle">System</text>
+            <line class="wireB" x1="230" y1="205" x2="288" y2="205" marker-end="url(#arrowB)"/>
+            <line class="wireB" x1="410" y1="205" x2="500" y2="205" marker-end="url(#arrowB)"/>
+            <text x="512" y="210" class="lbl">Output</text>
+            <!-- feedback path -->
+            <path class="wireB" d="M470 205 L470 285 L70 285 L70 223" marker-end="url(#arrowB)"/>
+            <rect class="box" x="250" y="262" width="90" height="40" rx="10" style="stroke:#11b5a4"/>
+            <text x="295" y="287" class="lbl" text-anchor="middle" style="fill:#0c8174">Sensor</text>
+            <text x="150" y="300" class="tiny">measurement fed back ↩</text>
+          </svg>
+          <figcaption>Open loop never checks itself. Closed loop measures the result, computes the
+            <em>error</em>, and feeds it back — that loop is what makes machines self-correcting.</figcaption>
+        </figure>
+
+        <div class="callout tip">
+          <span class="ic">✅</span>
+          <div><strong>Open loop</strong> works only if nothing surprising happens (a microwave runs
+          for 30 s no matter what). <strong>Closed loop</strong> (feedback) survives the real world —
+          wind, friction, a heavier load — because it keeps watching and adjusting.</div>
+        </div>
+
+        <h2>See it: a heater fighting the cold</h2>
+        <p>
+          Below, two identical rooms warm up toward <strong>21°C</strong>. The <span style="color:#b06e02"><strong>open-loop</strong></span>
+          room runs its heater at one fixed power. The <span style="color:#0c8174"><strong>closed-loop</strong></span>
+          room measures its own temperature and adjusts. Now <strong>drag the outdoor temperature</strong>
+          slider to make it colder or warmer — watch which room keeps its cool (well… its warmth).
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Open loop vs. closed loop heating</div>
+          <canvas id="heatCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#ffc24d"></i> Closed-loop room (feedback)</span>
+            <span><i style="background:#ff6f9c"></i> Open-loop room (fixed power)</span>
+            <span><i style="background:#6f8bff" class="dot"></i> Setpoint 21°C</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="outTemp">Outdoor temperature <span class="val" id="outTemp-val"></span></label>
+              <input type="range" id="outTemp" min="-10" max="25" step="1" value="5" />
+              <div class="hint">Drag me down — feel the open-loop room get cold.</div>
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn" id="heatGust">🌬️ Open a window (disturbance)</button>
+            <button class="demo-btn" id="heatReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Closed-loop: <b id="roClosed">—</b></span>
+            <span>Open-loop: <b id="roOpen">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">💡</span>
+          <div><strong>What you should notice:</strong> the closed-loop room hugs 21°C no matter how
+          cold it gets outside, because its error grows and the controller pushes harder. The open-loop
+          room has no idea it's failing — it just keeps doing the same thing. <em>That's why feedback
+          is everywhere.</em></div>
+        </div>
+
+        <h2>Where this is going</h2>
+        <p>The rest of this site splits into the two jobs inside that loop:</p>
+        <ul class="clean">
+          <li><strong>Filters</strong> (next few lessons) clean up the noisy <em>measurement</em> so the
+            controller isn't fooled by sensor jitter.</li>
+          <li><strong>Controllers</strong> (PID, bang-bang, MPC) are the <em>rules</em> that turn error
+            into smart actions.</li>
+        </ul>
+        <p>First we need to understand what sensors actually hand us — and why it's messier than you'd think.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const plot = new Plot("heatCanvas", { height: 280, xmin: 0, xmax: 30, ymin: -12, ymax: 30,
+      padL: 40, xLabel: "seconds", yLabel: "°C" });
+
+    const SET = 21;
+    let outDial = 5;
+    const sim = {};
+    const tClosed = new Trace(900), tOpen = new Trace(900), tOut = new Trace(900);
+    let t = 0;
+    // Open-loop heater power is fixed to what's needed when it's +5°C outside.
+    const lossK = 0.09;            // how fast heat leaks out
+    const heatGain = 1.0;
+    const openPower = lossK * (SET - 5) / heatGain;  // "set once and forget"
+
+    function reset() {
+      sim.closed = 12; sim.open = 12; sim.integ = 0;
+      tClosed.clear(); tOpen.clear(); tOut.clear(); t = 0;
+    }
+    reset();
+
+    let gust = 0;
+    function step(dt) {
+      const out = outDial + gust;
+      gust *= 0.98; // window-open disturbance fades
+
+      // closed loop: simple proportional + a little integral so it nails the setpoint
+      const err = SET - sim.closed;
+      sim.integ = Math.max(-3, Math.min(3, sim.integ + err * dt * 0.25));
+      let u = 0.18 * err + sim.integ;
+      u = Math.max(0, Math.min(3, u));                 // heater can't cool, has a max
+      sim.closed += (heatGain * u - lossK * (sim.closed - out)) * dt;
+
+      // open loop: fixed power forever
+      sim.open += (heatGain * openPower - lossK * (sim.open - out)) * dt;
+
+      t += dt;
+      tClosed.push(t, sim.closed);
+      tOpen.push(t, sim.open);
+    }
+
+    function draw() {
+      plot.setX(Math.max(0, t - 30), Math.max(30, t));
+      plot.clear(); plot.grid();
+      plot.hline(SET, { color: "#6f8bff", dash: [6, 5], width: 1.5 });
+      plot.clip(() => {
+        plot.line(tOpen.points(), { color: "#ff6f9c", width: 2.5 });
+        plot.line(tClosed.points(), { color: "#ffc24d", width: 2.5 });
+      });
+      $("roClosed").textContent = sim.closed.toFixed(1) + " °C";
+      $("roOpen").textContent = sim.open.toFixed(1) + " °C";
+    }
+
+    let acc = 0, last = performance.now();
+    function loop(now) {
+      let frame = (now - last) / 1000; last = now;
+      frame = Math.min(frame, 0.05);
+      acc += frame;
+      const dt = 1 / 60;
+      let n = 0;
+      while (acc >= dt && n < 8) { step(dt * 4); acc -= dt; n++; } // 4x sim speed
+      draw();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    bindSlider("outTemp", { fmt: (v) => v + " °C", onChange: (v) => (outDial = v) });
+    $("heatGust").addEventListener("click", () => (gust -= 12));
+    $("heatReset").addEventListener("click", reset);
+  })();
+  </script>
+</body>
+</html>

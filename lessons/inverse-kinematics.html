@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inverse Kinematics — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦾</text></svg>" />
+</head>
+<body data-page="inverse-kinematics">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🦾 Robotics (FTC/FRC) · Lesson 17</span>
+          <h1>Inverse Kinematics</h1>
+          <p class="sub">"Put the claw <em>there</em>." Working out the joint angles that make a point in space happen.</p>
+        </div>
+
+        <p>
+          Lots of FTC/FRC robots have a jointed arm: a shoulder, an elbow, a claw on the end. You don't think in
+          joint angles — you think "reach the high junction" or "grab the sample at that spot." Turning a
+          target <strong>position</strong> into the <strong>joint angles</strong> that get you there is
+          <strong>inverse kinematics</strong> (IK). It's the same "go to a point" goal as path following, but for
+          an arm instead of a drivetrain.
+        </p>
+
+        <h2>Forward first: angles → position</h2>
+        <p>
+          The easy direction is <strong>forward kinematics</strong>: if you know the angles, where's the hand?
+          For a two-joint arm with link lengths <code>L₁</code> and <code>L₂</code>, shoulder angle
+          <code>θ₁</code>, and elbow angle <code>θ₂</code> (measured relative to the first link), you just add up
+          the two links:
+        </p>
+        <div class="formula">
+          x = <span class="c-teal">L₁·cos(θ₁)</span> + <span class="c-amber">L₂·cos(θ₁ + θ₂)</span><br>
+          y = <span class="c-teal">L₁·sin(θ₁)</span> + <span class="c-amber">L₂·sin(θ₁ + θ₂)</span>
+        </div>
+
+        <h2>The hard, useful direction: position → angles</h2>
+        <p>
+          Now run it backwards. Given a target <code>(x, y)</code>, find <code>θ₁</code> and <code>θ₂</code>.
+          This is where a little triangle geometry — the <strong>law of cosines</strong> — does all the work.
+          Picture the two links plus the straight line from the shoulder to the target: that's a triangle with
+          sides <code>L₁</code>, <code>L₂</code>, and <code>r</code> (the distance to the target).
+        </p>
+        <ol class="derive">
+          <li>Distance to the target: <code>r² = x² + y²</code>.</li>
+          <li>The elbow angle comes straight from the law of cosines:</li>
+        </ol>
+        <div class="formula">
+          cos(θ₂) = <span class="c-rose">(r² − L₁² − L₂²) / (2·L₁·L₂)</span><br>
+          θ₂ = <span class="c-rose">± arccos( … )</span> &nbsp;<span class="small">← two answers: elbow-up or elbow-down</span>
+        </div>
+        <ol class="derive" start="3">
+          <li>Then the shoulder angle: aim the whole arm at the target, then back off by the angle the second
+            link contributes.</li>
+        </ol>
+        <div class="formula">
+          θ₁ = <span class="c-brand">atan2(y, x)</span> − <span class="c-amber">atan2( L₂·sin(θ₂), &nbsp;L₁ + L₂·cos(θ₂) )</span>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">✌️</span>
+          <div><strong>Two solutions, always.</strong> Your elbow can bend two ways to reach the same point —
+          "elbow up" and "elbow down" (the <code>±</code> on θ₂). Real robots pick whichever avoids hitting the
+          robot, the floor, or the game element. Toggle it in the demo and watch the arm flip.</div>
+        </div>
+
+        <div class="callout math">
+          <span class="ic">🧭</span>
+          <div><strong>Why <code>atan2</code> and not plain <code>atan</code>?</strong> <code>atan2(y, x)</code>
+          knows which <em>quadrant</em> the target is in, so it gives the correct angle all the way around the
+          circle (behind the robot, above, below). Plain <code>atan(y/x)</code> can't tell left from right and
+          will silently point the arm the wrong way. Always use <code>atan2</code> for directions.</div>
+        </div>
+
+        <h2>Can it even reach?</h2>
+        <p>
+          A two-link arm can only touch points inside a ring: no further than <code>L₁ + L₂</code> (arm straight
+          out) and no closer than <code>|L₁ − L₂|</code> (arm folded back). Ask for a point outside that ring and
+          <code>cos(θ₂)</code> comes out beyond ±1 — the math's way of saying "impossible." Good code checks for
+          this; the demo shades the reachable ring and shows what happens when you drag the target past it.
+        </p>
+
+        <h2>Aim the arm: drag the target</h2>
+        <p>
+          Drag the <span style="color:#ff6f9c">pink target</span> anywhere. The arm solves IK every frame to put
+          its hand on it. Change the link lengths, flip the elbow, and pull the target outside the
+          <span style="color:#2fd3c0">reachable ring</span> to see it max out.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Two-joint arm IK — drag the target</div>
+          <canvas id="ikCanvas"></canvas>
+          <div class="kbd-tip" style="color:#8294b8;margin-top:6px">Drag the pink dot. The shaded ring is everywhere the hand can reach.</div>
+          <div class="controls">
+            <div class="control">
+              <label for="l1">Upper arm L₁ <span class="val" id="l1-val"></span></label>
+              <input type="range" id="l1" min="40" max="160" step="2" value="110" />
+            </div>
+            <div class="control">
+              <label for="l2">Forearm L₂ <span class="val" id="l2-val"></span></label>
+              <input type="range" id="l2" min="40" max="160" step="2" value="90" />
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn primary active" id="elbow">Elbow: up</button>
+            <button class="demo-btn" id="ikReset">↺ Reset target</button>
+          </div>
+          <div class="readout">
+            <span>Shoulder θ₁: <b id="roT1">—</b></span>
+            <span>Elbow θ₂: <b id="roT2">—</b></span>
+            <span>Status: <b id="roReach">—</b></span>
+          </div>
+        </div>
+
+        <div class="code-label"><span class="badge ftc">FTC</span><span class="badge frc">FRC</span> the solver, ready to paste</div>
+        <pre class="code"><code>static final double L1 = 0.45, L2 = 0.40;   // link lengths, metres
+
+// Returns {shoulder, elbow} radians, or null if the point is out of reach.
+double[] solveIK(double x, double y, boolean elbowDown) {
+    double r2   = x*x + y*y;
+    double cos2 = (r2 - L1*L1 - L2*L2) / (2 * L1 * L2);
+    if (cos2 &lt; -1 || cos2 &gt; 1) return null;          // unreachable
+
+    double theta2 = Math.acos(cos2);
+    if (elbowDown) theta2 = -theta2;                    // the other solution
+
+    double theta1 = Math.atan2(y, x)
+                  - Math.atan2(L2 * Math.sin(theta2), L1 + L2 * Math.cos(theta2));
+    return new double[] { theta1, theta2 };
+}
+
+// In your loop: solve, then send each joint to its angle.
+double[] goal = solveIK(targetX, targetY, /*elbowDown=*/ false);
+if (goal != null) {
+    shoulder.setGoal(goal[0]);   // a ProfiledPIDController (Lesson 13)
+    elbow.setGoal(goal[1]);      //   + ArmFeedforward kG·cos (Lesson 12)
+}</code></pre>
+
+        <div class="callout tip">
+          <span class="ic">🔗</span>
+          <div><strong>This is where the whole track comes together.</strong> IK tells each joint <em>what angle
+          to hit</em>. A <strong>motion profile</strong> (Lesson 13) gets it there smoothly,
+          <strong>feedforward</strong> (Lesson 12) cancels gravity with <code>kG·cos(θ)</code>, and
+          <strong>PID</strong> (Lesson 8) cleans up the rest. Five lessons, one arm.</div>
+        </div>
+
+        <h2>You made it — what now?</h2>
+        <p>
+          You've gone from "what is feedback?" to estimating a robot's pose and driving it along a planned path
+          with a profiled, feed-forwarded arm on top. That's the real backbone of a competitive FTC/FRC robot.
+          The honest next step is the fun one: <strong>open your robot project and start typing.</strong> Pick one
+          mechanism, get ticks→metres right, add feedforward, then a profile, and watch it come alive. The rest
+          of the understanding arrives the moment it moves.
+        </p>
+
+        <div class="callout idea">
+          <span class="ic">📚</span>
+          <div><strong>Where to go deeper:</strong> the <em>WPILib docs</em> (FRC), <em>Game Manual 0</em> and
+          <em>Road Runner</em> / <em>Pedro Pathing</em> docs (FTC), and <em>FRC SysId</em> for measuring kS/kV/kA.
+          Everything you built intuition for here has a polished, battle-tested version in those libraries.</div>
+        </div>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script>
+  (function () {
+    const cv=document.getElementById("ikCanvas"), cx=cv.getContext("2d");
+    function size(){const dpr=window.devicePixelRatio||1;const w=cv.clientWidth||600;const h=400;
+      cv.style.height=h+"px";cv.width=w*dpr;cv.height=h*dpr;cx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h;}
+    size();window.addEventListener("resize",size);
+
+    let L1=110, L2=90, elbowDown=false;
+    let baseX, baseY, targetX, targetY;       // math coords (y up) relative to base for target stored as offset
+    function placeBase(){baseX=cv._w/2; baseY=cv._h-40;}
+    function resetTarget(){targetX=80; targetY=150;}  // offset from base, y up
+    placeBase(); resetTarget();
+    window.addEventListener("resize",()=>{placeBase();});
+
+    // eased current angles
+    let a1=0.6, a2=0.8;
+
+    function solveIK(x,y,down){
+      const r2=x*x+y*y;
+      let cos2=(r2-L1*L1-L2*L2)/(2*L1*L2);
+      const reachable=(cos2>=-1&&cos2<=1);
+      cos2=Math.max(-1,Math.min(1,cos2));
+      let t2=Math.acos(cos2); if(down)t2=-t2;
+      const t1=Math.atan2(y,x)-Math.atan2(L2*Math.sin(t2),L1+L2*Math.cos(t2));
+      return {t1,t2,reachable};
+    }
+
+    function draw(){
+      const w=cv._w,h=cv._h;
+      cx.fillStyle="#0b1120";cx.fillRect(0,0,w,h);
+      cx.strokeStyle="rgba(255,255,255,0.06)";cx.lineWidth=1;
+      for(let x=0;x<=w;x+=40){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+      for(let y=0;y<=h;y+=40){cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+
+      // reachable ring (annulus) — clip to make a donut
+      const outR=L1+L2, inR=Math.abs(L1-L2);
+      cx.save();
+      cx.beginPath();cx.arc(baseX,baseY,outR,0,7);
+      cx.arc(baseX,baseY,inR,0,7,true);
+      cx.fillStyle="rgba(47,211,192,0.08)";cx.fill("evenodd");
+      cx.restore();
+      cx.strokeStyle="rgba(47,211,192,0.35)";cx.lineWidth=1.5;cx.setLineDash([5,5]);
+      cx.beginPath();cx.arc(baseX,baseY,outR,0,7);cx.stroke();
+      if(inR>1){cx.beginPath();cx.arc(baseX,baseY,inR,0,7);cx.stroke();}
+      cx.setLineDash([]);
+
+      // solve IK toward the target offset
+      const sol=solveIK(targetX,targetY,elbowDown);
+      // ease angles for smooth motion
+      a1+=(sol.t1-a1)*0.25; a2+=(sol.t2-a2)*0.25;
+
+      // FK in math coords, map to screen (y up -> y down)
+      const jx=baseX+L1*Math.cos(a1), jy=baseY-L1*Math.sin(a1);
+      const hx=baseX+L1*Math.cos(a1)+L2*Math.cos(a1+a2);
+      const hy=baseY-(L1*Math.sin(a1)+L2*Math.sin(a1+a2));
+
+      // base
+      cx.fillStyle="#16203a";cx.strokeStyle="#4f6cf7";cx.lineWidth=2;
+      cx.beginPath();cx.arc(baseX,baseY,12,0,7);cx.fill();cx.stroke();
+      // link 1
+      cx.strokeStyle="#2fd3c0";cx.lineWidth=10;cx.lineCap="round";
+      cx.beginPath();cx.moveTo(baseX,baseY);cx.lineTo(jx,jy);cx.stroke();
+      // link 2
+      cx.strokeStyle="#ffc24d";
+      cx.beginPath();cx.moveTo(jx,jy);cx.lineTo(hx,hy);cx.stroke();
+      // joints
+      cx.fillStyle="#cfe0ff";cx.beginPath();cx.arc(jx,jy,6,0,7);cx.fill();
+      // hand / claw
+      cx.fillStyle="#e8eefc";cx.beginPath();cx.arc(hx,hy,7,0,7);cx.fill();
+
+      // target marker (screen pos)
+      const txs=baseX+targetX, tys=baseY-targetY;
+      cx.strokeStyle="#ff6f9c";cx.lineWidth=2;
+      cx.beginPath();cx.arc(txs,tys,9,0,7);cx.stroke();
+      cx.beginPath();cx.moveTo(txs-13,tys);cx.lineTo(txs+13,tys);cx.moveTo(txs,tys-13);cx.lineTo(txs,tys+13);cx.stroke();
+      // if unreachable, dashed line from hand to target
+      if(!sol.reachable){cx.strokeStyle="rgba(255,111,156,0.6)";cx.setLineDash([4,4]);
+        cx.beginPath();cx.moveTo(hx,hy);cx.lineTo(txs,tys);cx.stroke();cx.setLineDash([]);}
+
+      $("roT1").textContent=(a1*180/Math.PI).toFixed(0)+"°";
+      $("roT2").textContent=(a2*180/Math.PI).toFixed(0)+"°";
+      $("roReach").textContent=sol.reachable?"reachable ✓":"out of reach — maxed out";
+      $("roReach").style.color=sol.reachable?"#5ce08a":"#ff6f9c";
+    }
+
+    function loop(){draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("l1",{fmt:(v)=>(v/100).toFixed(2)+" m",onChange:(v)=>L1=v});
+    bindSlider("l2",{fmt:(v)=>(v/100).toFixed(2)+" m",onChange:(v)=>L2=v});
+    $("elbow").addEventListener("click",()=>{elbowDown=!elbowDown;const b=$("elbow");
+      b.textContent="Elbow: "+(elbowDown?"down":"up");});
+    $("ikReset").addEventListener("click",resetTarget);
+
+    // drag target
+    let drag=false;
+    function pos(ev){const r=cv.getBoundingClientRect();
+      const mx=(ev.touches?ev.touches[0].clientX:ev.clientX)-r.left;
+      const my=(ev.touches?ev.touches[0].clientY:ev.clientY)-r.top;
+      targetX=mx-baseX; targetY=baseY-my;}
+    cv.addEventListener("mousedown",(e)=>{drag=true;pos(e);});
+    window.addEventListener("mousemove",(e)=>{if(drag)pos(e);});
+    window.addEventListener("mouseup",()=>drag=false);
+    cv.addEventListener("touchstart",(e)=>{drag=true;pos(e);e.preventDefault();},{passive:false});
+    cv.addEventListener("touchmove",(e)=>{if(drag){pos(e);e.preventDefault();}},{passive:false});
+    window.addEventListener("touchend",()=>drag=false);
+  })();
+  </script>
+</body>
+</html>

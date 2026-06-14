@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feedforward (kS, kV, kA) — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>➡️</text></svg>" />
+  <style>
+    .vbars{display:grid;gap:10px;margin-top:16px}
+    .vbar{display:grid;grid-template-columns:96px 1fr 70px;align-items:center;gap:10px}
+    .vbar .name{font-weight:700;font-size:.85rem}
+    .vbar .track{position:relative;height:14px;background:#1a2440;border-radius:7px;overflow:hidden}
+    .vbar .fill{position:absolute;top:0;bottom:0;left:0;border-radius:7px}
+    .vbar .num{font-family:var(--mono);font-size:.82rem;text-align:right;color:#fff}
+  </style>
+</head>
+<body data-page="feedforward">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">➡️ Robotics (FTC/FRC) · Lesson 12</span>
+          <h1>Feedforward — predict, don't just react</h1>
+          <p class="sub">The upgrade that turns a sluggish, twitchy PID loop into a crisp one. kS, kV, kA.</p>
+        </div>
+
+        <p>
+          PID has a weakness: it's <strong>reactive</strong>. It does nothing until an error appears, then
+          scrambles to fix it. But on a robot you often <em>already know</em> roughly what it'll take. Want
+          the drivetrain at 3&nbsp;m/s? You know about how much voltage that needs. Holding an arm out
+          sideways? You know gravity is pulling on it. <strong>Feedforward</strong> is you handing the motor
+          that known answer <em>up front</em>, so PID only has to clean up the small leftover.
+        </p>
+
+        <div class="analogy">
+          <strong>🚗 Driving up a hill.</strong> A good driver presses the gas <em>before</em> the car slows
+          down, because they can see the hill coming. A purely reactive driver waits until the car is already
+          crawling, then stomps the pedal — lurchy and late. Feedforward is "see the hill, press the gas."
+          PID is "notice you slowed down, correct it."
+        </div>
+
+        <h2>The formula that runs FRC drivetrains</h2>
+        <p>
+          The workhorse is WPILib's <code>SimpleMotorFeedforward</code>. To get a mechanism to a target
+          <em>velocity</em> <code>v</code> (and optionally <em>acceleration</em> <code>a</code>), the voltage it
+          predicts is:
+        </p>
+
+        <div class="formula">
+          V = <span class="c-amber">kS·sign(v)</span> + <span class="c-teal">kV·v</span> + <span class="c-brand">kA·a</span>
+        </div>
+
+        <p>Three constants, each with a clear physical meaning:</p>
+        <table class="tidy">
+          <tr><th>Term</th><th>Fights…</th><th>In words</th></tr>
+          <tr><td><strong class="c-amber" style="color:#b06e02">kS</strong> — static</td><td>Friction / stiction</td>
+            <td>The minimum voltage just to get it <em>moving</em> at all. A fixed shove in the right direction.</td></tr>
+          <tr><td><strong style="color:#0c8174">kV</strong> — velocity</td><td>Back-EMF / drag</td>
+            <td>Volts per unit of speed. The bulk of the work: "to go this fast, hold this voltage."</td></tr>
+          <tr><td><strong style="color:#3a52d6">kA</strong> — acceleration</td><td>Inertia (mass)</td>
+            <td>Extra volts to <em>speed up</em> this fast. Only matters while the target is changing.</td></tr>
+        </table>
+
+        <div class="callout idea">
+          <span class="ic">🪜</span>
+          <div><strong>Two close cousins you'll meet:</strong> an <strong>arm</strong> also fights gravity that
+          changes with angle, so <code>ArmFeedforward</code> adds <code>kG·cos(θ)</code>. An
+          <strong>elevator</strong> fights constant gravity, so <code>ElevatorFeedforward</code> adds a plain
+          <code>kG</code>. Same idea, one extra term for weight.</div>
+        </div>
+
+        <h2>The golden pattern: feedforward + feedback</h2>
+        <p>
+          You almost never use feedforward <em>alone</em> (your constants are never perfect, and the world has
+          surprises) or PID <em>alone</em> (laggy). You add them. Feedforward does ~90% of the work instantly;
+          PID nudges the last bit and handles disturbances.
+        </p>
+
+        <div class="formula">
+          output = <span class="c-teal">feedforward(goal)</span> + <span class="c-rose">PID(measurement, goal)</span>
+        </div>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> velocity control, the standard recipe</div>
+        <pre class="code"><code>// Constants come from characterization (see below). Units: volts.
+SimpleMotorFeedforward ff  = new SimpleMotorFeedforward(kS, kV, kA);
+PIDController          pid = new PIDController(kP, 0, 0);
+
+@Override
+public void robotPeriodic() {
+    double goalVel = 3.0;                        // m/s we want right now
+    double measVel = encoder.getRate();          // m/s we actually have
+
+    double predict = ff.calculate(goalVel);       // the "press the gas early" part
+    double correct = pid.calculate(measVel, goalVel); // clean up the leftover error
+
+    motor.setVoltage(predict + correct);          // volts, not -1..1
+}</code></pre>
+
+        <div class="code-label"><span class="badge ftc">FTC</span> the same thing, written out by hand</div>
+        <pre class="code"><code>double predict = kS * Math.signum(goalVel) + kV * goalVel;  // (+ kA*goalAccel)
+double correct = kP * (goalVel - measVel);
+double volts   = predict + correct;
+
+// FTC motors take power in -1..1, so divide by the real battery voltage:
+motor.setPower(volts / battery.getVoltage());</code></pre>
+
+        <div class="callout tip">
+          <span class="ic">🔋</span>
+          <div><strong>Why divide by battery voltage?</strong> "0.5 power" means something different on a fresh
+          13&nbsp;V battery than a tired 11&nbsp;V one. Thinking in <em>volts</em> and dividing by the real pack
+          voltage makes your robot behave the same all match long. WPILib's <code>setVoltage()</code> does this
+          for you.</div>
+        </div>
+
+        <h2>See the difference: spin up a flywheel</h2>
+        <p>
+          This motor must reach the dashed target speed. Toggle <strong>feedforward</strong> on and off with the
+          same gains and watch what happens. The bars show how the output voltage splits between the
+          <span style="color:#5ce08a">feedforward prediction</span> and the
+          <span style="color:#ffc24d">PID correction</span>.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Velocity control — feedforward vs. PID-only</div>
+          <canvas id="ffPlot"></canvas>
+          <div class="legend">
+            <span><i style="background:#6f8bff" class="dot"></i> Target</span>
+            <span><i style="background:#5ce08a"></i> Speed (FF + PID)</span>
+            <span><i style="background:#ff6f9c"></i> Speed (PID only)</span>
+          </div>
+
+          <div class="controls">
+            <div class="control">
+              <label for="goal">Target speed <span class="val" id="goal-val"></span></label>
+              <input type="range" id="goal" min="0" max="4" step="0.1" value="3" />
+            </div>
+            <div class="control">
+              <label for="kv">kV (your estimate) <span class="val" id="kv-val"></span></label>
+              <input type="range" id="kv" min="0" max="4" step="0.05" value="2.4" />
+              <div class="hint">True value ≈ 2.40. Try mistuning it.</div>
+            </div>
+            <div class="control">
+              <label for="kp">kP (feedback) <span class="val" id="kp-val"></span></label>
+              <input type="range" id="kp" min="0" max="12" step="0.1" value="2" />
+            </div>
+          </div>
+
+          <div class="vbars">
+            <div class="vbar"><span class="name" style="color:#5ce08a">Feedforward</span>
+              <div class="track"><div class="fill" id="barFF" style="background:#5ce08a"></div></div><span class="num" id="numFF">0 V</span></div>
+            <div class="vbar"><span class="name" style="color:#ffc24d">PID</span>
+              <div class="track"><div class="fill" id="barFB" style="background:#ffc24d"></div></div><span class="num" id="numFB">0 V</span></div>
+          </div>
+
+          <div class="demo-actions">
+            <button class="demo-btn primary active" id="ffToggle">Feedforward: ON</button>
+            <button class="demo-btn" id="step">⤓ Step the target</button>
+            <button class="demo-btn" id="load">🏋️ Sudden load</button>
+            <button class="demo-btn" id="ffReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Speed: <b id="roV">—</b></span>
+            <span>Target: <b id="roT">—</b></span>
+            <span>Error: <b id="roE">—</b></span>
+            <span>Voltage: <b id="roVolt">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">🧪</span>
+          <div><strong>Three things to try:</strong>
+            <ol style="margin:.4em 0 0">
+              <li>With FF <strong>ON</strong> and a tiny kP (say 2), it snaps to the target and sits there. The
+                green FF bar is doing almost all the work.</li>
+              <li>Turn FF <strong>OFF</strong>. Now PID alone with kP=2 settles <em>well below</em> the target —
+                classic steady-state error. To fix it you'd need a big kP (try cranking it) which makes it
+                twitchy and overshoot.</li>
+              <li>Turn FF back on, then mistune <strong>kV</strong> too low. The FF under-predicts and PID has to
+                make up the gap — you've lost the main benefit.</li>
+            </ol>
+          </div>
+        </div>
+
+        <h2>Where do kS, kV, kA come from?</h2>
+        <p>You don't guess them blindly. Two honest ways:</p>
+        <ul class="clean">
+          <li><strong>Measure (best).</strong> FRC's <strong>SysId</strong> tool drives the mechanism through
+            test patterns and computes kS, kV, kA for you. FTC folks do the same idea by hand or with library
+            tuners (Road Runner's tuning OpModes).</li>
+          <li><strong>Reason about it.</strong> <code>kV ≈ 12&nbsp;V ÷ (top speed)</code> — if full voltage gives
+            4.8&nbsp;m/s, then kV ≈ 12/4.8 = 2.5. <code>kS</code> = the voltage where it <em>just barely</em>
+            starts creeping. <code>kA</code> is smaller and trickier; SysId really earns its keep here.</li>
+        </ul>
+
+        <div class="callout warn">
+          <span class="ic">⚠️</span>
+          <div><strong>Feedforward needs trustworthy units.</strong> kV in "volts per m/s" only works if
+          <code>encoder.getRate()</code> really returns m/s. This is why Lesson 11's ticks→metres step has to be
+          right <em>first</em>. Garbage units in, garbage feedforward out.</div>
+        </div>
+
+        <p>
+          Feedforward shines brightest when the target is <em>moving</em> in a smooth, planned way — which is
+          exactly what a <strong>motion profile</strong> gives it. That's next.
+        </p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const plot=new Plot("ffPlot",{height:300,xmin:0,xmax:6,ymin:0,ymax:4.5,yLabel:"speed (m/s)",xLabel:"seconds"});
+    // true plant constants (what the motor really obeys)
+    const kS_true=0.7, kV_true=2.4, kA_true=0.5, kS_c=0.7;
+    let goal=3, kVc=2.4, kP=2, ffOn=true;
+    let vFF=0, vPB=0, t=0, loadFF=0, loadPB=0;
+    let lastFF=0, lastFB=0, lastV=0;
+    const tFF=new Trace(1500), tPB=new Trace(1500), tGoal=new Trace(1500);
+    const dt=1/200;
+
+    function reset(){vFF=0;vPB=0;t=0;loadFF=0;loadPB=0;tFF.clear();tPB.clear();tGoal.clear();}
+
+    function plant(v,V,load){
+      // first-order motor: a = (V - kV*v - kS*sign(v) - load) / kA
+      const drag=kV_true*v + kS_true*Math.sign(v||1) + load;
+      const a=(V-drag)/kA_true;
+      return v+a*dt;
+    }
+
+    function step(){
+      t+=dt;
+      // --- FF + PID controller ---
+      const eF=goal-vFF;
+      const ff = ffOn ? (kS_c*Math.sign(goal||1) + kVc*goal) : 0;
+      const fb = kP*eF;
+      let V=Math.max(-12,Math.min(12,ff+fb));
+      lastFF=ff; lastFB=V-ff; lastV=V;
+      vFF=plant(vFF,V,loadFF);
+      // --- PID-only controller (same kP), for comparison ---
+      let V2=Math.max(-12,Math.min(12,kP*(goal-vPB)));
+      vPB=plant(vPB,V2,loadPB);
+      loadFF*=0.99; loadPB*=0.99;
+      tGoal.push(t,goal); tFF.push(t,vFF); tPB.push(t,vPB);
+    }
+
+    function setBar(id,val){const el=$(id);el.style.width=Math.max(0,Math.min(1,Math.abs(val)/12))*100+"%";}
+    function draw(){
+      plot.setX(Math.max(0,t-6),Math.max(6,t));
+      plot.clear();plot.grid();
+      plot.clip(()=>{
+        plot.line(tGoal.points(),{color:"#6f8bff",width:1.5,dash:[6,5]});
+        plot.line(tPB.points(),{color:"#ff6f9c",width:2});
+        plot.line(tFF.points(),{color:"#5ce08a",width:3});
+      });
+      setBar("barFF",lastFF);setBar("barFB",lastFB);
+      $("numFF").textContent=lastFF.toFixed(1)+" V";
+      $("numFB").textContent=lastFB.toFixed(1)+" V";
+      $("roV").textContent=vFF.toFixed(2)+" m/s";
+      $("roT").textContent=goal.toFixed(2)+" m/s";
+      $("roE").textContent=(goal-vFF).toFixed(2)+" m/s";
+      $("roVolt").textContent=lastV.toFixed(2)+" V";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<60){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("goal",{fmt:(v)=>v.toFixed(1)+" m/s",onChange:(v)=>goal=v});
+    bindSlider("kv",{fmt:(v)=>v.toFixed(2),onChange:(v)=>kVc=v});
+    bindSlider("kp",{fmt:(v)=>v.toFixed(1),onChange:(v)=>kP=v});
+    $("ffToggle").addEventListener("click",()=>{ffOn=!ffOn;const b=$("ffToggle");
+      b.textContent="Feedforward: "+(ffOn?"ON":"OFF");b.classList.toggle("active",ffOn);b.classList.toggle("primary",ffOn);});
+    $("step").addEventListener("click",()=>{vFF=0;vPB=0;t=0;tFF.clear();tPB.clear();tGoal.clear();});
+    $("load").addEventListener("click",()=>{loadFF+=5;loadPB+=5;});
+    $("ffReset").addEventListener("click",reset);
+  })();
+  </script>
+</body>
+</html>

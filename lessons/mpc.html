@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Predictive Control — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔮</text></svg>" />
+</head>
+<body data-page="mpc">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🔮 Controllers · Lesson 10</span>
+          <h1>Model Predictive Control</h1>
+          <p class="sub">The controller that thinks before it acts — by simulating the future, over and over.</p>
+        </div>
+
+        <p>
+          PID and bang-bang are <em>reactive</em>: they look at the error right now and respond. <strong>Model
+          Predictive Control (MPC)</strong> is different — it's a <em>planner</em>. Before every move, it runs
+          a little simulation of the future in its head, tries out different plans, picks the best one… then
+          takes only the <strong>first step</strong> of that plan, and re-plans from scratch a moment later.
+        </p>
+
+        <div class="analogy">
+          <strong>♟️ Chess analogy.</strong> A good chess player doesn't just react to the last move — they
+          think "if I do this, then that, then…" several moves ahead, choose the best line, play one move,
+          then re-think on the next turn as the board changes. MPC plays your system like a game of chess.
+        </div>
+
+        <h2>The three ingredients</h2>
+        <div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr))">
+          <div class="card" style="cursor:default">
+            <span class="emoji">🧠</span><h3>A model</h3>
+            <p>A formula that predicts "if I push this hard, where will I be next?" The "M" in MPC.</p>
+          </div>
+          <div class="card" style="cursor:default">
+            <span class="emoji">🔭</span><h3>A horizon</h3>
+            <p>How many steps into the future to plan. Longer = more foresight, but more computing.</p>
+          </div>
+          <div class="card" style="cursor:default">
+            <span class="emoji">⚖️</span><h3>A cost</h3>
+            <p>What "good" means: get close to the target, but don't waste effort or move violently.</p>
+          </div>
+        </div>
+
+        <h2>The "receding horizon" loop</h2>
+        <figure class="figure">
+          <svg viewBox="0 0 640 200" role="img" aria-label="Receding horizon: plan ahead, take one step, repeat">
+            <defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#8b5cf6"/></marker></defs>
+            <style>.mt{font:600 12px Inter,sans-serif;fill:#56617a}.mb{font:700 13px Inter,sans-serif;fill:#1c2333}</style>
+            <text x="20" y="24" class="mb">Now</text>
+            <circle cx="40" cy="60" r="8" fill="#8b5cf6"/>
+            <!-- planned dashed -->
+            <path d="M40 60 C 150 40, 260 120, 380 70" fill="none" stroke="#8b5cf6" stroke-width="2.5" stroke-dasharray="6 5"/>
+            <circle cx="380" cy="70" r="6" fill="none" stroke="#8b5cf6" stroke-width="2"/>
+            <text x="200" y="35" class="mt" fill="#6d3fd1">imagined plan over the horizon →</text>
+            <!-- one step taken -->
+            <circle cx="78" cy="54" r="8" fill="#11b5a4"/>
+            <path d="M40 60 L72 55" stroke="#11b5a4" stroke-width="3" marker-end="url(#ma)"/>
+            <text x="60" y="92" class="mt" fill="#0c8174">take just the 1st step ✓</text>
+            <text x="430" y="74" class="mt">target 🎯</text>
+            <text x="20" y="150" class="mb">…then throw away the rest of the plan and do it all again from the new spot.</text>
+            <text x="20" y="172" class="mt">Re-planning constantly is what lets MPC handle surprises and obey limits.</text>
+          </svg>
+          <figcaption>Plan a whole future trajectory → commit to only the first step → re-plan. That
+            "always re-planning" trick is the secret to MPC's robustness.</figcaption>
+        </figure>
+
+        <h2>Watch it plan</h2>
+        <p>
+          The <span style="color:#b08bff"><strong>purple cart</strong></span> wants to reach the
+          <span style="color:#6f8bff"><strong>target flag</strong></span> and stop dead on it. The faint
+          <span style="color:#b08bff"><strong>ghost trail</strong></span> ahead of it is the plan MPC is
+          imagining <em>right now</em> for the next few seconds — you'll see it constantly redrawn.
+          <strong>Drag the flag</strong> and watch the plan instantly re-route.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> MPC planning — drag the target!</div>
+          <div class="stage split">
+            <div>
+              <canvas id="mpcLane"></canvas>
+              <div class="kbd-tip" style="color:#8294b8;margin-top:6px">↔ Drag inside this box to move the target.</div>
+            </div>
+            <div>
+              <canvas id="mpcPlot"></canvas>
+              <div class="legend"><span><i style="background:#6f8bff" class="dot"></i> Target</span>
+                <span><i style="background:#b08bff"></i> Position</span></div>
+            </div>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="mHor">Planning horizon <span class="val" id="mHor-val"></span></label>
+              <input type="range" id="mHor" min="3" max="50" step="1" value="20" />
+              <div class="hint">How far ahead it looks. Short = jumpy &amp; aggressive · Long = smooth &amp; calm</div>
+            </div>
+            <div class="control">
+              <label for="mSmooth">Effort penalty <span class="val" id="mSmooth-val"></span></label>
+              <input type="range" id="mSmooth" min="0.01" max="0.6" step="0.01" value="0.06" />
+              <div class="hint">High = "take it easy, save energy" · Low = "just get there fast"</div>
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn" id="mMove">🎯 Make target move</button>
+            <button class="demo-btn" id="mReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Position: <b id="mPos">—</b></span>
+            <span>Speed: <b id="mVel">—</b></span>
+            <span>Planning <b id="mSteps">—</b> steps ahead</span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">🔭</span>
+          <div><strong>Try this:</strong> set the horizon very <em>short</em> — the cart lunges and overshoots
+          because it can't see far enough ahead to start braking in time. Now make the horizon <em>long</em>
+          — it eases off the gas early and glides smoothly onto the target. <strong>Seeing further ahead =
+          smoother control.</strong> That's the whole pitch of MPC.</div>
+        </div>
+
+        <h2>Why use MPC instead of PID?</h2>
+        <ul class="clean">
+          <li><strong>It can plan around limits.</strong> If a motor maxes out or a car can't exceed a speed,
+            MPC bakes that into the plan instead of slamming into it.</li>
+          <li><strong>It looks ahead.</strong> It can start braking <em>before</em> a turn, or anticipate a
+            known future change — PID can only react once the error appears.</li>
+          <li><strong>It handles many knobs at once.</strong> Steering + throttle + braking together, all
+            balanced in one plan.</li>
+        </ul>
+
+        <div class="callout warn">
+          <span class="ic">⚠️</span>
+          <div><strong>The catch:</strong> MPC has to solve an optimization problem many times a second, so it
+          needs real computing power and a good model. PID needs almost nothing. That's why your thermostat
+          isn't MPC — but a self-driving car or a rocket landing very much is.</div>
+        </div>
+
+        <p>You've now met the whole family — filters that <em>see</em> clearly and controllers that
+          <em>act</em> wisely. The glossary pulls every term together in one place.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const plot=new Plot("mpcPlot",{height:300,xmin:0,xmax:12,ymin:0,ymax:100,yLabel:"position",xLabel:"seconds"});
+    const lc=document.getElementById("mpcLane"), lx=lc.getContext("2d");
+    function sizeL(){const dpr=window.devicePixelRatio||1;const w=lc.clientWidth||320;const h=300;
+      lc.style.height=h+"px";lc.width=w*dpr;lc.height=h*dpr;lx.setTransform(dpr,0,0,dpr,0,0);lc._w=w;lc._h=h;}
+    sizeL();window.addEventListener("resize",sizeL);
+
+    const dt=0.06, AMAX=4, WX=100;
+    let H=20, wu=0.06, target=70, p=12, v=0, t=0, autoMove=false;
+    let gains=[];                 // time-varying LQR gains, recomputed on change
+    const posT=new Trace(700), tgtT=new Trace(700);
+
+    // ---- backward Riccati for finite-horizon LQR (the MPC plan) ----
+    function mul2(M,N){return [[M[0][0]*N[0][0]+M[0][1]*N[1][0],M[0][0]*N[0][1]+M[0][1]*N[1][1]],
+                               [M[1][0]*N[0][0]+M[1][1]*N[1][0],M[1][0]*N[0][1]+M[1][1]*N[1][1]]];}
+    function Tr(M){return [[M[0][0],M[1][0]],[M[0][1],M[1][1]]];}
+    function mv(M,a){return [M[0][0]*a[0]+M[0][1]*a[1], M[1][0]*a[0]+M[1][1]*a[1]];}
+    function computeGains(){
+      const A=[[1,dt],[0,1]], B=[0.5*dt*dt,dt];
+      const wp=1, wv=0.3, R=wu, Q=[[wp,0],[0,wv]], Qf=[[wp*40,0],[0,wv*40]];
+      let P=[[Qf[0][0],0],[0,Qf[1][1]]];
+      const Ks=new Array(H);
+      for(let k=H-1;k>=0;k--){
+        const PB=mv(P,B); const BPB=B[0]*PB[0]+B[1]*PB[1];
+        const PA=mul2(P,A); const BPA=[B[0]*PA[0][0]+B[1]*PA[1][0], B[0]*PA[0][1]+B[1]*PA[1][1]];
+        const K=[BPA[0]/(BPB+R), BPA[1]/(BPB+R)]; Ks[k]=K;
+        const AT=Tr(A); const ATP=mul2(AT,P); const APA=mul2(ATP,A); const APB=mv(ATP,B);
+        P=[[Q[0][0]+APA[0][0]-APB[0]*K[0], Q[0][1]+APA[0][1]-APB[0]*K[1]],
+           [Q[1][0]+APA[1][0]-APB[1]*K[0], Q[1][1]+APA[1][1]-APB[1]*K[1]]];
+      }
+      gains=Ks;
+    }
+    const clamp=(a)=>Math.max(-AMAX,Math.min(AMAX,a));
+    // roll out the imagined plan from (p,v) using the gains -> predicted positions
+    function planRollout(){
+      let pp=p, vv=v; const out=[[pp,vv]];
+      for(let k=0;k<H;k++){
+        const a=clamp(-(gains[k][0]*(pp-target)+gains[k][1]*vv));
+        pp+=vv*dt+0.5*a*dt*dt; vv+=a*dt; out.push([pp,vv]);
+      }
+      return out;
+    }
+    function reset(){p=12;v=0;t=0;posT.clear();tgtT.clear();}
+    computeGains();
+
+    function step(){
+      t+=dt;
+      if(autoMove) target=50+22*Math.sin(t*0.35);
+      const a=clamp(-(gains[0][0]*(p-target)+gains[0][1]*v));
+      p+=v*dt+0.5*a*dt*dt; v+=a*dt;
+      if(p<2){p=2;v=Math.max(0,v);} if(p>98){p=98;v=Math.min(0,v);}
+      posT.push(t,p); tgtT.push(t,target);
+    }
+
+    const PX=(x)=>{const w=lc._w;return 24+(x/WX)*(w-48);};
+    function drawLane(){
+      const w=lc._w,h=lc._h, laneY=h*0.55;
+      lx.fillStyle="#0b1120"; lx.fillRect(0,0,w,h);
+      // lane
+      lx.strokeStyle="#22304f"; lx.lineWidth=2;
+      lx.beginPath();lx.moveTo(PX(0),laneY+22);lx.lineTo(PX(100),laneY+22);lx.stroke();
+      // ticks
+      lx.fillStyle="#2a3656";lx.font="9px ui-monospace";lx.textAlign="center";
+      for(let gx=0;gx<=100;gx+=20){lx.fillRect(PX(gx),laneY+18,1,8);lx.fillText(gx,PX(gx),laneY+40);}
+      // predicted plan (ghost trail)
+      const plan=planRollout();
+      for(let k=1;k<plan.length;k++){
+        const al=0.5*(1-k/plan.length)+0.06;
+        lx.fillStyle=`rgba(176,139,255,${al})`;
+        lx.beginPath();lx.arc(PX(plan[k][0]),laneY-14,4,0,7);lx.fill();
+      }
+      lx.fillStyle="#8294b8";lx.font="11px Inter,sans-serif";lx.textAlign="left";
+      lx.fillText("imagined plan →", PX(2), laneY-30);
+      // target flag
+      lx.strokeStyle="#6f8bff";lx.lineWidth=2;lx.beginPath();
+      lx.moveTo(PX(target),laneY-40);lx.lineTo(PX(target),laneY+22);lx.stroke();
+      lx.fillStyle="#6f8bff";lx.beginPath();
+      lx.moveTo(PX(target),laneY-40);lx.lineTo(PX(target)+18,laneY-34);lx.lineTo(PX(target),laneY-28);lx.closePath();lx.fill();
+      lx.fillText("🎯", PX(target)-6, laneY+8);
+      // cart
+      const cx=PX(p);
+      lx.fillStyle="#b08bff"; roundRect(lx,cx-16,laneY+2,32,18,5); lx.fill();
+      lx.fillStyle="#1c1030"; lx.beginPath();lx.arc(cx-8,laneY+22,4,0,7);lx.arc(cx+8,laneY+22,4,0,7);lx.fill();
+      // velocity arrow
+      if(Math.abs(v)>0.3){ lx.strokeStyle="#5ce08a";lx.lineWidth=3;
+        const dir=Math.sign(v), len=Math.min(40,Math.abs(v)*2);
+        lx.beginPath();lx.moveTo(cx,laneY-2);lx.lineTo(cx+dir*len,laneY-2);
+        lx.lineTo(cx+dir*len-dir*6,laneY-6);lx.moveTo(cx+dir*len,laneY-2);lx.lineTo(cx+dir*len-dir*6,laneY+2);lx.stroke(); }
+    }
+    function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);
+      c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+    function draw(){
+      plot.setX(Math.max(0,t-12),Math.max(12,t));
+      plot.clear();plot.grid();
+      plot.clip(()=>{plot.line(tgtT.points(),{color:"#6f8bff",width:1.5,dash:[6,5]});
+        plot.line(posT.points(),{color:"#b08bff",width:3});});
+      drawLane();
+      $("mPos").textContent=p.toFixed(1);
+      $("mVel").textContent=v.toFixed(2);
+      $("mSteps").textContent=H;
+    }
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<4){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    function pointTo(ev){const rect=lc.getBoundingClientRect();
+      const cxp=(ev.touches?ev.touches[0].clientX:ev.clientX)-rect.left;
+      const w=lc._w; let x=(cxp-24)/(w-48)*WX; target=Math.max(3,Math.min(97,x)); autoMove=false;
+      $("mMove").classList.remove("active");}
+    let dragging=false;
+    lc.addEventListener("mousedown",(e)=>{dragging=true;pointTo(e);});
+    window.addEventListener("mousemove",(e)=>{if(dragging)pointTo(e);});
+    window.addEventListener("mouseup",()=>dragging=false);
+    lc.addEventListener("touchstart",(e)=>{dragging=true;pointTo(e);e.preventDefault();},{passive:false});
+    lc.addEventListener("touchmove",(e)=>{if(dragging){pointTo(e);e.preventDefault();}},{passive:false});
+    window.addEventListener("touchend",()=>dragging=false);
+
+    bindSlider("mHor",{fmt:(v)=>v+" steps",onChange:(v)=>{H=v;computeGains();}});
+    bindSlider("mSmooth",{fmt:(v)=>v.toFixed(2),onChange:(v)=>{wu=v;computeGains();}});
+    $("mMove").addEventListener("click",(e)=>{autoMove=!autoMove;e.target.classList.toggle("active",autoMove);});
+    $("mReset").addEventListener("click",reset);
+  })();
+  </script>
+</body>
+</html>

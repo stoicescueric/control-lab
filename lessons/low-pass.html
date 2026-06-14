@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Low-Pass Filter — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>" />
+</head>
+<body data-page="low-pass">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🌊 Filters · Lesson 3</span>
+          <h1>The Low-Pass Filter</h1>
+          <p class="sub">The simplest, most-used filter on Earth — one line of code that smooths almost anything.</p>
+        </div>
+
+        <p>
+          A <strong>low-pass filter</strong> lets <em>slow</em> changes through and blocks <em>fast</em>
+          ones. Since real signals usually wiggle slowly and noise wiggles fast, blocking the fast stuff
+          throws away most of the noise. The name says it all: it lets <strong>low</strong> frequencies
+          <strong>pass</strong>.
+        </p>
+
+        <div class="analogy">
+          <strong>🪣 The leaky-bucket analogy.</strong> Picture a bucket with a small hole. You pour the
+          noisy sensor readings in. The water level can't jump around instantly — it rises and falls
+          <em>gradually</em>, ignoring quick splashes but following the overall trend. The water level
+          is your smoothed output.
+        </div>
+
+        <h2>The one formula you need</h2>
+        <p>
+          Each new reading, you take a little step from your old estimate toward the new measurement.
+          How big a step? A number <strong>α</strong> (alpha) between 0 and 1:
+        </p>
+
+        <div class="formula">
+          <span class="c-teal">new estimate</span> =
+          <span class="c-teal">old estimate</span> +
+          <span class="c-amber">α</span> × ( <span class="c-rose">measurement</span> − <span class="c-teal">old estimate</span> )
+        </div>
+
+        <p>That "(measurement − old estimate)" part is just the <em>error</em> — how surprised you are by
+        the new reading. You move a fraction α of the way toward the surprise.</p>
+
+        <table class="tidy">
+          <tr><th>α value</th><th>Behaviour</th><th>Feels like</th></tr>
+          <tr><td><strong>near 0</strong></td><td>Tiny steps → super smooth, but slow &amp; laggy</td><td>A heavy, calm flywheel</td></tr>
+          <tr><td><strong>near 1</strong></td><td>Big steps → snappy, but barely filters anything</td><td>A twitchy, nervous needle</td></tr>
+        </table>
+
+        <div class="callout math">
+          <span class="ic">⚖️</span>
+          <div><strong>The eternal trade-off:</strong> smoothness vs. lag. More smoothing always means
+          more delay. There's no free lunch — you're choosing how much you trust the latest reading
+          versus your accumulated history.</div>
+        </div>
+
+        <h2>Try it — find your favourite α</h2>
+        <p>
+          The <span style="color:#ffc24d"><strong>dots</strong></span> are the raw noisy sensor. The
+          <span style="color:#6f8bff"><strong>blue line</strong></span> is the low-pass output. Slide α
+          from left (heavy smoothing) to right (almost raw) and watch the line go from a calm-but-late
+          curve to a jumpy-but-instant one.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Exponential low-pass filter</div>
+          <canvas id="lpCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#2fd3c0"></i> True signal</span>
+            <span><i style="background:#ffc24d" class="dot"></i> Noisy sensor</span>
+            <span><i style="background:#6f8bff"></i> Filtered output</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="alpha">Smoothing α <span class="val" id="alpha-val"></span></label>
+              <input type="range" id="alpha" min="0.02" max="1" step="0.01" value="0.15" />
+              <div class="hint">Left = smoother &amp; slower · Right = snappier &amp; noisier</div>
+            </div>
+            <div class="control">
+              <label for="lpnoise">Sensor noise <span class="val" id="lpnoise-val"></span></label>
+              <input type="range" id="lpnoise" min="0" max="3" step="0.05" value="1.1" />
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn" id="lpStep">⬆️ Sudden jump (step test)</button>
+          </div>
+          <div class="readout">
+            <span>Lag: <b id="lpLag">—</b></span>
+            <span>Noise left in output: <b id="lpResid">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">💡</span>
+          <div>Hit <strong>"Sudden jump"</strong> with a low α. The blue line takes a while to catch up —
+          that's the lag you pay for smoothness. Now raise α and try again: it catches up fast, but the
+          dots' jitter leaks straight through. That tension is the entire art of filtering.</div>
+        </div>
+
+        <h2>Where it's used</h2>
+        <ul class="clean">
+          <li>Smoothing a joystick or volume knob so it doesn't twitch.</li>
+          <li>Audio: removing hiss, taming treble (bass is "low-pass" by nature).</li>
+          <li>Cleaning up temperature, light, or battery readings on a microcontroller.</li>
+          <li>As a building block inside fancier filters (you'll meet it again in the complementary filter).</li>
+        </ul>
+
+        <div class="callout tip">
+          <span class="ic">🧠</span>
+          <div><strong>Bonus:</strong> swap the formula around and you get a <em>high-pass</em> filter —
+          <code>measurement − low-pass output</code> — which keeps only the fast changes and throws away
+          the slow ones. Useful for detecting sudden taps, beats, or edges.</div>
+        </div>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const plot = new Plot("lpCanvas", { height: 290, xmin: 0, xmax: 12, ymin: -5, ymax: 7, yLabel: "value" });
+    function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+      return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+    let alpha = 0.15, noise = 1.1;
+    let t = 0, est = 0, stepOffset = 0;
+    const trueT = new Trace(800), measT = new Trace(800), filtT = new Trace(800);
+    let lagAcc = 0.5;
+
+    function baseSignal(tt){ return 2.2*Math.sin(tt*0.7) + stepOffset; }
+
+    function step(dt){
+      t += dt;
+      const truth = baseSignal(t);
+      const m = truth + noise*randn();
+      est = est + alpha*(m - est);
+      trueT.push(t, truth); measT.push(t, m); filtT.push(t, est);
+      // crude lag estimate: time constant ~ dt/alpha
+      lagAcc = dt/Math.max(alpha,1e-3);
+    }
+    function draw(){
+      plot.setX(Math.max(0,t-12), Math.max(12,t));
+      plot.clear(); plot.grid();
+      plot.clip(()=>{
+        plot.line(trueT.points(), { color:"#2fd3c0", width:2, alpha:0.65 });
+        plot.dots(measT.points(), { color:"#ffc24d", r:2.1, alpha:0.8 });
+        plot.line(filtT.points(), { color:"#6f8bff", width:3 });
+      });
+      $("lpLag").textContent = "≈ " + lagAcc.toFixed(2) + " s";
+      // residual noise estimate
+      const pts = filtT.points(), tp = trueT.points();
+      let s=0,n=0; for(let i=Math.max(0,pts.length-120);i<pts.length;i++){ s+=Math.abs(pts[i][1]-tp[i][1]); n++; }
+      $("lpResid").textContent = n? (s/n).toFixed(2) : "—";
+    }
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.05);
+      const dt=1/60;let k=0;while(acc>=dt&&k<6){step(dt*1.5);acc-=dt;k++;}draw();
+      requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("alpha",{fmt:(v)=>v.toFixed(2),onChange:(v)=>alpha=v});
+    bindSlider("lpnoise",{fmt:(v)=>v.toFixed(2),onChange:(v)=>noise=v});
+    $("lpStep").addEventListener("click",()=> stepOffset = stepOffset>1?0:3.5);
+  })();
+  </script>
+</body>
+</html>
