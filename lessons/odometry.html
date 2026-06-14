@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Odometry &amp; Pose — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>" />
+</head>
+<body data-page="odometry">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🧭 Robotics (FTC/FRC) · Lesson 15</span>
+          <h1>Odometry &amp; Pose Tracking</h1>
+          <p class="sub">Add up a thousand tiny movements and you know where the robot is on the field — for a while.</p>
+        </div>
+
+        <p>
+          Autonomous routines need to know the robot's <strong>pose</strong>: its position <code>(x, y)</code>
+          and which way it's facing, <code>heading</code>. No single sensor reports "you are here." So we build
+          it up ourselves: every loop we ask the encoders <em>how far did each wheel roll?</em>, work out the
+          little step the robot took, and add it onto a running total. This adding-up is called
+          <strong>odometry</strong> (or <em>dead reckoning</em>).
+        </p>
+
+        <div class="analogy">
+          <strong>🚶 Eyes closed.</strong> Stand up, close your eyes, and take 10 careful steps while turning.
+          You can roughly track where you are by remembering each step. That's odometry — and just like you, it
+          slowly gets lost, because tiny errors in each step pile up. The trick is making each step's math as
+          honest as possible.
+        </div>
+
+        <h2>One odometry step</h2>
+        <p>
+          For a tank-style robot, each loop we read how far the left and right sides rolled, <code>dL</code> and
+          <code>dR</code> (in metres — thank you, Lesson 11). From those two numbers:
+        </p>
+        <div class="formula">
+          forward step:   <span class="c-teal">ds = (dL + dR) / 2</span><br>
+          heading change: <span class="c-amber">dθ = (dR − dL) / T</span> &nbsp;<span class="small">(T = track width)</span>
+        </div>
+        <p>
+          The simplest thing is to assume the robot went in a straight line for that step:
+          <code>x += ds·cos(θ)</code>, <code>y += ds·sin(θ)</code>. That's fine in a straight line but wrong on
+          curves — it "cuts the corner." The honest version assumes the step was a little <strong>arc</strong>
+          (constant curvature), which is what really happens when the two sides roll different amounts. It's a
+          few more lines and dramatically more accurate over a real path:
+        </p>
+
+        <div class="code-label"><span class="badge ftc">FTC</span><span class="badge frc">FRC</span> the accurate per-loop update (works in any language)</div>
+        <pre class="code"><code>double dL = leftPos  - lastLeft;     // metres rolled since last loop
+double dR = rightPos - lastRight;
+lastLeft = leftPos;  lastRight = rightPos;
+
+double ds  = (dL + dR) / 2.0;            // forward distance
+double dth = (dR - dL) / TRACK_WIDTH;     // heading change (radians)
+
+// Constant-curvature ("pose exponential") integration:
+double sinC, cosC;
+if (Math.abs(dth) &lt; 1e-9) {              // basically straight -> avoid divide-by-0
+    sinC = 1.0;             cosC = 0.5 * dth;
+} else {
+    sinC = Math.sin(dth) / dth;
+    cosC = (1 - Math.cos(dth)) / dth;
+}
+// rotate the little arc into field coordinates and add it on:
+x       += ds * (sinC * Math.cos(heading) - cosC * Math.sin(heading));
+y       += ds * (sinC * Math.sin(heading) + cosC * Math.cos(heading));
+heading += dth;</code></pre>
+
+        <div class="callout idea">
+          <span class="ic">📡</span>
+          <div><strong>Use the gyro for heading.</strong> Encoders estimate <code>dθ</code>, but wheel scrub
+          makes that the <em>least</em> trustworthy number. Most teams instead take <code>heading</code> straight
+          from the IMU/gyro and use encoders only for distance. WPILib's odometry classes are built to accept a
+          gyro angle for exactly this reason.</div>
+        </div>
+
+        <h2>Dead wheels: odometry that ignores slip</h2>
+        <p>
+          When a drive wheel slips or spins, your encoder lies and odometry drifts. FTC's favourite fix:
+          <strong>dead wheels</strong> (a.k.a. odometry pods) — small unpowered omni wheels on light springs
+          that just roll along measuring true ground movement, immune to drive slip. Two parallel pods measure
+          forward motion and heading; a third, sideways, catches strafe.
+        </p>
+
+        <figure class="figure">
+          <svg viewBox="0 0 420 300" role="img" aria-label="Top-down robot with three dead-wheel odometry pods">
+            <style>
+              .body{fill:rgba(79,108,247,0.12);stroke:#6f8bff;stroke-width:2.5}
+              .pod{fill:#11b5a4}
+              .pl{font:600 12px Inter,sans-serif;fill:#0c8174;text-anchor:middle}
+              .dl{font:500 11px Inter,sans-serif;fill:#8a93a8;text-anchor:middle}
+            </style>
+            <rect class="body" x="110" y="50" width="200" height="200" rx="16"/>
+            <text class="dl" x="210" y="40">front</text>
+            <!-- two parallel (forward) pods -->
+            <rect class="pod" x="150" y="120" width="10" height="34" rx="3"/>
+            <rect class="pod" x="260" y="120" width="10" height="34" rx="3"/>
+            <text class="pl" x="155" y="170">left pod</text>
+            <text class="pl" x="265" y="170">right pod</text>
+            <!-- one perpendicular (strafe) pod -->
+            <rect class="pod" x="193" y="200" width="34" height="10" rx="3"/>
+            <text class="pl" x="210" y="228">strafe pod</text>
+            <text class="dl" x="210" y="270">left + right → forward &amp; heading · strafe pod → sideways</text>
+          </svg>
+          <figcaption>Three dead wheels give a full pose with no help from the drive motors. Road Runner and
+            Pedro Pathing in FTC are built around this setup.</figcaption>
+        </figure>
+
+        <h2>See it drift — then fix it</h2>
+        <p>
+          The <span style="color:#5ce08a">green</span> robot drives a perfect circle (the truth). The
+          <span style="color:#ffc24d">amber</span> robot is what <em>odometry thinks</em>, built only from
+          (slightly imperfect) encoder readings. Turn up the <strong>wheel slip</strong> and watch the estimate
+          spiral away from reality — then hit <strong>"AprilTag fix"</strong> to snap it back, the way a camera
+          looking at a field marker would.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Odometry vs. truth</div>
+          <canvas id="odoCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#5ce08a"></i> true pose</span>
+            <span><i style="background:#ffc24d"></i> odometry estimate</span>
+            <span><i style="background:#6f8bff"></i> error</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="slip">Wheel slip / noise <span class="val" id="slip-val"></span></label>
+              <input type="range" id="slip" min="0" max="1" step="0.02" value="0.25" />
+              <div class="hint">How untrustworthy the encoders are.</div>
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn primary active" id="play">⏸ Pause</button>
+            <button class="demo-btn" id="fix">📸 AprilTag fix</button>
+            <button class="demo-btn" id="odoReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>True: <b id="roTrue">—</b></span>
+            <span>Estimate: <b id="roEst">—</b></span>
+            <span>Position error: <b id="roErr">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="ic">⏳</span>
+          <div><strong>Odometry always drifts eventually.</strong> Errors only ever add up — they never cancel.
+          That's not a bug, it's the nature of dead reckoning. The fix is to occasionally <em>correct</em> it
+          with an absolute sensor: a camera seeing an <strong>AprilTag</strong>, distance sensors against a wall,
+          field markings. Blending that correction in optimally is… a <strong>Kalman filter</strong> (Lesson 6),
+          which is exactly what WPILib's <code>SwerveDrivePoseEstimator</code> does.</div>
+        </div>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> odometry in three lines</div>
+        <pre class="code"><code>var odometry = new DifferentialDriveOdometry(
+        gyro.getRotation2d(),                       // starting heading
+        leftEncoder.getDistance(), rightEncoder.getDistance());
+
+@Override
+public void robotPeriodic() {
+    odometry.update(gyro.getRotation2d(),           // trust the gyro for heading
+                    leftEncoder.getDistance(),
+                    rightEncoder.getDistance());
+    Pose2d pose = odometry.getPoseMeters();         // x, y, heading — ready to use
+}</code></pre>
+
+        <p>
+          Now the robot knows where it is. The last step of autonomous is making it
+          <strong>follow a planned path</strong> across the field — and the classic, beautifully simple way to do
+          that is up next.
+        </p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script>
+  (function () {
+    const cv=document.getElementById("odoCanvas"), cx=cv.getContext("2d");
+    function size(){const dpr=window.devicePixelRatio||1;const w=cv.clientWidth||600;const h=400;
+      cv.style.height=h+"px";cv.width=w*dpr;cv.height=h*dpr;cx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h;}
+    size();window.addEventListener("resize",size);
+
+    const T=0.4;                         // track width (m) for the math
+    let slip=0.25, playing=true;
+    // true pose + estimate pose
+    let tx,ty,tth, ex,ey,eth, t;
+    const trueTrail=[], estTrail=[];
+    function reset(){
+      const w=cv._w,h=cv._h;
+      tx=w/2; ty=h/2+90; tth=0; ex=tx; ey=ty; eth=tth; t=0;
+      trueTrail.length=0; estTrail.length=0;
+    }
+    size(); reset(); window.addEventListener("resize",reset);
+
+    const v=70;                          // px/s forward speed
+    const R=90;                          // circle radius px
+    const omega=v/R;                     // rad/s
+    const dt=1/60;
+
+    function odoStep(p, dL, dR){
+      const ds=(dL+dR)/2, dth=(dR-dL)/T;
+      let sinC,cosC;
+      if(Math.abs(dth)<1e-9){sinC=1;cosC=0.5*dth;}
+      else{sinC=Math.sin(dth)/dth;cosC=(1-Math.cos(dth))/dth;}
+      p.x+=ds*(sinC*Math.cos(p.th)-cosC*Math.sin(p.th));
+      p.y+=ds*(sinC*Math.sin(p.th)+cosC*Math.cos(p.th));
+      p.th+=dth;
+    }
+    function randn(){return (Math.random()+Math.random()+Math.random()-1.5)*0.7;}
+
+    function step(){
+      if(!playing)return;
+      t+=dt;
+      // true robot: perfect circle (unicycle)
+      tx+=v*Math.cos(tth)*dt; ty+=v*Math.sin(tth)*dt; tth+=omega*dt;
+      // wheel deltas from the true motion
+      const dL=(v - omega*T/2)*dt, dR=(v + omega*T/2)*dt; // note: v,omega here are px-based but ratio consistent
+      // corrupt with slip: systematic scale mismatch + random noise
+      const bias=0.04*slip;
+      const dLm=dL*(1+bias)*(1+randn()*0.05*slip);
+      const dRm=dR*(1-bias)*(1+randn()*0.05*slip);
+      const p={x:ex,y:ey,th:eth}; odoStep(p,dLm,dRm); ex=p.x;ey=p.y;eth=p.th;
+      // trails
+      if(trueTrail.length===0||Math.hypot(tx-trueTrail[trueTrail.length-1][0],ty-trueTrail[trueTrail.length-1][1])>2){
+        trueTrail.push([tx,ty]); estTrail.push([ex,ey]);
+        if(trueTrail.length>900){trueTrail.shift();estTrail.shift();}
+      }
+    }
+
+    function robot(x,y,th,color){
+      cx.save();cx.translate(x,y);cx.rotate(th);
+      cx.fillStyle=color;cx.globalAlpha=0.9;
+      cx.beginPath();cx.moveTo(14,0);cx.lineTo(-10,-9);cx.lineTo(-10,9);cx.closePath();cx.fill();
+      cx.globalAlpha=1;cx.restore();
+    }
+    function draw(){
+      const w=cv._w,h=cv._h;
+      cx.fillStyle="#0b1120";cx.fillRect(0,0,w,h);
+      cx.strokeStyle="rgba(255,255,255,0.06)";cx.lineWidth=1;
+      for(let x=0;x<=w;x+=40){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+      for(let y=0;y<=h;y+=40){cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+      // trails
+      const drawTrail=(arr,color)=>{if(arr.length<2)return;cx.strokeStyle=color;cx.lineWidth=2;cx.globalAlpha=0.7;
+        cx.beginPath();cx.moveTo(arr[0][0],arr[0][1]);for(let i=1;i<arr.length;i++)cx.lineTo(arr[i][0],arr[i][1]);cx.stroke();cx.globalAlpha=1;};
+      drawTrail(trueTrail,"#5ce08a");
+      drawTrail(estTrail,"#ffc24d");
+      // error line
+      cx.strokeStyle="#6f8bff";cx.lineWidth=1.5;cx.setLineDash([4,4]);
+      cx.beginPath();cx.moveTo(tx,ty);cx.lineTo(ex,ey);cx.stroke();cx.setLineDash([]);
+      robot(tx,ty,tth,"#5ce08a");
+      robot(ex,ey,eth,"#ffc24d");
+      const errPx=Math.hypot(tx-ex,ty-ey);
+      $("roTrue").textContent=`(${(tx/100).toFixed(2)}, ${(-ty/100).toFixed(2)}) m`;
+      $("roEst").textContent=`(${(ex/100).toFixed(2)}, ${(-ey/100).toFixed(2)}) m`;
+      $("roErr").textContent=(errPx/100).toFixed(2)+" m";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<10){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("slip",{fmt:(v)=>v<0.02?"none":(v*100).toFixed(0)+"%",onChange:(v)=>slip=v});
+    $("play").addEventListener("click",()=>{playing=!playing;const b=$("play");
+      b.textContent=playing?"⏸ Pause":"▶ Play";b.classList.toggle("active",playing);b.classList.toggle("primary",playing);});
+    $("fix").addEventListener("click",()=>{ex=tx;ey=ty;eth=tth;});   // resync estimate to truth
+    $("odoReset").addEventListener("click",reset);
+  })();
+  </script>
+</body>
+</html>

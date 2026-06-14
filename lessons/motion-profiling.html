@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motion Profiling — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
+</head>
+<body data-page="motion-profiling">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">📈 Robotics (FTC/FRC) · Lesson 13</span>
+          <h1>Motion Profiling</h1>
+          <p class="sub">Don't tell a mechanism <em>"be there now."</em> Hand it a smooth schedule it can actually follow.</p>
+        </div>
+
+        <p>
+          Imagine you want a linear slide to go up 1&nbsp;metre. The naive way is to set the target to 1&nbsp;m
+          and let a PID slam it there. The slide lurches, the wheels slip, the whole robot rocks, and it
+          overshoots. The problem: you asked for an <strong>instant jump</strong>, which needs infinite speed
+          and force. No motor can do that.
+        </p>
+        <p>
+          A <strong>motion profile</strong> fixes this. Instead of one far-away target, it produces a
+          <strong>moving target</strong> — a position for <em>every instant</em> between here and there — that
+          never asks for more speed or acceleration than the mechanism can deliver. The controller chases a
+          target that's always within reach, so the motion comes out smooth, fast, and repeatable.
+        </p>
+
+        <div class="analogy">
+          <strong>🚦 A good bus driver.</strong> They don't floor it then slam the brakes. They accelerate
+          smoothly to cruising speed, cruise, then ease off early to stop gently. Passengers barely notice.
+          That speed-vs-time story — ramp up, hold, ramp down — is <em>exactly</em> a trapezoidal motion profile.
+        </div>
+
+        <h2>The trapezoidal profile</h2>
+        <p>
+          The most common profile has three phases. Plot the <strong>velocity</strong> over time and you get the
+          shape it's named after — a trapezoid:
+        </p>
+
+        <figure class="figure">
+          <svg viewBox="0 0 680 300" role="img" aria-label="Position, velocity and acceleration of a trapezoidal profile">
+            <style>
+              .ax{stroke:#cdd6ea;stroke-width:1.5}
+              .cv{fill:none;stroke-width:2.5}
+              .lb{font:600 12px Inter,sans-serif;fill:#56617a}
+              .ph{font:600 11px Inter,sans-serif;fill:#8a93a8;text-anchor:middle}
+            </style>
+            <!-- velocity (the trapezoid) -->
+            <text class="lb" x="0" y="20">velocity</text>
+            <line class="ax" x1="40" y1="90" x2="660" y2="90"/>
+            <polyline class="cv" stroke="#11b5a4" points="40,90 180,30 470,30 610,90"/>
+            <line x1="180" y1="30" x2="180" y2="90" stroke="#11b5a4" stroke-width="1" stroke-dasharray="3 3"/>
+            <line x1="470" y1="30" x2="470" y2="90" stroke="#11b5a4" stroke-width="1" stroke-dasharray="3 3"/>
+            <text class="ph" x="110" y="78">ramp up</text>
+            <text class="ph" x="325" y="22">cruise (v max)</text>
+            <text class="ph" x="540" y="78">ramp down</text>
+            <!-- acceleration -->
+            <text class="lb" x="0" y="130">accel</text>
+            <line class="ax" x1="40" y1="160" x2="660" y2="160"/>
+            <polyline class="cv" stroke="#f59e0b" points="40,135 180,135 180,160 470,160 470,185 610,185"/>
+            <text class="ph" x="110" y="128" style="fill:#b06e02">+a max</text>
+            <text class="ph" x="540" y="200" style="fill:#b06e02">−a max</text>
+            <!-- position -->
+            <text class="lb" x="0" y="225">position</text>
+            <line class="ax" x1="40" y1="285" x2="660" y2="285"/>
+            <path class="cv" stroke="#4f6cf7" d="M40,285 Q110,283 180,260 L470,150 Q540,127 610,125"/>
+            <text class="ph" x="610" y="118" style="fill:#3a52d6">target</text>
+          </svg>
+          <figcaption>The velocity ramps up at <em>+a&nbsp;max</em>, holds at <em>v&nbsp;max</em>, then ramps
+            down at <em>−a&nbsp;max</em>. Position (bottom) is the smooth result — an S-shaped curve that eases
+            in and out instead of jumping.</figcaption>
+        </figure>
+
+        <h2>The math (it's just areas under the line)</h2>
+        <p>
+          Velocity is the slope of position; the distance covered is the <strong>area under the velocity
+          graph</strong>. With a top speed <code>vmax</code> and acceleration limit <code>amax</code>, for a move
+          of distance <code>d</code>:
+        </p>
+
+        <div class="formula">
+          time to reach v max:  <span class="c-teal">t_ramp = vmax / amax</span><br>
+          distance used ramping (×2 ends): <span class="c-amber">d_ramp = vmax² / amax</span><br><br>
+          <span class="small">if d ≥ d_ramp → full <b>trapezoid</b> (there's room to cruise):</span><br>
+          &nbsp;&nbsp;cruise time = (d − vmax²/amax) / vmax<br><br>
+          <span class="small">if d &lt; d_ramp → <b>triangle</b> (too short to reach vmax):</span><br>
+          &nbsp;&nbsp;<span class="c-rose">peak speed = √(amax · d)</span>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">📐</span>
+          <div><strong>The triangle case matters.</strong> For short moves the mechanism never reaches top speed
+          — it ramps up and immediately ramps back down. Good profile code checks for this. The demo below flips
+          between trapezoid and triangle automatically as you shrink the distance; watch the shape change.</div>
+        </div>
+
+        <h2>Why this is the perfect partner for feedforward</h2>
+        <p>
+          A profile hands you, at every instant, a target <strong>position</strong>, <strong>velocity</strong>,
+          <em>and</em> <strong>acceleration</strong>. That's a gift: feed the velocity and acceleration straight
+          into the <code>kV</code> and <code>kA</code> feedforward from last lesson, and use PID only to fix the
+          tiny position error. This is how top FRC mechanisms move — fast and dead accurate.
+        </p>
+
+        <div class="formula">
+          voltage = <span class="c-teal">kV·v_profile + kA·a_profile</span> + <span class="c-rose">PID(pos, pos_profile)</span>
+        </div>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> TrapezoidProfile + feedforward</div>
+        <pre class="code"><code>var limits = new TrapezoidProfile.Constraints(kMaxVel, kMaxAccel);  // m/s, m/s^2
+var profile = new TrapezoidProfile(limits);
+
+var goal     = new TrapezoidProfile.State(targetMetres, 0);  // arrive stopped
+var setpoint = new TrapezoidProfile.State(0, 0);             // start here, stopped
+
+@Override
+public void robotPeriodic() {
+    // Advance the moving setpoint by one 20 ms loop:
+    setpoint = profile.calculate(0.02, setpoint, goal);
+
+    double ff = feedforward.calculate(setpoint.velocity);          // kV*v + kA*a
+    double fb = pid.calculate(encoder.getDistance(), setpoint.position);
+    motor.setVoltage(ff + fb);
+}</code></pre>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> the all-in-one shortcut</div>
+        <pre class="code"><code>// ProfiledPIDController builds the profile internally — just give it the goal:
+var controller = new ProfiledPIDController(
+        kP, kI, kD, new TrapezoidProfile.Constraints(kMaxVel, kMaxAccel));
+
+double fb = controller.calculate(encoder.getDistance(), targetMetres);
+double ff = feedforward.calculate(controller.getSetpoint().velocity);
+motor.setVoltage(fb + ff);</code></pre>
+
+        <div class="callout tip">
+          <span class="ic">🧩</span>
+          <div><strong>FTC equivalent.</strong> The <strong>Road Runner</strong> library builds motion profiles
+          (and full trajectories) for you, and Pedro Pathing handles paths. You can also drop the trapezoid
+          equations above into a few lines of Java and run your own — it's genuinely not much code.</div>
+        </div>
+
+        <h2>Try it: profile a linear slide</h2>
+        <p>
+          The slide ping-pongs up and down following a trapezoidal profile. Change the distance, top speed, and
+          acceleration, and watch both the moving slide and the velocity trapezoid on the right. Shrink the
+          distance until the trapezoid collapses into a triangle.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Trapezoidal profile generator</div>
+          <div class="stage split">
+            <div>
+              <canvas id="slideCanvas"></canvas>
+              <div class="kbd-tip" style="color:#8294b8;margin-top:6px">The carriage follows the profile — smooth ends, no slamming.</div>
+            </div>
+            <div>
+              <canvas id="profPlot"></canvas>
+              <div class="legend">
+                <span><i style="background:#2fd3c0"></i> velocity profile</span>
+                <span><i style="background:#ffc24d" class="dot"></i> right now</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="control">
+              <label for="dist">Move distance <span class="val" id="dist-val"></span></label>
+              <input type="range" id="dist" min="0.1" max="1.5" step="0.05" value="1.0" />
+              <div class="hint">Make it small → triangle profile.</div>
+            </div>
+            <div class="control">
+              <label for="vmax">Max velocity <span class="val" id="vmax-val"></span></label>
+              <input type="range" id="vmax" min="0.3" max="2.5" step="0.1" value="1.2" />
+            </div>
+            <div class="control">
+              <label for="amax">Max acceleration <span class="val" id="amax-val"></span></label>
+              <input type="range" id="amax" min="0.5" max="6" step="0.1" value="2.5" />
+            </div>
+          </div>
+          <div class="readout">
+            <span>Phase: <b id="roPhase">—</b></span>
+            <span>Total move time: <b id="roT">—</b></span>
+            <span>Peak speed: <b id="roVpk">—</b></span>
+            <span>Shape: <b id="roShape">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">🌊</span>
+          <div><strong>Going further:</strong> a trapezoid still has sharp corners in acceleration (it jumps from
+          0 to +a instantly). Limiting how fast acceleration itself can change gives an even gentler
+          <strong>S-curve</strong> (jerk-limited) profile. Same idea, one more layer of smoothness — great for
+          tall, tippy mechanisms.</div>
+        </div>
+
+        <p>
+          So far every mechanism moved in one dimension. Next we give the <em>whole robot</em> the ability to
+          move — and that means turning a joystick into wheel commands: <strong>drive kinematics</strong>.
+        </p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    // ---- trapezoidal profile (verified math) ----
+    function makeProfile(d, vmax, amax){
+      let ta=vmax/amax, da=0.5*amax*ta*ta, tc, T, vpk=vmax, triangle=false;
+      if(2*da>=d){ triangle=true; vpk=Math.sqrt(amax*d); ta=vpk/amax; da=0.5*amax*ta*ta; tc=0; T=2*ta; }
+      else { tc=(d-2*da)/vmax; T=2*ta+tc; }
+      return {T,ta,tc,vpk,triangle,d,amax,
+        at(t){ t=Math.max(0,Math.min(T,t)); let p,v,ph;
+          if(t<ta){p=0.5*amax*t*t; v=amax*t; ph="ramp up";}
+          else if(t<ta+tc){p=da+vpk*(t-ta); v=vpk; ph="cruise";}
+          else{const td=T-t; p=d-0.5*amax*td*td; v=amax*td; ph="ramp down";}
+          return {p,v,ph}; } };
+    }
+
+    let dist=1.0, vmax=1.2, amax=2.5;
+    let prof=makeProfile(dist,vmax,amax);
+    function rebuild(){prof=makeProfile(dist,vmax,amax);}
+
+    // animation state: ping-pong between 0 and dist
+    let pt=0, goingUp=true; const HOLD=0.5; let holdT=0;
+    const dt=1/60;
+    function step(){
+      if(holdT>0){holdT-=dt; return;}
+      pt+=dt;
+      if(pt>=prof.T){ pt=prof.T; holdT=HOLD; goingUp=!goingUp; pt=0; }
+    }
+    function curPos(){ const s=prof.at(pt); return goingUp? s.p : dist - s.p; }
+
+    // ---- slide canvas ----
+    const sc=document.getElementById("slideCanvas"), sx=sc.getContext("2d");
+    function sizeS(){const dpr=window.devicePixelRatio||1;const w=sc.clientWidth||320;const h=300;
+      sc.style.height=h+"px";sc.width=w*dpr;sc.height=h*dpr;sx.setTransform(dpr,0,0,dpr,0,0);sc._w=w;sc._h=h;}
+    sizeS();window.addEventListener("resize",sizeS);
+    function drawSlide(){
+      const w=sc._w,h=sc._h;
+      sx.fillStyle="#0b1120";sx.fillRect(0,0,w,h);
+      const railX=w/2, top=30, bot=h-30, travel=bot-top;
+      // rail
+      sx.strokeStyle="#2a3656";sx.lineWidth=10;sx.lineCap="round";
+      sx.beginPath();sx.moveTo(railX,top);sx.lineTo(railX,bot);sx.stroke();
+      // target ticks
+      sx.strokeStyle="#3b4a6e";sx.lineWidth=1;
+      for(let i=0;i<=10;i++){const y=bot-i/10*travel;sx.beginPath();sx.moveTo(railX-22,y);sx.lineTo(railX+22,y);sx.stroke();}
+      // top target marker (= dist relative to max 1.5)
+      const frac=curPos()/1.5;
+      const cy=bot-frac*travel;
+      const goalFrac=dist/1.5, gy=bot-goalFrac*travel;
+      sx.strokeStyle="#6f8bff";sx.setLineDash([6,5]);sx.lineWidth=2;
+      sx.beginPath();sx.moveTo(railX-34,gy);sx.lineTo(railX+34,gy);sx.stroke();sx.setLineDash([]);
+      sx.fillStyle="#6f8bff";sx.font="11px Inter,sans-serif";sx.textAlign="left";
+      sx.fillText("top "+dist.toFixed(2)+" m",railX+40,gy+4);
+      // carriage
+      sx.fillStyle="#5ce08a";sx.strokeStyle="#2fd3c0";sx.lineWidth=2;
+      roundRect(sx,railX-30,cy-16,60,32,7);sx.fill();sx.stroke();
+      sx.fillStyle="#0b1120";sx.beginPath();sx.arc(railX,cy,5,0,7);sx.fill();
+      sx.fillStyle="#cfe0ff";sx.textAlign="center";sx.fillText(curPos().toFixed(2)+" m",railX,cy-22);
+    }
+    function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);
+      c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+    // ---- profile plot ----
+    const plot=new Plot("profPlot",{height:300,xmin:0,xmax:2,ymin:0,ymax:2.5,yLabel:"speed (m/s)",xLabel:"seconds"});
+    function drawPlot(){
+      plot.setX(0,prof.T*1.05+1e-3);
+      plot.setY(0,Math.max(vmax,prof.vpk)*1.2);
+      plot.clear();plot.grid();
+      // build trapezoid polyline
+      const pts=[]; const N=80;
+      for(let i=0;i<=N;i++){const tt=i/N*prof.T; pts.push([tt,prof.at(tt).v]);}
+      plot.clip(()=>{
+        plot.band(pts.map(p=>[p[0],0,p[1]]),"rgba(47,211,192,0.15)");
+        plot.line(pts,{color:"#2fd3c0",width:3});
+        const s=prof.at(pt);
+        plot.dot(pt, s.v, {color:"#ffc24d", r:5, ring:"#fff", ringW:1.5});
+      });
+    }
+
+    function draw(){
+      drawSlide(); drawPlot();
+      const s=prof.at(pt);
+      $("roPhase").textContent = (holdT>0?"hold":(goingUp?s.ph+" ↑":s.ph+" ↓"));
+      $("roT").textContent = prof.T.toFixed(2)+" s";
+      $("roVpk").textContent = prof.vpk.toFixed(2)+" m/s";
+      $("roShape").textContent = prof.triangle? "triangle (too short)" : "trapezoid";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<10){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("dist",{fmt:(v)=>v.toFixed(2)+" m",onChange:(v)=>{dist=v;rebuild();pt=0;holdT=0;}});
+    bindSlider("vmax",{fmt:(v)=>v.toFixed(1)+" m/s",onChange:(v)=>{vmax=v;rebuild();pt=0;holdT=0;}});
+    bindSlider("amax",{fmt:(v)=>v.toFixed(1)+" m/s²",onChange:(v)=>{amax=v;rebuild();pt=0;holdT=0;}});
+  })();
+  </script>
+</body>
+</html>

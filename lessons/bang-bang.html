@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>On/Off (Bang-Bang) Control — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌡️</text></svg>" />
+</head>
+<body data-page="bang-bang">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🌡️ Controllers · Lesson 9</span>
+          <h1>On/Off (Bang-Bang) Control</h1>
+          <p class="sub">The simplest controller there is — and it's heating your home right now.</p>
+        </div>
+
+        <p>
+          Not every controller needs to be clever. <strong>Bang-bang control</strong> (also called
+          <em>on/off</em> or <em>hysteresis</em> control) has exactly two settings: <strong>full ON</strong>
+          and <strong>full OFF</strong>. Too cold? Heater fully on. Warm enough? Heater fully off. That's it.
+          Your home thermostat, your fridge, a kettle, an electric oven — all bang-bang.
+        </p>
+
+        <div class="analogy">
+          <strong>🚰 Analogy.</strong> It's like filling a glass by slapping the tap fully open, then fully
+          shut, over and over — versus PID, which is like easing the tap to a precise trickle. Cruder, but
+          dead simple and impossible to "mis-tune."
+        </div>
+
+        <h2>The one wrinkle: the deadband</h2>
+        <p>
+          If the heater flipped on and off the instant you crossed the target, it would
+          <strong>chatter</strong> — switching thousands of times a second, wearing itself out. The fix is
+          a <strong>deadband</strong> (or <em>hysteresis</em>): a little gap around the target where nothing
+          changes.
+        </p>
+        <ul class="clean">
+          <li>Turn <strong>ON</strong> only when temperature drops below <code>target − ½ band</code>.</li>
+          <li>Turn <strong>OFF</strong> only when it rises above <code>target + ½ band</code>.</li>
+          <li>In between, leave it exactly as it is. That gap stops the frantic switching.</li>
+        </ul>
+
+        <figure class="figure">
+          <svg viewBox="0 0 560 200" role="img" aria-label="Hysteresis sawtooth around a setpoint">
+            <style>.bt{font:600 12px Inter,sans-serif;fill:#56617a}</style>
+            <rect x="60" y="70" width="460" height="44" fill="rgba(79,108,247,.08)"/>
+            <line x1="60" y1="92" x2="520" y2="92" stroke="#4f6cf7" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <line x1="60" y1="70" x2="520" y2="70" stroke="#ef4476" stroke-width="1.5"/>
+            <line x1="60" y1="114" x2="520" y2="114" stroke="#11b5a4" stroke-width="1.5"/>
+            <text x="525" y="74" class="bt" fill="#ef4476">OFF above here</text>
+            <text x="525" y="96" class="bt">target</text>
+            <text x="525" y="118" class="bt" fill="#0c8174">ON below here</text>
+            <polyline points="60,114 130,70 200,114 270,70 340,114 410,70 480,114" fill="none" stroke="#ffc24d" stroke-width="3"/>
+            <text x="200" y="150" class="bt">temperature bounces between the two lines (sawtooth) ↑↓</text>
+          </svg>
+          <figcaption>The temperature never sits still — it sawtooths up and down inside the deadband.
+            That gentle oscillation is the signature of bang-bang control.</figcaption>
+        </figure>
+
+        <h2>Play thermostat</h2>
+        <p>
+          Set the <strong>deadband</strong> width and watch the trade-off. A <em>narrow</em> band keeps the
+          temperature very close to target but the heater switches constantly (clicky and wearing). A
+          <em>wide</em> band switches rarely but lets the room swing further from comfy.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Thermostat with hysteresis</div>
+          <canvas id="bbCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#ffc24d"></i> Room temperature</span>
+            <span><i style="background:#6f8bff" class="dot"></i> Target</span>
+            <span><i style="background:rgba(111,139,255,.4)"></i> Deadband</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="bbBand">Deadband width <span class="val" id="bbBand-val"></span></label>
+              <input type="range" id="bbBand" min="0.2" max="6" step="0.1" value="2" />
+              <div class="hint">Narrow = precise but clicky · Wide = lazy but swingy</div>
+            </div>
+            <div class="control">
+              <label for="bbPow">Heater power <span class="val" id="bbPow-val"></span></label>
+              <input type="range" id="bbPow" min="0.5" max="3" step="0.1" value="1.6" />
+            </div>
+          </div>
+          <div class="readout">
+            <span>Heater: <b id="bbState">—</b></span>
+            <span>Switches/min: <b id="bbRate">—</b></span>
+            <span>Swing: <b id="bbSwing">—</b></span>
+          </div>
+        </div>
+
+        <h2>Bang-bang vs. PID</h2>
+        <table class="tidy">
+          <tr><th></th><th>Bang-bang</th><th>PID</th></tr>
+          <tr><td>Output</td><td>Just ON or OFF</td><td>Any smooth amount</td></tr>
+          <tr><td>Tuning</td><td>One knob (the deadband)</td><td>Three gains, real skill</td></tr>
+          <tr><td>Result</td><td>Always sawtooths a bit</td><td>Can settle perfectly still</td></tr>
+          <tr><td>Best for</td><td>Heaters, fridges, pumps — slow systems where a little wobble is fine</td>
+              <td>Drones, motors, anything needing precision &amp; smoothness</td></tr>
+        </table>
+
+        <div class="callout idea">
+          <span class="ic">💡</span>
+          <div><strong>Why it survives:</strong> bang-bang is unbeatable when your actuator <em>can't</em> do
+          "half power" anyway (a relay, a valve, a compressor) and when the system is slow enough that a
+          gentle sawtooth doesn't matter. Simple, robust, basically free. Don't over-engineer.</div>
+        </div>
+
+        <p>Bang-bang and PID both only react to the <em>present</em>. The final controller is the
+          mastermind that simulates the <em>future</em> before it acts: Model Predictive Control.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const plot=new Plot("bbCanvas",{height:300,xmin:0,xmax:30,ymin:14,ymax:28,yLabel:"°C",xLabel:"seconds"});
+    const SET=21, Tout=6, loss=0.08;
+    let band=2, power=1.6, T=18, on=false, t=0;
+    const tempT=new Trace(1200);
+    let switches=[], swingLo=21, swingHi=21;
+
+    function step(dt){
+      t+=dt;
+      if(T < SET-band/2) on=true;
+      else if(T > SET+band/2) on=false;
+      const prevOn=on;
+      T += ((on?power:0) - loss*(T-Tout))*dt;
+      tempT.push(t,T);
+      // track switching by detecting state edges across steps
+      if(step._last!==undefined && step._last!==on) switches.push(t);
+      step._last=on;
+      switches=switches.filter(s=>s>t-60);
+      // swing within last window
+      const pts=tempT.points(); let lo=99,hi=-99;
+      for(let i=Math.max(0,pts.length-400);i<pts.length;i++){lo=Math.min(lo,pts[i][1]);hi=Math.max(hi,pts[i][1]);}
+      swingLo=lo;swingHi=hi;
+    }
+    function draw(){
+      plot.setX(Math.max(0,t-30),Math.max(30,t));
+      plot.clear();plot.grid();
+      // deadband shaded
+      const pts=[]; for(let xx=plot.o.xmin;xx<=plot.o.xmax;xx+=1)pts.push([xx,SET-band/2,SET+band/2]);
+      plot.band(pts,"rgba(111,139,255,.16)");
+      plot.hline(SET,{color:"#6f8bff",dash:[6,5],width:1.5});
+      plot.clip(()=>plot.line(tempT.points(),{color:"#ffc24d",width:3}));
+      $("bbState").textContent=on?"🔥 ON":"❄️ OFF";
+      $("bbRate").textContent=switches.length.toString();
+      $("bbSwing").textContent=(swingHi-swingLo).toFixed(1)+" °C";
+    }
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      const dt=1/60;let k=0;while(acc>=dt&&k<8){step(dt*5);acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("bbBand",{fmt:(v)=>v.toFixed(1)+" °C",onChange:(v)=>band=v});
+    bindSlider("bbPow",{fmt:(v)=>v.toFixed(1),onChange:(v)=>power=v});
+  })();
+  </script>
+</body>
+</html>

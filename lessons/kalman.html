@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kalman Filter — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>" />
+</head>
+<body data-page="kalman">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🎯 Filters · Lesson 6</span>
+          <h1>The Kalman Filter</h1>
+          <p class="sub">The legendary filter that landed Apollo on the Moon — and lives in your phone's GPS.</p>
+        </div>
+
+        <p>
+          The <strong>Kalman filter</strong> has a scary reputation, but the idea is beautifully simple.
+          It's a filter that does two things over and over: it <strong>predicts</strong> where something
+          should be, then <strong>corrects</strong> that guess with a fresh (noisy) measurement —
+          blending the two in the smartest possible proportion. It even tracks <em>how unsure it is</em>
+          and uses that to decide how much to trust the next reading.
+        </p>
+
+        <div class="analogy">
+          <strong>🚗 Analogy.</strong> You're tracking a friend's car. You know its speed, so you can
+          <em>predict</em> "it should be about here now." Then a blurry GPS ping arrives. You don't fully
+          believe the ping (GPS is noisy) and you don't fully believe your guess (cars turn) — you split
+          the difference, leaning toward whichever you trust more right now. That's a Kalman filter.
+        </div>
+
+        <h2>The two-step heartbeat</h2>
+        <figure class="figure">
+          <svg viewBox="0 0 640 220" role="img" aria-label="Kalman predict-update cycle">
+            <defs><marker id="ka" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7"/></marker></defs>
+            <style>.kt{font:700 15px Inter,sans-serif;fill:#1c2333}.kd{font:500 12px Inter,sans-serif;fill:#56617a}</style>
+            <rect x="60" y="60" width="200" height="92" rx="16" fill="rgba(79,108,247,.08)" stroke="#4f6cf7" stroke-width="2"/>
+            <text x="160" y="92" class="kt" text-anchor="middle">1 · PREDICT</text>
+            <text x="160" y="116" class="kd" text-anchor="middle">"Where should it be?"</text>
+            <text x="160" y="134" class="kd" text-anchor="middle">use motion → guess gets fuzzier</text>
+
+            <rect x="380" y="60" width="200" height="92" rx="16" fill="rgba(17,181,164,.08)" stroke="#11b5a4" stroke-width="2"/>
+            <text x="480" y="92" class="kt" text-anchor="middle">2 · UPDATE</text>
+            <text x="480" y="116" class="kd" text-anchor="middle">"What did the sensor say?"</text>
+            <text x="480" y="134" class="kd" text-anchor="middle">blend in measurement → sharper</text>
+
+            <path d="M260 90 L376 90" stroke="#4f6cf7" stroke-width="2.5" fill="none" marker-end="url(#ka)"/>
+            <path d="M480 152 C480 195, 160 195, 160 156" stroke="#11b5a4" stroke-width="2.5" fill="none" marker-end="url(#ka)"/>
+            <text x="320" y="80" class="kd" text-anchor="middle">prediction</text>
+            <text x="320" y="210" class="kd" text-anchor="middle">corrected estimate loops back, forever</text>
+          </svg>
+          <figcaption>Predict → Update → Predict → Update… many times a second. Each prediction widens
+            the uncertainty; each measurement shrinks it back.</figcaption>
+        </figure>
+
+        <h2>The secret sauce: the Kalman gain</h2>
+        <p>
+          The whole filter balances on one number, the <strong>Kalman gain (K)</strong> — basically "how
+          much do I trust this new measurement?" It's computed automatically from the two uncertainties:
+        </p>
+        <ul class="clean">
+          <li>If the <strong>sensor is noisy</strong> → small gain → mostly trust the prediction (stay smooth).</li>
+          <li>If your <strong>prediction is shaky</strong> → big gain → jump toward the measurement.</li>
+          <li>It re-balances <em>every single step</em>. That self-tuning is what makes it special.</li>
+        </ul>
+
+        <div class="callout math">
+          <span class="ic">🔢</span>
+          <div>The update is just a smart version of the low-pass formula you already know:<br>
+          <code>estimate = prediction + K × (measurement − prediction)</code><br>
+          The only new trick is that <strong>K is chosen optimally</strong> from the math, instead of you
+          guessing an α by hand.</div>
+        </div>
+
+        <h2>Watch it track a moving target</h2>
+        <p>
+          A target (<span style="color:#5ce08a"><strong>green</strong></span>) flies a smooth path. Your
+          radar only gives you the noisy <span style="color:#ffc24d"><strong>yellow blips</strong></span>.
+          The Kalman filter turns those blips into the smooth
+          <span style="color:#6f8bff"><strong>blue estimate</strong></span>, with a shaded
+          <strong>uncertainty bubble</strong> showing how sure it is.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> 2-D Kalman tracking</div>
+          <canvas id="kfCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#5ce08a" class="dot"></i> True target</span>
+            <span><i style="background:#ffc24d" class="dot"></i> Noisy measurements</span>
+            <span><i style="background:#6f8bff"></i> Kalman estimate</span>
+            <span><i style="background:rgba(111,139,255,.5)" class="dot"></i> Uncertainty</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="kfR">Measurement noise <span class="val" id="kfR-val"></span></label>
+              <input type="range" id="kfR" min="0.5" max="9" step="0.1" value="3.5" />
+              <div class="hint">How blurry the radar blips are.</div>
+            </div>
+            <div class="control">
+              <label for="kfQ">Model trust <span class="val" id="kfQ-val"></span></label>
+              <input type="range" id="kfQ" min="0.3" max="40" step="0.5" value="18" />
+              <div class="hint">Low = "it moves predictably" (smoother, lags on turns) · High = "it could do anything"</div>
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn" id="kfBlips">👁️ Show only blips (hide truth)</button>
+            <button class="demo-btn" id="kfReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Raw blip error: <b id="kfErrM">—</b></span>
+            <span>Kalman error: <b id="kfErrK">—</b></span>
+            <span>Improvement: <b id="kfImp">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout tip">
+          <span class="ic">✅</span>
+          <div>Look at the readouts: the Kalman error is usually a fraction of the raw blip error — it's
+          genuinely extracting signal from noise. Push <strong>measurement noise</strong> way up and the
+          blue line stays calm and sensible while the blips scatter wildly. That's the magic.</div>
+        </div>
+
+        <div class="callout warn">
+          <span class="ic">⚠️</span>
+          <div>Set <strong>Model trust</strong> very low and watch the estimate lag on sharp turns — it
+          trusts its "moves predictably" assumption too much. Crank it high and the estimate gets jumpy,
+          chasing every blip. Tuning that balance is the real job of a Kalman engineer.</div>
+        </div>
+
+        <p>
+          One catch: the basic Kalman filter assumes everything moves in nice <strong>straight-line</strong>
+          (linear) ways. The real world has curves, angles, and spin. For that we need a clever upgrade…
+        </p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script>
+  (function () {
+    function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+      return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+    const cv = document.getElementById("kfCanvas");
+    const ctx = cv.getContext("2d");
+    const WX = 100, WY = 60;       // world size
+    let scale=1, ox=0, oy=0;
+    function size(){
+      const dpr=window.devicePixelRatio||1; const w=cv.clientWidth||600; const h=340;
+      cv.style.height=h+"px"; cv.width=w*dpr; cv.height=h*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+      cv._w=w; cv._h=h;
+      const pad=18; scale=Math.min((w-2*pad)/WX,(h-2*pad)/WY);
+      ox=(w-WX*scale)/2; oy=(h-WY*scale)/2;
+    }
+    size(); window.addEventListener("resize", size);
+    const PX=(x)=>ox+x*scale, PY=(y)=>oy+(WY-y)*scale;
+
+    // per-axis constant-velocity Kalman filter
+    function makeAxis(p0){ return { x:[p0,0], P:[[10,0],[0,10]] }; }
+    function kfStep(ax, z, dt, q, r){
+      const [p,v]=ax.x;
+      const pp=p+v*dt, pv=v;
+      const P=ax.P, F=[[1,dt],[0,1]];
+      // Pp = F P F' + Q
+      let Pp=[
+        [P[0][0]+dt*P[1][0]+dt*(P[0][1]+dt*P[1][1]), P[0][1]+dt*P[1][1]],
+        [P[1][0]+dt*P[1][1], P[1][1]]
+      ];
+      const Q=[[q*dt**4/4,q*dt**3/2],[q*dt**3/2,q*dt**2]];
+      Pp=[[Pp[0][0]+Q[0][0],Pp[0][1]+Q[0][1]],[Pp[1][0]+Q[1][0],Pp[1][1]+Q[1][1]]];
+      const y=z-pp, S=Pp[0][0]+r, K0=Pp[0][0]/S, K1=Pp[1][0]/S;
+      ax.x=[pp+K0*y, pv+K1*y];
+      ax.P=[[ (1-K0)*Pp[0][0], (1-K0)*Pp[0][1] ],
+            [ Pp[1][0]-K1*Pp[0][0], Pp[1][1]-K1*Pp[0][1] ]];
+    }
+
+    let R=3.5, Q=18, hideTruth=false, t=0;
+    let axX, axY;
+    const truePath=[], measPts=[], estPath=[];
+    let errM=2, errK=1;
+
+    function truePos(tt){ return [ 50+34*Math.sin(tt*0.32), 30+17*Math.sin(tt*0.46+0.5) ]; }
+    function reset(){ const p=truePos(0); axX=makeAxis(p[0]); axY=makeAxis(p[1]);
+      truePath.length=0; measPts.length=0; estPath.length=0; t=0; errM=2; errK=1; }
+    reset();
+
+    const dt=0.06;
+    function step(){
+      t+=dt;
+      const [tx,ty]=truePos(t);
+      const sd=Math.sqrt(R);
+      const mx=tx+sd*randn(), my=ty+sd*randn();
+      kfStep(axX,mx,dt,Q,R); kfStep(axY,my,dt,Q,R);
+      const ex=axX.x[0], ey=axY.x[0];
+      truePath.push([tx,ty]); measPts.push([mx,my]); estPath.push([ex,ey]);
+      if(truePath.length>140){truePath.shift();estPath.shift();}
+      if(measPts.length>45)measPts.shift();
+      errM=0.95*errM+0.05*Math.hypot(mx-tx,my-ty);
+      errK=0.95*errK+0.05*Math.hypot(ex-tx,ey-ty);
+    }
+
+    function draw(){
+      const w=cv._w,h=cv._h;
+      ctx.fillStyle="#0b1120"; ctx.fillRect(0,0,w,h);
+      // grid
+      ctx.strokeStyle="rgba(255,255,255,.05)"; ctx.lineWidth=1;
+      for(let gx=0;gx<=WX;gx+=10){ctx.beginPath();ctx.moveTo(PX(gx),PY(0));ctx.lineTo(PX(gx),PY(WY));ctx.stroke();}
+      for(let gy=0;gy<=WY;gy+=10){ctx.beginPath();ctx.moveTo(PX(0),PY(gy));ctx.lineTo(PX(WX),PY(gy));ctx.stroke();}
+
+      // true path
+      if(!hideTruth && truePath.length>1){
+        ctx.strokeStyle="rgba(92,224,138,.45)"; ctx.lineWidth=2; ctx.beginPath();
+        truePath.forEach((p,i)=> i?ctx.lineTo(PX(p[0]),PY(p[1])):ctx.moveTo(PX(p[0]),PY(p[1]))); ctx.stroke();
+      }
+      // measurements
+      ctx.fillStyle="rgba(255,194,77,.85)";
+      for(const m of measPts){ ctx.beginPath(); ctx.arc(PX(m[0]),PY(m[1]),2.6,0,7); ctx.fill(); }
+      // estimate path
+      if(estPath.length>1){
+        ctx.strokeStyle="#6f8bff"; ctx.lineWidth=3; ctx.lineJoin="round"; ctx.beginPath();
+        estPath.forEach((p,i)=> i?ctx.lineTo(PX(p[0]),PY(p[1])):ctx.moveTo(PX(p[0]),PY(p[1]))); ctx.stroke();
+      }
+      // uncertainty bubble (radius from covariance)
+      const ex=axX.x[0], ey=axY.x[0];
+      const unc=Math.sqrt(Math.max(axX.P[0][0],axY.P[0][0]))*2;
+      ctx.fillStyle="rgba(111,139,255,.16)"; ctx.strokeStyle="rgba(111,139,255,.5)"; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.arc(PX(ex),PY(ey),Math.max(unc*scale,4),0,7); ctx.fill(); ctx.stroke();
+      // current dots
+      if(!hideTruth){ const tp=truePath[truePath.length-1];
+        if(tp){ctx.fillStyle="#5ce08a";ctx.beginPath();ctx.arc(PX(tp[0]),PY(tp[1]),5,0,7);ctx.fill();}}
+      ctx.fillStyle="#cfe0ff"; ctx.beginPath(); ctx.arc(PX(ex),PY(ey),4,0,7); ctx.fill();
+
+      $("kfErrM").textContent=errM.toFixed(2);
+      $("kfErrK").textContent=errK.toFixed(2);
+      const imp=errM>0.01?(errM/Math.max(errK,1e-3)):1;
+      $("kfImp").textContent=imp.toFixed(1)+"× cleaner";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      const fr=1/60;let k=0;while(acc>=fr&&k<6){step();acc-=fr;k++;}draw();
+      requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("kfR",{fmt:(v)=>v.toFixed(1),onChange:(v)=>R=v*v/3.5});
+    bindSlider("kfQ",{fmt:(v)=>v.toFixed(1),onChange:(v)=>Q=v});
+    $("kfBlips").addEventListener("click",(e)=>{hideTruth=!hideTruth;
+      e.target.classList.toggle("active",hideTruth);
+      e.target.textContent=hideTruth?"👁️ Show truth":"👁️ Show only blips (hide truth)";});
+    $("kfReset").addEventListener("click",reset);
+  })();
+  </script>
+</body>
+</html>

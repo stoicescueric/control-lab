@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Path Following (Pure Pursuit) — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛤️</text></svg>" />
+</head>
+<body data-page="path-following">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🛤️ Robotics (FTC/FRC) · Lesson 16</span>
+          <h1>Path Following — Pure Pursuit</h1>
+          <p class="sub">Give the robot a path and one delightfully simple rule: always chase a point a little way ahead.</p>
+        </div>
+
+        <p>
+          Your autonomous has a plan: a curve across the field from the start to a scoring spot. The robot knows
+          where it is (odometry, Lesson 15). How does it actually <em>follow</em> the path smoothly, instead of
+          driving to each waypoint and stopping? The classic answer — used by FRC and FTC teams for years — is
+          <strong>Pure Pursuit</strong>, and it's almost suspiciously simple.
+        </p>
+
+        <div class="analogy">
+          <strong>🥕 Carrot on a stick.</strong> Imagine a carrot floating a fixed distance ahead of you,
+          always on the path. You just keep walking toward the carrot. As you move, the carrot slides further
+          along the path, so you're forever curving toward it — and you end up tracing the whole path smoothly.
+          That floating carrot is the <strong>lookahead point</strong>.
+        </div>
+
+        <h2>The whole algorithm</h2>
+        <ol class="derive">
+          <li><strong>Find the lookahead point.</strong> Walk along the path from where you are until you're a
+            fixed <em>lookahead distance</em> <code>Ld</code> away. That point is your carrot.</li>
+          <li><strong>Look at it from the robot's point of view.</strong> Convert the carrot into the robot's own
+            frame, where <em>+x is straight ahead</em> and <em>+y is to the left</em>. Call the sideways offset
+            <code>y</code>.</li>
+          <li><strong>Curve toward it.</strong> There's exactly one circular arc that starts at the robot
+            (pointing forward) and passes through the carrot. Its curvature is:</li>
+        </ol>
+        <div class="formula">
+          curvature = <span class="c-rose">2 · y / Ld²</span> &nbsp;&nbsp;<span class="small">(y = how far left/right the carrot is)</span><br><br>
+          turn rate <span class="c-amber">ω = curvature · v</span> &nbsp;&nbsp;<span class="small">(v = your forward speed)</span>
+        </div>
+        <p>
+          That little formula falls right out of geometry: if the carrot is dead ahead (<code>y = 0</code>),
+          curvature is 0 — drive straight. The further off to the side it is, the harder you curve. Drive forward
+          at <code>v</code> and turn at <code>ω</code>, and repeat every loop. That's the whole controller.
+        </p>
+
+        <h2>The one knob: lookahead distance</h2>
+        <p>It's a balance, and feeling it is the best way to learn it:</p>
+        <table class="tidy">
+          <tr><th>Lookahead Ld</th><th>Behaviour</th></tr>
+          <tr><td><strong>Too small</strong></td><td>Hugs the path tightly but gets twitchy and <em>oscillates</em> — overcorrects, weaves side to side.</td></tr>
+          <tr><td><strong>Too large</strong></td><td>Buttery smooth but <em>cuts corners</em> and rounds off the path, missing tight features.</td></tr>
+          <tr><td><strong>Just right</strong></td><td>Smoothly tracks the path with gentle, stable correction.</td></tr>
+        </table>
+
+        <h2>Drive a path: drag the waypoints, tune the lookahead</h2>
+        <p>
+          The robot follows the blue path using pure pursuit. The <span style="color:#ffc24d">amber carrot</span>
+          is the lookahead point it's chasing. <strong>Drag the white waypoints</strong> to reshape the path, and
+          slide the lookahead distance from tiny (watch it wobble) to large (watch it cut the corners).
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Pure pursuit path follower</div>
+          <canvas id="ppCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#6f8bff"></i> planned path</span>
+            <span><i style="background:#ffc24d" class="dot"></i> lookahead (carrot)</span>
+            <span><i style="background:#5ce08a"></i> robot &amp; trail</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="ld">Lookahead distance <span class="val" id="ld-val"></span></label>
+              <input type="range" id="ld" min="14" max="150" step="2" value="55" />
+              <div class="hint">Small = wobbly · Large = cuts corners.</div>
+            </div>
+            <div class="control">
+              <label for="spd">Robot speed <span class="val" id="spd-val"></span></label>
+              <input type="range" id="spd" min="40" max="200" step="5" value="110" />
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn primary active" id="ppPlay">⏸ Pause</button>
+            <button class="demo-btn" id="ppRestart">↺ Restart from start</button>
+          </div>
+          <div class="readout">
+            <span>Cross-track error: <b id="roCte">—</b></span>
+            <span>Progress: <b id="roProg">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout idea">
+          <span class="ic">🧪</span>
+          <div><strong>Try this:</strong> drag two waypoints into a sharp dog-leg. Set lookahead small — the robot
+          tracks the corner but jitters. Crank lookahead up — smooth as silk, but it slices straight across the
+          corner. There's no "perfect" value; you pick based on how tight your path needs to be.</div>
+        </div>
+
+        <div class="code-label"><span class="badge ftc">FTC</span><span class="badge frc">FRC</span> pure pursuit, one loop iteration</div>
+        <pre class="code"><code>Pose2d robot = odometry.getPoseMeters();
+
+// 1. Lookahead point: first path point at least Ld ahead (don't look backwards).
+Translation2d carrot = path.get(path.size() - 1);          // default to the end
+for (int i = lastIndex; i &lt; path.size(); i++) {
+    if (robot.getTranslation().getDistance(path.get(i)) >= LOOKAHEAD) {
+        carrot = path.get(i);
+        lastIndex = i;        // remember progress so we never target behind us
+        break;
+    }
+}
+
+// 2. Carrot in the robot's frame: +x forward, +y left.
+Translation2d local = carrot.minus(robot.getTranslation())
+                            .rotateBy(robot.getRotation().unaryMinus());
+
+// 3. Arc curvature to the carrot, then command forward speed + turn rate.
+double L         = local.getNorm();
+double curvature = 2 * local.getY() / (L * L);
+double omega     = curvature * CRUISE_SPEED;
+
+drivetrain.drive(CRUISE_SPEED, omega);   // feed into the kinematics from Lesson 14</code></pre>
+
+        <div class="callout tip">
+          <span class="ic">🚀</span>
+          <div><strong>What the real libraries use.</strong> Pure pursuit is the gateway idea. Production
+          followers go further: FRC's <code>RamseteController</code> and <code>HolonomicDriveController</code>,
+          and FTC's <strong>Road Runner</strong> and <strong>Pedro Pathing</strong>, follow full
+          <em>trajectories</em> (paths <em>with</em> a motion profile and timing) and add feedforward + PID on
+          top. Same spirit — look ahead, curve toward the goal — with more accuracy and speed control.</div>
+        </div>
+
+        <p>
+          Driving the whole robot around is one kind of "go to a point." The other is moving a jointed
+          <strong>arm</strong> so its hand lands on a target — which needs the math to run <em>backwards</em>:
+          inverse kinematics.
+        </p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script>
+  (function () {
+    const cv=document.getElementById("ppCanvas"), cx=cv.getContext("2d");
+    function size(){const dpr=window.devicePixelRatio||1;const w=cv.clientWidth||600;const h=400;
+      cv.style.height=h+"px";cv.width=w*dpr;cv.height=h*dpr;cx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h;}
+    size();window.addEventListener("resize",size);
+
+    let waypoints=[];
+    function defaultPath(){const w=cv._w,h=cv._h;
+      waypoints=[[w*0.10,h*0.78],[w*0.30,h*0.30],[w*0.52,h*0.70],[w*0.74,h*0.28],[w*0.92,h*0.62]];}
+    defaultPath();
+    let path=[];
+    function buildPath(){
+      path=[];
+      for(let s=0;s<waypoints.length-1;s++){
+        const a=waypoints[s],b=waypoints[s+1];
+        const d=Math.hypot(b[0]-a[0],b[1]-a[1]);const n=Math.max(2,Math.round(d/5));
+        for(let i=0;i<n;i++){const t=i/n;path.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}
+      }
+      path.push(waypoints[waypoints.length-1].slice());
+    }
+    buildPath();
+
+    let Ld=55, v=110, playing=true;
+    let pose, pi, trail=[];
+    function restart(){
+      const a=path[0],b=path[Math.min(8,path.length-1)];
+      pose={x:a[0],y:a[1],th:Math.atan2(b[1]-a[1],b[0]-a[0])};
+      pi=0; trail=[];
+    }
+    restart();
+
+    const dt=1/60;
+    function nearestAhead(){
+      let best=pi,bd=1e9;
+      for(let i=pi;i<Math.min(path.length,pi+80);i++){
+        const d=Math.hypot(path[i][0]-pose.x,path[i][1]-pose.y);
+        if(d<bd){bd=d;best=i;}
+      }
+      pi=best; return bd;
+    }
+    function lookaheadPt(){
+      for(let i=pi;i<path.length;i++){
+        if(Math.hypot(path[i][0]-pose.x,path[i][1]-pose.y)>=Ld) return path[i];
+      }
+      return path[path.length-1];
+    }
+
+    let cte=0, carrot=null;
+    function step(){
+      if(!playing)return;
+      cte=nearestAhead();
+      // reached end?
+      const last=path[path.length-1];
+      if(pi>=path.length-2 && Math.hypot(pose.x-last[0],pose.y-last[1])<12){ restart(); return; }
+      carrot=lookaheadPt();
+      const dx=carrot[0]-pose.x, dy=carrot[1]-pose.y;
+      const c=Math.cos(-pose.th), s=Math.sin(-pose.th);
+      const xr=dx*c-dy*s, yr=dx*s+dy*c;
+      const L=Math.hypot(xr,yr)||Ld;
+      const curv=2*yr/(L*L);
+      const w=curv*v;
+      pose.x+=v*Math.cos(pose.th)*dt;
+      pose.y+=v*Math.sin(pose.th)*dt;
+      pose.th+=w*dt;
+      if(trail.length===0||Math.hypot(pose.x-trail[trail.length-1][0],pose.y-trail[trail.length-1][1])>3){
+        trail.push([pose.x,pose.y]); if(trail.length>1200)trail.shift();
+      }
+    }
+
+    function draw(){
+      const w=cv._w,h=cv._h;
+      cx.fillStyle="#0b1120";cx.fillRect(0,0,w,h);
+      cx.strokeStyle="rgba(255,255,255,0.06)";cx.lineWidth=1;
+      for(let x=0;x<=w;x+=40){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+      for(let y=0;y<=h;y+=40){cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+      // path
+      cx.strokeStyle="#6f8bff";cx.lineWidth=3;cx.globalAlpha=0.85;
+      cx.beginPath();cx.moveTo(path[0][0],path[0][1]);
+      for(let i=1;i<path.length;i++)cx.lineTo(path[i][0],path[i][1]);cx.stroke();cx.globalAlpha=1;
+      // waypoints
+      waypoints.forEach((p)=>{cx.fillStyle="#e8eefc";cx.strokeStyle="#6f8bff";cx.lineWidth=2;
+        cx.beginPath();cx.arc(p[0],p[1],7,0,7);cx.fill();cx.stroke();});
+      // trail
+      if(trail.length>1){cx.strokeStyle="#5ce08a";cx.lineWidth=2;cx.globalAlpha=0.8;
+        cx.beginPath();cx.moveTo(trail[0][0],trail[0][1]);for(let i=1;i<trail.length;i++)cx.lineTo(trail[i][0],trail[i][1]);cx.stroke();cx.globalAlpha=1;}
+      // lookahead radius + carrot + connector
+      if(carrot){
+        cx.strokeStyle="rgba(255,194,77,0.25)";cx.lineWidth=1.5;cx.setLineDash([4,4]);
+        cx.beginPath();cx.arc(pose.x,pose.y,Ld,0,7);cx.stroke();cx.setLineDash([]);
+        cx.strokeStyle="#ffc24d";cx.lineWidth=1.5;
+        cx.beginPath();cx.moveTo(pose.x,pose.y);cx.lineTo(carrot[0],carrot[1]);cx.stroke();
+        cx.fillStyle="#ffc24d";cx.beginPath();cx.arc(carrot[0],carrot[1],6,0,7);cx.fill();
+      }
+      // robot
+      cx.save();cx.translate(pose.x,pose.y);cx.rotate(pose.th);
+      cx.fillStyle="#5ce08a";cx.beginPath();cx.moveTo(15,0);cx.lineTo(-10,-10);cx.lineTo(-10,10);cx.closePath();cx.fill();
+      cx.restore();
+      $("roCte").textContent=(cte/100).toFixed(2)+" m";
+      $("roProg").textContent=Math.round(100*pi/(path.length-1))+"%";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<10){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("ld",{fmt:(x)=>(x/100).toFixed(2)+" m",onChange:(x)=>Ld=x});
+    bindSlider("spd",{fmt:(x)=>(x/100).toFixed(2)+" m/s",onChange:(x)=>v=x});
+    $("ppPlay").addEventListener("click",()=>{playing=!playing;const b=$("ppPlay");
+      b.textContent=playing?"⏸ Pause":"▶ Play";b.classList.toggle("active",playing);b.classList.toggle("primary",playing);});
+    $("ppRestart").addEventListener("click",restart);
+
+    // drag waypoints
+    let drag=-1;
+    function pos(ev){const r=cv.getBoundingClientRect();
+      return [ (ev.touches?ev.touches[0].clientX:ev.clientX)-r.left, (ev.touches?ev.touches[0].clientY:ev.clientY)-r.top ];}
+    function down(ev){const [mx,my]=pos(ev);
+      for(let i=0;i<waypoints.length;i++){if(Math.hypot(waypoints[i][0]-mx,waypoints[i][1]-my)<14){drag=i;break;}}}
+    function move(ev){if(drag<0)return;const [mx,my]=pos(ev);
+      waypoints[drag]=[Math.max(8,Math.min(cv._w-8,mx)),Math.max(8,Math.min(cv._h-8,my))];buildPath();
+      if(ev.cancelable)ev.preventDefault();}
+    function up(){drag=-1;}
+    cv.addEventListener("mousedown",down);window.addEventListener("mousemove",move);window.addEventListener("mouseup",up);
+    cv.addEventListener("touchstart",down,{passive:true});cv.addEventListener("touchmove",move,{passive:false});window.addEventListener("touchend",up);
+  })();
+  </script>
+</body>
+</html>

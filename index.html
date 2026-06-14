@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Control Lab — Learn Filters & Controllers</title>
+  <meta name="description" content="A friendly, illustrated, interactive guide to filters (Kalman, EKF, low-pass), controllers (PID, MPC, bang-bang), and FTC/FRC robotics (feedforward, motion profiling, kinematics, odometry, pure pursuit, inverse kinematics) — with real Java code, built for curious beginners." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>" />
+</head>
+<body data-page="home">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+
+      <section class="hero">
+        <div class="container">
+          <span class="eyebrow">⚙️ Control Lab</span>
+          <h1>Make sense of filters, controllers &amp; robots — by playing with them.</h1>
+          <p class="lead">
+            Kalman filters, PID controllers, MPC… these sound like rocket science.
+            They're actually built from a few simple ideas. Start with the fundamentals using
+            plain language, friendly pictures, and <strong>interactive demos you can poke at</strong>,
+            then carry them onto a real <strong>FTC / FRC robot</strong> — with the actual Java code,
+            explained line by line. If you know what an average is, you're ready.
+          </p>
+          <div class="cta">
+            <a class="btn btn-primary" href="lessons/intro.html">Start from the beginning →</a>
+            <a class="btn btn-ghost" href="lessons/robotics-intro.html">🤖 Jump to the robotics track</a>
+          </div>
+        </div>
+      </section>
+
+      <div class="container" style="padding-bottom:80px">
+
+        <h2 style="margin-top:48px">🧭 Pick a topic</h2>
+        <p style="color:var(--ink-soft); max-width:64ch">
+          Brand new? Go top to bottom. Already know the basics? Jump straight to the
+          filter or controller you're curious about.
+        </p>
+        <div class="card-grid" id="cards" style="margin-top:22px"></div>
+
+        <h2>🤔 What's the difference between a filter and a controller?</h2>
+        <p>
+          They're the two halves of almost every smart machine — a drone, a self-driving car,
+          a washing machine, your phone's step counter.
+        </p>
+        <div class="card-grid" style="grid-template-columns:1fr 1fr">
+          <div class="card" style="cursor:default">
+            <span class="emoji">🌊</span>
+            <h3>A filter cleans up what you <em>know</em></h3>
+            <p>Sensors are noisy and shaky. A filter takes messy measurements and estimates
+            the true value — like wiping fog off a window so you can see clearly.</p>
+            <span class="tag filter">Kalman · EKF · Low-pass</span>
+          </div>
+          <div class="card" style="cursor:default">
+            <span class="emoji">🎮</span>
+            <h3>A controller decides what to <em>do</em></h3>
+            <p>Once you know where things are, a controller chooses the action — more thrust,
+            less heat, turn left — to reach your goal and hold it there.</p>
+            <span class="tag control">PID · MPC · Bang-bang</span>
+          </div>
+        </div>
+
+        <div class="callout idea" style="margin-top:36px">
+          <span class="ic">💡</span>
+          <div>
+            <strong>How to get the most out of this site:</strong> don't just read — drag the
+            sliders! Every demo lets you break things on purpose. Crank a knob until the drone
+            goes crazy, then bring it back. That "aha" is the whole point.
+          </div>
+        </div>
+
+      </div>
+
+      <footer class="site">
+        <div class="container">
+          Built as a friendly, hands-on intro to control theory &amp; state estimation ·
+          All demos run right in your browser, no installs.
+        </div>
+      </footer>
+
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="assets/js/site.js"></script>
+  <script>
+    // Build the topic cards from the shared lesson list.
+    const cards = document.getElementById("cards");
+    SITE.LESSONS.forEach((l, i) => {
+      const a = document.createElement("a");
+      a.className = "card";
+      a.href = SITE.lessonHref(l.file);
+      a.innerHTML = `
+        <span class="emoji">${l.icon}</span>
+        <div class="num">LESSON ${String(i + 1).padStart(2, "0")}</div>
+        <h3>${l.title}</h3>
+        <p>${l.short}</p>
+        <span class="tag ${l.tag}">${l.group}</span>`;
+      cards.appendChild(a);
+    });
+  </script>
+</body>
+</html>

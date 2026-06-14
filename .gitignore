@@ -1,0 +1,19 @@
+# --- Claude Code / local tooling ---
+.claude/
+
+# --- Verification & screenshot scaffolding (temporary, never ship) ---
+_*.js
+_*.png
+_shot-*.png
+_cprofile/
+
+# --- OS / editor junk ---
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+*.swp
+
+# --- Node (only if you ever add tooling) ---
+node_modules/
+npm-debug.log*

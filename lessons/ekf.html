@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extended Kalman Filter — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>" />
+</head>
+<body data-page="ekf">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">📐 Filters · Lesson 7</span>
+          <h1>The Extended Kalman Filter</h1>
+          <p class="sub">Kalman's worldly sibling — for when reality refuses to move in straight lines.</p>
+        </div>
+
+        <p>
+          The plain Kalman filter has one big assumption baked in: that everything is
+          <strong>linear</strong> — straight lines, simple proportions. But real sensors are often
+          <em>curvy</em>. A radar measures <strong>distance and angle</strong>, not neat x-y coordinates.
+          A thermometer's voltage bends with temperature. The <strong>Extended Kalman Filter (EKF)</strong>
+          is the patch that lets Kalman cope with these <strong>nonlinear</strong> situations — and it's
+          probably the most widely deployed estimator on the planet (GPS, drones, robots).
+        </p>
+
+        <h2>What "nonlinear" means here</h2>
+        <div class="analogy">
+          <strong>📡 Radar analogy.</strong> A radar dish doesn't see "the plane is at x=40, y=12." It sees
+          "something is <em>30 km away</em>, at a <em>bearing of 22°</em>." Turning distance-and-angle into
+          x-y involves sine and cosine — <strong>curved</strong> math. And a tiny angle error becomes a
+          <em>huge</em> position error when the target is far away. That's nonlinearity biting.
+        </div>
+
+        <h2>The one clever trick: zoom in until it's straight</h2>
+        <p>
+          Here's the whole idea of the EKF. A curve, if you zoom in close enough on any point, looks
+          like a <strong>straight line</strong> (think of how the Earth feels flat even though it's round).
+          So at every step the EKF:
+        </p>
+        <ol>
+          <li>Looks at its current best guess.</li>
+          <li>Pretends the curve is a straight line <em>right there</em> (this is called
+            <strong>linearizing</strong>, using a bit of calculus called the <em>Jacobian</em> — just the
+            local slope).</li>
+          <li>Runs the normal Kalman math on that straight-line approximation.</li>
+          <li>Repeats next step from the new guess.</li>
+        </ol>
+
+        <figure class="figure">
+          <svg viewBox="0 0 560 230" role="img" aria-label="Linearizing a curve with its tangent line">
+            <style>.et{font:600 13px Inter,sans-serif;fill:#1c2333}.ed{font:500 12px Inter,sans-serif;fill:#56617a}</style>
+            <line x1="40" y1="190" x2="520" y2="190" stroke="#cdd6ea" stroke-width="1.5"/>
+            <line x1="60" y1="200" x2="60" y2="30" stroke="#cdd6ea" stroke-width="1.5"/>
+            <path d="M60 185 Q 230 180 320 110 T 510 40" fill="none" stroke="#11b5a4" stroke-width="3"/>
+            <text x="430" y="60" class="et" fill="#0c8174">the real (curved) relationship</text>
+            <!-- tangent at a point -->
+            <circle cx="320" cy="110" r="6" fill="#4f6cf7"/>
+            <line x1="200" y1="165" x2="440" y2="55" stroke="#4f6cf7" stroke-width="2.5" stroke-dasharray="7 5"/>
+            <text x="150" y="150" class="et" fill="#3a52d6">straight-line</text>
+            <text x="150" y="167" class="et" fill="#3a52d6">approximation</text>
+            <text x="330" y="128" class="ed">current guess</text>
+          </svg>
+          <figcaption>Near the current guess (blue dot), the EKF replaces the curve with its tangent
+            straight line — then it's just an ordinary Kalman filter again.</figcaption>
+        </figure>
+
+        <div class="callout math">
+          <span class="ic">🧮</span>
+          <div><strong>In one sentence:</strong> the EKF = the Kalman filter + "linearize the curvy parts
+          around my current estimate at every step." Same predict-update heartbeat, same Kalman gain — it
+          just straightens the curve first.</div>
+        </div>
+
+        <h2>See it: tracking a target with radar</h2>
+        <p>
+          The <span style="color:#2fd3c0"><strong>radar</strong></span> at the left only measures
+          <strong>distance + angle</strong> to the target. Because of angle noise, the raw
+          <span style="color:#ffc24d"><strong>measurements</strong></span> smear out into curved arcs —
+          and smear <em>more</em> the farther away the target is. The EKF still reconstructs a smooth,
+          accurate <span style="color:#6f8bff"><strong>estimate</strong></span> of the true
+          <span style="color:#5ce08a"><strong>path</strong></span>.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> EKF radar tracking</div>
+          <canvas id="ekfCanvas"></canvas>
+          <div class="legend">
+            <span><i style="background:#2fd3c0" class="dot"></i> Radar</span>
+            <span><i style="background:#5ce08a" class="dot"></i> True target</span>
+            <span><i style="background:#ffc24d" class="dot"></i> Raw measurements</span>
+            <span><i style="background:#6f8bff"></i> EKF estimate</span>
+          </div>
+          <div class="controls">
+            <div class="control">
+              <label for="ekfRange">Distance noise <span class="val" id="ekfRange-val"></span></label>
+              <input type="range" id="ekfRange" min="0.2" max="6" step="0.1" value="1.2" />
+            </div>
+            <div class="control">
+              <label for="ekfBear">Angle noise <span class="val" id="ekfBear-val"></span></label>
+              <input type="range" id="ekfBear" min="0.5" max="12" step="0.5" value="4" />
+              <div class="hint">Watch the blips fan out into arcs far from the radar.</div>
+            </div>
+          </div>
+          <div class="demo-actions">
+            <button class="demo-btn" id="ekfRays">📡 Show radar beam</button>
+            <button class="demo-btn" id="ekfReset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Raw measurement error: <b id="ekfErrM">—</b></span>
+            <span>EKF error: <b id="ekfErrK">—</b></span>
+          </div>
+        </div>
+
+        <div class="callout tip">
+          <span class="ic">✅</span>
+          <div>Turn <strong>Angle noise</strong> up high. The blips closest to the radar stay tight, but
+          far-away blips scatter across huge arcs — yet the EKF estimate barely flinches. It "knows" angle
+          errors mean more at range (that's exactly what the Jacobian encodes) and weighs them accordingly.</div>
+        </div>
+
+        <h2>EKF vs. Kalman — when to reach for which</h2>
+        <table class="tidy">
+          <tr><th></th><th>Kalman (KF)</th><th>Extended Kalman (EKF)</th></tr>
+          <tr><td>World is…</td><td>Linear (straight-line)</td><td>Nonlinear (curves, angles, spin)</td></tr>
+          <tr><td>Extra work</td><td>None</td><td>Compute a slope (Jacobian) each step</td></tr>
+          <tr><td>Accuracy</td><td>Exact (for linear)</td><td>Approximate — great if curves are gentle</td></tr>
+          <tr><td>Used in</td><td>Simple tracking, finance</td><td>GPS, drones, robot navigation, SLAM</td></tr>
+        </table>
+
+        <div class="callout warn">
+          <span class="ic">⚠️</span>
+          <div>The EKF's straight-line trick only works if the curve is <em>gentle near your guess</em>.
+          If things are wildly curvy or your guess is way off, the approximation can mislead it. That's why
+          fancier cousins exist (the <em>Unscented</em> Kalman Filter, particle filters) — but the EKF
+          remains the trusty workhorse.</div>
+        </div>
+
+        <p>That wraps up filters — turning messy measurements into trustworthy knowledge. Now we switch to
+          the other half of the loop: <strong>deciding what to do</strong>. Time for controllers.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/linalg.js"></script>
+  <script>
+  (function () {
+    const LA = window.LA;
+    function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+      return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+    function wrap(a){while(a>Math.PI)a-=2*Math.PI;while(a<-Math.PI)a+=2*Math.PI;return a;}
+
+    const cv=document.getElementById("ekfCanvas"); const ctx=cv.getContext("2d");
+    const WX=100,WY=60; let scale=1,ox=0,oy=0;
+    function size(){const dpr=window.devicePixelRatio||1;const w=cv.clientWidth||600;const h=340;
+      cv.style.height=h+"px";cv.width=w*dpr;cv.height=h*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+      cv._w=w;cv._h=h;const pad=18;scale=Math.min((w-2*pad)/WX,(h-2*pad)/WY);
+      ox=(w-WX*scale)/2;oy=(h-WY*scale)/2;}
+    size();window.addEventListener("resize",size);
+    const PX=(x)=>ox+x*scale,PY=(y)=>oy+(WY-y)*scale;
+
+    const SX=12, SY=14;             // radar position (world)
+    const dt=0.06;
+    let rNoise=1.2, bNoiseDeg=4, showRays=false, t=0;
+    let x, P;                       // EKF state [x,vx,y,vy] (col), cov
+    const truePath=[], measPts=[], estPath=[];
+    let errM=4, errK=2;
+
+    const F=[[1,dt,0,0],[0,1,0,0],[0,0,1,dt],[0,0,0,1]];
+    function Qmat(){const qd=30,a=qd*dt**4/4,b=qd*dt**3/2,c=qd*dt**2;
+      return [[a,b,0,0],[b,c,0,0],[0,0,a,b],[0,0,b,c]];}
+
+    function truePos(tt){ return [50+30*Math.cos(tt*0.45), 32+18*Math.sin(tt*0.45)]; } // big circle
+
+    function reset(){ const p=truePos(0);
+      x=[[p[0]],[ -30*0.45*Math.sin(0) ],[p[1]],[ 18*0.45*Math.cos(0) ]];
+      P=[[20,0,0,0],[0,20,0,0],[0,0,20,0],[0,0,0,20]];
+      truePath.length=0;measPts.length=0;estPath.length=0;t=0;errM=4;errK=2; }
+    reset();
+
+    function step(){
+      t+=dt;
+      const [tx,ty]=truePos(t);
+      // true range/bearing from radar
+      const dx=tx-SX, dy=ty-SY;
+      const rng=Math.hypot(dx,dy), bear=Math.atan2(dy,dx);
+      const bSd=bNoiseDeg*Math.PI/180;
+      const zr=rng+rNoise*randn(), zb=wrap(bear+bSd*randn());
+      // convert measurement to xy for display
+      const mx=SX+zr*Math.cos(zb), my=SY+zr*Math.sin(zb);
+
+      // ---- EKF predict ----
+      x=LA.mul(F,x);
+      P=LA.add(LA.mul(LA.mul(F,P),LA.transpose(F)),Qmat());
+      // ---- EKF update ----
+      const px=x[0][0]-SX, py=x[2][0]-SY;
+      const r2=px*px+py*py, r=Math.sqrt(r2);
+      const H=[[px/r,0,py/r,0],[-py/r2,0,px/r2,0]];
+      const hx=[Math.sqrt(r2),Math.atan2(py,px)];
+      const yk=[[zr-hx[0]],[wrap(zb-hx[1])]];
+      const R=[[rNoise*rNoise,0],[0,bSd*bSd]];
+      const S=LA.add(LA.mul(LA.mul(H,P),LA.transpose(H)),R);
+      const K=LA.mul(LA.mul(P,LA.transpose(H)),LA.inv(S));
+      x=LA.add(x,LA.mul(K,yk));
+      P=LA.mul(LA.sub(LA.identity(4),LA.mul(K,H)),P);
+
+      const ex=x[0][0], ey=x[2][0];
+      truePath.push([tx,ty]);measPts.push([mx,my]);estPath.push([ex,ey]);
+      if(truePath.length>150){truePath.shift();estPath.shift();}
+      if(measPts.length>40)measPts.shift();
+      errM=0.95*errM+0.05*Math.hypot(mx-tx,my-ty);
+      errK=0.95*errK+0.05*Math.hypot(ex-tx,ey-ty);
+    }
+
+    function draw(){
+      const w=cv._w,h=cv._h; ctx.fillStyle="#0b1120"; ctx.fillRect(0,0,w,h);
+      ctx.strokeStyle="rgba(255,255,255,.05)";ctx.lineWidth=1;
+      for(let gx=0;gx<=WX;gx+=10){ctx.beginPath();ctx.moveTo(PX(gx),PY(0));ctx.lineTo(PX(gx),PY(WY));ctx.stroke();}
+      for(let gy=0;gy<=WY;gy+=10){ctx.beginPath();ctx.moveTo(PX(0),PY(gy));ctx.lineTo(PX(WX),PY(gy));ctx.stroke();}
+
+      // radar range rings
+      ctx.strokeStyle="rgba(47,211,192,.14)";
+      for(let rr=20;rr<=80;rr+=20){ctx.beginPath();ctx.arc(PX(SX),PY(SY),rr*scale,0,7);ctx.stroke();}
+
+      if(showRays){ const tp=truePath[truePath.length-1];
+        if(tp){ctx.strokeStyle="rgba(47,211,192,.5)";ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+          ctx.beginPath();ctx.moveTo(PX(SX),PY(SY));ctx.lineTo(PX(tp[0]),PY(tp[1]));ctx.stroke();ctx.setLineDash([]);}}
+
+      if(truePath.length>1){ctx.strokeStyle="rgba(92,224,138,.45)";ctx.lineWidth=2;ctx.beginPath();
+        truePath.forEach((p,i)=>i?ctx.lineTo(PX(p[0]),PY(p[1])):ctx.moveTo(PX(p[0]),PY(p[1])));ctx.stroke();}
+      ctx.fillStyle="rgba(255,194,77,.8)";
+      for(const m of measPts){ctx.beginPath();ctx.arc(PX(m[0]),PY(m[1]),2.6,0,7);ctx.fill();}
+      if(estPath.length>1){ctx.strokeStyle="#6f8bff";ctx.lineWidth=3;ctx.lineJoin="round";ctx.beginPath();
+        estPath.forEach((p,i)=>i?ctx.lineTo(PX(p[0]),PY(p[1])):ctx.moveTo(PX(p[0]),PY(p[1])));ctx.stroke();}
+
+      // radar icon
+      ctx.fillStyle="#2fd3c0";ctx.beginPath();ctx.arc(PX(SX),PY(SY),6,0,7);ctx.fill();
+      ctx.fillStyle="#0b1120";ctx.font="9px ui-monospace";ctx.textAlign="center";ctx.fillText("◗",PX(SX),PY(SY)+3);
+      // dots
+      const tp=truePath[truePath.length-1];
+      if(tp){ctx.fillStyle="#5ce08a";ctx.beginPath();ctx.arc(PX(tp[0]),PY(tp[1]),5,0,7);ctx.fill();}
+      ctx.fillStyle="#cfe0ff";ctx.beginPath();ctx.arc(PX(x[0][0]),PY(x[2][0]),4,0,7);ctx.fill();
+
+      $("ekfErrM").textContent=errM.toFixed(2);
+      $("ekfErrK").textContent=errK.toFixed(2);
+    }
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      const fr=1/60;let k=0;while(acc>=fr&&k<6){step();acc-=fr;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("ekfRange",{fmt:(v)=>v.toFixed(1),onChange:(v)=>rNoise=v});
+    bindSlider("ekfBear",{fmt:(v)=>v.toFixed(1)+"°",onChange:(v)=>bNoiseDeg=v});
+    $("ekfRays").addEventListener("click",(e)=>{showRays=!showRays;e.target.classList.toggle("active",showRays);});
+    $("ekfReset").addEventListener("click",reset);
+  })();
+  </script>
+</body>
+</html>

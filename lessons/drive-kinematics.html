@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drive Kinematics — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛞</text></svg>" />
+</head>
+<body data-page="drive-kinematics">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🛞 Robotics (FTC/FRC) · Lesson 14</span>
+          <h1>Drive Kinematics</h1>
+          <p class="sub">You think in "go forward and turn." The wheels think in "spin this fast." Kinematics is the translator.</p>
+        </div>
+
+        <p>
+          When you push a joystick you're asking for three things at once: drive
+          <strong>forward/back</strong>, <strong>strafe</strong> sideways, and <strong>turn</strong>. We bundle
+          those into the robot's <em>chassis speeds</em>. But a motor only knows how fast to spin <em>its</em>
+          wheel. <strong>Kinematics</strong> is the math that converts between the two:
+        </p>
+        <ul class="clean">
+          <li><strong>Inverse kinematics</strong> — chassis speeds → individual wheel commands. You run this
+            <em>every teleop loop</em>.</li>
+          <li><strong>Forward kinematics</strong> — wheel speeds → how the chassis is actually moving. The basis
+            of odometry (next lesson).</li>
+        </ul>
+
+        <p>The math depends on the drivetrain. Here are the three you'll meet in FTC/FRC.</p>
+
+        <h2>① Tank / differential drive</h2>
+        <p>
+          Wheels on each side, no sideways motion. Turning means spinning the two sides at different speeds
+          (like a tank, or a shopping trolley you steer by dragging one side). With chassis forward speed
+          <code>v</code>, turn rate <code>ω</code>, and track width <code>T</code> (distance between the sides):
+        </p>
+        <div class="formula">
+          <span class="c-teal">left  = v − ω · (T/2)</span><br>
+          <span class="c-amber">right = v + ω · (T/2)</span>
+        </div>
+
+        <h2>② Mecanum drive</h2>
+        <p>
+          Four special wheels with diagonal rollers. By mixing wheel directions, a mecanum robot can drive
+          forward, strafe sideways, <em>and</em> turn — full movement in any direction. This is the most common
+          FTC drivetrain, and almost every team starts from these exact lines (here <code>fwd</code>,
+          <code>str</code>=strafe-right, <code>turn</code>=clockwise):
+        </p>
+        <div class="formula">
+          <span class="c-teal">frontLeft  = fwd + str + turn</span><br>
+          <span class="c-teal">backLeft   = fwd − str + turn</span><br>
+          <span class="c-amber">frontRight = fwd − str − turn</span><br>
+          <span class="c-amber">backRight  = fwd + str − turn</span>
+        </div>
+        <div class="callout idea">
+          <span class="ic">✳️</span>
+          <div><strong>The magic of the signs.</strong> To strafe right, the front-left and back-right wheels
+          roll forward while front-right and back-left roll backward — the diagonal rollers then push the whole
+          robot sideways. Watch the wheel arrows form that "X" pattern in the demo when you strafe.</div>
+        </div>
+
+        <h2>③ Swerve drive</h2>
+        <p>
+          The Ferrari of drivetrains (mostly FRC). Each corner is a <strong>module</strong> that can both
+          <em>steer</em> to any angle and <em>drive</em> at any speed. Each module's job is the chassis's overall
+          motion <em>plus</em> the spin contribution at that corner. For a module at position
+          <code>(xᵢ, yᵢ)</code> from the robot's center (forward = +x, left = +y), with chassis velocity
+          <code>(vx, vy)</code> and turn rate <code>ω</code>:
+        </p>
+        <div class="formula">
+          module vx = <span class="c-brand">vx − ω · yᵢ</span><br>
+          module vy = <span class="c-brand">vy + ω · xᵢ</span><br><br>
+          <span class="c-teal">speed  = √(vx² + vy²)</span> &nbsp;&nbsp;
+          <span class="c-amber">angle = atan2(vy, vx)</span>
+        </div>
+        <p>
+          That "+ ω × position" piece is just the fact that during a turn, the corners of the robot whip around
+          faster than the center — and each in a different direction. Each module steers to its own
+          <code>angle</code> and drives at its own <code>speed</code>.
+        </p>
+
+        <h2>Drive it: switch drivetrains, push the sticks</h2>
+        <p>
+          Pick a drivetrain, then set forward / strafe / turn. The robot moves on the field and the wheel arrows
+          show what each wheel is doing. Try <strong>pure strafe</strong> on mecanum (watch the X-pattern), and
+          try <strong>strafe on tank</strong> — it can't, the slider does nothing, which is the whole point.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Forward · strafe · turn → wheels</div>
+          <div class="demo-actions" style="margin-top:0;margin-bottom:6px">
+            <button class="demo-btn" data-drive="tank">🚜 Tank</button>
+            <button class="demo-btn primary active" data-drive="mecanum">🦀 Mecanum</button>
+            <button class="demo-btn" data-drive="swerve">🏎️ Swerve</button>
+            <button class="demo-btn" id="recenter" style="margin-left:auto">↺ Recenter robot</button>
+          </div>
+          <canvas id="driveCanvas"></canvas>
+
+          <div class="controls">
+            <div class="control">
+              <label for="fwd">Forward / back <span class="val" id="fwd-val"></span></label>
+              <input type="range" id="fwd" min="-1" max="1" step="0.05" value="0.5" />
+            </div>
+            <div class="control">
+              <label for="str">Strafe (L/R) <span class="val" id="str-val"></span></label>
+              <input type="range" id="str" min="-1" max="1" step="0.05" value="0" />
+              <div class="hint" id="strHint">Sideways motion.</div>
+            </div>
+            <div class="control">
+              <label for="turn">Turn <span class="val" id="turn-val"></span></label>
+              <input type="range" id="turn" min="-1" max="1" step="0.05" value="0" />
+            </div>
+          </div>
+          <div class="readout" id="wheelReadout"></div>
+        </div>
+
+        <div class="code-label"><span class="badge ftc">FTC</span> the mecanum teleop almost every team copies first</div>
+        <pre class="code"><code>double y  = -gamepad1.left_stick_y;   // forward (stick up reads negative)
+double x  =  gamepad1.left_stick_x;   // strafe right
+double rx =  gamepad1.right_stick_x;  // turn clockwise
+
+// Scale all four down together so none exceeds 1.0 (keeps the direction true):
+double denom = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
+
+frontLeft .setPower((y + x + rx) / denom);
+backLeft  .setPower((y - x + rx) / denom);
+frontRight.setPower((y - x - rx) / denom);
+backRight .setPower((y + x - rx) / denom);</code></pre>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> let the kinematics class do the algebra</div>
+        <pre class="code"><code>// SWERVE — give module corner locations once (metres, +x fwd, +y left):
+var kinematics = new SwerveDriveKinematics(
+        new Translation2d( 0.3,  0.3),   // front-left
+        new Translation2d( 0.3, -0.3),   // front-right
+        new Translation2d(-0.3,  0.3),   // back-left
+        new Translation2d(-0.3, -0.3));  // back-right
+
+ChassisSpeeds speeds = new ChassisSpeeds(vx, vy, omega);  // m/s, m/s, rad/s
+SwerveModuleState[] states = kinematics.toSwerveModuleStates(speeds);
+for (int i = 0; i &lt; 4; i++) {
+    modules[i].setAngle(states[i].angle);              // steer
+    modules[i].setSpeed(states[i].speedMetersPerSecond); // drive
+}
+
+// TANK — same idea, simpler:
+var tank = new DifferentialDriveKinematics(trackWidthMetres);
+var w = tank.toWheelSpeeds(new ChassisSpeeds(vx, 0, omega));
+// w.leftMetersPerSecond, w.rightMetersPerSecond</code></pre>
+
+        <div class="callout warn">
+          <span class="ic">🧭</span>
+          <div><strong>Field-centric driving.</strong> Pros usually rotate the joystick command by the robot's
+          heading first, so "push up" always means "away from the driver" no matter which way the robot faces.
+          It's one rotation added in front of the kinematics above — and it needs a good heading estimate, which
+          is exactly what odometry gives us next.</div>
+        </div>
+
+        <p>Now that we can <em>command</em> motion, the natural question is: where did the robot actually end up?
+          That's <strong>odometry</strong>.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script>
+  (function () {
+    const cv=document.getElementById("driveCanvas"), cx=cv.getContext("2d");
+    function size(){const dpr=window.devicePixelRatio||1;const w=cv.clientWidth||600;const h=380;
+      cv.style.height=h+"px";cv.width=w*dpr;cv.height=h*dpr;cx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h;}
+    size();window.addEventListener("resize",size);
+
+    let drive="mecanum";
+    let fwd=0.5, str=0, turn=0;
+    // pose on field (screen coords, y-down). heading th: 0 = facing up.
+    let px, py, th;
+    function recenter(){px=cv._w/2;py=cv._h/2;th=0;}
+    recenter();
+
+    const MAXV=90, MAXW=1.6;            // px/s and rad/s on screen
+    const HALF_L=34, HALF_W=26;          // robot half-size (px)
+    const dt=1/60;
+
+    // robot-frame unit vectors in screen coords
+    function fU(){return [Math.sin(th),-Math.cos(th)];}   // forward
+    function rU(){return [Math.cos(th), Math.sin(th)];}   // right
+
+    function wheelPowers(){
+      if(drive==="tank"){
+        let l=fwd+turn, r=fwd-turn;
+        const d=Math.max(Math.abs(l),Math.abs(r),1); l/=d; r/=d;
+        return {type:"tank", l, r};
+      }
+      if(drive==="mecanum"){
+        let fl=fwd+str+turn, bl=fwd-str+turn, fr=fwd-str-turn, br=fwd+str-turn;
+        const d=Math.max(Math.abs(fl),Math.abs(bl),Math.abs(fr),Math.abs(br),1);
+        return {type:"mecanum", fl:fl/d, bl:bl/d, fr:fr/d, br:br/d};
+      }
+      // swerve: module field velocities
+      const V=chassisVel();
+      const w=turn*MAXW;
+      const corners=cornerOffsets();
+      const mods=corners.map(off=>{
+        const vx=V[0] + w*(-off[1]);   // + w × r  (screen, clockwise +)
+        const vy=V[1] + w*( off[0]);
+        return {speed:Math.hypot(vx,vy), ang:Math.atan2(vy,vx), vx, vy};
+      });
+      return {type:"swerve", mods};
+    }
+
+    function chassisVel(){
+      const f=fU(), r=rU();
+      const useStrafe = (drive!=="tank");
+      const s = useStrafe? str : 0;
+      return [ (fwd*f[0] + s*r[0])*MAXV, (fwd*f[1] + s*r[1])*MAXV ];
+    }
+    // module corner offsets from center (screen coords): FL,FR,BL,BR
+    function cornerOffsets(){
+      const f=fU(), r=rU();
+      const mk=(u,w)=>[u*f[0]+w*r[0], u*f[1]+w*r[1]];
+      return [ mk( HALF_L,-HALF_W), mk( HALF_L, HALF_W), mk(-HALF_L,-HALF_W), mk(-HALF_L, HALF_W) ];
+    }
+
+    function step(){
+      const V=chassisVel();
+      px+=V[0]*dt; py+=V[1]*dt; th+=turn*MAXW*dt;
+      // wrap around the field edges
+      const m=40,w=cv._w,h=cv._h;
+      if(px<-m)px=w+m; if(px>w+m)px=-m; if(py<-m)py=h+m; if(py>h+m)py=-m;
+    }
+
+    function arrow(x,y,dx,dy,color,wid){
+      const len=Math.hypot(dx,dy); if(len<0.5)return;
+      cx.strokeStyle=color;cx.fillStyle=color;cx.lineWidth=wid||3;cx.lineCap="round";
+      cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+dx,y+dy);cx.stroke();
+      const a=Math.atan2(dy,dx),h=6;
+      cx.beginPath();cx.moveTo(x+dx,y+dy);
+      cx.lineTo(x+dx-h*Math.cos(a-0.5),y+dy-h*Math.sin(a-0.5));
+      cx.lineTo(x+dx-h*Math.cos(a+0.5),y+dy-h*Math.sin(a+0.5));cx.closePath();cx.fill();
+    }
+    function powerColor(p){return p>=0?"#5ce08a":"#ff6f9c";}
+
+    function draw(){
+      const w=cv._w,h=cv._h;
+      cx.fillStyle="#0b1120";cx.fillRect(0,0,w,h);
+      // field grid
+      cx.strokeStyle="rgba(255,255,255,0.06)";cx.lineWidth=1;
+      for(let x=0;x<=w;x+=40){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,h);cx.stroke();}
+      for(let y=0;y<=h;y+=40){cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+
+      const f=fU();
+      const wp=wheelPowers();
+      const corners=cornerOffsets();
+
+      // robot body
+      cx.save();cx.translate(px,py);cx.rotate(th);
+      cx.fillStyle="rgba(79,108,247,0.18)";cx.strokeStyle="#6f8bff";cx.lineWidth=2.5;
+      roundRect(cx,-HALF_W,-HALF_L,HALF_W*2,HALF_L*2,8);cx.fill();cx.stroke();
+      // front marker (robot faces -y in local = forward)
+      cx.fillStyle="#6f8bff";cx.beginPath();cx.moveTo(0,-HALF_L-2);cx.lineTo(-7,-HALF_L+10);cx.lineTo(7,-HALF_L+10);cx.closePath();cx.fill();
+      cx.restore();
+
+      // wheels + arrows (field frame)
+      const names=["FL","FR","BL","BR"];
+      for(let i=0;i<4;i++){
+        const c=corners[i], wx=px+c[0], wy=py+c[1];
+        if(wp.type==="swerve"){
+          const m=wp.mods[i];
+          // module body rotated to its drive angle
+          cx.save();cx.translate(wx,wy);cx.rotate(m.ang);
+          cx.fillStyle="#1a2440";cx.strokeStyle="#9fb4e6";cx.lineWidth=2;
+          roundRect(cx,-12,-6,24,12,3);cx.fill();cx.stroke();cx.restore();
+          const sc=26*Math.min(1,m.speed/MAXV);
+          arrow(wx,wy,Math.cos(m.ang)*sc,Math.sin(m.ang)*sc,"#2fd3c0",3);
+        } else {
+          const p = wp.type==="tank" ? (i<2? (i===0?wp.l:wp.r) : (i===2?wp.l:wp.r)) // FL,FR,BL,BR -> l,r,l,r
+                                     : [wp.fl,wp.fr,wp.bl,wp.br][i];
+          // wheel block aligned to robot
+          cx.save();cx.translate(wx,wy);cx.rotate(th);
+          cx.fillStyle="#1a2440";cx.strokeStyle="#9fb4e6";cx.lineWidth=2;
+          roundRect(cx,-7,-12,14,24,3);cx.fill();cx.stroke();
+          if(wp.type==="mecanum"){cx.strokeStyle="#56617a";cx.lineWidth=1.5;
+            for(let k=-2;k<=2;k++){cx.beginPath();cx.moveTo(-6,k*5-3);cx.lineTo(6,k*5+3);cx.stroke();}}
+          cx.restore();
+          const sc=26*p;
+          arrow(wx,wy,f[0]*sc,f[1]*sc,powerColor(p),3);
+        }
+      }
+      // chassis velocity arrow from center
+      const V=chassisVel();
+      arrow(px,py,V[0]*0.32,V[1]*0.32,"#ffc24d",2.5);
+
+      // readout
+      let ro="";
+      if(wp.type==="tank") ro=`<span>Drive: <b>Tank</b></span><span>L: <b>${wp.l.toFixed(2)}</b></span><span>R: <b>${wp.r.toFixed(2)}</b></span>`;
+      else if(wp.type==="mecanum") ro=`<span>Drive: <b>Mecanum</b></span><span>FL <b>${wp.fl.toFixed(2)}</b></span><span>FR <b>${wp.fr.toFixed(2)}</b></span><span>BL <b>${wp.bl.toFixed(2)}</b></span><span>BR <b>${wp.br.toFixed(2)}</b></span>`;
+      else {const a=wp.mods.map((m,i)=>`<span>${names[i]} <b>${(m.speed/MAXV).toFixed(2)} @ ${(m.ang*180/Math.PI).toFixed(0)}°</b></span>`).join("");
+        ro=`<span>Drive: <b>Swerve</b></span>`+a;}
+      $("wheelReadout").innerHTML=ro;
+    }
+    function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);
+      c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<10){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("fwd",{fmt:(v)=>v.toFixed(2),onChange:(v)=>fwd=v});
+    const strIn=bindSlider("str",{fmt:(v)=>v.toFixed(2),onChange:(v)=>str=v});
+    bindSlider("turn",{fmt:(v)=>v.toFixed(2),onChange:(v)=>turn=v});
+
+    document.querySelectorAll("[data-drive]").forEach(b=>b.addEventListener("click",()=>{
+      drive=b.getAttribute("data-drive");
+      document.querySelectorAll("[data-drive]").forEach(x=>{x.classList.remove("primary","active");});
+      b.classList.add("primary","active");
+      const tank=drive==="tank";
+      strIn.disabled=tank; strIn.style.opacity=tank?0.4:1;
+      $("strHint").textContent=tank?"Tank can't strafe — slider disabled.":"Sideways motion.";
+    }));
+    $("recenter").addEventListener("click",recenter);
+  })();
+  </script>
+</body>
+</html>

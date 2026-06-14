@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Robot Control Stack — Control Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+</head>
+<body data-page="robotics-intro">
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="content">
+      <main class="page">
+
+        <div class="lesson-head">
+          <span class="lesson-kicker">🤖 Robotics (FTC/FRC) · Lesson 11</span>
+          <h1>The Robot Control Stack</h1>
+          <p class="sub">Everything you just learned, now bolted onto a real competition robot — and the code that runs it.</p>
+        </div>
+
+        <p>
+          The first ten lessons were the <em>ideas</em>. From here on, we put them on a robot — specifically
+          the kind you build for <strong>FIRST Tech Challenge (FTC)</strong> and <strong>FIRST Robotics
+          Competition (FRC)</strong>. These are high-school robotics leagues, both programmed mostly in
+          <strong>Java</strong>, both with fantastic open-source libraries (WPILib for FRC; Road Runner,
+          Pedro Pathing and FTCLib for FTC). The code in these lessons is the <em>real</em> shape of what
+          those libraries do.
+        </p>
+
+        <div class="callout idea">
+          <span class="ic">🎯</span>
+          <div><strong>The goal of this whole track:</strong> you should be able to read each idea, understand
+          it well enough to <em>start typing it into your robot project</em>, and then learn the rest by
+          watching your robot succeed (or fail hilariously) and tuning it. Half the understanding comes
+          <em>after</em> you run it.</div>
+        </div>
+
+        <h2>The loop that runs your whole robot</h2>
+        <p>
+          A robot doesn't "do" one thing — it runs the <strong>same loop dozens of times a second</strong>,
+          forever. Read sensors, clean them up, decide, act. Repeat. This is exactly the closed loop from
+          Lesson 1, just with names you'll see in real code.
+        </p>
+
+        <figure class="figure">
+          <svg viewBox="0 0 760 250" role="img" aria-label="The sense-estimate-decide-act robot loop">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7"/>
+              </marker>
+            </defs>
+            <style>
+              .bx{fill:#fff;stroke:#4f6cf7;stroke-width:2}
+              .bx2{fill:#fff;stroke:#11b5a4;stroke-width:2}
+              .bx3{fill:#fff;stroke:#f59e0b;stroke-width:2}
+              .bx4{fill:#fff;stroke:#ef4476;stroke-width:2}
+              .t{font:600 14px Inter,sans-serif;fill:#1c2333;text-anchor:middle}
+              .s{font:500 11px Inter,sans-serif;fill:#56617a;text-anchor:middle}
+              .w{stroke:#4f6cf7;stroke-width:2.5;fill:none}
+            </style>
+            <rect class="bx2" x="30"  y="60" width="140" height="56" rx="12"/>
+            <text class="t" x="100" y="84">Sensors</text><text class="s" x="100" y="102">encoders, IMU, camera</text>
+            <rect class="bx"  x="220" y="60" width="140" height="56" rx="12"/>
+            <text class="t" x="290" y="84">Filter / Estimate</text><text class="s" x="290" y="102">Kalman, low-pass</text>
+            <rect class="bx3" x="410" y="60" width="140" height="56" rx="12"/>
+            <text class="t" x="480" y="84">Controller</text><text class="s" x="480" y="102">PID + feedforward</text>
+            <rect class="bx4" x="600" y="60" width="130" height="56" rx="12"/>
+            <text class="t" x="665" y="84">Motors</text><text class="s" x="665" y="102">drive, arm, shooter</text>
+
+            <line class="w" x1="170" y1="88" x2="218" y2="88" marker-end="url(#ar)"/>
+            <line class="w" x1="360" y1="88" x2="408" y2="88" marker-end="url(#ar)"/>
+            <line class="w" x1="550" y1="88" x2="598" y2="88" marker-end="url(#ar)"/>
+            <path class="w" d="M665 116 L665 180 L100 180 L100 118" marker-end="url(#ar)"/>
+            <text class="s" x="382" y="174">the robot moves, the world changes, the sensors read again…</text>
+          </svg>
+          <figcaption>One pass through this loop is called a <em>periodic update</em> or a <em>loop iteration</em>.
+            FRC runs it every <strong>20&nbsp;ms</strong> (50&nbsp;times/second); FTC runs as fast as it can
+            (often 50–100&nbsp;times/second).</figcaption>
+        </figure>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> the loop is a method that's called for you</div>
+        <pre class="code"><code>public class Robot extends TimedRobot {
+    // robotPeriodic() runs automatically every 0.02 s (20 ms).
+    @Override
+    public void robotPeriodic() {
+        double measured = encoder.getRate();          // 1. SENSE
+        double clean    = filter.calculate(measured);  // 2. ESTIMATE (Lesson 3)
+        double output   = pid.calculate(clean, target);// 3. DECIDE  (Lesson 8)
+        motor.setVoltage(output);                       // 4. ACT
+    }
+}</code></pre>
+
+        <div class="code-label"><span class="badge ftc">FTC · SDK</span> you write the loop yourself</div>
+        <pre class="code"><code>waitForStart();
+ElapsedTime timer = new ElapsedTime();
+while (opModeIsActive()) {
+    double dt = timer.seconds();  timer.reset();   // how long since last loop?
+
+    double measured = encoder.getVelocity();        // 1. SENSE
+    double clean    = filter.update(measured);       // 2. ESTIMATE
+    double output   = controller.update(target, clean, dt); // 3. DECIDE
+    motor.setPower(output);                          // 4. ACT
+}</code></pre>
+
+        <div class="callout warn">
+          <span class="ic">⏱️</span>
+          <div><strong>Why <code>dt</code> matters.</strong> Integrals and derivatives (the I and D of PID, every
+          filter, all odometry) are really "per second" math. If your loop runs at a different speed than you
+          assumed, the numbers come out wrong. FRC hands you a fixed 20&nbsp;ms; in FTC you should
+          <em>measure</em> <code>dt</code> each loop, like above.</div>
+        </div>
+
+        <h2>The one piece of math every robot needs: ticks → metres</h2>
+        <p>
+          Motors don't know about metres. They have an <strong>encoder</strong> that counts little <em>ticks</em>
+          as the shaft turns. Your very first job on any mechanism is converting those ticks into something
+          physical — metres travelled, or degrees an arm has rotated. Get this wrong and <em>nothing</em> else
+          (odometry, profiles, paths) can possibly work.
+        </p>
+
+        <div class="formula">
+          ticks per wheel turn = <span class="c-teal">encoder counts/rev</span> × <span class="c-amber">gear ratio</span><br><br>
+          distance = <span class="c-brand">ticks</span> ÷ (ticks per wheel turn) × <span class="c-rose">π · wheel diameter</span>
+        </div>
+
+        <p>
+          The middle part — <span class="c-rose">π · diameter</span> — is just the wheel's
+          <strong>circumference</strong>: how far it rolls in one full turn. Spin the wheel
+          <em>N</em> revolutions and you've rolled <em>N</em> circumferences. That's the whole idea.
+        </p>
+
+        <div class="code-label"><span class="badge ftc">FTC</span> a tiny helper you'll reuse all season</div>
+        <pre class="code"><code>// goBILDA 5202/5203 312-RPM motor as an example:
+static final double TICKS_PER_REV  = 537.7;   // counts per output-shaft turn
+static final double GEAR_RATIO     = 1.0;     // any EXTRA gearing after the motor
+static final double WHEEL_DIAMETER = 0.096;   // metres  (96 mm wheel)
+
+double ticksToMetres(int ticks) {
+    double revolutions = ticks / (TICKS_PER_REV * GEAR_RATIO);
+    return revolutions * Math.PI * WHEEL_DIAMETER;
+}
+
+// later, in the loop:
+double metres = ticksToMetres(motor.getCurrentPosition());</code></pre>
+
+        <div class="code-label"><span class="badge frc">FRC · WPILib</span> the library does it once, then hands you metres</div>
+        <pre class="code"><code>// Tell the encoder how far one tick is, then just read .getDistance():
+encoder.setDistancePerPulse(Math.PI * kWheelDiameter / kCountsPerRev);
+
+double metres        = encoder.getDistance();  // already in metres
+double metresPerSec  = encoder.getRate();      // already in m/s</code></pre>
+
+        <h2>Try it: an encoder explorer</h2>
+        <p>
+          Spin a motor and watch ticks become distance. Change the encoder resolution, the gearing, and the
+          wheel size, and notice how the <strong>same number of ticks</strong> can mean wildly different real
+          distances. This is the bug that eats a thousand rookie autonomous routines.
+        </p>
+
+        <div class="demo">
+          <div class="demo-title"><span class="pill">Live demo</span> Ticks → distance</div>
+          <div class="stage split">
+            <div>
+              <canvas id="wheelCanvas"></canvas>
+              <div class="kbd-tip" style="color:#8294b8;margin-top:6px">The dot marks one point on the tyre so you can count turns.</div>
+            </div>
+            <div>
+              <canvas id="distCanvas"></canvas>
+              <div class="legend"><span><i style="background:#5ce08a"></i> distance travelled</span></div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="control">
+              <label for="rpm">Motor speed <span class="val" id="rpm-val"></span></label>
+              <input type="range" id="rpm" min="0" max="312" step="1" value="120" />
+              <div class="hint">RPM at the wheel.</div>
+            </div>
+            <div class="control">
+              <label for="tpr">Encoder counts / rev <span class="val" id="tpr-val"></span></label>
+              <input type="range" id="tpr" min="28" max="2000" step="1" value="538" />
+              <div class="hint">Higher = finer counting.</div>
+            </div>
+            <div class="control">
+              <label for="dia">Wheel diameter <span class="val" id="dia-val"></span></label>
+              <input type="range" id="dia" min="40" max="160" step="1" value="96" />
+              <div class="hint">In millimetres.</div>
+            </div>
+          </div>
+
+          <div class="demo-actions">
+            <button class="demo-btn primary" id="run">▶ Run</button>
+            <button class="demo-btn" id="reset">↺ Reset</button>
+          </div>
+          <div class="readout">
+            <span>Revolutions: <b id="roRev">0</b></span>
+            <span>Ticks counted: <b id="roTicks">0</b></span>
+            <span>Distance: <b id="roDist">0 m</b></span>
+            <span>Speed: <b id="roVel">0 m/s</b></span>
+          </div>
+        </div>
+
+        <div class="callout tip">
+          <span class="ic">🧪</span>
+          <div><strong>Experiment:</strong> set a speed and let it run for a few seconds. Now <em>halve the wheel
+          diameter</em> — the tick count is identical, but the distance is half. A robot told to "drive 2000
+          ticks" goes a completely different distance on different wheels. That's why we always convert to
+          metres first.</div>
+        </div>
+
+        <h2>Where each earlier lesson shows up on a robot</h2>
+        <table class="tidy">
+          <tr><th>You learned…</th><th>On an FTC/FRC robot it becomes…</th></tr>
+          <tr><td><strong>Low-pass filter</strong></td><td>Smoothing a noisy distance sensor or joystick before you use it</td></tr>
+          <tr><td><strong>Complementary / Kalman</strong></td><td>Fusing the gyro + encoders into a trustworthy heading and field position</td></tr>
+          <tr><td><strong>PID</strong></td><td>Holding an arm angle, a shooter RPM, or a heading</td></tr>
+          <tr><td><strong>Feedforward</strong> (next)</td><td>Predicting the voltage a drivetrain or arm needs <em>before</em> error appears</td></tr>
+          <tr><td><strong>Motion profiling</strong></td><td>Moving a slide or the robot smoothly instead of slamming to a setpoint</td></tr>
+          <tr><td><strong>Odometry + path following</strong></td><td>The autonomous period: driving a planned route across the field</td></tr>
+          <tr><td><strong>Inverse kinematics</strong></td><td>Telling a multi-joint arm where to put its hand</td></tr>
+        </table>
+
+        <p>Next up: the idea that turns a twitchy, laggy PID loop into a crisp one — <strong>feedforward</strong>.</p>
+
+        <nav class="pager" id="pager"></nav>
+      </main>
+      <footer class="site"><div class="container">Control Lab · learn by playing.</div></footer>
+    </div>
+  </div>
+  <div class="scrim" id="scrim"></div>
+
+  <script src="../assets/js/site.js"></script>
+  <script src="../assets/js/code.js"></script>
+  <script src="../assets/js/plot.js"></script>
+  <script>
+  (function () {
+    const wc = document.getElementById("wheelCanvas"), wx = wc.getContext("2d");
+    function sizeW(){const dpr=window.devicePixelRatio||1;const w=wc.clientWidth||320;const h=300;
+      wc.style.height=h+"px";wc.width=w*dpr;wc.height=h*dpr;wx.setTransform(dpr,0,0,dpr,0,0);wc._w=w;wc._h=h;}
+    sizeW();window.addEventListener("resize",sizeW);
+
+    const plot=new Plot("distCanvas",{height:300,xmin:0,xmax:10,ymin:0,ymax:2,yLabel:"metres",xLabel:"seconds"});
+    const distT=new Trace(1200);
+
+    let rpm=120, TPR=538, dia=0.096;
+    let running=false, angle=0, revs=0, t=0;
+
+    function reset(){running=false;angle=0;revs=0;t=0;distT.clear();syncBtn();}
+    function syncBtn(){const b=$("run");b.textContent=running?"⏸ Pause":"▶ Run";b.classList.toggle("active",running);}
+
+    const dt=1/60;
+    function step(){
+      if(!running) return;
+      const rps=rpm/60;                 // revolutions per second
+      revs += rps*dt;
+      angle += rps*dt*2*Math.PI;
+      t += dt;
+      const dist = revs*Math.PI*dia;
+      distT.push(t, dist);
+    }
+
+    function drawWheel(){
+      const w=wc._w,h=wc._h,cx=w/2,cy=h/2,R=Math.min(w,h)/2-30;
+      wx.fillStyle="#0b1120";wx.fillRect(0,0,w,h);
+      // tyre
+      wx.lineWidth=14;wx.strokeStyle="#2a3656";
+      wx.beginPath();wx.arc(cx,cy,R,0,7);wx.stroke();
+      // tread marks
+      wx.lineWidth=2;wx.strokeStyle="#3b4a6e";
+      for(let i=0;i<24;i++){const a=angle+i/24*2*Math.PI;
+        wx.beginPath();wx.moveTo(cx+Math.cos(a)*(R-7),cy+Math.sin(a)*(R-7));
+        wx.lineTo(cx+Math.cos(a)*(R+7),cy+Math.sin(a)*(R+7));wx.stroke();}
+      // hub
+      wx.fillStyle="#16203a";wx.beginPath();wx.arc(cx,cy,R-16,0,7);wx.fill();
+      wx.strokeStyle="#4f6cf7";wx.lineWidth=2;wx.stroke();
+      // spokes
+      wx.strokeStyle="#314066";wx.lineWidth=4;
+      for(let i=0;i<4;i++){const a=angle+i/4*2*Math.PI;
+        wx.beginPath();wx.moveTo(cx,cy);wx.lineTo(cx+Math.cos(a)*(R-18),cy+Math.sin(a)*(R-18));wx.stroke();}
+      // marker dot
+      wx.fillStyle="#5ce08a";
+      wx.beginPath();wx.arc(cx+Math.cos(angle)*(R),cy+Math.sin(angle)*(R),7,0,7);wx.fill();
+      // center cap
+      wx.fillStyle="#6f8bff";wx.beginPath();wx.arc(cx,cy,6,0,7);wx.fill();
+    }
+
+    function draw(){
+      drawWheel();
+      const span=Math.max(10,t);
+      plot.setX(Math.max(0,t-10),span);
+      const dist=revs*Math.PI*dia;
+      plot.setY(0,Math.max(2,dist*1.15));
+      plot.clear();plot.grid();
+      plot.clip(()=>plot.line(distT.points(),{color:"#5ce08a",width:3}));
+      const ticks=revs*TPR;
+      const vel=(rpm/60)*Math.PI*dia;
+      $("roRev").textContent=revs.toFixed(2);
+      $("roTicks").textContent=Math.round(ticks).toLocaleString();
+      $("roDist").textContent=dist.toFixed(2)+" m";
+      $("roVel").textContent=(running?vel:0).toFixed(2)+" m/s";
+    }
+
+    let acc=0,last=performance.now();
+    function loop(now){let f=(now-last)/1000;last=now;acc+=Math.min(f,0.1);
+      let k=0;while(acc>=dt&&k<10){step();acc-=dt;k++;}draw();requestAnimationFrame(loop);}
+    requestAnimationFrame(loop);
+
+    bindSlider("rpm",{fmt:(v)=>v+" RPM",onChange:(v)=>rpm=v});
+    bindSlider("tpr",{fmt:(v)=>v+" /rev",onChange:(v)=>TPR=v});
+    bindSlider("dia",{fmt:(v)=>v+" mm",onChange:(v)=>dia=v/1000});
+    $("run").addEventListener("click",()=>{running=!running;syncBtn();});
+    $("reset").addEventListener("click",reset);
+    syncBtn();
+  })();
+  </script>
+</body>
+</html>
