@@ -8,7 +8,7 @@ to real rigor: a plain-language hook, a **hands-on simulation you can poke with 
 math, properly typeset derivations (KaTeX), and the **clean, deployable Java** underneath
 (FTC-first: Road Runner / Pedro Pathing / FTCLib), with the hardware realities the textbooks leave out.
 
-### 👉 [**Open the live site**](https://stoicescueric.github.io/control-lab/)
+### 👉 [**Open the live site**](https://keapre.github.io/control-lab/)
 
 > _Live once the repo is pushed to GitHub and Pages is enabled — see [Deploying](#-deploying)._
 
