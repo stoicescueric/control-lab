@@ -23,8 +23,9 @@ function tailwindPlugin() {
   };
 }
 
-// GitHub Pages target. Project site served at https://stoicescueric.github.io/control-lab/.
-const ORG = 'stoicescueric';
+// GitHub Pages target. Project site served at https://keapre.github.io/control-lab/.
+// ORG is the GitHub owner (cased); the Pages hostname is always lowercase.
+const ORG = 'Keapre';
 const REPO = 'control-lab';
 
 const config: Config = {
@@ -38,7 +39,7 @@ const config: Config = {
     faster: true,
   },
 
-  url: `https://${ORG}.github.io`,
+  url: `https://${ORG.toLowerCase()}.github.io`,
   baseUrl: `/${REPO}/`,
 
   organizationName: ORG,
