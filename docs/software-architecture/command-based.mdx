@@ -1,0 +1,168 @@
+---
+title: Command-Based Programming
+description: Composing robot behaviour from small, reusable Command objects that a scheduler sequences and runs in parallel — the model that scales where a single flat state machine explodes.
+sidebar_position: 2
+tags: [architecture, command-based, scheduler, composition, ftclib]
+---
+
+import CommandScheduler from '@site/src/components/sims/CommandScheduler';
+
+# Command-Based Programming
+
+<Abstract>
+Command-based programming builds robot behaviour out of small, self-contained "command" objects —
+each one knowing how to start, how to run for a moment, and how to tell when it is finished — which a
+scheduler then composes into sequences and parallel groups and ticks once per loop. This lesson walks
+from that plain idea up to a command's formal lifecycle and a clean Java implementation, and shows why
+composition succeeds at whole-robot routines where a single state machine drowns in states.
+</Abstract>
+
+A [state machine](./state-machines.mdx) is the right tool for *one* subsystem. But a competition
+autonomous is not one subsystem — it is "drive over there *while* the lift goes up, *then* score,
+*then* come back," weaving several subsystems together with timing and parallelism. Try to cram that
+into one state machine and the states multiply out of control. Command-based programming is the model
+built for the whole robot.
+
+<Problem title="The autonomous that's one giant step counter">
+
+The first autonomous works: a `switch` on an `int step`, incrementing through "drive, lift, score,
+retreat." Then you want the lift to *start rising while still driving* to save time. Now a single
+state has to mean "driving **and** lifting," so you add `DRIVING_AND_LIFTING`. Then
+`DRIVING_AND_LIFTING_AND_AIMING`. Every combination of things-happening-at-once becomes its own state
+— the number of states explodes combinatorially — and the logic becomes a wall of
+`if (step == 3 && armUp && atPose)`. Worse, none of it is reusable: the "drive to a pose" code is
+copy-pasted into every routine, and reordering the routine means renumbering every step by hand.
+
+<Analogy>
+<strong>A recipe vs. a single tangled instruction.</strong> A good recipe is a list of small steps
+("sauté the onions," "boil the pasta") you can reorder, reuse, and even do <em>at the same time</em>
+("boil the pasta <em>while</em> the sauce simmers"). The step-counter autonomous is the opposite: one
+enormous run-on instruction that only makes sense start to finish. Commands are the recipe steps.
+</Analogy>
+
+</Problem>
+
+<Theory title="A command's lifecycle, and a scheduler that composes them">
+
+Below is a real autonomous routine as the scheduler sees it: each bar is one **command**, coloured by
+the **subsystem** it controls. Press play to watch the playhead sweep through. Then flip the lift+aim
+step between **parallel** (they overlap — the routine finishes sooner) and **sequential** (one waits
+for the other) and watch the total time change.
+
+<CommandScheduler />
+
+A **command** is a small object with a four-stage lifecycle. The scheduler calls these for you:
+
+| Stage | When it runs | What it's for |
+|---|---|---|
+| `initialize()` | once, when scheduled | set up — zero a timer, capture a target |
+| `execute()` | every loop while running | do the work — one non-blocking step |
+| `isFinished()` | every loop, after `execute()` | return `true` when the goal is met |
+| `end(interrupted)` | once, when finished or interrupted | clean up — stop the motor |
+
+Each loop, the scheduler advances every scheduled command by one step. Conceptually it holds a set of
+commands $C$ and, for each $c \in C$, runs:
+
+$$
+c.\texttt{execute}() \;\rightarrow\; \textbf{if } c.\texttt{isFinished}() \textbf{ then } c.\texttt{end}(\text{false})
+$$
+
+Two ideas make this powerful:
+
+- **Requirements give safety.** Each command declares the subsystems it *requires*. The scheduler
+  guarantees a subsystem is owned by at most one command at a time — schedule a new command that needs
+  a busy subsystem and the old one is interrupted. This is the same guarantee a state machine gave
+  ("you can't be in two states at once"), now enforced across the whole robot automatically.
+- **Groups are commands too.** A `SequentialCommandGroup` runs its children in order; a
+  `ParallelCommandGroup` runs them at once. Because a group *is itself a command* (same four-stage
+  lifecycle), groups nest into a tree — and the entire autonomous becomes one composed command you can
+  name, reuse, and drop into another routine.
+
+<Callout type="idea" title="Sequential vs. parallel is a real speedup.">
+In the demo, running the lift and the aim in <strong>parallel</strong> finishes the routine noticeably
+sooner than <strong>sequential</strong> — the lift and turret are independent subsystems, so there is
+no reason to wait. Time saved in autonomous is points; composition is how you spend it.
+</Callout>
+
+</Theory>
+
+<Deploy title="A Command interface, and a routine built by composition">
+
+The lifecycle is just an interface with sensible defaults, so a simple command overrides only what it
+needs:
+
+<JavaCode league="FTC" label="The command abstraction (FTCLib mirrors this exactly)">{`/**
+ * One unit of robot behaviour with a four-stage lifecycle. The scheduler owns
+ * the calls; a command never blocks — execute() does one loop's worth of work.
+ */
+public interface Command {
+    default void initialize() {}
+    default void execute() {}
+    default boolean isFinished() { return false; }
+    default void end(boolean interrupted) {}
+
+    /** Subsystems this command needs exclusive use of (prevents conflicts). */
+    Set<Subsystem> getRequirements();
+}`}</JavaCode>
+
+A concrete command implements the stages and declares its requirement:
+
+<JavaCode league="FTC" label="A single, reusable command">{`/** Drives the lift to a target height, then finishes. Reusable in any routine. */
+public class RaiseLift implements Command {
+    private final Lift lift;
+    private final double targetInches;
+
+    public RaiseLift(Lift lift, double targetInches) {
+        this.lift = lift;
+        this.targetInches = targetInches;
+    }
+
+    @Override public void execute()       { lift.setTarget(targetInches); }   // runs the lift's PID
+    @Override public boolean isFinished() { return lift.atTarget(); }
+    @Override public void end(boolean interrupted) { lift.holdPosition(); }
+
+    @Override public Set<Subsystem> getRequirements() { return Set.of(lift); }
+}`}</JavaCode>
+
+Now the whole autonomous is one expression — readable top to bottom, trivially reorderable, with the
+parallelism explicit:
+
+<JavaCode league="FTC" label="The routine, composed from reusable pieces">{`Command auto = new SequentialCommandGroup(
+        new DriveToPose(drive, SCORING_POSE),
+        new ParallelCommandGroup(            // lift and aim at the same time
+                new RaiseLift(lift, HIGH),
+                new AimTurret(turret, GOAL)),
+        new Score(scorer));
+
+scheduler.schedule(auto);
+
+// ...then, once per loop, for the entire OpMode:
+scheduler.run();`}</JavaCode>
+
+<Callout type="warn" title="Declare your requirements, or two commands will fight.">
+The scheduler can only prevent two commands from driving the same motor if each command <em>declares</em>
+that motor as a requirement. Forget it, and a stray default command and your autonomous command can
+both command the drivetrain on the same loop — the exact conflict the model is supposed to make
+impossible.
+</Callout>
+
+<Callout type="tip" title="Default commands fill the gaps.">
+Give a subsystem a <em>default command</em> (e.g. the drivetrain's teleop joystick control) and the
+scheduler runs it automatically whenever no other command requires that subsystem — so teleop "just
+works" between scheduled actions.
+</Callout>
+
+<Callout type="note" title="Same non-blocking rule, bigger scale.">
+A command's <code>execute()</code> must return immediately every loop; <code>isFinished()</code>
+replaces <code>sleep()</code>, exactly as in a state machine. Command-based doesn't repeal the
+loop-time discipline — it scales it across many composed behaviours at once.
+</Callout>
+
+**So which do you reach for?** A state machine is leaner for a single subsystem with a few well-defined
+modes. Command-based earns its overhead the moment you are *composing* subsystems — sequencing,
+overlapping, and interrupting behaviours across the robot, which is most of autonomous. They also
+combine cleanly: a complex subsystem can run an FSM internally while exposing simple commands to the
+scheduler. With the architecture settled, every controller and estimator in the rest of the curriculum
+has a clean place to live.
+
+</Deploy>

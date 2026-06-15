@@ -1,0 +1,61 @@
+---
+title: Why Math Matters
+description: The case for understanding the mathematics under the libraries you deploy — and how this curriculum is structured to build that understanding.
+sidebar_position: 1
+tags: [preface, calculus, linear-algebra, state-space]
+---
+
+# Why Math Matters
+
+<Abstract>
+Modern FTC libraries hide real mathematics — calculus, linear algebra, differential equations — behind
+a few convenient method calls, which is fine right up until the robot misbehaves and you need to see
+inside. This preface makes the case for learning that math as an engineering tool and lays out how the
+rest of the curriculum builds it from intuition upward.
+</Abstract>
+
+You can win FTC matches by treating Road Runner, Pedro Pathing, and FTCLib as black boxes. You cannot
+*debug* them that way. The moment your robot oscillates at the end of a path, drifts during
+localization, or stalls a flywheel under load, the library stops being a convenience and becomes a
+wall — and the only way through is to understand the math it is executing on your behalf.
+
+This curriculum is written for the programmer who has already shipped a working robot and is now
+frustrated by that wall. It assumes you can read and write Java, that you have met PID at least once,
+and that you are willing to take calculus and linear algebra seriously as *engineering tools* rather
+than as abstract coursework.
+
+:::note Who this is for
+This is **not** an introduction to FTC programming. It assumes a working knowledge of Java and basic
+control concepts. If `setPower`, `OpMode`, and encoders are new to you, start with
+[Game Manual 0](https://gm0.org/en/latest/) and return here once you have a robot moving.
+:::
+
+## The four mathematical pillars
+
+Everything downstream rests on four areas. You do not need to be fluent before you start — each module
+introduces exactly the math it needs — but it helps to know where you are headed.
+
+- **Calculus** — derivatives are *rates* (velocity, the D in PID) and integrals are *accumulations*
+  (distance from velocity, the I in PID). Control loops are calculus discretized onto a 50 Hz robot
+  controller.
+- **Linear algebra** — a robot's pose is a vector; a mecanum drivetrain is a matrix that maps wished
+  motion to wheel speeds. Kinematics *is* linear algebra.
+- **Differential equations** — a DC motor, a flywheel spinning down, a robot coasting to a stop: each
+  is a differential equation. Feedforward is the solution to one.
+- **State-space** — the language that unifies the above. A Kalman filter and a modern controller both
+  speak it.
+
+## How each lesson is built
+
+Every lesson follows the same pipeline, deliberately, so you always know where the intuition ends and
+the rigor begins:
+
+1. **The hook** — a concrete FTC failure mode that the concept fixes.
+2. **The visual intuition** — an interactive simulation you can poke *before* any equations appear.
+3. **The theory** — the derivation, in properly typeset math.
+4. **The implementation** — clean, abstracted FTC Java you can adapt to your robot.
+5. **The hardware reality** — the physical constraints (I²C latency, back-EMF, wheel slip) that the
+   textbook version ignores.
+
+Read the intuition, play with the demo until the behavior is obvious, *then* read the math. That order
+is the whole point.

@@ -1,0 +1,93 @@
+import Kalman from "./Kalman.jsx";
+
+export const meta = {
+  id: "kalman",
+  title: "Kalman Filter",
+  icon: "🎯",
+  group: "Filters",
+  tag: "filter",
+  short: "The optimal state estimator.",
+  sub: "Predict, then correct — blending model and measurement in the provably best proportion.",
+  order: 7,
+};
+
+The Kalman filter is the optimal linear state estimator: given a motion model and noisy
+measurements, it produces the minimum-variance estimate of the true state, and tracks its own
+uncertainty while doing so. It is the principled successor to the hand-tuned complementary filter.
+
+<Problem title="A fixed blend is not the optimal blend">
+
+The complementary filter blends two sources with a *constant* weight $\alpha$. But the right amount
+to trust a measurement is not constant — it depends on how uncertain your prediction currently is
+versus how noisy the sensor is. On a robot this is concrete: dead-reckoning odometry is smooth but
+drifts, while an absolute fix (an AprilTag pose, a beacon) is noisy and intermittent. Early after a
+correction the model is trustworthy; after a long blind stretch it is not. A fixed weight cannot
+express that, and it cannot report how confident the resulting estimate is.
+
+</Problem>
+
+<Theory title="Predict, update, and the optimal gain">
+
+The filter maintains a state estimate $\hat{x}$ and a covariance $P$ (its uncertainty), and repeats
+two steps. **Predict** advances the state through the motion model and *grows* the uncertainty:
+
+$$
+\hat{x}^- = F\hat{x}, \qquad P^- = F P F^\top + Q
+$$
+
+**Update** folds in a measurement $z$ and *shrinks* the uncertainty, weighted by the **Kalman
+gain** $K$:
+
+$$
+K = P^- H^\top (H P^- H^\top + R)^{-1}, \qquad
+\hat{x} = \hat{x}^- + K\,(z - H\hat{x}^-), \qquad
+P = (I - KH)P^-
+$$
+
+The update is the low-pass formula you already know — *estimate = prediction + K·(measurement −
+prediction)* — except $K$ is **derived optimally** from the prediction covariance $P^-$ and the
+measurement noise $R$, every step:
+
+- noisy sensor (large $R$) → small $K$ → trust the model, stay smooth;
+- shaky prediction (large $P^-$) → large $K$ → jump toward the measurement.
+
+In the demo, a target follows a smooth path reported only as noisy blips. The filter recovers a
+smooth estimate plus an uncertainty bubble. The two knobs are the tuning parameters: $R$
+(measurement noise) and $Q$ (process noise / "model trust").
+
+<Kalman />
+
+<Callout type="warn" title="Q and R are the tuning.">
+Set model trust very low and the estimate lags on sharp turns — it over-believes its motion model.
+Set it high and it chases every blip. Choosing <code>Q</code> and <code>R</code> to match the real
+process and sensor noise is the engineering of applying a Kalman filter.
+</Callout>
+
+</Theory>
+
+<Deploy title="On a robot: fuse odometry with an absolute fix">
+
+Full matrix Kalman filters on FTC are usually provided by a library (and WPILib ships
+`SwerveDrivePoseEstimator` / `DifferentialDrivePoseEstimator` for exactly this odometry + vision
+fusion). The mechanism is approachable, though — a **scalar** Kalman update is enough to fuse two
+estimates of one quantity, and shows the whole idea:
+
+<JavaCode league="FTC" label="Scalar Kalman update — fuse odometry x with a tag x">{`double x = odoX;          // current estimate (from odometry)
+double P = pVar;          // its variance, grown each loop by process noise Q
+// P += Q;  // (prediction step: x advances with motion, P grows)
+
+// When an AprilTag gives an absolute x with measurement variance R:
+double R = tagVar;
+double K = P / (P + R);          // optimal gain
+x = x + K * (tagX - x);          // corrected estimate
+P = (1 - K) * P;                 // reduced uncertainty`}</JavaCode>
+
+<Callout type="tip" title="It extracts signal from noise.">
+In the demo the Kalman error is typically a fraction of the raw blip error — genuine information
+recovery, not just smoothing. That is why it underpins GPS, drone, and robot localisation.
+</Callout>
+
+The basic filter assumes the motion and measurement models are **linear**. Robot localisation is
+not — range/bearing and heading involve trigonometry. The Extended Kalman Filter handles that, next.
+
+</Deploy>

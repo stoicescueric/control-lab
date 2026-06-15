@@ -1,0 +1,76 @@
+---
+title: Trajectory Simulation
+description: The capstone — a research-grade synthesis of the full stack, simulating and validating the estimate → plan → follow pipeline for autonomous FTC trajectories against on-robot telemetry.
+sidebar_position: 1
+tags: [research, trajectory, motion-profiling, pure-pursuit, capstone]
+---
+
+import PurePursuit from '@site/src/components/sims/PurePursuit';
+
+# Trajectory Simulation
+
+<Callout type="note" title="Maintainer note — this page is a scaffold.">
+This is the structural container for the trajectory-simulation research paper that closes the
+curriculum. Drop the paper's prose, figures, and measured results into the sections below (or replace
+this file entirely). Everything else on the site is written so this page reads as the
+<em>advanced masterclass</em>, not an isolated project. Placeholder passages are marked
+<em>[fill in]</em>.
+</Callout>
+
+<div className="not-prose my-7 rounded-2xl border-l-4 border-brand bg-surface-2 p-6">
+  <div className="mb-2 text-[0.72rem] font-bold uppercase tracking-[0.14em] text-brand-dk">Abstract</div>
+  <p className="m-0 text-[0.97rem] leading-relaxed text-ink-soft">Autonomous scoring in FIRST Tech Challenge is bounded by how accurately a robot can plan and execute timed trajectories under real actuator and sensor limits. This work develops a simulation of the full estimate → plan → follow pipeline — odometry, motion profiling, and a geometric path follower with feedforward — and validates it against on-robot telemetry. <em>[fill in: headline result, e.g. predicted vs. measured cross-track error within X cm at Y m/s.]</em></p>
+  <p className="m-0 mt-3 text-[0.85rem] text-ink-faint"><strong>Keywords:</strong> trajectory generation · motion profiling · pure pursuit · feedforward · odometry · FTC autonomous</p>
+</div>
+
+## 1. Introduction
+
+Every preceding lesson contributed one component of an autonomous routine: discretisation and units
+(the execution substrate), PID and feedforward (the actuator-level controllers), odometry (state
+estimation), and pure pursuit (path following). A competitive routine is the *composition* of all of
+them under a time budget. This paper studies that composition in simulation and on hardware.
+*[fill in: the specific question — e.g. "how closely can a kinematic simulation predict real
+trajectory error, and what dominates the residual?"]*
+
+## 2. Method
+
+The simulation advances a kinematic robot model at a fixed timestep, driving it along generated
+trajectories with the same controllers deployed on the robot. Each subsystem links back to its
+lesson, so the method is auditable end-to-end:
+
+- **State estimation** — constant-curvature odometry from dead-wheel pods ([Odometry & Pose](../localization-odometry/odometry.mdx)).
+- **Reference generation** — trapezoidal/S-curve motion profiles bounding velocity and acceleration.
+- **Path following** — pure-pursuit curvature with velocity feedforward ([Path Following](../path-following/pure-pursuit.mdx), [Feedforward](../control-theory/feedforward.mdx)).
+
+*[fill in: model equations, parameter values from characterisation, and how simulated noise/slip was
+calibrated to the real drivetrain.]*
+
+<figure className="my-7">
+  <PurePursuit />
+  <figcaption className="mt-2 text-center text-[0.9rem] text-ink-soft">
+    <strong>Figure 1.</strong> Interactive closed-loop tracking: the follower curves toward a moving
+    lookahead target. Replace or supplement with the paper's measured trajectory plots.
+  </figcaption>
+</figure>
+
+## 3. Results
+
+*[fill in: simulated vs. measured trajectories, cross-track and heading error distributions, the
+effect of loop rate and lookahead, and timing margins against the autonomous period. Include the
+plots and tables here.]*
+
+## 4. On-Robot Deployment
+
+The contribution is only validated once the simulated controller runs unchanged on the Control Hub
+within loop-time budget. *[fill in: integration notes, measured loop times, and any optimisations
+required to avoid dropped frames — the bridge from analysis to a robot that scores.]*
+
+## 5. Conclusion & Future Work
+
+*[fill in: what the simulation predicts well, where it diverges, and the next step — e.g. fusing
+AprilTag corrections with a Kalman filter, or full trajectory optimisation.]*
+
+## References
+
+1. *[fill in: Road Runner / Pedro Pathing documentation, WPILib characterisation, pure-pursuit and
+   motion-profiling sources, and any prior FTC trajectory work referenced.]*

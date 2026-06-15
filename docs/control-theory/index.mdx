@@ -1,0 +1,32 @@
+---
+title: Motor Dynamics & Control Theory
+description: From the DC-motor model to deployable controllers — feedforward, PID, bang-bang, system identification, battery compensation, and motion profiling.
+tags: [pid, feedforward, motor-model, motion-profiling, sysid]
+---
+
+# Module 4 · Motor Dynamics & Control Theory
+
+This is the heart of the curriculum. A motor is a physical system with a knowable model; a controller is
+the math that commands it to do what you want despite gravity, friction, and a sagging battery. We start
+with the motor itself, learn to *predict* the command it needs (feedforward), then *correct* whatever is
+left with feedback (PID) — and combine the two into a single output.
+
+## What this module covers
+
+- **The DC-motor model & motor curve** — torque, speed, and back-EMF; why a motor slows under load.
+- **Feedforward (kS, kV, kA)** — computing the command *before* the error appears.
+- **PID** — the three-term feedback controller, hardened for real hardware.
+- **Bang-bang control** — when the simplest possible controller is the right one (flywheels).
+- **System identification (OLS regression)** — how SysId recovers kS/kV/kA from data.
+- **Battery compensation** — holding behavior constant as voltage drops over a match.
+- **Motion profiling** — feeding the controller a physically achievable trajectory instead of a step.
+
+:::warning Feedback alone is always a step behind
+A pure PID controller cannot act until an error already exists. The fast, accurate mechanisms you see
+at competition pair feedback with a feedforward model of the plant. Understanding the motor model is
+what makes that pairing possible.
+:::
+
+Available now: [How a Motor Works](./how-a-motor-works.mdx),
+[Feedforward (kS, kV, kA)](./feedforward.mdx), and [PID Control](./pid.mdx). The remaining lessons —
+bang-bang, system identification, battery compensation, and motion profiling — are planned.

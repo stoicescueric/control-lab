@@ -1,0 +1,31 @@
+---
+title: Enterprise Architecture & Loop Optimization
+description: The engineering discipline around the control loop — version control, live tuning, bulk reads, and the loop-time budget every controller spends.
+tags: [loop-time, ftc-dashboard, bulk-reads, git]
+---
+
+# Module 1 · Enterprise Architecture & Loop Optimization
+
+Every controller in this curriculum runs once per loop iteration, and every loop iteration costs time.
+Before the math matters, the *infrastructure* around it has to be sound: a fast, measured loop; live
+tuning over Wi-Fi; and a version-control workflow that lets a team iterate without breaking the robot
+the night before a competition.
+
+## What this module covers
+
+- **Git workflow for robotics teams** — branching, review, and keeping a deployable `main`.
+- **FTC Dashboard** — live telemetry and tuning controller gains over Wi-Fi without re-deploying.
+- **Manual bulk reads** — collapsing dozens of per-call I²C round-trips into one, the single biggest
+  loop-time win available to most teams.
+- **Loop-time optimization** — measuring `Δt`, finding the bottleneck, and protecting the budget your
+  controllers depend on.
+
+:::warning Loop time is a hardware reality, not a detail
+A PID derivative term and a discrete integral both divide or multiply by `Δt`. If your loop time is
+inconsistent — say it jumps from 5 ms to 40 ms because of an unbatched sensor read — your controller's
+behavior changes with it. This module is the foundation that makes discretization — and every
+controller downstream — trustworthy.
+:::
+
+Available now: [Discretization & Units](./discretization.mdx) — turning continuous control math into
+a per-loop update with consistent units. The Git, FTC Dashboard, and bulk-read lessons are planned.

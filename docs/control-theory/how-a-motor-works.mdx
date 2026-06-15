@@ -1,0 +1,208 @@
+---
+title: How a Motor Works
+description: The DC-motor model every FTC controller is built on — back-EMF, the torque–speed curve, and why a motor slows under load, draws current, and turns the shortfall into heat.
+sidebar_position: 1
+tags: [motor, dc-motor, back-emf, torque-speed, stall, gear-ratio]
+---
+
+import MotorCurve from '@site/src/components/sims/MotorCurve';
+
+# How a Motor Works
+
+<Abstract>
+A DC motor converts electrical voltage into motion through two coupled effects — the torque it makes
+is proportional to the current it draws, and its own spinning generates a "back-EMF" voltage that
+grows with speed — which together produce a straight-line trade-off between how fast it spins and how
+hard it can push. This lesson builds that torque–speed curve from first principles and uses it to
+explain why a motor slows under load, spikes its current near stall, and turns the shortfall into
+heat.
+</Abstract>
+
+A motor is the only actuator on the robot — every controller in this module, in the end, just
+chooses a *voltage* to send it. PID, feedforward, motion profiling: all of them are sophisticated
+ways of answering one question, "what voltage now?" So before any of that, you have to know what the
+motor *does* with that voltage. And the honest answer is more interesting than "more volts, more
+speed."
+
+<Problem title="The mechanism that's fast empty and useless under load">
+
+A team gears a lift for blistering speed. On the bench, unloaded, it screams to the top. Then they
+hang a game element on it and it bogs to a crawl, the motor gets too hot to touch, and two matches
+later it browns out the whole robot mid-climb. Nothing is "broken." The motor is behaving exactly as
+physics requires — the team just designed against a mental model that doesn't exist.
+
+That wrong model is **"voltage sets speed, full stop."** In reality a motor trades speed for torque:
+the harder you load it, the slower it turns, the more current it pulls, and the more of your battery
+ends up as heat instead of motion. You cannot pick a gear ratio, choose a controller, or read a
+current spike correctly until that tradeoff is in your bones.
+
+<Analogy>
+<strong>Bicycle gears on a hill.</strong> In your highest gear you fly on the flat but grind to a
+dead stop the instant the road tilts up — and your legs burn doing it. Drop to a low gear and you
+climb easily, just slowly. The pedals (the motor) didn't change; the <em>load</em> did, and there is
+no gear that is fast <em>and</em> strong at once. A motor lives on exactly this tradeoff curve.
+</Analogy>
+
+</Problem>
+
+<Theory title="The torque–speed line, and where it comes from">
+
+Start with the picture, not the equations. Below is a motor model you can drive. Set the applied
+voltage and the load it has to fight; the green dot is where it actually settles. Try the presets,
+then watch what happens to **current**, **efficiency**, and **heat** as you push the load toward
+stall.
+
+<MotorCurve />
+
+<Callout type="note" title="About the numbers.">
+The values shown are for a <em>representative</em> FTC-class motor (one self-consistent model), for
+intuition — not a specific product's datasheet. Every motor publishes three numbers: free speed,
+stall torque, and stall current. Drop yours into the same equations below and the picture is the same
+shape.
+</Callout>
+
+Here is why the line looks like that. A DC motor obeys two simple proportionalities:
+
+- **Torque comes from current.** The magnetic force on the windings is proportional to the current
+  through them: $\tau = k_t\, I$.
+- **Speed creates a voltage that fights you.** A spinning motor is also a generator. It produces a
+  *back-EMF* proportional to its speed, $V_\text{emf} = k_e\,\omega$, pushing back against the supply.
+
+<Formula>
+  torque <Teal>τ = kt·I</Teal> &nbsp;·&nbsp; back-EMF <Amber>V_emf = ke·ω</Amber>
+</Formula>
+
+Now write Kirchhoff's voltage law around the armature. The applied voltage $V$ is split between the
+resistance of the windings and that back-EMF:
+
+$$
+V = \underbrace{I\,R}_{\text{across the windings}} + \underbrace{k_e\,\omega}_{\text{back-EMF}}
+$$
+
+Solve for current, then multiply by $k_t$ to get torque as a function of speed:
+
+$$
+I = \frac{V - k_e\,\omega}{R}, \qquad
+\tau(\omega) = \frac{k_t}{R}\,\big(V - k_e\,\omega\big)
+= \underbrace{\frac{k_t V}{R}}_{\text{stall torque}} - \underbrace{\frac{k_t k_e}{R}}_{\text{slope}}\,\omega
+$$
+
+That is the straight line in the demo. Read off its two ends — the only two operating points most
+datasheets bother to list:
+
+| Operating point | Speed | Torque | Current | What's happening |
+|---|---|---|---|---|
+| **Stall** ($\omega = 0$) | none | max, $\tau_\text{stall} = \frac{k_t V}{R}$ | max, $I_\text{stall} = \frac{V}{R}$ | no back-EMF, so current — and heat — peak |
+| **Free run** ($\tau = 0$) | max, $\omega_\text{free} = \frac{V}{k_e}$ | none | ≈ 0 | back-EMF nearly cancels the supply |
+
+Two consequences fall straight out of the algebra, and both are worth internalizing:
+
+**Voltage slides the line; it doesn't tilt it.** Stall torque and free speed *both* scale with $V$,
+but the slope $-k_t k_e / R$ has no $V$ in it. Halve the voltage and the whole line moves inward,
+parallel to itself (the faint line in the demo is full 12 V for comparison). When your code sets motor
+power to `0.5`, *this* is what it does — it applies roughly half the voltage, sliding the motor onto a
+lower-but-parallel line.
+
+**Maximum power is at half speed.** Output power is $P_\text{out} = \tau\,\omega$ — zero at stall (no
+motion) and zero at free run (no force), so it peaks in the middle, at exactly
+$\omega_\text{free}/2$. Meanwhile the electrical input is $P_\text{in} = V I$, and the difference is
+dumped as heat, $P_\text{heat} = I^2 R$. Near stall the current is enormous and the motion is nearly
+zero, so almost all of that power becomes heat — efficiency collapses.
+
+<Formula>
+  out <Teal>P = τ·ω</Teal> &nbsp;·&nbsp; in <Blue>P = V·I</Blue> &nbsp;·&nbsp; heat <Rose>P = I²·R</Rose>
+</Formula>
+
+<Callout type="idea" title="Three things to try in the demo:">
+<ol>
+<li><strong>Free run</strong> — load at zero. Top speed, almost no current, but zero useful work and
+0% efficiency. Speed alone does nothing.</li>
+<li><strong>A healthy load</strong> — the default. The dot sits in the fast, efficient stretch near
+the top of the line; current is modest.</li>
+<li><strong>Stall it</strong> — load past the stall torque. The motor can't move it, speed pins to
+zero, current jumps to its maximum, and the heat readout goes through the roof. This is the lift that
+"works empty."</li>
+</ol>
+</Callout>
+
+</Theory>
+
+<Deploy title="Gearing, current, and what your code actually controls">
+
+You almost never run a bare motor — you bolt a gearbox to it, and the gearbox is how you *move the
+useful part of the curve* to where your mechanism lives. A reduction of $G$ divides the output speed
+by $G$ and multiplies the output torque by $G$ (minus gearbox losses):
+
+<Formula>
+  output speed = <Blue>ω_free / G</Blue> &nbsp;·&nbsp; output torque = <Rose>τ_stall · G · η</Rose>
+</Formula>
+
+So the design move is: take your motor's three datasheet numbers, pick $G$ so the mechanism's real
+load lands in the fast, efficient part of the line — not crammed against stall. The model is small
+enough to keep in code:
+
+<JavaCode league="FTC" label="Motor specs → geared output (fill in your datasheet numbers)">{`/**
+ * The three numbers every DC motor publishes at nominal (12 V) voltage.
+ * Fill these in from YOUR motor's datasheet — nothing here is assumed for you.
+ */
+public record MotorSpec(
+        double freeSpeedRpm,    // RPM at no load
+        double stallTorqueNm,   // N·m at zero speed
+        double stallCurrentA) { // A at zero speed  (this is the heat budget)
+
+    /** Output free speed after a reduction gearbox: speed divides down. */
+    public double gearedFreeSpeedRpm(double gearReduction) {
+        return freeSpeedRpm / gearReduction;
+    }
+
+    /** Output stall torque after a reduction: torque multiplies up, minus losses. */
+    public double gearedStallTorqueNm(double gearReduction, double efficiency) {
+        return stallTorqueNm * gearReduction * efficiency;
+    }
+}`}</JavaCode>
+
+The other half is at runtime: a motor sitting near stall is the single most common way to cook a
+mechanism and brown out a robot. The Control Hub can read motor current directly, so guard against it.
+
+<JavaCode league="FTC" label="Back off before a stalled motor cooks itself">{`/**
+ * Near stall the motor pulls its full stall current and turns almost all of it
+ * into heat (I²R), sagging the battery and tripping the hub's protection. If the
+ * current runs away, scale the command back into a safe budget.
+ */
+public void driveSafely(DcMotorEx motor, double command, double maxCurrentA) {
+    double current = motor.getCurrent(CurrentUnit.AMPS);
+    if (current > maxCurrentA) {
+        command *= maxCurrentA / current;   // throttle to the current budget
+    }
+    motor.setPower(command);
+}`}</JavaCode>
+
+<Callout type="warn" title="Stall is a thermal event, not just a slow one.">
+A motor held near stall draws stall current <em>continuously</em>. That energy has nowhere to go but
+into the windings as heat — enough to demagnetize or melt them, and enough to drag the battery
+voltage down until the Control Hub browns out. Never gear a mechanism so its normal load sits near
+stall, and never hold a pushing match at full power.
+</Callout>
+
+<Callout type="tip" title="This is why RUN_USING_ENCODER exists.">
+The SDK's velocity mode runs a feedback loop that adjusts voltage to hold a target speed as the load
+changes — it's nudging the operating point along the curve for you. Knowing the curve tells you its
+hard limits: it can never exceed the free speed, and under heavy load it must give up speed or pull
+huge current. No control loop repeals the physics.
+</Callout>
+
+<Callout type="note" title="The ideal model, and where it bends.">
+Real motors add friction (so free current isn't quite zero and free speed is a touch lower),
+winding inductance, and gearbox losses — the perfect straight line is slightly curved. It's still
+accurate enough to design with. Measuring the <em>real</em> $k_t$, $k_e$, and $R$ for your specific
+motor is a later lesson: system identification.
+</Callout>
+
+Notice what those three constants are doing. The current term $k_t/R$ that overcomes friction, the
+back-EMF term $k_e \omega$ that grows with speed, the resistance that fights acceleration — these are
+*exactly* the quantities the next lesson packages into the feedforward gains
+$k_S$, $k_V$, and $k_A$. Feedforward is this motor model, turned around to ask: given the speed I
+*want*, what voltage should I send before any error even appears? On to
+[**Feedforward**](./feedforward.mdx).
+
+</Deploy>

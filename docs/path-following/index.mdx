@@ -1,0 +1,29 @@
+---
+title: Path Following & Kinematics
+description: Driving the robot along a planned path — mecanum kinematics, field-centric control, PID-to-point, splines, pure pursuit, and guided vector fields.
+tags: [kinematics, mecanum, pure-pursuit, splines, path-following]
+---
+
+# Module 5 · Path Following & Kinematics
+
+Given a pose estimate (Module 3) and controllers that can hit a target (Module 4), this module answers
+the question that wins autonomous: *how do we make the robot trace a path smoothly and accurately?*
+
+## What this module covers
+
+- **Mecanum kinematics** — the matrix that turns a desired chassis motion into four wheel speeds, plus
+  field-centric driving and joystick-scaling for drivers.
+- **PID-to-point** — the simplest path follower, and its failure modes.
+- **Angle wrapping** — the deceptively subtle bug that makes a robot spin the long way around.
+- **Predictive deceleration** — stopping on the point instead of overshooting it.
+- **Quintic splines** — C² continuity and why it matters versus C¹ cubic paths.
+- **Pure pursuit** — fixed versus dynamic lookahead.
+- **Guided vector fields** — following a path as a flow rather than chasing a moving point.
+
+:::tip This module assumes the two before it
+Path following composes localization and control. If a follower behaves badly, the bug is often in the
+pose estimate or the underlying controller — not the path logic itself.
+:::
+
+Available now: [Path Following (Pure Pursuit)](./pure-pursuit.mdx) — the geometric lookahead
+follower. Mecanum kinematics, PID-to-point, splines, and guided vector fields are planned.

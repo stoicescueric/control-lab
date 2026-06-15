@@ -1,0 +1,122 @@
+---
+title: Path Following (Pure Pursuit)
+description: Convert a planned path into continuous steering with one geometric rule — chase a lookahead "carrot" along the path, turn the chord into an arc, and command curvature every loop.
+sidebar_position: 1
+tags: [pure-pursuit, path-following, lookahead, curvature, autonomous]
+---
+
+import PurePursuit from '@site/src/components/sims/PurePursuit';
+
+# Path Following (Pure Pursuit)
+
+<Abstract>
+Pure pursuit turns a planned path into smooth steering with one geometric rule: continuously aim at a
+"carrot" a fixed look-ahead distance along the path. This lesson derives the curvature that arc
+requires and shows how the look-ahead distance trades tracking tightness against smoothness.
+</Abstract>
+
+The robot knows where it is (odometry) and where it should go (a planned path). Path following is
+the controller that connects them: it converts the path into a continuous stream of drive commands.
+**Pure Pursuit** is the classic, deployable method — a single geometric rule that has steered FTC
+and FRC robots for years.
+
+<Problem title="Waypoint-to-waypoint driving is slow and discontinuous">
+
+The naïve approach drives straight to waypoint 1, stops, rotates, drives to waypoint 2, and so on.
+It is slow, jerky, and stresses the drivetrain at every stop. Competition autonomous needs to follow
+a *continuous* curve at speed, correcting smoothly for the inevitable pose error rather than halting
+to re-aim. The controller must answer, every loop: given my current pose and this path, what
+curvature should I drive?
+
+<Analogy>
+<strong>A carrot on a stick.</strong> Fix a carrot a constant distance ahead of you, always on the
+path, and simply walk toward it. As you advance, the carrot slides further along the path, so you
+continuously curve to follow it. That moving target is the <strong>lookahead point</strong>.
+</Analogy>
+
+</Problem>
+
+<Theory title="One arc to a lookahead point">
+
+The algorithm is three steps, run every loop:
+
+1. **Find the lookahead point** — walk along the path until you are a fixed lookahead distance $L_d$
+   away. That point is the carrot.
+2. **Transform it into the robot frame**, where $+x$ is forward and $+y$ is left. Call the lateral
+   offset $y$.
+3. **Compute the arc** — exactly one circular arc starts at the robot (tangent to its heading) and
+   passes through the carrot. Its curvature, and the resulting turn rate at speed $v$, are:
+
+$$
+\kappa = \frac{2y}{L_d^{\,2}}, \qquad \omega = \kappa\,v
+$$
+
+<Formula>
+  curvature = <Rose>2·y / Ld²</Rose> &nbsp;&nbsp; turn rate <Amber>ω = curvature · v</Amber>
+</Formula>
+
+This drops out of geometry: the chord to the carrot has length $L_d$ and lateral offset $y$, so the
+unique tangent circle through both has radius $r = L_d^2 / (2y)$, hence curvature $1/r = 2y/L_d^2$.
+If the carrot is dead ahead ($y = 0$), curvature is zero — drive straight.
+
+The single tuning parameter is the lookahead distance, and it is a direct trade-off:
+
+| Lookahead $L_d$ | Behaviour |
+|---|---|
+| **Too small** | tracks tightly but oscillates — over-corrects and weaves |
+| **Too large** | very smooth but cuts corners and rounds off tight features |
+| **Tuned** | smooth tracking with stable, gentle correction |
+
+In the demo, the robot follows the blue path; the <span style={{ color: "#ffc24d" }}>amber
+carrot</span> is its lookahead target. Drag the waypoints to reshape the path and sweep the lookahead
+from small (watch it oscillate) to large (watch it cut corners).
+
+<PurePursuit />
+
+<Callout type="idea" title="Experiment:">
+arrange two waypoints into a tight dog-leg. A small lookahead tracks the corner but jitters; a large
+lookahead is smooth but slices across it. There is no universally correct value — it is chosen for
+the geometry the path demands.
+</Callout>
+
+</Theory>
+
+<Deploy title="The loop, and what production followers add">
+
+One iteration on the Control Hub: locate the carrot ahead, transform it into the robot frame, convert
+to curvature, and command forward speed plus turn rate.
+
+<JavaCode league="FTC" label="Pure pursuit, one loop iteration">{`Pose2d robot = drive.localizer.getPose();
+
+// 1. Lookahead: first path point at least Ld ahead (never target behind us).
+Vector2d carrot = path.get(path.size() - 1);
+for (int i = lastIndex; i < path.size(); i++) {
+    if (robot.position.minus(path.get(i)).norm() >= LOOKAHEAD) {
+        carrot = path.get(i);
+        lastIndex = i;
+        break;
+    }
+}
+
+// 2. Carrot in the robot frame (+x forward, +y left).
+Vector2d d = carrot.minus(robot.position);
+double h = robot.heading.toDouble();
+double yLocal = -Math.sin(h) * d.x + Math.cos(h) * d.y;
+double L = d.norm();
+
+// 3. Arc curvature -> drive command.
+double curvature = 2 * yLocal / (L * L);
+drive.setDrivePowers(CRUISE_SPEED, curvature * CRUISE_SPEED);`}</JavaCode>
+
+<Callout type="tip" title="What the production libraries do.">
+Pure Pursuit is the foundation. Road Runner and Pedro Pathing follow full <em>trajectories</em> —
+paths combined with a motion profile and timing — and layer feedforward plus PID on top. The
+principle is identical: look ahead, curve toward the target, with tighter accuracy and explicit speed
+control.
+</Callout>
+
+This completes the autonomous stack — estimate the pose, plan a path, follow it. From here the filter
+track (Kalman, EKF) deepens the "where am I" half, and the remaining controllers complete the "what do
+I do" half. The curriculum culminates in a research-grade application of all of it.
+
+</Deploy>

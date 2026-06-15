@@ -1,0 +1,47 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Control Lab — control theory, state estimation & FTC robotics">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0a0f1e"/>
+      <stop offset="1" stop-color="#0f1730"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="80" y1="84" x2="176" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6883f9"/>
+      <stop offset="1" stop-color="#3a52d6"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(980 70) rotate(125) scale(560 620)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4f6cf7" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#4f6cf7" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="curve" x1="120" y1="520" x2="1080" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#11b5a4"/>
+      <stop offset="0.55" stop-color="#6f8bff"/>
+      <stop offset="1" stop-color="#93a7ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- faint grid -->
+  <g stroke="#ffffff" stroke-opacity="0.05" stroke-width="1">
+    <path d="M0 150 H1200 M0 250 H1200 M0 350 H1200 M0 450 H1200 M0 550 H1200"/>
+    <path d="M200 0 V630 M400 0 V630 M600 0 V630 M800 0 V630 M1000 0 V630"/>
+  </g>
+
+  <!-- logo mark -->
+  <rect x="80" y="84" width="96" height="96" rx="26" fill="url(#tile)"/>
+  <path d="M99 132 H157" stroke="#ffffff" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 9"/>
+  <path d="M99 170 C 110 170 113 100 127 100 C 137 100 140 116 150 112 C 156 110 158 113 162 113" stroke="#ffffff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="162" cy="113" r="6.5" fill="#ffffff"/>
+
+  <text x="200" y="150" font-family="Inter, system-ui, sans-serif" font-size="58" font-weight="800" letter-spacing="-1.5" fill="#ffffff">Control Lab</text>
+  <text x="202" y="186" font-family="'JetBrains Mono', ui-monospace, monospace" font-size="20" font-weight="500" letter-spacing="2" fill="#93a7ff">INTERACTIVE · RIGOROUS · FTC-FIRST</text>
+
+  <!-- setpoint + underdamped step response -->
+  <path d="M120 360 H1080" stroke="#ffffff" stroke-opacity="0.28" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="2 14"/>
+  <path d="M120 520 C 300 520 330 300 470 298 C 590 296 630 372 760 360 C 880 349 940 364 1080 360" stroke="url(#curve)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1080" cy="360" r="11" fill="#ffc24d"/>
+
+  <text x="120" y="588" font-family="Inter, system-ui, sans-serif" font-size="30" font-weight="600" fill="#e7ecf7">Control theory, state estimation &amp; FTC robotics</text>
+  <text x="822" y="588" font-family="Inter, system-ui, sans-serif" font-size="30" font-weight="600" fill="#7e8cac">from the math to the metal</text>
+</svg>

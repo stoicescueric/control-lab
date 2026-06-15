@@ -1,0 +1,129 @@
+---
+title: Control & Feedback
+description: What control engineering is — open versus closed loops, the five terms of every feedback system, and the control-loop skeleton every later controller fills in.
+sidebar_position: 2
+tags: [preface, feedback, closed-loop, control]
+---
+
+import Heater from '@site/src/components/sims/Heater';
+
+# Control & Feedback
+
+<Abstract>
+Control engineering is the discipline of making a system reach and hold a target despite disturbances,
+using feedback: measure how far off you are, then act to shrink that error. This lesson introduces the
+open- versus closed-loop distinction and the control-loop skeleton that every later controller fills
+in.
+</Abstract>
+
+Control engineering is the discipline of making a physical system track a desired state despite
+disturbances. You have a **target** (an arm at 90°, a flywheel at 3000 RPM, the robot parked on a
+line) and a single **actuator** (motor power). The entire field answers one question: *how should
+the command be computed, every loop, so the system reaches the target and holds it while the world
+pushes back?*
+
+<Problem title="A fixed command cannot reject disturbances">
+
+The naïve approach is **open loop**: choose a command once and apply it blindly. Run the arm motor
+at 40 % power and hope it lands at 90°. This fails the moment reality deviates from the assumption —
+a sagging battery, a defender's bump, friction that changes with wear. The controller never learns
+it missed, because it never looks.
+
+<Analogy>
+<strong>Microwave vs. shower.</strong> A microwave is open loop — it runs 30 s regardless of how
+hot the food gets. A shower is closed loop — you feel the water, compare it to "comfortable," and
+adjust the tap continuously. Only one of these survives a cold front.
+</Analogy>
+
+The fix is **feedback**: measure the result, compute how far off you are, and correct. That single
+idea — the closed loop — is what makes a machine robust.
+
+</Problem>
+
+<Theory title="The closed loop, and the error that drives it">
+
+Five terms describe every feedback system. Learn them once; they appear on every page.
+
+| Term | Definition | On an FTC arm |
+|---|---|---|
+| **Setpoint** | the target value | "hold 90°" |
+| **Measurement** | the current sensor reading | encoder reports 84° |
+| **Error** | setpoint − measurement | 6° low |
+| **Controller** | the rule mapping error → command | your control code |
+| **Actuator** | the element that acts on the world | the motor |
+
+The **error** is the quantity every controller consumes:
+
+$$
+e = \text{setpoint} - \text{measurement}
+$$
+
+The controller computes a command from $e$, the actuator changes the system, a sensor measures the
+result, and the result feeds back to recompute $e$ — continuously.
+
+<figure className="my-7 text-center">
+  <svg viewBox="0 0 680 150" className="mx-auto max-w-full" role="img" aria-label="Closed loop block diagram">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7" />
+      </marker>
+    </defs>
+    <circle cx="40" cy="60" r="16" fill="none" stroke="#4f6cf7" strokeWidth="2" />
+    <text x="40" y="65" fontSize="15" fontWeight="600" fill="#4f6cf7" textAnchor="middle">∑</text>
+    <text x="40" y="32" fontSize="11" fill="#8a93a8" textAnchor="middle">setpoint</text>
+    <line x1="40" y1="20" x2="40" y2="42" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
+    <rect x="90" y="36" width="120" height="48" rx="12" fill="none" stroke="#4f6cf7" strokeWidth="2" />
+    <text x="150" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7" textAnchor="middle">Controller</text>
+    <line x1="56" y1="60" x2="88" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
+    <text x="74" y="52" fontSize="11" fill="#8a93a8" textAnchor="middle">error</text>
+    <rect x="270" y="36" width="120" height="48" rx="12" fill="none" stroke="#4f6cf7" strokeWidth="2" />
+    <text x="330" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7" textAnchor="middle">Robot</text>
+    <line x1="210" y1="60" x2="268" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
+    <line x1="390" y1="60" x2="500" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
+    <text x="540" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7">Output</text>
+    <path d="M470 60 L470 120 L40 120 L40 78" fill="none" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
+    <rect x="245" y="100" width="90" height="38" rx="10" fill="none" stroke="#11b5a4" strokeWidth="2" />
+    <text x="290" y="124" fontSize="13" fontWeight="600" fill="#11b5a4" textAnchor="middle">Sensor</text>
+    <text x="120" y="135" fontSize="11" fill="#8a93a8">measurement fed back ↩</text>
+  </svg>
+  <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
+    The closed loop: measure the output, compute the error, feed it back. This is the skeleton every
+    later controller fills in.
+  </figcaption>
+</figure>
+
+The demo below makes the difference concrete. Two rooms heat toward **21 °C**. The
+<span style={{color: '#ff6f9c'}}>**open-loop**</span> room holds a fixed heater power; the
+<span style={{color: '#ffc24d'}}>**closed-loop**</span> room measures its temperature and adjusts.
+Drag the outdoor temperature down and observe which one holds setpoint.
+
+<Heater />
+
+<Callout type="idea" title="The takeaway:">
+the closed-loop room holds 21 °C regardless of the disturbance — its error grows, so its command
+grows to match. The open-loop room cannot detect that it is failing. This is precisely why feedback
+is non-negotiable on a competition robot.
+</Callout>
+
+</Theory>
+
+<Deploy title="The control-loop skeleton on a Control Hub">
+
+Every controller in this curriculum slots into the same periodic loop. The structure never changes
+— only the line that computes the command.
+
+<JavaCode league="FTC" label="The shape of every feedback loop">{`while (opModeIsActive()) {
+    double measurement = arm.getCurrentPosition();   // read the sensor
+    double error = setpoint - measurement;           // compare to the target
+
+    double command = controller.update(error);       // <-- the only part that changes
+    arm.setPower(clamp(command, -1, 1));             // act on the world
+}`}</JavaCode>
+
+The rest of this curriculum fills in that one line — but only after two prerequisites. **Filters**
+clean the noisy *measurement* so the controller is not misled; **controllers** (PID, feedforward,
+motion profiling) define the *rule*. Before either runs correctly on hardware, the continuous maths
+has to become a discrete loop in real units — the subject of
+[From Math to a Loop](../enterprise-architecture/discretization.mdx).
+
+</Deploy>

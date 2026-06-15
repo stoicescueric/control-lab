@@ -1,0 +1,112 @@
+import MovingAverage from "./MovingAverage.jsx";
+
+export const meta = {
+  id: "moving-average",
+  title: "Moving Average",
+  icon: "📊",
+  group: "Filters",
+  tag: "filter",
+  short: "Average the last N readings.",
+  sub: "Equal-weight smoothing — its strengths, and the failure modes that motivate the Kalman filter.",
+  order: 5,
+};
+
+The moving average is the filter you already use intuitively — a "7-day average," a "50-day stock
+average." It is excellent at one job and instructively bad at another, which sets up why a smarter
+estimator is eventually required.
+
+<Problem title="Steady jitter needs averaging; bursts and lag do not forgive it">
+
+A signal buried in steady random jitter is best cleaned by averaging — but a naïve average over *all*
+history can never track a moving signal. The fix is a **sliding window**: average only the most
+recent N readings, discarding the oldest as each new one arrives. The window size is a direct
+smooth-versus-responsive trade-off, and — as the demo will show — a single outlier contaminates the
+output for the full N samples.
+
+<Analogy>
+<strong>You have seen this.</strong> A rolling case count, a moving stock average, your phone's
+average step count — all sliding-window averages that turn a spiky series into a readable trend.
+</Analogy>
+
+</Problem>
+
+<Theory title="The average of a sliding window">
+
+Hold the last N readings; report their mean. Next loop, the window slides one step forward.
+
+$$
+\hat{x}_k = \frac{1}{N}\sum_{i=0}^{N-1} z_{k-i}
+$$
+
+<figure className="my-7 text-center">
+  <svg viewBox="0 0 640 130" className="mx-auto max-w-full" role="img" aria-label="A sliding window over a row of readings">
+    <defs>
+      <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7" />
+      </marker>
+    </defs>
+    <text x="20" y="20" fontSize="11" fill="#8a93a8">data stream (newest on the right) →</text>
+    <rect x="20" y="36" width="40" height="40" rx="8" fill="#0f1730" stroke="#243049" />
+    <rect x="70" y="36" width="40" height="40" rx="8" fill="#0f1730" stroke="#243049" />
+    <rect x="120" y="36" width="40" height="40" rx="8" fill="#0f1730" stroke="#243049" />
+    <rect x="180" y="30" width="220" height="52" rx="12" fill="rgba(79,108,247,0.12)" stroke="#4f6cf7" strokeWidth="2" strokeDasharray="6 4" />
+    <rect x="190" y="36" width="40" height="40" rx="8" fill="rgba(79,108,247,0.25)" stroke="#4f6cf7" />
+    <rect x="240" y="36" width="40" height="40" rx="8" fill="rgba(79,108,247,0.25)" stroke="#4f6cf7" />
+    <rect x="290" y="36" width="40" height="40" rx="8" fill="rgba(79,108,247,0.25)" stroke="#4f6cf7" />
+    <rect x="340" y="36" width="40" height="40" rx="8" fill="rgba(79,108,247,0.25)" stroke="#4f6cf7" />
+    <text x="290" y="100" fontSize="12" fontWeight="600" fill="#4f6cf7" textAnchor="middle">average these N = 4</text>
+    <line x1="400" y1="56" x2="468" y2="56" stroke="#4f6cf7" strokeWidth="2" markerEnd="url(#ma)" />
+    <rect x="472" y="36" width="64" height="40" rx="10" fill="#4f6cf7" />
+    <text x="504" y="61" fontSize="13" fontWeight="600" fill="#fff" textAnchor="middle">output</text>
+  </svg>
+  <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
+    The window holds the most recent N readings; their mean is the output. Next loop the window slides
+    one step forward.
+  </figcaption>
+</figure>
+
+It is a close cousin of the low-pass filter, with a different memory model:
+
+| | Moving average | Low-pass (EMA) |
+|---|---|---|
+| Remembers | last N readings, **equally** | all readings, **fading** |
+| Storage | N values | one number |
+| Knob | window size N | smoothing α |
+| Best at | killing steady jitter | cheap real-time smoothing |
+
+The demo overlays truth, sensor, and the windowed average. Grow N for smoothness, then run the step
+test to feel the lag a large window costs.
+
+<MovingAverage />
+
+<Callout type="warn" title="The two failure modes.">
+With a large window the step test ramps up slowly instead of snapping — pure lag. And a single wild
+spike shifts the average for the full N samples. For fast-moving or spike-prone data, the Kalman
+filter (two lessons ahead) is dramatically better.
+</Callout>
+
+</Theory>
+
+<Deploy title="A fixed-cost ring buffer">
+
+On a Control Hub, implement the window as a ring buffer with a running sum, so each update is O(1)
+regardless of N. The cost to weigh against the low-pass is the N-value memory.
+
+<JavaCode league="FTC" label="O(1) moving average">{`final int N = 12;
+double[] buf = new double[N];
+int idx = 0, count = 0;
+double sum = 0;
+
+double update(double reading) {
+    sum -= buf[idx];          // drop the oldest sample in this slot
+    buf[idx] = reading;        // store the newest
+    sum += reading;
+    idx = (idx + 1) % N;
+    count = Math.min(count + 1, N);
+    return sum / count;        // average of the current window
+}`}</JavaCode>
+
+Both filters here assume a *single* noisy sensor. The next two lessons fuse *multiple* imperfect
+sensors into one estimate that beats any of them alone — starting with the complementary filter.
+
+</Deploy>

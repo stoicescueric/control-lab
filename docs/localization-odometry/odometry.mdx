@@ -1,0 +1,129 @@
+---
+title: Odometry & Pose
+description: Track where the robot is on the field — integrate a thousand small constant-curvature arcs into a field pose, understand why it inevitably drifts, and correct it from an absolute reference.
+sidebar_position: 1
+tags: [odometry, pose, dead-wheels, pose-exponential, apriltag]
+---
+
+import OdometryField from '@site/src/components/sims/OdometryField';
+
+# Odometry & Pose
+
+<Abstract>
+Odometry reconstructs the robot's field pose — position and heading — by integrating thousands of tiny
+wheel movements, because no sensor reports absolute position directly. This lesson develops the
+constant-curvature pose update, explains why the estimate inevitably drifts, and shows how an absolute
+reference snaps it back.
+</Abstract>
+
+Autonomous routines need the robot's **pose**: position $(x, y)$ and heading $\theta$. No sensor
+reports this directly, so it is reconstructed every loop from incremental motion. Doing that
+reconstruction accurately — and knowing precisely how it fails — is the core of field-relative
+autonomous.
+
+<Problem title="No sensor reports absolute pose, and encoders drift">
+
+There is no "you are here" sensor on an FTC field. Pose must be *integrated* from wheel motion, and
+integration has a fundamental weakness: **errors accumulate and never cancel.** Worse, a powered
+drive wheel that slips during a hard acceleration or turn reports rotation that did not translate
+into ground movement, so its encoder lies. Over a match, the estimate spirals away from reality.
+This is the exact limitation that motivates the filters later in the curriculum.
+
+<Analogy>
+<strong>Navigating with your eyes closed.</strong> Take ten careful steps while turning and you can
+roughly track your position from memory — but small per-step errors compound, and you end up lost.
+Odometry is that process, with the same failure mode.
+</Analogy>
+
+</Problem>
+
+<Theory title="Integrating motion as a sequence of small arcs">
+
+Each loop, read how far the left and right sides rolled, $d_L$ and $d_R$ (in metres). The forward
+step and heading change are:
+
+$$
+ds = \frac{d_L + d_R}{2}, \qquad d\theta = \frac{d_R - d_L}{T}
+$$
+
+with $T$ the track width. Assuming the step was *straight* ($x \mathrel{+}= ds\cos\theta$) cuts
+corners on curves. The accurate model treats each step as a small constant-curvature **arc** — the
+*pose exponential* — which matters over a real trajectory:
+
+<JavaCode league="FTC" label="Constant-curvature pose update (the algorithm)">{`double dL = leftPos  - lastLeft;       // metres rolled this loop
+double dR = rightPos - lastRight;
+lastLeft = leftPos;  lastRight = rightPos;
+
+double ds  = (dL + dR) / 2.0;
+double dth = (dR - dL) / TRACK_WIDTH;
+
+double sinC, cosC;
+if (Math.abs(dth) < 1e-9) {             // nearly straight -> avoid divide-by-zero
+    sinC = 1.0;            cosC = 0.5 * dth;
+} else {
+    sinC = Math.sin(dth) / dth;
+    cosC = (1 - Math.cos(dth)) / dth;
+}
+x       += ds * (sinC * Math.cos(heading) - cosC * Math.sin(heading));
+y       += ds * (sinC * Math.sin(heading) + cosC * Math.cos(heading));
+heading += dth;`}</JavaCode>
+
+Two engineering choices sharpen this in practice. **Heading from the IMU:** encoder-derived
+$d\theta$ is corrupted by wheel scrub, so most teams take heading from the gyro and use encoders
+only for distance. **Dead wheels:** unpowered omni "odometry pods" on light springs measure true
+ground motion, immune to drive slip — two parallel pods give forward distance and heading, a third
+(perpendicular) captures strafe.
+
+<figure className="my-7 text-center">
+  <svg viewBox="0 0 420 300" className="mx-auto max-w-full" role="img" aria-label="Top-down robot with three dead-wheel pods">
+    <rect x="110" y="50" width="200" height="200" rx="16" fill="rgba(79,108,247,0.12)" stroke="#6f8bff" strokeWidth="2.5" />
+    <text x="210" y="40" fontSize="11" fill="#8a93a8" textAnchor="middle">front</text>
+    <rect x="150" y="120" width="10" height="34" rx="3" fill="#11b5a4" />
+    <rect x="260" y="120" width="10" height="34" rx="3" fill="#11b5a4" />
+    <text x="150" y="172" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">left pod</text>
+    <text x="270" y="172" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">right pod</text>
+    <rect x="193" y="200" width="34" height="10" rx="3" fill="#11b5a4" />
+    <text x="210" y="228" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">strafe pod</text>
+    <text x="210" y="272" fontSize="11" fill="#8a93a8" textAnchor="middle">left + right → forward &amp; heading · strafe → sideways</text>
+  </svg>
+  <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
+    Three dead wheels reconstruct a full pose independently of the drive motors — the basis of Road
+    Runner and Pedro Pathing localisation.
+  </figcaption>
+</figure>
+
+The demo runs the algorithm live. The <span style={{ color: "#5ce08a" }}>green</span> robot is
+ground truth (a perfect circle); the <span style={{ color: "#ffc24d" }}>amber</span> robot is the
+odometry estimate built from imperfect encoder deltas. Raise the slip and watch it diverge — then
+apply an **AprilTag fix** to snap the estimate back to truth.
+
+<OdometryField />
+
+<Callout type="warn" title="Odometry always decays.">
+Errors only accumulate. The remedy is periodic correction from an <em>absolute</em> reference — an
+AprilTag, a wall-facing distance sensor, field markings. Fusing that correction <em>optimally</em>
+with the drifting estimate is exactly what a <strong>Kalman filter</strong> does.
+</Callout>
+
+</Theory>
+
+<Deploy title="Read the maintained pose; reset from vision">
+
+In practice a library maintains the pose from dead-wheel pods every loop. Your responsibilities are
+tuning its constants (ticks-per-rev, wheel radius, pod offsets) and resetting from an AprilTag when
+one is visible.
+
+<JavaCode league="FTC" label="Road Runner pose, corrected by AprilTag">{`drive.updatePoseEstimate();              // integrate one loop of motion
+Pose2d pose = drive.localizer.getPose();
+
+double x = pose.position.x;              // configured units (e.g. inches)
+double y = pose.position.y;
+double heading = pose.heading.toDouble();
+
+// When the camera resolves a tag, trust it and erase the accumulated drift:
+if (tag != null) drive.localizer.setPose(tag.fieldPose);`}</JavaCode>
+
+With a reliable pose, the final piece of autonomous is
+[**following a planned path**](../path-following/pure-pursuit.mdx) — the subject of the next page.
+
+</Deploy>

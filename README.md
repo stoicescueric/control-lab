@@ -1,111 +1,145 @@
 # ⚙️ Control Lab
 
-**Learn filters, controllers & robotics by *playing* with them.**
+**Control theory, state estimation & FTC robotics — from the math to the metal.**
 
-An interactive, illustration-heavy website that teaches **control theory**, **state
-estimation**, and **FTC/FRC robotics** from scratch — built for curious beginners
-(roughly high-school level). Every idea comes with plain-language explanations,
-analogies, diagrams, a **hands-on demo you can poke at with sliders**, and — for the
-robotics track — the **real Java code** (WPILib / Road Runner style) explained line
-by line so you can start coding it on your own robot.
+An interactive, open-source curriculum that teaches **control theory**, **state estimation**, and
+**FTC/FRC robotics**. Every lesson opens at a level a high-school freshman can follow and then climbs
+to real rigor: a plain-language hook, a **hands-on simulation you can poke with sliders** _before_ any
+math, properly typeset derivations (KaTeX), and the **clean, deployable Java** underneath
+(FTC-first: Road Runner / Pedro Pathing / FTCLib), with the hardware realities the textbooks leave out.
 
-### 👉 [**Open the live site**](https://YOUR-USERNAME.github.io/control-lab/)
+### 👉 [**Open the live site**](https://stoicescueric.github.io/control-lab/)
 
-> _Replace the link above with your GitHub Pages URL once you publish (see
-> [Hosting](#-hosting-it-yourself))._
+> _Live once the repo is pushed to GitHub and Pages is enabled — see [Deploying](#-deploying)._
 
 ---
 
-## ✨ Why it's different
+## ✨ What's different
 
-- **No walls of theory.** You read a little, then immediately *drag a slider* and
-  watch what happens. Break things on purpose; that "aha" is the point.
-- **Real simulations, not fake animations.** The demos run the genuine algorithms —
-  actual Kalman filters, real drone dynamics, true kinematics and odometry math.
-- **From idea to your robot.** The robotics lessons include copy-pasteable Java for
-  both FIRST leagues (WPILib for FRC; Road Runner / Pedro Pathing / FTCLib for FTC).
-- **Runs anywhere, instantly.** Plain HTML/CSS/JS — no build, no installs, no
-  account, works offline. Just open it.
+- **Intuition first.** Each concept starts with a real FTC failure and an interactive widget. Drag a
+  slider, break it on purpose, _then_ read the derivation.
+- **Real simulations.** The demos run the genuine algorithms — actual PID loops, the real DC-motor
+  torque–speed curve, true odometry, a working pure-pursuit follower, a live command scheduler.
+- **Rigor, not hand-waving.** Properly typeset calculus, linear algebra, and state-space — pitched at
+  programmers who want to understand the libraries, not memorize them.
+- **Deploy-ready.** Clean, abstracted, Javadoc'd Java for FTC and FRC.
 
-## 📚 What's inside
+## 🧰 Tech stack
 
-| # | Lesson | What you'll play with |
-|---|--------|-----------------------|
-| 1 | **Control & Feedback** | A heater fighting the cold: open loop vs. closed loop |
-| 2 | **Signals & Noise** | Build a noisy sensor and watch the truth disappear |
-| 3 | **Low-Pass Filter** | Exponential smoothing — find your favourite α |
-| 4 | **Moving Average** | Grow the sliding window, feel the smoothness/lag trade-off |
-| 5 | **Complementary Filter** | Fuse a gyro + accelerometer into one good tilt estimate |
-| 6 | **Kalman Filter** | Track a moving target through noisy radar blips (2-D) |
-| 7 | **Extended Kalman Filter** | Range/bearing tracking in a curved, nonlinear world |
-| 8 | **PID Controller** | Fly a drone to a draggable target; live P/I/D term meters |
-| 9 | **On/Off (Bang-Bang)** | Play thermostat with an adjustable deadband |
-| 10 | **Model Predictive Control** | Watch a cart plan its future, then re-plan |
-| 11 | **The Robot Control Stack** 🤖 | The sense→estimate→decide→act loop; ticks → metres |
-| 12 | **Feedforward (kS, kV, kA)** 🤖 | Toggle feedforward on a flywheel; see the lag vanish |
-| 13 | **Motion Profiling** 🤖 | A trapezoidal profile driving a linear slide |
-| 14 | **Drive Kinematics** 🤖 | Tank / mecanum / swerve — joystick → wheel commands |
-| 15 | **Odometry & Pose** 🤖 | Watch dead-reckoning drift, then snap it back with vision |
-| 16 | **Path Following (Pure Pursuit)** 🤖 | Drag waypoints; tune the lookahead "carrot" |
-| 17 | **Inverse Kinematics** 🤖 | Drag a target; a 2-joint arm solves its angles live |
-| 18 | **Glossary & Cheat Sheet** | Every term in plain English + a "which tool?" guide |
-
-🤖 = the **FTC/FRC robotics track** (rigorous math + interactive demo + Java for both leagues).
+[Docusaurus v3](https://docusaurus.io) (TypeScript) · [React 19](https://react.dev) · lessons in
+**[MDX](https://mdxjs.com)** · math via **[KaTeX](https://katex.org)**
+(`remark-math` + `rehype-katex`) · styling with **[Tailwind CSS v4](https://tailwindcss.com)**
+(utilities only, layered over Infima) · animation with **[Framer Motion](https://www.framer.com/motion/)**
+· code highlighting via Prism. Sidebars and the page graph are generated from the filesystem.
 
 ## 🚀 Run it locally
 
-Clone or download this repo, then either:
+You'll need [Node.js](https://nodejs.org) 20+.
 
-- **Easiest:** double-click `index.html`.
-- **Recommended** (so every asset loads cleanly): serve the folder with any static
-  server —
-  - Python: `python -m http.server` → visit <http://localhost:8000>
-  - Node: `npx serve`
-
-## 🌐 Hosting it yourself
-
-It's all static files with **no build step**, so any static host works. The free,
-zero-config option is **GitHub Pages**:
-
-1. Push this repo to **GitHub** (make it **public**).
-2. Repo **Settings → Pages → Source: "Deploy from a branch" → `main` / `(root)` → Save**.
-3. ~1 minute later it's live at `https://<your-username>.github.io/<repo-name>/`.
-
-Every push redeploys automatically. (Cloudflare Pages, Netlify, and Vercel work
-just as well.)
-
-## 🙌 Contributing
-
-Contributions are welcome — especially from students and mentors.
-
-- **Small fixes** (typos, wording, a better code example): edit the file on GitHub
-  with the pencil ✏️, or press <kbd>.</kbd> on the repo to open the in-browser VS
-  Code editor, then open a pull request.
-- **Add a whole lesson:**
-  1. Copy an existing page in `lessons/` (e.g. `feedforward.html`) — each is
-     self-contained.
-  2. Add one entry to the `LESSONS` array in `assets/js/site.js`. The sidebar,
-     home-page cards, and prev/next pager all build themselves from it — nothing
-     else to wire up.
-  3. Match the house style: intuition + analogy → the math → real Java (with an
-     `FRC`/`FTC` badge where it fits) → an interactive demo → "now go code it" notes.
-- **Ideas & bug reports:** open an issue. Wishlist topics include LQR, full swerve
-  odometry, AprilTag pose estimation, and trajectory generation.
+```bash
+npm install      # once
+npm start        # dev server with hot reload → http://localhost:3000/control-lab/
+npm run build    # production build into build/
+npm run serve    # preview the production build locally
+npm run typecheck # optional: TypeScript check
+```
 
 ## 🗂️ Project layout
 
 ```
-index.html              Landing page (hero + lesson cards)
-lessons/                One self-contained HTML page per topic
-assets/css/style.css    Shared design system
-assets/js/
-  site.js               Builds the sidebar nav, mobile menu, prev/next pager
-  plot.js               Reusable canvas plotter + scrolling-trace helper
-  linalg.js             Tiny matrix library (used by the Kalman & EKF demos)
-  code.js               Dependency-free Java syntax highlighter for code blocks
+docusaurus.config.ts     site config (KaTeX, Tailwind plugin, navbar/footer, GitHub placeholders)
+sidebars.ts              one autogenerated "curriculum" sidebar (built from docs/)
+docs/                    the lessons, one folder per module
+  <module>/
+    _category_.json      module label + sidebar position
+    index.mdx            module landing page
+    <lesson>.mdx         a lesson (frontmatter + the page-anatomy beats)
+src/
+  components/
+    kit/                 Abstract, Steps, Callout, Formula, JavaCode, Demo, Slider (lesson building blocks)
+    sims/                the interactive widgets (one deeply-typed .tsx per demo)
+  lib/                   canvas.js (useDprCanvas/useRaf/usePlot), plot.js, linalg.js
+  theme/MDXComponents.tsx  registers the kit as global MDX tags (usable without import)
+  css/custom.css         design tokens + Infima re-skin + Tailwind import
+  pages/index.tsx        the animated homepage
+static/img/              logo.svg, favicon, social card
+legacy/                  the original no-build HTML site (porting reference)
+legacy-vite/             the previous Vite/React app (porting reference)
 ```
+
+## 🙌 Authoring a lesson
+
+Lessons are **MDX** — Markdown with components mixed in. Add one by dropping a file in the right
+module folder; the sidebar and prev/next pager build themselves from frontmatter.
+
+1. Create `docs/<module>/your-topic.mdx` with frontmatter:
+   ```yaml
+   ---
+   title: Your Topic
+   description: One-sentence summary (used for SEO and social cards).
+   sidebar_position: 4      # order within the module
+   tags: [control, your-topic]
+   ---
+   ```
+2. Follow the **page anatomy** (this is the house structure for every lesson):
+   1. **Abstract** — a two-sentence academic TL;DR via `<Abstract>`.
+   2. **The Hook** — a real FTC hardware/software failure.
+   3. **The Visual Intuition** — an embedded interactive widget, _before_ the math.
+   4. **The Theoretical Rigor** — the derivation in KaTeX.
+   5. **The Enterprise Implementation** — clean, Javadoc'd FTC Java.
+   6. **The Hardware Reality** — admonitions (`:::warning`, `:::tip`, `:::note`) for I²C latency,
+      back-EMF, wheel slip, loop time, brownouts.
+
+Components usable in any lesson **without importing**:
+
+| Component | What it is |
+|---|---|
+| `<Abstract>` | the opening two-sentence TL;DR |
+| `<Problem>` / `<Theory>` / `<Deploy>` | titled section dividers for the why → math → code flow |
+| `<Callout type="tip\|idea\|math\|warn\|note">` · `<Analogy>` | aside boxes |
+| `<Formula>` + `<Teal>/<Amber>/<Rose>/<Blue>` | a plain-text equation with tinted parts |
+| `<JavaCode league="FTC" label="...">` | highlighted Java with a league badge |
+| ` ```java ` fenced blocks · `$ … $` / `$$ … $$` | auto-highlighting · KaTeX math |
+| `:::note`, `:::tip`, `:::warning` | Docusaurus admonitions |
+
+## 🎛️ Adding an interactive demo
+
+Write the widget as a standalone, deeply typed `.tsx` in `src/components/sims/`, then `import` it at
+the top of the lesson. Two flavors:
+
+- **Canvas/plot sims** use the shared hooks in `src/lib/canvas.js` — `useDprCanvas(ref, height)` for a
+  crisp HiDPI canvas, `useRaf(cb)` for an animation loop, `usePlot(ref, opts)` for a ready-made 2-D
+  plotter. See `src/components/sims/MotorCurve.tsx`.
+- **Pure-React widgets** (no canvas) just use component state. See
+  `src/components/sims/StateMachine.tsx`.
+
+Use the `Demo` / `Slider` / `Button` / `Legend` furniture from `src/components/kit/Demo.tsx` to match
+the house style. All canvas/`window` access lives inside `useEffect`/handlers, so the sims render an
+empty shell on the server and hydrate on the client (SSR-safe, no `BrowserOnly` needed).
+
+## 🌐 Deploying
+
+A GitHub Actions workflow (`.github/workflows/deploy.yml`) builds the site and publishes `build/` to
+GitHub Pages on every push to `main`.
+
+1. In `docusaurus.config.ts`, set `ORG` to your GitHub username and `REPO` to the repository name
+   (and check `baseUrl` — it must be `/<repo>/` for a project site, or `/` for a `username.github.io`
+   user site).
+2. Push to a **public** GitHub repo.
+3. Repo **Settings → Pages → Source: "GitHub Actions"**.
+4. The site deploys to `https://<username>.github.io/<repo>/`.
+
+> The social card (`static/img/control-lab-social-card.svg`) is an SVG; several link-preview crawlers
+> ignore SVG, so rasterize it to PNG/JPG and point `themeConfig.image` at it before relying on rich
+> previews.
+
+## 📚 Curriculum
+
+Preface (why the math matters) · **M0** Software Architecture · **M1** Enterprise Architecture & Loop
+Optimization · **M2** Signal Processing · **M3** Localization & Odometry · **M4** Motor Dynamics &
+Control Theory · **M5** Path Following & Kinematics · **M6** Advanced Research (capstone).
 
 ## 📄 License
 
-Released under the [MIT License](LICENSE) — free to use, share, remix, and build on.
-Attribution is appreciated but not required.
+Released under the [MIT License](LICENSE) — free to use, share, remix, and build on. Attribution is
+appreciated but not required.
