@@ -1,8 +1,8 @@
 ---
 title: Control & Feedback
-description: What control engineering is — open versus closed loops, the five terms of every feedback system, and the control-loop skeleton every later controller fills in.
+description: Open-loop versus closed-loop control, error, disturbances, sensors, actuators, and the control-loop skeleton every later FTC controller builds on.
 sidebar_position: 2
-tags: [preface, feedback, closed-loop, control]
+tags: [preface, feedback, closed-loop, control, ftc]
 ---
 
 import Heater from '@site/src/components/sims/Heater';
@@ -10,120 +10,328 @@ import Heater from '@site/src/components/sims/Heater';
 # Control & Feedback
 
 <Abstract>
-Control engineering is the discipline of making a system reach and hold a target despite disturbances,
-using feedback: measure how far off you are, then act to shrink that error. This lesson introduces the
-open- versus closed-loop distinction and the control-loop skeleton that every later controller fills
-in.
+Control engineering is the discipline of making a physical system reach and hold a desired behavior while the real world pushes back.
+Feedback is the central idea: measure the system, compare it to the target, and use that error to compute the next command.
 </Abstract>
 
-Control engineering is the discipline of making a physical system track a desired state despite
-disturbances. You have a **target** (an arm at 90°, a flywheel at 3000 RPM, the robot parked on a
-line) and a single **actuator** (motor power). The entire field answers one question: *how should
-the command be computed, every loop, so the system reaches the target and holds it while the world
-pushes back?*
+Control is not a PID acronym. PID is only one possible rule inside a much larger pattern.
 
-<Problem title="A fixed command cannot reject disturbances">
+Every robot mechanism has the same basic story:
 
-The naïve approach is **open loop**: choose a command once and apply it blindly. Run the arm motor
-at 40 % power and hope it lands at 90°. This fails the moment reality deviates from the assumption —
-a sagging battery, a defender's bump, friction that changes with wear. The controller never learns
-it missed, because it never looks.
+1. You want something to happen.
+2. The mechanism does something close, but not perfect.
+3. A sensor tells you what actually happened.
+4. Code decides the next motor command.
 
-<Analogy>
-<strong>Microwave vs. shower.</strong> A microwave is open loop — it runs 30 s regardless of how
-hot the food gets. A shower is closed loop — you feel the water, compare it to "comfortable," and
-adjust the tap continuously. Only one of these survives a cold front.
-</Analogy>
+That loop is the foundation behind arm control, flywheel velocity, drivetrain heading hold, odometry
+correction, path following, and state estimation.
 
-The fix is **feedback**: measure the result, compute how far off you are, and correct. That single
-idea — the closed loop — is what makes a machine robust.
+## FTC example: an arm does not stop where power says it should
 
-</Problem>
+Imagine an arm that scores a game element. During testing, you discover that `0.28` motor power holds
+the arm near the target angle when the battery is full and the robot is sitting still.
 
-<Theory title="The closed loop, and the error that drives it">
+Then the match starts.
 
-Five terms describe every feedback system. Learn them once; they appear on every page.
+The battery voltage drops. The intake has a game element in it. A cable rubs slightly against the
+mechanism. The same `0.28` power no longer holds the same angle. The robot did not become mysterious;
+the code was open-loop. It sent a command without checking whether the command worked.
 
-| Term | Definition | On an FTC arm |
-|---|---|---|
-| **Setpoint** | the target value | "hold 90°" |
-| **Measurement** | the current sensor reading | encoder reports 84° |
-| **Error** | setpoint − measurement | 6° low |
-| **Controller** | the rule mapping error → command | your control code |
-| **Actuator** | the element that acts on the world | the motor |
+Feedback fixes that failure by turning the mechanism into a conversation:
 
-The **error** is the quantity every controller consumes:
+> "Where should you be? Where are you now? How hard should I push next?"
 
-$$
-e = \text{setpoint} - \text{measurement}
-$$
+## Open loop is not wrong; it is just blind
 
-The controller computes a command from $e$, the actuator changes the system, a sensor measures the
-result, and the result feeds back to recompute $e$ — continuously.
+Open-loop control means you send an output without using the result to change the next output. A
+time-based autonomous drive is open loop:
 
-<figure className="my-7 text-center">
-  <svg viewBox="0 0 680 150" className="mx-auto max-w-full" role="img" aria-label="Closed loop block diagram">
-    <defs>
-      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0 0 L10 5 L0 10 z" fill="#4f6cf7" />
-      </marker>
-    </defs>
-    <circle cx="40" cy="60" r="16" fill="none" stroke="#4f6cf7" strokeWidth="2" />
-    <text x="40" y="65" fontSize="15" fontWeight="600" fill="#4f6cf7" textAnchor="middle">∑</text>
-    <text x="40" y="32" fontSize="11" fill="#8a93a8" textAnchor="middle">setpoint</text>
-    <line x1="40" y1="20" x2="40" y2="42" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
-    <rect x="90" y="36" width="120" height="48" rx="12" fill="none" stroke="#4f6cf7" strokeWidth="2" />
-    <text x="150" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7" textAnchor="middle">Controller</text>
-    <line x1="56" y1="60" x2="88" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
-    <text x="74" y="52" fontSize="11" fill="#8a93a8" textAnchor="middle">error</text>
-    <rect x="270" y="36" width="120" height="48" rx="12" fill="none" stroke="#4f6cf7" strokeWidth="2" />
-    <text x="330" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7" textAnchor="middle">Robot</text>
-    <line x1="210" y1="60" x2="268" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
-    <line x1="390" y1="60" x2="500" y2="60" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
-    <text x="540" y="65" fontSize="14" fontWeight="600" fill="#4f6cf7">Output</text>
-    <path d="M470 60 L470 120 L40 120 L40 78" fill="none" stroke="#4f6cf7" strokeWidth="2.5" markerEnd="url(#ar)" />
-    <rect x="245" y="100" width="90" height="38" rx="10" fill="none" stroke="#11b5a4" strokeWidth="2" />
-    <text x="290" y="124" fontSize="13" fontWeight="600" fill="#11b5a4" textAnchor="middle">Sensor</text>
-    <text x="120" y="135" fontSize="11" fill="#8a93a8">measurement fed back ↩</text>
-  </svg>
-  <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
-    The closed loop: measure the output, compute the error, feed it back. This is the skeleton every
-    later controller fills in.
-  </figcaption>
-</figure>
+<JavaCode league="FTC" label="Open-loop drivetrain timing">{`frontLeft.setPower(0.5);
+frontRight.setPower(0.5);
+backLeft.setPower(0.5);
+backRight.setPower(0.5);
 
-The demo below makes the difference concrete. Two rooms heat toward **21 °C**. The
-<span style={{color: '#ff6f9c'}}>**open-loop**</span> room holds a fixed heater power; the
-<span style={{color: '#ffc24d'}}>**closed-loop**</span> room measures its temperature and adjusts.
-Drag the outdoor temperature down and observe which one holds setpoint.
+sleep(700);
+
+frontLeft.setPower(0.0);
+frontRight.setPower(0.0);
+backLeft.setPower(0.0);
+backRight.setPower(0.0);`}</JavaCode>
+
+An intake that simply runs while the driver holds a trigger is also open loop:
+
+<JavaCode league="FTC" label="Open-loop intake">{`if (gamepad1.right_trigger > 0.2) {
+    intakeMotor.setPower(1.0);
+} else {
+    intakeMotor.setPower(0.0);
+}`}</JavaCode>
+
+This is often fine. An intake may not need to land at a precise state. A simple timed motion may be
+good enough for a low-risk autonomous action. The question is not "is open loop bad?" The question is:
+what are the design requirements?
+
+Ask:
+
+- Does the mechanism need accuracy, or only motion?
+- Will battery voltage, load, or defense contact change the result?
+- Is there a sensor that can measure success?
+- Is a bad final position costly during a match?
+
+If the answer is "yes" to accuracy, disturbances, measurable success, or high cost, you probably want
+feedback.
+
+## Visual intuition
+
+The demo below shows the difference with temperature instead of an arm, because temperature is easy to
+read. The principle is identical for FTC hardware: the open-loop system keeps doing the same thing,
+while the closed-loop system measures error and reacts to disturbances.
 
 <Heater />
 
-<Callout type="idea" title="The takeaway:">
-the closed-loop room holds 21 °C regardless of the disturbance — its error grows, so its command
-grows to match. The open-loop room cannot detect that it is failing. This is precisely why feedback
-is non-negotiable on a competition robot.
-</Callout>
+Watch what happens when the outside temperature changes. The open-loop room has no way to know it is
+wrong. The closed-loop room sees the error grow and increases its command.
 
-</Theory>
+## Theoretical rigor
 
-<Deploy title="The control-loop skeleton on a Control Hub">
+A feedback system starts with a target and a measurement.
 
-Every controller in this curriculum slots into the same periodic loop. The structure never changes
-— only the line that computes the command.
+$$
+e = r - y
+$$
 
-<JavaCode league="FTC" label="The shape of every feedback loop">{`while (opModeIsActive()) {
-    double measurement = arm.getCurrentPosition();   // read the sensor
-    double error = setpoint - measurement;           // compare to the target
+Here, $e$ is error, $r$ is the reference or setpoint, and $y$ is the measured output. For an FTC arm,
+$r$ might be the desired arm angle and $y$ might be the encoder-estimated arm angle.
 
-    double command = controller.update(error);       // <-- the only part that changes
-    arm.setPower(clamp(command, -1, 1));             // act on the world
+The controller maps error into a command:
+
+$$
+u = C(e)
+$$
+
+Here, $u$ is the actuator command and $C(\cdot)$ is the controller rule. That rule could be as simple
+as proportional control or as advanced as a model-based controller.
+
+The robot mechanism then responds:
+
+$$
+y_{k+1} = P(y_k, u_k, d_k)
+$$
+
+Here, $k$ is the current loop number, $k+1$ is the next loop, $P(\cdot)$ represents the physical plant
+or mechanism, and $d_k$ is a disturbance such as battery sag, friction, defense contact, gravity, or a
+game element entering the mechanism.
+
+The key difference is whether the next command depends on the latest measurement.
+
+| Style | Command | What it can handle |
+|---|---|---|
+| Open loop | $u_k = u_\text{fixed}$ | only the condition it was tuned for |
+| Closed loop | $u_k = C(r_k - y_k)$ | changes in load, voltage, friction, and position |
+
+Open loop can still be useful. Feedforward is often an open-loop prediction from a model. But by
+itself, open loop cannot know when it is wrong.
+
+Closed loop is useful because it makes failure observable. If the measured arm angle is low, the error
+is positive. If the flywheel slows after shooting, the velocity error grows. If the drivetrain heading
+drifts, the heading error appears. The controller does not need to guess that reality changed; the
+sensor makes the change visible.
+
+### Two first controllers
+
+The simplest closed-loop controller is a bang-bang controller. It looks at the error and chooses one of
+two outputs:
+
+$$
+u =
+\begin{cases}
+u_\text{up}, & e > \epsilon \\
+u_\text{down}, & e < -\epsilon \\
+0, & |e| \le \epsilon
+\end{cases}
+$$
+
+Here, $\epsilon$ is a tolerance band. Without a tolerance, a real robot may wait forever for the
+measurement to equal the setpoint exactly, which almost never happens.
+
+<JavaCode league="FTC" label="Bang-bang arm hold with tolerance">{`double error = targetTicks - armMotor.getCurrentPosition();
+double toleranceTicks = 20.0;
+
+if (error > toleranceTicks) {
+    armMotor.setPower(0.45);
+} else if (error < -toleranceTicks) {
+    armMotor.setPower(-0.25);
+} else {
+    armMotor.setPower(0.0);
 }`}</JavaCode>
 
-The rest of this curriculum fills in that one line — but only after two prerequisites. **Filters**
-clean the noisy *measurement* so the controller is not misled; **controllers** (PID, feedforward,
-motion profiling) define the *rule*. Before either runs correctly on hardware, the continuous maths
-has to become a discrete loop in real units — the subject of
-[From Math to a Loop](../enterprise-architecture/discretization.mdx).
+Bang-bang is easy to understand, but it often oscillates because the command changes abruptly. A
+proportional controller is the next step:
 
-</Deploy>
+$$
+u = k_P e
+$$
+
+Here, $k_P$ is the proportional gain. A larger error creates a larger command; a smaller error creates
+a smaller command.
+
+<JavaCode league="FTC" label="Proportional arm controller">{`double error = targetTicks - armMotor.getCurrentPosition();
+double command = kP * error;
+
+armMotor.setPower(Range.clip(command, -1.0, 1.0));`}</JavaCode>
+
+This proportional rule is the first piece of PID. Later, the PID lesson adds memory of past error and
+reaction to changing error, but the core feedback idea is already here.
+
+### The loop shape
+
+<figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+  <div className="bg-panel px-4 py-5">
+    <svg viewBox="0 0 760 210" className="h-auto w-full" role="img" aria-label="Closed-loop feedback block diagram">
+      <defs>
+        <marker id="feedbackArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="#93a7ff" />
+        </marker>
+      </defs>
+      <rect width="760" height="210" rx="18" fill="#0b1120" />
+      <circle cx="86" cy="84" r="22" fill="#101a2e" stroke="#6f8bff" strokeWidth="2.5" />
+      <text x="86" y="90" fill="#e8eefc" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="14">sum</text>
+      <text x="86" y="42" fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13">target r</text>
+      <line x1="86" x2="86" y1="48" y2="60" stroke="#93a7ff" strokeWidth="3" markerEnd="url(#feedbackArrow)" />
+      <line x1="108" x2="156" y1="84" y2="84" stroke="#93a7ff" strokeWidth="3" markerEnd="url(#feedbackArrow)" />
+      <text x="132" y="72" fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">e</text>
+      <rect x="160" y="50" width="150" height="68" rx="14" fill="#16203a" stroke="#6f8bff" strokeWidth="2" />
+      <text x="235" y="80" fill="#e8eefc" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="15">controller</text>
+      <text x="235" y="101" fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">u = C(e)</text>
+      <line x1="310" x2="370" y1="84" y2="84" stroke="#93a7ff" strokeWidth="3" markerEnd="url(#feedbackArrow)" />
+      <rect x="374" y="50" width="150" height="68" rx="14" fill="#16203a" stroke="#5ce08a" strokeWidth="2" />
+      <text x="449" y="80" fill="#e8eefc" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="15">mechanism</text>
+      <text x="449" y="101" fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">arm, lift, drive</text>
+      <line x1="524" x2="642" y1="84" y2="84" stroke="#93a7ff" strokeWidth="3" markerEnd="url(#feedbackArrow)" />
+      <text x="670" y="90" fill="#e8eefc" fontFamily="JetBrains Mono, monospace" fontSize="14">output y</text>
+      <path d="M610 84 L610 164 L86 164 L86 108" fill="none" stroke="#93a7ff" strokeWidth="3" markerEnd="url(#feedbackArrow)" />
+      <rect x="344" y="142" width="130" height="44" rx="12" fill="#16203a" stroke="#ffc24d" strokeWidth="2" />
+      <text x="409" y="169" fill="#e8eefc" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="14">sensor</text>
+      <text x="204" y="184" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12">measurement returns to the comparison point</text>
+    </svg>
+  </div>
+  <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-ink-soft">
+    <strong className="text-ink">Closed-loop control.</strong> The sensor turns the output back into information, and that information changes the next command.
+  </figcaption>
+</figure>
+
+## Enterprise implementation
+
+Production robot code should make the feedback loop explicit. Sensors read. Controllers compute.
+Actuators write. Telemetry records what happened.
+
+<JavaCode league="FTC" label="A small feedback-control architecture">{`/**
+ * Reads the current value controlled by a feedback loop.
+ */
+public interface FeedbackSensor {
+    /**
+     * @return measured process value in real engineering units.
+     */
+    double getMeasurement();
+}
+
+/**
+ * Applies a normalized command to hardware.
+ */
+public interface Actuator {
+    /**
+     * @param command normalized actuator command in the range [-1.0, 1.0].
+     */
+    void setCommand(double command);
+}
+
+/**
+ * Converts setpoint and measurement into an actuator command.
+ */
+public interface FeedbackController {
+    /**
+     * @param setpoint desired value in the same units as measurement.
+     * @param measurement current measured value.
+     * @param dtSeconds elapsed loop time in seconds.
+     * @return normalized actuator command before final safety clamping.
+     */
+    double calculate(double setpoint, double measurement, double dtSeconds);
+}
+
+public final class FeedbackLoop {
+    private final FeedbackSensor sensor;
+    private final Actuator actuator;
+    private final FeedbackController controller;
+    private double setpoint;
+
+    public FeedbackLoop(
+            FeedbackSensor sensor,
+            Actuator actuator,
+            FeedbackController controller) {
+        this.sensor = sensor;
+        this.actuator = actuator;
+        this.controller = controller;
+    }
+
+    public void setSetpoint(double setpoint) {
+        this.setpoint = setpoint;
+    }
+
+    /**
+     * Runs one control iteration. Call this exactly once per OpMode loop.
+     */
+    public void update(double dtSeconds, Telemetry telemetry) {
+        double measurement = sensor.getMeasurement();
+        double command = controller.calculate(setpoint, measurement, dtSeconds);
+        double safeCommand = Range.clip(command, -1.0, 1.0);
+
+        actuator.setCommand(safeCommand);
+
+        telemetry.addData("setpoint", setpoint);
+        telemetry.addData("measurement", measurement);
+        telemetry.addData("error", setpoint - measurement);
+        telemetry.addData("command", safeCommand);
+    }
+}`}</JavaCode>
+
+This style makes later lessons easier to plug in. A proportional controller, PID controller,
+feedforward-plus-PID controller, or motion-profiled controller can all implement the same
+`FeedbackController` interface.
+
+## Practice
+
+Try these on a safe test stand or with the robot wheels off the ground first:
+
+- Run a drivetrain forward for a fixed time. Does the distance change between a full battery and a
+  low battery?
+- Move an arm with bang-bang control and a tolerance. Does it chatter near the setpoint?
+- Replace bang-bang with proportional control. What value of $k_P$ starts to oscillate?
+- Add telemetry for setpoint, measurement, error, and command. Which value tells the clearest story
+  when behavior is wrong?
+
+## Hardware reality
+
+<Admonition type="warning" title="Feedback is only as good as the measurement">
+
+If the encoder slips, the IMU drifts, or the camera frame arrives late, the controller is reacting to
+bad information. Feedback does not magically make a robot correct; it makes the robot correctable when
+the measurement is trustworthy enough.
+
+</Admonition>
+
+<Admonition type="warning" title="Closed loop does not remove actuator limits">
+
+If the motor is already at full power, asking for more command cannot create more voltage. Saturation
+changes controller behavior, especially for integral terms, so real implementations need output
+clamps, anti-windup, current limits, and carefully chosen motion targets.
+
+</Admonition>
+
+<Admonition type="tip" title="FTC intuition">
+
+When a mechanism fails only after the battery drops, load changes, or a defender bumps the robot, ask
+whether the code can measure the failure. If it cannot measure the failure, it cannot correct it.
+
+</Admonition>
+
+The next lesson, [From Math to a Loop](../software-architecture/discretization.mdx), explains how
+continuous equations become the discrete update loop your Control Hub actually runs.

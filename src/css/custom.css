@@ -109,12 +109,13 @@
   --ifm-pre-border-radius: 12px;
   --ifm-code-border-radius: 6px;
 
-  /* Type scale (clean, high-contrast) */
+  /* Type scale (clean, high-contrast) — sized up for in-class readability */
   --ifm-heading-font-weight: 700;
-  --ifm-h1-font-size: 2.5rem;
-  --ifm-h2-font-size: 1.6rem;
-  --ifm-h3-font-size: 1.25rem;
-  --ifm-line-height-base: 1.7;
+  --ifm-h1-font-size: 2.7rem;
+  --ifm-h2-font-size: 1.78rem;
+  --ifm-h3-font-size: 1.4rem;
+  --ifm-line-height-base: 1.72;
+  --ifm-font-size-base: 112%;
 
   /* Inline code as a tinted chip */
   --ifm-code-background: rgba(79, 108, 247, 0.08);
@@ -235,16 +236,22 @@ input.cl-range[type='range']::-moz-range-thumb {
   color: #eaf0ff;
 }
 
+.cl-video-caption p {
+  display: inline;
+  margin: 0;
+}
+
 /* ---------------------------------------------------------------------------
    KaTeX (math in lessons)
    --------------------------------------------------------------------------- */
 .katex {
-  font-size: 1.04em;
+  font-size: 1.24em;
 }
 .katex-display {
+  font-size: 1.32em;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 4px 2px 10px;
+  padding: 12px 2px 18px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -262,6 +269,15 @@ html {
 /* Inter's stylistic sets: straight-leg lowercase, single-storey a, etc. */
 body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+}
+
+.theme-doc-markdown {
+  font-size: 1.15rem;
+}
+
+.theme-doc-markdown p,
+.theme-doc-markdown li {
+  line-height: 1.78;
 }
 
 /* Headings: tighter tracking and balanced wrapping. */

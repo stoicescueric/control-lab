@@ -42,7 +42,7 @@ Three distinct corruptions, each demanding a different defence:
 <Theory title="Sampling, and what noise looks like">
 
 A Control Hub does not read sensors continuously; it **samples** them tens to hundreds of times per
-second (see [From Math to a Loop](../enterprise-architecture/discretization.mdx) for why the rate
+second (see [From Math to a Loop](../software-architecture/discretization.mdx) for why the rate
 matters). Every filter in this track operates on that stream of samples and answers one question:
 *given the readings so far, what is the best estimate of the true value?*
 

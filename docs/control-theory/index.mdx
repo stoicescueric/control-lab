@@ -21,11 +21,13 @@ left with feedback (PID) — and combine the two into a single output.
 - **Battery compensation** — holding behavior constant as voltage drops over a match.
 - **Motion profiling** — feeding the controller a physically achievable trajectory instead of a step.
 
-:::warning Feedback alone is always a step behind
+<Admonition type="warning" title="Feedback alone is always a step behind">
+
 A pure PID controller cannot act until an error already exists. The fast, accurate mechanisms you see
 at competition pair feedback with a feedforward model of the plant. Understanding the motor model is
 what makes that pairing possible.
-:::
+
+</Admonition>
 
 Available now: [How a Motor Works](./how-a-motor-works.mdx),
 [Feedforward (kS, kV, kA)](./feedforward.mdx), and [PID Control](./pid.mdx). The remaining lessons —

@@ -1,29 +1,86 @@
 ---
 title: Path Following & Kinematics
-description: Driving the robot along a planned path — mecanum kinematics, field-centric control, PID-to-point, splines, pure pursuit, and guided vector fields.
-tags: [kinematics, mecanum, pure-pursuit, splines, path-following]
+description: How autonomous movement actually works — the pipeline from pose estimate to wheel powers, and the progression from PID-to-point up through pure pursuit and guided vector fields.
+tags: [kinematics, mecanum, pure-pursuit, splines, path-following, autonomous]
 ---
 
 # Module 5 · Path Following & Kinematics
 
-Given a pose estimate (Module 3) and controllers that can hit a target (Module 4), this module answers
-the question that wins autonomous: *how do we make the robot trace a path smoothly and accurately?*
+Autonomous movement is where localization and control finally pay off. A great autonomous routine does
+two things well: it can **drive to any pose on the field**, and it can **follow a smooth path** through
+many poses at speed without stopping to re-aim. Everything in this module builds toward those two
+capabilities.
 
-## What this module covers
+<Admonition type="note" title="Prerequisites">
 
-- **Mecanum kinematics** — the matrix that turns a desired chassis motion into four wheel speeds, plus
-  field-centric driving and joystick-scaling for drivers.
-- **PID-to-point** — the simplest path follower, and its failure modes.
-- **Angle wrapping** — the deceptively subtle bug that makes a robot spin the long way around.
-- **Predictive deceleration** — stopping on the point instead of overshooting it.
-- **Quintic splines** — C² continuity and why it matters versus C¹ cubic paths.
-- **Pure pursuit** — fixed versus dynamic lookahead.
-- **Guided vector fields** — following a path as a flow rather than chasing a moving point.
+This module *composes* the two before it, so have them in hand first:
 
-:::tip This module assumes the two before it
-Path following composes localization and control. If a follower behaves badly, the bug is often in the
-pose estimate or the underlying controller — not the path logic itself.
-:::
+- **[Localization & Odometry](../localization-odometry/odometry.mdx)** — every follower here assumes a
+  trustworthy pose $(x, y, \theta)$ updated each loop.
+- **[Control Theory](../control-theory/index.mdx)** — the [PID](../control-theory/pid.mdx) and
+  [feedforward](../control-theory/feedforward.mdx) loops that turn an error into a motor command.
 
-Available now: [Path Following (Pure Pursuit)](./pure-pursuit.mdx) — the geometric lookahead
-follower. Mecanum kinematics, PID-to-point, splines, and guided vector fields are planned.
+If a follower misbehaves, the bug is usually in the *pose estimate* or the *underlying controller*, not
+the path logic on top.
+
+</Admonition>
+
+## The autonomous-movement pipeline
+
+Every method in this module — from the simplest go-to-pose to a guided vector field — is the same five
+steps run every loop. The methods differ only in *how* they do steps 2 and 3.
+
+| Step | What happens | Where it lives |
+|---|---|---|
+| 1. **Localize** | read the current pose from odometry / vision | [Module 3](../localization-odometry/odometry.mdx) |
+| 2. **Plan the target** | pick where to go next — a target pose, a lookahead point, or a field vector | this module |
+| 3. **Control** | turn the error into a chassis command $(v_x, v_y, \omega)$ with PID + feedforward | this module + [Module 4](../control-theory/index.mdx) |
+| 4. **Mix & correct** | convert the chassis command to wheel powers, desaturate, re-run next loop | [Mecanum kinematics](./mecanum-kinematics.mdx) |
+| 5. **Terminate** | stop when within a pose tolerance *and* slow — or when a timeout fires | every follower |
+
+<Admonition type="tip" title="Step 5 is not optional">
+
+A follower that never decides it is "done" will hunt around the target forever, and one that trusts only
+position will report done while still coasting. Always gate completion on **pose tolerance AND low
+velocity**, with a **timeout** as a backstop so a stuck routine yields the field.
+
+</Admonition>
+
+## See it on a real robot
+
+Before the math, watch a competitive team walk through their own movement code — the same pipeline,
+running on hardware, with the practical decisions called out.
+
+<VideoEmbed
+  title="Wolfpack Movement Breakdown"
+  src="https://www.youtube.com/embed/ri06orPFaKo?start=266"
+  href="https://www.youtube.com/watch?v=ri06orPFaKo&t=266s">
+  Wolfpack &amp; Lupine (Waring Robotics) break down their autonomous movement stack end to end — a good
+  concrete anchor for the techniques formalized in this module.
+</VideoEmbed>
+
+## From simple to advanced
+
+The honest way to learn this is in order of capability. Start with the follower you can debug by eye, and
+only add machinery when a real limitation forces you to.
+
+1. **[Mecanum kinematics](./mecanum-kinematics.mdx)** — the matrix that turns one chassis command into
+   four wheel powers, plus field-centric driving and joystick response curves. *This is step 4 of the
+   pipeline; build it first so every later method has a drivetrain to command.*
+2. **[PID-to-point](./pid-to-point.mdx)** — the simplest complete follower: three PID loops drive the
+   robot to a single target pose. Most autonomous routines are just a list of these.
+3. **[Angle wrapping](./angle-wrapping.mdx)** — the small, mandatory fix that stops the robot spinning
+   the long way around.
+4. **[Predictive deceleration](./predictive-deceleration.mdx)** — cap speed by the distance left to stop,
+   so the robot eases onto the point instead of overshooting it.
+5. **[Quintic & Bézier splines](./quintic-splines.mdx)** — the two ways to describe a smooth, curvature-
+   continuous path: Bézier control points (approximation) versus quintic Hermite waypoints
+   (interpolation).
+6. **[Pure pursuit](./pure-pursuit.mdx)** — chase a lookahead "carrot" along a path; fixed versus dynamic
+   lookahead.
+7. **[Guided vector fields](./guided-vector-fields.mdx)** — follow a path as a flow that converges onto
+   the path, rather than chasing a moving point.
+
+Steps 1–2 give you a working autonomous today; 3–4 make it reliable; 5–7 make it fast and smooth. Read
+them in order — kinematics gives you a drivetrain you can command, the next three turn one target into
+clean motion, and the last three follow whole paths at speed.

@@ -8,7 +8,15 @@
    blocks, admonitions, headings, links) keep working, then add our kit. */
 
 import MDXComponents from '@theme-original/MDXComponents';
+import Admonition from '@theme/Admonition';
 import {Abstract} from '@site/src/components/kit/Abstract';
+import {VideoEmbed} from '@site/src/components/kit/VideoEmbed';
+import {
+  CalculusIllustration,
+  LinearAlgebraIllustration,
+  DifferentialEquationsIllustration,
+  StateSpaceIllustration,
+} from '@site/src/components/kit/MathIllustrations';
 import {Problem, Theory, Deploy} from '@site/src/components/kit/Steps';
 import {Callout, Analogy} from '@site/src/components/kit/Callout';
 import {Formula, Blue, Teal, Amber, Rose, Faint} from '@site/src/components/kit/Formula';
@@ -27,9 +35,15 @@ import {Slider} from '@site/src/components/kit/Slider';
 
 export default {
   ...MDXComponents,
+  Admonition,
   // academic TL;DR that opens each lesson
   Abstract,
-  // the strict 3-step lesson layout
+  VideoEmbed,
+  CalculusIllustration,
+  LinearAlgebraIllustration,
+  DifferentialEquationsIllustration,
+  StateSpaceIllustration,
+  // clean titled lesson sections
   Problem,
   Theory,
   Deploy,

@@ -6,6 +6,7 @@ tags: [filter, kalman, state-estimation, sensor-fusion]
 ---
 
 import Kalman from '@site/src/components/sims/Kalman';
+import {KalmanGainExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Kalman Filter
 
@@ -20,6 +21,12 @@ The Kalman filter is the optimal linear state estimator: given a motion model an
 measurements, it produces the minimum-variance estimate of the true state, and tracks its own
 uncertainty while doing so. It is the principled successor to the hand-tuned complementary filter.
 
+Kou and Haggenmiller's FTC-focused paper,
+[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578),
+is the applied reference for this lesson. Their competition-robot setup is exactly the FTC pattern
+we care about: odometry gives frequent motion information, computer vision landmarks give less
+frequent absolute position information, and the filter fuses them by comparing their covariance.
+
 <Problem title="A fixed blend is not the optimal blend">
 
 The complementary filter blends two sources with a *constant* weight $\alpha$. But the right amount
@@ -31,14 +38,41 @@ express that, and it cannot report how confident the resulting estimate is.
 
 </Problem>
 
+<KalmanGainExplorer />
+
+This Desmos-style graph is the Kalman filter in one dimension. The blue curve is the model's
+prediction, the pink curve is the sensor measurement, and the green curve is the corrected estimate.
+Wide curves mean high variance: the value could plausibly be far from the center. Narrow curves mean
+low variance: that source is confident. Move the variance sliders and watch the corrected estimate
+move toward the narrower curve.
+
 <Theory title="Predict, update, and the optimal gain">
 
 The filter maintains a state estimate $\hat{x}$ and a covariance $P$ (its uncertainty), and repeats
 two steps. **Predict** advances the state through the motion model and *grows* the uncertainty:
 
 $$
-\hat{x}^- = F\hat{x}, \qquad P^- = F P F^\top + Q
+\hat{x}^- = A\hat{x} + Bu, \qquad P^- = A P A^\top + Q
 $$
+
+Here $\hat{x}$ is the current best estimate of the state, such as position or velocity; $A$ is the
+state-transition matrix that advances the state by one loop; $u$ is the control input; $B$ maps that
+control input into state change; $P$ is the covariance matrix, meaning the uncertainty attached to
+the estimate; and $Q$ is process noise, the uncertainty added because the model is never perfect.
+The paper writes this as the prediction model $x_{a,t}=Ax_{a,t-1}+Bu_t+q_t$, where $q_t$ is
+Gaussian process noise with covariance $Q$.
+
+If the state has only one number, such as "robot x-position," covariance reduces to ordinary
+variance. In that scalar case the update gain becomes:
+
+$$
+K = \frac{P^-}{P^- + R}
+$$
+
+That formula is the whole intuition. If $P^-$ is large, the prediction is uncertain, so $K$ moves
+toward $1$ and the measurement gets trusted. If $R$ is large, the sensor is noisy, so $K$ moves
+toward $0$ and the prediction stays mostly unchanged. The matrix equation is the same idea, except
+the filter can track uncertainty across several coupled state variables at once.
 
 **Update** folds in a measurement $z$ and *shrinks* the uncertainty, weighted by the **Kalman
 gain** $K$:
@@ -48,6 +82,28 @@ K = P^- H^\top (H P^- H^\top + R)^{-1}, \qquad
 \hat{x} = \hat{x}^- + K\,(z - H\hat{x}^-), \qquad
 P = (I - KH)P^-
 $$
+
+In this update, $z$ is the sensor measurement, $H$ maps the state into whatever the sensor can
+observe, $R$ is measurement-noise covariance, and $I$ is the identity matrix. The term
+$(z-H\hat{x}^-)$ is the innovation: the part of the measurement the model did not already predict.
+
+Read the update in three pieces:
+
+$$
+\text{innovation} = z - H\hat{x}^-
+$$
+
+$$
+\text{correction} = K \cdot \text{innovation}
+$$
+
+$$
+\text{new estimate} = \text{prediction} + \text{correction}
+$$
+
+The innovation answers, "How surprised was the filter by this sensor reading?" The Kalman gain
+answers, "How much of that surprise should we believe?" The covariance update answers, "After
+seeing this measurement, how much uncertainty remains?"
 
 The update is the low-pass formula you already know — *estimate = prediction + K·(measurement −
 prediction)* — except $K$ is **derived optimally** from the prediction covariance $P^-$ and the
@@ -96,3 +152,7 @@ The basic filter assumes the motion and measurement models are **linear**. Robot
 not — range/bearing and heading involve trigonometry. The Extended Kalman Filter handles that, next.
 
 </Deploy>
+
+## Reference
+
+Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578). *Journal of Student Research, 12*(1). Also available as [arXiv:2310.04459](https://arxiv.org/abs/2310.04459).
