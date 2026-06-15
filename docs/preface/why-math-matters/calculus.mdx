@@ -1,0 +1,131 @@
+---
+title: Calculus
+description: Derivatives, integrals, and limits as engineering tools for robot motion, controller error, and accumulated distance.
+sidebar_position: 2
+tags: [preface, calculus, derivatives, integrals, motion]
+---
+
+import {CalculusLiveDemo} from '@site/src/components/sims/MathDemos';
+
+# Calculus
+
+<Abstract>
+Calculus studies quantities that change continuously, which makes it the natural language of robot motion.
+In FTC, derivatives explain velocity and damping, while integrals explain distance, accumulated error, and energy over time.
+</Abstract>
+
+You already use calculus whenever you say "the lift is moving too fast" or "the robot has driven far
+enough." The word can sound academic, but the core idea is friendly:
+
+> Calculus is how we talk about a thing changing, and about the total effect of that change.
+
+## FTC example: a lift that overshoots every time
+
+Suppose your lift needs to move from the bottom to a scoring height. If the code jumps instantly from
+"go nowhere" to "full target height," the mechanism tries to change position too sharply. The motor
+saturates, the lift gains momentum, and by the time the controller reacts, the carriage has already
+overshot.
+
+The bug is not just "bad PID." It is a bad motion request. You commanded a position without respecting
+velocity and acceleration.
+
+## Visual intuition
+
+Start with the picture: a robot mechanism has position, velocity, and acceleration at the same time.
+Calculus is the set of tools that connects those three layers.
+
+<CalculusLiveDemo />
+
+<VideoEmbed
+  title="3Blue1Brown: Essence of Calculus"
+  src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr"
+  href="https://www.youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr">
+  Grant Sanderson's visual series is the best first pass for building intuition about derivatives and
+  integrals before manipulating symbols.
+</VideoEmbed>
+
+## The basics
+
+A **derivative** measures instantaneous rate of change. If $x(t)$ is position, then velocity is:
+
+$$
+v(t) = \frac{dx}{dt}
+$$
+
+Here, $x(t)$ means position as a function of time, $t$ is time, and $\frac{dx}{dt}$ means "how quickly
+position is changing right now."
+
+Acceleration is the derivative of velocity:
+
+$$
+a(t) = \frac{dv}{dt} = \frac{d^2x}{dt^2}
+$$
+
+Here, $a(t)$ is acceleration, $v(t)$ is velocity, and $\frac{d^2x}{dt^2}$ means "take the derivative of
+position twice."
+
+<CalculusIllustration />
+
+An **integral** accumulates a quantity over time. If velocity is known, distance is accumulated velocity:
+
+$$
+x(t) = x(0) + \int_0^t v(\tau)\,d\tau
+$$
+
+Here, $x(0)$ is the starting position, $\tau$ is a temporary time variable used inside the integral,
+and $\int_0^t v(\tau)\,d\tau$ means "add up all the tiny velocity contributions from time $0$ to time
+$t$."
+
+On a Control Hub, the loop is discrete. That means calculus becomes finite differences and sums:
+
+$$
+v_k \approx \frac{x_k - x_{k-1}}{\Delta t},
+\qquad
+x_k \approx x_{k-1} + v_k \Delta t
+$$
+
+Here, $k$ is the current loop number, $k-1$ is the previous loop, and $\Delta t$ is the measured time
+between those two loops.
+
+This is why measuring $\Delta t$ matters. If your loop sometimes takes 8 ms and sometimes 40 ms, the
+same encoder change implies a different velocity.
+
+## Engineering use case: motion profiling
+
+Motion profiling is calculus made practical. Instead of commanding a lift to teleport to a target, you
+create a path through position, velocity, and acceleration:
+
+$$
+\text{target} = \big(x(t), v(t), a(t)\big)
+$$
+
+The target is not a single number. It is a package containing desired position, desired velocity, and
+desired acceleration at the current instant.
+
+Then feedforward can ask for the voltage needed to produce the target velocity and acceleration, while
+feedback cleans up the remaining error:
+
+$$
+u = k_S\operatorname{sign}(v) + k_Vv + k_Aa + k_P(x_\text{target} - x_\text{measured})
+$$
+
+Here, $u$ is the motor command, $k_S$ fights static friction, $k_V$ scales with velocity, $k_A$ scales
+with acceleration, and $k_P$ corrects position error.
+
+That equation explains why a profiled lift feels calm: the controller is no longer surprised by motion.
+
+<Admonition type="warning" title="Hardware reality: derivatives amplify noise">
+
+Encoder velocity is usually estimated from changes in encoder position. Differentiation magnifies
+jitter, so raw velocity can be noisy even when position looks stable. This is why derivative terms and
+velocity controllers often need filtering.
+
+</Admonition>
+
+<Admonition type="tip" title="FTC intuition">
+
+When a robot "slams" into a target, ask what acceleration you accidentally demanded. When odometry
+drifts, ask what velocity was integrated for too long. Those are calculus questions wearing robot
+clothes.
+
+</Admonition>

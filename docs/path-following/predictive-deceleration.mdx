@@ -1,0 +1,176 @@
+---
+title: Predictive Deceleration
+description: Why proportional control brakes too late, and how a √(2·a·d) speed cap lets the robot plan its stop instead of reacting to it.
+sidebar_position: 4
+tags: [deceleration, motion-profiling, braking, control, autonomous]
+---
+
+import {BrakingProfileIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+
+# Predictive Deceleration
+
+<Abstract>
+A proportional controller reduces speed only as the remaining error shrinks, so at speed it commits to
+braking too late and overshoots. Predictive deceleration caps the commanded speed at the fastest value
+from which the robot can still stop in the distance remaining, turning a reactive loop into a planned,
+overshoot-free approach.
+</Abstract>
+
+This is the first fix for the overshoot we saw in [PID-to-point](./pid-to-point.mdx). It is also the
+core idea behind full motion profiling, in one equation you can drop into an existing controller.
+
+<Problem title="Proportional control finds out too late">
+
+A pure proportional command, $v = k_p\, d$, is fast when the distance $d$ is large and slow when it is
+small — which sounds right. But the robot has a maximum deceleration. Far from the target the
+proportional command is *way* above the speed from which the robot could still stop in time, so it
+charges in, realizes too late that it must brake, and sails past. Lower the gain to fix the overshoot
+and the whole approach becomes sluggish. There is no single gain that is both fast and clean.
+
+</Problem>
+
+<Theory title="The kinematics of stopping">
+
+Ask a different question: *given the distance left, how fast am I allowed to go?* Constant-acceleration
+kinematics answers it directly. To bring speed $v$ to zero over distance $d$ at deceleration $a$:
+
+$$
+v^2 = 2 a d \quad\Longrightarrow\quad v_\text{cap} = \sqrt{2 a d}
+$$
+
+That is the **fastest speed from which you can still stop on the point.** Stay under it and you are
+guaranteed to be able to halt at the target. The commanded speed becomes the smallest of three limits —
+the braking cap, the robot's top speed, and (optionally) the proportional term for a soft final
+approach:
+
+$$
+v_\text{cmd} = \min\big(\sqrt{2 a d},\ v_\text{max},\ k_p\, d\big)
+$$
+
+<BrakingProfileIllustration />
+
+Far out, $\sqrt{2ad}$ exceeds $v_\text{max}$, so the robot cruises at top speed. As it nears the target
+the square-root cap drops below $v_\text{max}$ and smoothly throttles the robot down to zero right at the
+point — a triangular or trapezoidal speed profile, computed from geometry, with no overshoot. Notice the
+shape: the cap is *concave*, braking gently at first and harder as distance runs out, which is exactly
+the opposite of the straight proportional line that stays too high until the very end.
+
+<Callout type="idea" title="This is motion profiling, lazily.">
+A full motion profile precomputes position, velocity, and acceleration for every instant. The √(2·a·d)
+cap is the same physics evaluated on demand from the current distance — cheaper to write, and enough for
+point-to-point moves. The trade-off is that it reacts to the live distance rather than committing to a
+timed plan.
+</Callout>
+
+### The slicker version: predict where you'll glide to
+
+The same physics solves for *distance* instead of speed. Rearranging $v^2 = 2 a d$, a robot moving at
+speed $v$ needs
+
+$$
+d_\text{glide} = \frac{v^2}{2 a}
+$$
+
+to coast to a stop — its **braking distance**, or "glide." Now the trick used by real FTC drives: don't
+cap the speed at all. Instead, add the glide vector to the current pose to get a **predicted stopping
+pose**, and run your ordinary [PID-to-point](./pid-to-point.mdx) controller against *that*:
+
+$$
+\mathbf{p}_\text{predicted} = \mathbf{p}_\text{now} + \frac{\mathbf{v}\,\lVert\mathbf{v}\rVert}{2 a}
+$$
+
+While the robot races toward the target, its predicted pose sits well *ahead* of it; as it gets close and
+slows, the prediction pulls back onto the target. When the robot is moving too fast, the predicted pose
+overshoots the goal, so the controller's error flips sign and it brakes — automatically, with no separate
+speed cap. This is how Cyliis's `Odo` computes `predictedX/Y` (a low-pass-filtered velocity feeding
+`sign(v)·v²/(2·decel)`), and how FTCclueless feeds an `expected` pose into a "predictive PID" near the
+target. It is the easiest way to retrofit predictive braking onto a controller you already have.
+
+</Theory>
+
+<Deploy title="A braking cap on the chassis command">
+
+Apply the cap to the *magnitude* of the translational command so the direction is untouched, then feed
+the result into the same go-to-pose loop:
+
+<JavaCode league="FTC" label="Distance-capped approach speed">{`/** Fastest approach speed (normalized) that can still stop at the target. */
+private double brakingCap(double distance) {
+    double vStop = Math.sqrt(2.0 * MAX_DECEL * distance);   // m/s
+    double v = Math.min(vStop, MAX_SPEED);                  // respect top speed
+    return v / MAX_SPEED;                                   // back to [0, 1]
+}
+
+public void driveToward(double exR, double eyR, double headingCmd) {
+    double dist = Math.hypot(exR, eyR);
+    double cap  = brakingCap(dist);            // planned speed limit
+
+    double dir  = Math.atan2(eyR, exR);        // robot-frame direction to target
+    double vx = cap * Math.cos(dir);
+    double vy = cap * Math.sin(dir);
+    drive(vx, vy, headingCmd);                 // mecanum mixer desaturates
+}`}</JavaCode>
+
+Because the cap already shapes the approach, you can run the underlying position gain higher without
+overshoot — the controller is fast far away and precise at the end, the combination a single gain could
+never give you.
+
+The predicted-pose variant is even less code — compute the glide once and feed an existing PID-to-point
+its target as if the robot were already at its stopping point:
+
+<JavaCode league="FTC" label="Glide-distance predicted pose (Cyliis-style)">{`/** Where the robot will coast to a stop if it braked now, in field coordinates. */
+public Pose2d predictedPose() {
+    Pose2d p = localizer.getPose();
+    Vector2d v = localizer.getVelocity();              // filter this — velocity is noisy
+    double speed = v.norm();
+    if (speed < 1e-6) return p;
+
+    double glide = speed * speed / (2.0 * MAX_DECEL);  // braking distance
+    double gx = (v.x / speed) * glide;                 // glide along the velocity direction
+    double gy = (v.y / speed) * glide;
+    return new Pose2d(p.x + gx, p.y + gy, p.heading);
+}
+
+// then, anywhere you ran PID-to-point on the live pose, run it on the predicted one:
+//     double ex = target.x - predictedPose().x;   // brakes early, automatically
+`}</JavaCode>
+
+<Admonition type="warning" title="Filter the velocity first">
+Glide is proportional to velocity *squared*, so raw encoder-derived velocity noise gets amplified into a
+jittery predicted pose. Cyliis runs the pod velocity through a [low-pass filter](../signal-processing/low-pass.mdx)
+before computing glide — do the same, or the robot will twitch near the target.
+</Admonition>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: your real decel is smaller than you think">
+
+`MAX_DECEL` is limited by traction, battery voltage, and weight transfer, not the motors. Measure it,
+then use **70–80%** of the measured value so a worn battery or a slick tile doesn't turn your computed
+stop into a slide. Add a small floor speed so static friction near the target doesn't strand the robot
+just short.
+
+</Admonition>
+
+<Admonition type="tip" title="Pair it with feedforward">
+
+The cap decides *how fast*; a velocity feedforward decides *what voltage* produces that speed. Together
+they give an open-loop-accurate approach that feedback only has to trim — see
+[Feedforward](../control-theory/feedforward.mdx).
+
+</Admonition>
+
+<Admonition type="info" title="Source-code references">
+
+The predicted-pose technique on this page is adapted, with attribution, from these open-source FTC team
+repositories:
+
+- **Glide-distance predicted stopping pose** (compute $\mathbf{p} + \mathbf{v}\lVert\mathbf{v}\rVert/2a$
+  from low-pass-filtered velocity and run PID against it) —
+  [Cyliis_Into_The_Deep_OfficialCode](https://github.com/Cyliis/CyLiis_Into_The_Deep_OfficialCode)
+  (`Wrappers/Odo.java`, `predictedX/Y`) and
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`Drivetrain.java`, the
+  "predictive PID" on the `expected` pose).
+
+The code here is an independent reimplementation of these ideas, not a copy of any one repository.
+
+</Admonition>

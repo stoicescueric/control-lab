@@ -1,0 +1,134 @@
+---
+title: State Space
+description: State vectors, inputs, outputs, and update equations as the common language behind odometry, Kalman filters, and modern control.
+sidebar_position: 5
+tags: [preface, state-space, state-vector, kalman, control]
+---
+
+import {StateSpaceLiveDemo} from '@site/src/components/sims/MathDemos';
+
+# State Space
+
+<Abstract>
+State space is a way to model a system by listing the variables that fully describe it right now and writing rules for how those variables update.
+It is the bridge between calculus, linear algebra, differential equations, odometry, Kalman filters, and modern robot controllers.
+</Abstract>
+
+State space is the moment the previous lessons snap together. Calculus gives rates. Linear algebra
+packages variables into vectors and matrices. Differential equations describe evolution. State space
+puts all of that into a model you can run every loop.
+
+## FTC example: one sensor reading is not enough
+
+An encoder gives a wheel position. An IMU gives heading. A distance sensor gives range. None of those
+alone tells you "where the robot is" or "what the mechanism is doing."
+
+The robot needs an estimate of the whole situation:
+
+$$
+\mathbf{x} =
+\begin{bmatrix}
+x \\
+y \\
+\theta \\
+v \\
+\omega
+\end{bmatrix}
+$$
+
+That vector is the **state**. Here, $x$ and $y$ are field position, $\theta$ is heading, $v$ is linear
+velocity, and $\omega$ is angular velocity.
+
+## Visual intuition
+
+For state space, the most useful picture is a loop: state goes into the model, input changes it, sensors
+correct it, and the next state becomes the starting point for the next loop.
+
+<StateSpaceLiveDemo />
+
+<VideoEmbed
+  title="State-space equations: an introduction"
+  src="https://www.youtube.com/embed/SdvNME2thaQ"
+  href="https://www.youtube.com/watch?v=SdvNME2thaQ">
+  This control-oriented introduction complements the 3Blue1Brown calculus, linear algebra, and
+  differential-equation intuition by showing the standard engineering notation.
+</VideoEmbed>
+
+## The basics
+
+A state-space model has four pieces:
+
+| Symbol | Meaning | FTC example |
+|---|---|---|
+| $\mathbf{x}$ | state | pose, velocity, heading, lift height |
+| $\mathbf{u}$ | input | motor voltages or drive commands |
+| $\mathbf{y}$ | output | encoder, IMU, camera, distance sensor readings |
+| $t$ or $k$ | time | continuous time or loop index |
+
+In continuous time:
+
+$$
+\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}
+$$
+
+Here, $\dot{\mathbf{x}}$ means "the rate of change of the state." $A$ describes how the current state
+affects future motion, $B$ describes how inputs affect the state, and $\mathbf{u}$ is the input vector.
+
+<StateSpaceIllustration />
+
+In a robot loop, the discrete version is more directly useful:
+
+$$
+\mathbf{x}_{k+1} = A\mathbf{x}_k + B\mathbf{u}_k
+$$
+
+Here, $k$ is the current robot loop and $k+1$ is the next loop. The equation says: use the current
+state and current input to predict the next state.
+
+Sensors read some part of the state:
+
+$$
+\mathbf{y}_k = C\mathbf{x}_k
+$$
+
+Here, $\mathbf{y}_k$ is the sensor output at loop $k$, and $C$ maps the hidden full state into the
+specific quantities the sensors can observe.
+
+Those three matrices say:
+
+- $A$ describes how the system evolves by itself,
+- $B$ describes how inputs affect it,
+- $C$ describes what the sensors can see.
+
+## Engineering use case: odometry plus correction
+
+Odometry is a state update. Every loop, wheel motion advances the pose:
+
+$$
+\mathbf{x}_{k+1} = f(\mathbf{x}_k, \Delta s, \Delta\theta)
+$$
+
+But odometry drifts. A camera or AprilTag observation gives a measurement:
+
+$$
+\mathbf{z}_k = h(\mathbf{x}_k) + \text{noise}
+$$
+
+A Kalman filter is state-space thinking with uncertainty attached. It predicts the next state from the
+model, compares the predicted sensor reading to the real one, and corrects the state estimate by the
+amount justified by the uncertainty.
+
+<Admonition type="warning" title="Hardware reality: the state is only as good as the sensors">
+
+If wheel slip corrupts odometry, if an IMU is noisy, or if a camera frame arrives late, the state vector
+can look precise while being wrong. State-space models are powerful because they force you to say what
+you trust and how much.
+
+</Admonition>
+
+<Admonition type="tip" title="FTC intuition">
+
+When a later lesson says "pose estimate," "Kalman filter," or "state estimator," translate it as: a
+state vector plus rules for prediction and correction.
+
+</Admonition>

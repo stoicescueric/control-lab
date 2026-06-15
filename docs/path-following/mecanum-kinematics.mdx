@@ -1,0 +1,189 @@
+---
+title: Mecanum Kinematics
+description: The matrix that turns one chassis command into four wheel powers — plus field-centric driving, joystick response curves, and the desaturation step that keeps the robot driving straight.
+sidebar_position: 1
+tags: [mecanum, kinematics, field-centric, desaturation, teleop]
+---
+
+import MecanumDrive from '@site/src/components/sims/MecanumDrive';
+
+# Mecanum Kinematics
+
+<Abstract>
+A mecanum drivetrain converts one desired chassis motion — forward, strafe, and turn — into four
+independent wheel powers through a fixed linear map. This lesson builds that map from the rollers up,
+adds the field-centric rotation and joystick shaping drivers actually want, and shows why the
+desaturation step is what keeps a "full speed" command driving in a straight line.
+</Abstract>
+
+Mecanum wheels are the reason an FTC robot can slide sideways without turning. Each wheel has rollers
+canted at 45°, so the wheel's grip points diagonally. Drive the four wheels in the right *combination*
+and those diagonal forces add up to pure forward, pure sideways, pure rotation, or anything between. The
+whole skill is choosing that combination — and it is exactly one matrix multiply.
+
+<Problem title="One driver intent, four motors, every loop">
+
+The driver gives you three numbers from two sticks: how much to go **forward**, how much to **strafe**,
+and how much to **turn**. The robot has four motors. Somewhere in your `OpMode` you must turn three
+numbers into four, sixty times a second, and get the signs right — or the robot strafes when it should
+spin.
+
+Worse, the obvious "just add the joystick axes" code has two silent bugs. It drives relative to the
+*robot*, so a disoriented driver fights the controls the moment the robot turns; and when you push two
+sticks at once it asks a wheel for more than 100% power, which the hardware quietly clips — turning your
+straight-line command into a curve.
+
+</Problem>
+
+<Theory title="From rollers to a wheel-mixing matrix">
+
+Work in the robot's own frame first. Call the chassis command
+
+$$
+\mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
+$$
+
+where $v_x$ is forward speed, $v_y$ is strafe speed (positive to the **left**), and $\omega$ is turn
+rate (positive **counter-clockwise**). Because of the 45° rollers, each wheel responds to forward and
+strafe with opposite signs on the diagonal, and to rotation by how far it sits from the center. Writing
+that out for the four wheels — front-left, front-right, back-left, back-right — gives the **mecanum
+inverse-kinematics matrix**:
+
+$$
+\begin{bmatrix} w_{FL} \\ w_{FR} \\ w_{BL} \\ w_{BR} \end{bmatrix}
+=
+\begin{bmatrix}
+1 & -1 & -(L+W) \\
+1 & \phantom{-}1 & \phantom{-}(L+W) \\
+1 & \phantom{-}1 & -(L+W) \\
+1 & -1 & \phantom{-}(L+W)
+\end{bmatrix}
+\begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
+$$
+
+Here $L$ and $W$ are the distances from the robot center to the wheel axles (front-to-back and
+side-to-side); the term $L+W$ sets how strongly turning loads each wheel. In normalized teleop you can
+fold those constants into $\omega$ and just read off the pattern:
+
+$$
+\begin{aligned}
+w_{FL} &= v_x - v_y - \omega &
+w_{FR} &= v_x + v_y + \omega \\
+w_{BL} &= v_x + v_y - \omega &
+w_{BR} &= v_x - v_y + \omega
+\end{aligned}
+$$
+
+This is the same idea as the [linear-algebra preface](../preface/why-math-matters/linear-algebra.mdx):
+a single matrix is the clean way to combine forward, strafe, and turn instead of four hand-tuned
+formulas.
+
+### Field-centric: rotate the command first
+
+Drivers think in *field* directions — "go to the scoring side" — not robot directions. So before the
+matrix, rotate the driver's field command into the robot frame by the robot's heading $\theta$ (read
+from the IMU). This is the rotation from the linear-algebra lesson, by $-\theta$:
+
+$$
+\begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{robot}
+=
+\begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix}
+\begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{field}
+$$
+
+Now "push the stick away from you" means the same field direction no matter which way the robot faces.
+
+### Joystick response curves
+
+A raw stick is linear, but fine alignment near the goal needs gentle low-stick response while still
+reaching full speed at the top. Shape the **magnitude** (so you don't distort the direction) by raising
+it to a power $k \ge 1$:
+
+$$
+m_\text{out} = m_\text{in}^{\,k}, \qquad m_\text{in} = \sqrt{v_x^2 + v_y^2}
+$$
+
+$k = 1$ is linear; $k = 2$ (squared) is the classic FTC feel — half stick gives a quarter speed, so
+slow moves are precise and the top end is untouched.
+
+### Desaturation: the step everyone forgets
+
+The matrix can hand back a wheel power above $1.0$. If you just clip it, the *other* wheels keep their
+values and the ratio between wheels changes — so the robot curves away from the commanded direction. The
+fix is to scale **all four together** by the largest magnitude, but only if it exceeds one:
+
+$$
+\text{scale} = \max\big(1,\ |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|\big),
+\qquad
+w_i \leftarrow \frac{w_i}{\text{scale}}
+$$
+
+Small commands pass through untouched; oversized ones shrink while **keeping their ratios**, so the
+direction of travel is preserved. Drive the demo's forward and turn sticks both to the top and watch the
+"desaturate ÷" readout climb above 1 — that divisor is the only thing keeping the robot honest.
+
+<MecanumDrive />
+
+</Theory>
+
+<Deploy title="A clean field-centric teleop drive">
+
+The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
+
+<JavaCode league="FTC" label="Field-centric mecanum with response curve + desaturation">{`/** Drives a mecanum chassis from field-relative stick input.
+ *  @param fwd   forward command, +1 away from the driver   [-1, 1]
+ *  @param strafe strafe command, +1 to the left             [-1, 1]
+ *  @param turn  turn command, +1 counter-clockwise          [-1, 1]
+ *  @param heading robot heading from the IMU, radians (field frame)
+ */
+public void driveFieldCentric(double fwd, double strafe, double turn, double heading) {
+    // 1) response curve on the translation magnitude (direction preserved)
+    double mag = Math.min(1.0, Math.hypot(fwd, strafe));
+    double dir = Math.atan2(strafe, fwd);
+    double curved = Math.pow(mag, DRIVE_CURVE);          // DRIVE_CURVE = 2.0 feels good
+    double fwdC = curved * Math.cos(dir);
+    double strC = curved * Math.sin(dir);
+
+    // 2) rotate the field command into the robot frame (rotate by -heading)
+    double cos = Math.cos(heading), sin = Math.sin(heading);
+    double vx =  fwdC * cos + strC * sin;
+    double vy = -fwdC * sin + strC * cos;
+    double w  = turn;
+
+    // 3) wheel-mixing matrix
+    double fl = vx - vy - w;
+    double fr = vx + vy + w;
+    double bl = vx + vy - w;
+    double br = vx - vy + w;
+
+    // 4) desaturate: scale all four down together if any exceeds 1.0
+    double scale = Math.max(1.0,
+        Math.max(Math.abs(fl), Math.max(Math.abs(fr),
+        Math.max(Math.abs(bl), Math.abs(br)))));
+    frontLeft.setPower(fl / scale);
+    frontRight.setPower(fr / scale);
+    backLeft.setPower(bl / scale);
+    backRight.setPower(br / scale);
+}`}</JavaCode>
+
+With teleop solid, the same chassis command becomes the *output* of an autonomous controller. The
+simplest one drives straight at a target pose — that is [**PID-to-point**](./pid-to-point.mdx), the next
+lesson.
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: mecanum is not a precise odometry source">
+
+Those canted rollers slip sideways by design, so wheel encoders on a mecanum drive over-report strafe
+distance and drift fast. Use the drive for *motion*, but localize from dedicated dead-wheel pods or
+fused vision — see [Odometry & Pose](../localization-odometry/odometry.mdx).
+
+</Admonition>
+
+<Admonition type="tip" title="Sign conventions are the #1 bug">
+
+If a wheel fights the others, flip its motor direction, not the math. Pick one convention (+x forward,
++y left, +ω CCW), write it in a comment, and make every wheel obey it. Half of all "mecanum is broken"
+posts are one inverted motor.
+
+</Admonition>
