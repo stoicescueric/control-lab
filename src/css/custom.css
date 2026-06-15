@@ -1,0 +1,401 @@
+/* =============================================================================
+   Control Lab — global styles.
+
+   Two systems coexist here, deliberately:
+   1. Infima (Docusaurus's CSS framework) owns the site chrome — navbar, sidebar,
+      docs layout, admonitions. We re-skin it via --ifm-* variables (Phase 2).
+   2. Tailwind v4 powers the interactive lesson components (the canvas demos and
+      their controls). We import UTILITIES ONLY (no Preflight) so Tailwind never
+      resets or clobbers Infima's base styles. Utilities live in their own cascade
+      layer, keeping them out of Infima's way.
+
+   Docusaurus toggles dark mode with [data-theme='dark'] on <html> (NOT a .dark
+   class), so our Tailwind `dark:` variant and token overrides target that.
+   ============================================================================= */
+
+/* Order the cascade layers up front; Tailwind slots its output into these. */
+@layer theme, base, components, utilities;
+
+/* Tailwind v4, Preflight excluded (we keep Infima's reset, not Tailwind's). */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@plugin '@tailwindcss/typography';
+
+/* Only scan our own source for class names — fast and avoids false positives. */
+@source '../';
+@source '../../docs';
+
+/* `dark:` utilities apply under Docusaurus's dark attribute. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ---------------------------------------------------------------------------
+   Design tokens (ported from the legacy Tailwind theme). Defining them under
+   @theme turns each into a utility too (e.g. bg-surface, text-ink, text-brand).
+   --------------------------------------------------------------------------- */
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* surfaces & ink */
+  --color-bg: #f3f6fc;
+  --color-bg-soft: #e9eefa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f9ff;
+  --color-ink: #1c2333;
+  --color-ink-soft: #56617a;
+  --color-ink-faint: #8a93a8;
+  --color-line: #e3e8f2;
+  --color-line-soft: #eef1f8;
+
+  /* brand + accents */
+  --color-brand: #4f6cf7;
+  --color-brand-dk: #3a52d6;
+  --color-teal: #11b5a4;
+  --color-amber: #f59e0b;
+  --color-rose: #ef4476;
+  --color-green: #22c55e;
+  --color-violet: #8b5cf6;
+
+  /* dark panels used inside the interactive demos (dark in BOTH themes) */
+  --color-panel: #0f1626;
+  --color-panel-2: #16203a;
+  --color-panel-ink: #e8edf7;
+
+  --radius-card: 16px;
+  --shadow-card: 0 6px 24px rgba(28, 40, 79, 0.08);
+  --shadow-pop: 0 18px 50px rgba(28, 40, 79, 0.16);
+}
+
+/* ---------------------------------------------------------------------------
+   Infima primary — map Docusaurus's accent to the Control Lab brand blue.
+   (Full chrome/surface/prose re-skin happens in Phase 2.)
+   --------------------------------------------------------------------------- */
+:root {
+  --ifm-color-primary: #4f6cf7;
+  --ifm-color-primary-dark: #3a52d6;
+  --ifm-color-primary-darker: #3149c8;
+  --ifm-color-primary-darkest: #283ca3;
+  --ifm-color-primary-light: #6883f9;
+  --ifm-color-primary-lighter: #7991fa;
+  --ifm-color-primary-lightest: #a3b3fc;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: var(--font-sans);
+  --ifm-font-family-monospace: var(--font-mono);
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.08);
+
+  /* Surfaces & text driven by the Control Lab tokens (off-white canvas, white
+     surfaces) for the Stripe-docs depth. */
+  --ifm-background-color: var(--color-bg);
+  --ifm-background-surface-color: var(--color-surface);
+  --ifm-font-color-base: var(--color-ink);
+  --ifm-heading-color: var(--color-ink);
+  --ifm-color-content-secondary: var(--color-ink-soft);
+  --ifm-link-color: var(--color-brand);
+  --ifm-link-hover-color: var(--color-brand-dk);
+  --ifm-link-hover-decoration: none;
+
+  /* Hairlines & emphasis */
+  --ifm-toc-border-color: var(--color-line);
+  --ifm-color-emphasis-200: var(--color-line-soft);
+  --ifm-color-emphasis-300: var(--color-line);
+  --ifm-hr-background-color: var(--color-line);
+  --ifm-blockquote-border-color: var(--color-line);
+
+  /* Shape */
+  --ifm-global-radius: 10px;
+  --ifm-button-border-radius: 9px;
+  --ifm-card-border-radius: 14px;
+  --ifm-pre-border-radius: 12px;
+  --ifm-code-border-radius: 6px;
+
+  /* Type scale (clean, high-contrast) */
+  --ifm-heading-font-weight: 700;
+  --ifm-h1-font-size: 2.5rem;
+  --ifm-h2-font-size: 1.6rem;
+  --ifm-h3-font-size: 1.25rem;
+  --ifm-line-height-base: 1.7;
+
+  /* Inline code as a tinted chip */
+  --ifm-code-background: rgba(79, 108, 247, 0.08);
+
+  /* Navbar: taller, translucent, hairline border */
+  --ifm-navbar-height: 3.75rem;
+  --ifm-navbar-background-color: rgba(255, 255, 255, 0.8);
+  --ifm-navbar-shadow: none;
+
+  /* Sidebar menu */
+  --ifm-menu-color: var(--color-ink-soft);
+  --ifm-menu-color-active: var(--color-brand);
+  --ifm-menu-color-background-active: rgba(79, 108, 247, 0.1);
+  --ifm-menu-color-background-hover: rgba(79, 108, 247, 0.06);
+
+  --cl-scroll-thumb: #c4ccdc;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #93a7ff;
+  --ifm-color-primary-dark: #6f8bff;
+  --ifm-color-primary-darker: #5d7cff;
+  --ifm-color-primary-darkest: #3a52d6;
+  --ifm-color-primary-light: #b3c2ff;
+  --ifm-color-primary-lighter: #c5d0ff;
+  --ifm-color-primary-lightest: #e0e6ff;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+
+  /* Re-point the Tailwind design tokens for dark mode. Because the kit's
+     utilities (text-ink, bg-surface, border-line, …) resolve to these CSS
+     variables, overriding them here flips the whole component palette. The
+     demo PANEL tokens stay dark in both themes by design. */
+  --color-bg: #0a0f1e;
+  --color-bg-soft: #121a30;
+  --color-surface: #111a2c;
+  --color-surface-2: #0f1730;
+  --color-ink: #e7ecf7;
+  --color-ink-soft: #aab6d0;
+  --color-ink-faint: #7e8cac;
+  --color-line: #243049;
+  --color-line-soft: #1a2440;
+  --color-brand-dk: #93a7ff;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 18px 50px rgba(0, 0, 0, 0.5);
+
+  /* Re-skin Infima chrome for dark mode off the same tokens. */
+  --ifm-background-color: var(--color-bg);
+  --ifm-background-surface-color: var(--color-surface);
+  --ifm-font-color-base: var(--color-ink);
+  --ifm-heading-color: var(--color-ink);
+  --ifm-color-content-secondary: var(--color-ink-soft);
+  --ifm-link-color: #93a7ff;
+  --ifm-link-hover-color: #c5d0ff;
+  --ifm-toc-border-color: var(--color-line);
+  --ifm-color-emphasis-200: var(--color-line-soft);
+  --ifm-color-emphasis-300: var(--color-line);
+  --ifm-hr-background-color: var(--color-line);
+  --ifm-blockquote-border-color: var(--color-line);
+  --ifm-code-background: rgba(147, 167, 255, 0.13);
+  --ifm-navbar-background-color: rgba(10, 15, 30, 0.72);
+  --ifm-menu-color: var(--color-ink-soft);
+  --ifm-menu-color-active: #c5d0ff;
+  --ifm-menu-color-background-active: rgba(147, 167, 255, 0.14);
+  --ifm-menu-color-background-hover: rgba(147, 167, 255, 0.08);
+  --cl-scroll-thumb: #2a3656;
+}
+
+/* ---------------------------------------------------------------------------
+   Kit component glue. Two jobs:
+   1. Style the range slider inside the dark demo panels (can't be expressed as
+      pure utilities — vendor pseudo-elements).
+   2. Keep Infima's prose styles from leaking into our always-dark panels.
+   --------------------------------------------------------------------------- */
+
+/* The numbered step heading sits tight under its kicker label. */
+.cl-step-title {
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+/* Range sliders inside the dark demo panels. */
+input.cl-range[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: #2a3656;
+  outline: none;
+}
+input.cl-range[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  cursor: pointer;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+input.cl-range[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  cursor: pointer;
+  border: 3px solid #fff;
+}
+
+/* Inside the dark demo panel, links/inline-code must read on the dark bg
+   regardless of the active site theme. */
+.cl-demo a {
+  color: #93a7ff;
+}
+.cl-demo :not(pre) > code {
+  background: rgba(255, 255, 255, 0.1);
+  color: #eaf0ff;
+}
+
+/* ---------------------------------------------------------------------------
+   KaTeX (math in lessons)
+   --------------------------------------------------------------------------- */
+.katex {
+  font-size: 1.04em;
+}
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 10px;
+}
+
+/* ---------------------------------------------------------------------------
+   Phase 2 — Stripe-docs chrome. Infima owns the layout; these rules refine its
+   navbar, sidebar, typography, code, and tables into the Control Lab identity.
+   The CSS variables above do most of the work; this is the rest.
+   --------------------------------------------------------------------------- */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Inter's stylistic sets: straight-leg lowercase, single-storey a, etc. */
+body {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+}
+
+/* Headings: tighter tracking and balanced wrapping. */
+h1,
+h2,
+h3,
+h4,
+.hero__title,
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  letter-spacing: -0.021em;
+  text-wrap: balance;
+}
+
+/* Translucent, blurred navbar with a hairline border. */
+.navbar {
+  border-bottom: 1px solid var(--ifm-toc-border-color);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+}
+.navbar__title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.navbar__link {
+  font-weight: 500;
+}
+
+/* Sidebar menu: pill links, gentle hover, brand-accented active item; category
+   labels read as headings. */
+.menu {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.menu__link {
+  border-radius: 8px;
+  line-height: 1.35;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.menu__link--active:not(.menu__link--sublist) {
+  font-weight: 600;
+}
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+/* Code blocks: soft shadow so they lift off the off-white canvas. */
+.theme-code-block {
+  box-shadow: var(--shadow-card);
+}
+pre code {
+  font-size: 0.86rem;
+}
+
+/* Inline code chip. */
+:not(pre) > code {
+  font-weight: 500;
+}
+
+/* Prose links: underline only on hover. */
+.markdown a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Tables: clean header band on the surface color. */
+.markdown table thead tr {
+  background: var(--ifm-background-surface-color);
+}
+.markdown table th,
+.markdown table td {
+  border-color: var(--ifm-toc-border-color);
+}
+
+/* Pagination + buttons: a touch more rounded with a subtle lift. */
+.pagination-nav__link {
+  border-radius: 12px;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease;
+}
+.pagination-nav__link:hover {
+  border-color: var(--ifm-color-primary);
+}
+.button {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+.button--lg:hover {
+  transform: translateY(-1px);
+}
+
+/* Subtle, brand-tinted scrollbars. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cl-scroll-thumb) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--cl-scroll-thumb);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+/* Accessible focus ring + selection. */
+:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+::selection {
+  background: rgba(79, 108, 247, 0.22);
+}
+
+/* Honour reduced-motion preferences across the whole site. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

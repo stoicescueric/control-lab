@@ -1,0 +1,90 @@
+---
+title: Complementary Filter
+description: Two flawed sensors that fail in opposite ways — a drifting gyro and a noisy accelerometer — blended into one reliable angle estimate.
+sidebar_position: 4
+tags: [filter, sensor-fusion, complementary, imu]
+---
+
+import Complementary from '@site/src/components/sims/Complementary';
+
+# Complementary Filter
+
+<Abstract>
+A complementary filter fuses two sensors that fail in opposite ways — a gyro that is smooth but drifts
+and an accelerometer that is stable but noisy — into one trustworthy angle estimate. This lesson shows
+how a single blending constant hands each sensor the frequency band it is actually good at.
+</Abstract>
+
+The previous filters cleaned a *single* sensor. Often the better move is to combine *two* imperfect
+sensors whose weaknesses are complementary. The classic case — used in every IMU-stabilised
+mechanism — is estimating an angle from a gyroscope and an accelerometer.
+
+<Problem title="The gyro drifts; the accelerometer is noisy">
+
+To hold a heading or a tilt, a robot has two sensors, each untrustworthy in an opposite way:
+
+- **Gyroscope** — measures *angular rate*. Integrating it gives a smooth, responsive angle, but the
+  integration accumulates a small bias into unbounded **drift**. Excellent short-term, useless
+  long-term.
+- **Accelerometer** — senses gravity, so it knows the true tilt *on average*, but every bump and
+  vibration corrupts it with **noise**. Honest long-term, jittery short-term.
+
+Used alone, one drifts away and the other shakes. We want an estimate that is both smooth *and*
+drift-free.
+
+</Problem>
+
+<Theory title="High-pass the gyro, low-pass the accelerometer, add them">
+
+Pass the gyro through a *high-pass* (keep its fast, accurate component) and the accelerometer
+through a *low-pass* (keep its slow, honest component). Their frequency responses are complements
+that sum to one, so the combination covers the whole band. In practice this collapses into a single
+recursive line:
+
+$$
+\hat{\theta}_k = \alpha\,(\hat{\theta}_{k-1} + \omega_{\text{gyro}}\,\Delta t) + (1 - \alpha)\,\theta_{\text{accel}}
+$$
+
+<Formula>
+  angle = <Amber>α</Amber>·(angle + <Teal>gyro</Teal>·dt) + (1 − <Amber>α</Amber>)·<Rose>accelAngle</Rose>
+</Formula>
+
+The first term coasts the angle forward on the smooth gyro; the second gently pulls it back toward
+the accelerometer's honest reading, cancelling drift. $\alpha$ sits close to 1 (≈ 0.98): mostly trust
+the gyro, sip just enough accelerometer to stay anchored.
+
+The demo runs a gyro-only estimate (smooth but drifting), an accel-only estimate (centred but
+noisy), and the fusion. Increase the gyro drift to see why neither raw sensor is acceptable.
+
+<Complementary />
+
+<Callout type="tip" title="Two wrongs make a right.">
+Let it run: the gyro-only line slides off the truth while the accel-only line is fuzzy — yet the
+fusion stays smooth <em>and</em> locked on. The compute cost is one multiply-add per axis.
+</Callout>
+
+</Theory>
+
+<Deploy title="One line per loop on the IMU">
+
+On FTC the BNO055/BHI260 IMU often fuses internally, but the complementary filter is the right tool
+whenever you combine a rate source with an absolute one (e.g. heading from a gyro corrected by a
+vision bearing). It needs the measured $\Delta t$ — the same discipline as every time-based term.
+
+<JavaCode league="FTC" label="Complementary heading estimate">{`double angle = 0;                 // persists across loops
+final double ALPHA = 0.98;        // gyro trust
+
+while (opModeIsActive()) {
+    double dt = timer.seconds(); timer.reset();
+
+    double gyroRate  = imu.getAngularVelocity().zRotationRate;   // deg/s
+    double accelAngle = Math.toDegrees(Math.atan2(ay, ax));      // absolute, noisy
+
+    angle = ALPHA * (angle + gyroRate * dt) + (1 - ALPHA) * accelAngle;
+}`}</JavaCode>
+
+The complementary filter hand-picks a fixed blend $\alpha$. The Kalman filter computes the
+*optimal* blend automatically, every step, from the actual uncertainties — the subject of the next
+page.
+
+</Deploy>

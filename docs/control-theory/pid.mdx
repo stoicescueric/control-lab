@@ -1,0 +1,130 @@
+---
+title: PID Control
+description: The three-term feedback controller — present, past, and future of an error signal — hardened for the Control Hub with derivative-on-measurement and anti-windup.
+sidebar_position: 3
+tags: [pid, feedback, control, anti-windup]
+---
+
+import Drone from '@site/src/components/sims/Drone';
+
+# PID Control
+
+<Abstract>
+PID is the workhorse feedback controller: it sums three reactions to the error — proportional to its
+present value, its accumulated past, and its rate of change — into a single command. This lesson builds
+each term from intuition, then hardens the loop for real hardware with derivative-on-measurement and
+anti-windup.
+</Abstract>
+
+PID is the controller you will deploy most often: arm position, flywheel velocity, drivetrain
+heading, lift height. It is three reactions to a single error signal, summed into one command. The
+name is intimidating; the mechanism is not.
+
+<Problem title="Proportional-only control leaves a standing error">
+
+Consider an arm that must hold 90° against gravity. The intuitive controller is *proportional* —
+command in proportion to the error, $u = K_p e$. It has a structural flaw: to produce the steady
+holding torque gravity demands, it **requires a non-zero error to exist**. The arm settles a few
+degrees low and stays there. Raising $K_p$ shrinks the gap but invites overshoot and oscillation,
+and it still never reaches zero. Disturbances — a game element's weight, a sagging battery — make it
+worse. We need terms that address the error's *history* and its *trend*, not just its present value.
+
+</Problem>
+
+<Theory title="Three terms acting on present, past, and future">
+
+The error is the gap between target and measurement, $e(t) = \text{setpoint} - \text{measurement}$.
+PID sums three responses to it:
+
+- **P — proportional** · *the present.* $u_P = K_p\,e(t)$ — push in proportion to the current gap.
+- **I — integral** · *the past.* $u_I = K_i \int_0^t e(\tau)\,d\tau$ — accumulate effort until a
+  persistent gap is eliminated. This is what removes the standing error above.
+- **D — derivative** · *the future.* $u_D = K_d \frac{de(t)}{dt}$ — anticipate: if the gap is
+  closing quickly, ease off early to avoid overshoot.
+
+$$
+u(t) = K_p\,e(t) + K_i \int_0^t e(\tau)\,d\tau + K_d \frac{de(t)}{dt}
+$$
+
+The gains $K_p, K_i, K_d$ are the tunable parameters. The drone below must hover at the dashed
+target while gravity pulls it down — the canonical "standing error" problem. Drag the target, tune
+the gains, and read the live contribution of each term.
+
+<Drone />
+
+<Callout type="idea" title="Three experiments that isolate each term:">
+<ol>
+<li><strong>"P only"</strong> — the drone stabilises <em>below</em> target. With no integral term it
+cannot generate the constant thrust that cancels gravity without holding an error. This is
+steady-state error, made visible.</li>
+<li><strong>"PID (tuned)"</strong> — the integral term accumulates exactly enough extra thrust to
+cancel gravity; the drone settles on target. Watch the yellow I-meter climb.</li>
+<li><strong>"Too much Kp"</strong> + a <strong>wind gust</strong> — overshoot and oscillation. The
+derivative term is what damps it.</li>
+</ol>
+</Callout>
+
+**Tuning** is the engineering. A reliable procedure: raise $K_p$ until the mechanism just begins to
+oscillate, then back off; add $K_d$ to damp the overshoot; add $K_i$ last, only if a standing error
+remains.
+
+| Symptom | Likely cause | Correction |
+|---|---|---|
+| Slow to respond | `kP` too low | raise `kP` |
+| Overshoots & oscillates | `kP` high / `kD` low | lower `kP`, raise `kD` |
+| Never reaches target | no / low `kI` | add a little `kI` |
+| Slow drift, sluggish wobble | `kI` too high (windup) | lower `kI` |
+| Jittery, twitchy | `kD` too high (noise) | lower `kD`, filter the input |
+
+</Theory>
+
+<Deploy title="A discrete PID loop, hardened for the Control Hub">
+
+The hub can't integrate or differentiate, so discretise: the integral becomes a running sum, the
+derivative a difference over the measured $\Delta t$.
+
+$$
+u_k = K_p e_k + K_i \sum_{j} e_j \Delta t + K_d \frac{e_k - e_{k-1}}{\Delta t}
+$$
+
+Two refinements are mandatory on real hardware:
+
+- **Derivative on measurement.** Differentiating the *error* spikes the output whenever the setpoint
+  changes ("derivative kick"). Differentiate the *measurement* instead — $-K_d\,\dot{m}$ — for the
+  same damping without the kick. (The drone above already does this with $-K_d\,\dot{y}$.)
+- **Anti-windup.** When the actuator is saturated, stop accumulating the integral; otherwise it
+  "winds up" and causes a large overshoot once the target is reached.
+
+FTCLib provides the controller, and FTC Dashboard tunes the gains live over Wi-Fi:
+
+<JavaCode league="FTC" label="FTCLib + Dashboard, with the refinements built in">{`@Config            // exposes the gains to FTC Dashboard for live tuning
+public class ArmController {
+    public static double kP = 0.012, kI = 0.0, kD = 0.0006;
+
+    private final DcMotorEx motor;
+    private final PIDController pid = new PIDController(kP, kI, kD);
+
+    public ArmController(HardwareMap hw) {
+        motor = hw.get(DcMotorEx.class, "arm");
+        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+    }
+
+    public void update(int targetTicks) {
+        pid.setPID(kP, kI, kD);                       // pick up Dashboard edits
+        double power = pid.calculate(motor.getCurrentPosition(), targetTicks);
+        motor.setPower(Math.max(-1, Math.min(1, power)));   // saturate safely
+    }
+}`}</JavaCode>
+
+<Callout type="tip" title="Filters and controllers are a team.">
+The derivative term amplifies sensor noise. Production controllers run the measurement through a
+low-pass filter first — a noisy encoder or distance sensor will wreck a D term. Clean the signal,
+then control it.
+</Callout>
+
+PID reacts only to error that has *already* happened. Pair it with the
+[feedforward](./feedforward.mdx) from the previous lesson — feedforward for the bulk of the command,
+PID for the residual it can't predict — and you have the control stack behind nearly every fast,
+accurate FTC mechanism.
+
+</Deploy>

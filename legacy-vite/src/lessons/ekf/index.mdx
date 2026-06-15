@@ -1,0 +1,94 @@
+import EKF from "./EKF.jsx";
+
+export const meta = {
+  id: "ekf",
+  title: "Extended Kalman Filter",
+  icon: "📐",
+  group: "Filters",
+  tag: "filter",
+  short: "Kalman for a nonlinear world.",
+  sub: "Linearise the robot's nonlinear motion and measurement models around the current estimate.",
+  order: 8,
+};
+
+The Kalman filter is optimal — for *linear* systems. Robot localisation is not linear: range and
+bearing, heading, and AprilTag geometry all involve trigonometry. The Extended Kalman Filter is the
+adaptation that makes the Kalman machinery work on the curved models real robots actually have, and
+it is the most widely deployed nonlinear estimator in existence.
+
+<Problem title="Drift and nonlinear measurements corrupt field coordinates">
+
+Standard wheel-encoder odometry drifts over time — most aggressively during the wheel slip of
+high-acceleration turns — steadily corrupting the robot's absolute field coordinates. The natural
+fix is to correct it with an absolute sensor, but those measurements are **nonlinear** functions of
+the pose: a vision target or beacon reports *range and bearing*, related to $(x, y)$ through
+$\sqrt{\cdot}$ and $\operatorname{atan2}$. A plain Kalman filter, which assumes a linear
+measurement matrix $H$, cannot fold them in. Worse, the nonlinearity is uneven: a small bearing
+error becomes a large position error at long range.
+
+</Problem>
+
+<Theory title="Linearise about the current mean with a Jacobian">
+
+The EKF keeps the Kalman predict–update heartbeat but, at each step, **linearises the nonlinear
+motion and measurement models around the current mean estimate** using their *Jacobians* — the
+matrices of partial derivatives that give the local slope. A curve, viewed close to your current
+estimate, is approximately its tangent line; on that local linearisation the ordinary Kalman update
+applies.
+
+For a measurement model $z = h(x)$, the linearisation is the Jacobian
+$H = \left.\dfrac{\partial h}{\partial x}\right|_{\hat{x}}$, and the update uses the *true*
+nonlinear $h$ for the residual while using $H$ for the covariance:
+
+$$
+H = \frac{\partial h}{\partial x}\bigg|_{\hat{x}}, \qquad
+\hat{x} = \hat{x}^- + K\,\big(z - h(\hat{x}^-)\big), \qquad
+K = P^- H^\top (H P^- H^\top + R)^{-1}
+$$
+
+For a radar/beacon at the origin observing position $(x, y)$ via range $r=\sqrt{x^2+y^2}$ and
+bearing $\beta=\operatorname{atan2}(y,x)$, the Jacobian is:
+
+$$
+H = \begin{bmatrix} x/r & y/r \\[4pt] -y/r^2 & x/r^2 \end{bmatrix}
+$$
+
+The $1/r^2$ terms encode exactly the "angle errors matter more at range" effect. The demo tracks a
+target from noisy range + bearing; raise the **angle noise** and the far blips fan into wide arcs,
+yet the EKF estimate barely moves — it weights each measurement by the geometry the Jacobian
+captures.
+
+<EKF />
+
+<Callout type="warn" title="The approximation has limits.">
+Linearisation is only valid if the model is gently curved near the estimate. If the nonlinearity is
+severe or the estimate is far off, the tangent misleads the filter — which is why the Unscented
+Kalman Filter and particle filters exist. For typical robot localisation, the EKF is the workhorse.
+</Callout>
+
+</Theory>
+
+<Deploy title="Where this runs on a robot">
+
+This predict → linearise → update loop is precisely what production localisation does when it fuses
+drifting odometry with intermittent AprilTag observations: odometry advances the state (predict), a
+detected tag provides a nonlinear measurement (update), and the Jacobian weights it by range and
+geometry. The matrix algebra is the same `linalg` used in this demo.
+
+<JavaCode league="FTC" label="EKF update structure (per loop, when a tag is seen)">{`// predict: advance pose with odometry, grow covariance P
+x = motionModel(x, wheelDeltas);
+P = add(mul(mul(F, P), transpose(F)), Q);     // F = motion Jacobian
+
+// update: a tag gives nonlinear measurement z = h(x)
+double[][] H  = measurementJacobian(x, tag);  // partials of h at current x
+double[][] yk = sub(z, h(x, tag));            // residual uses the true nonlinear h
+double[][] S  = add(mul(mul(H, P), transpose(H)), R);
+double[][] K  = mul(mul(P, transpose(H)), inv(S));
+x = add(x, mul(K, yk));
+P = mul(sub(identity(n), mul(K, H)), P);`}</JavaCode>
+
+That closes the **filter** track — turning noisy measurements into a trustworthy state estimate.
+The curriculum's other half, *deciding what to do* with that estimate, is the controllers; the whole
+stack is then synthesised in the capstone.
+
+</Deploy>

@@ -1,0 +1,253 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* Class-based dark mode: `dark:` utilities apply when inside .dark, and the
+   semantic colour tokens below are re-pointed for the dark theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===========================================================================
+   Control Lab — design tokens (ported from the legacy assets/css/style.css).
+   A friendly LIGHT theme for the site chrome, with DARK panels for the demos.
+   Tokens defined here become Tailwind utilities automatically, e.g.
+   `bg-surface`, `text-ink`, `border-line`, `text-brand`.
+   =========================================================================== */
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* surfaces & ink */
+  --color-bg: #f3f6fc;
+  --color-bg-soft: #e9eefa;
+  --color-surface: #ffffff;
+  --color-surface-2: #f7f9ff;
+  --color-ink: #1c2333;
+  --color-ink-soft: #56617a;
+  --color-ink-faint: #8a93a8;
+  --color-line: #e3e8f2;
+  --color-line-soft: #eef1f8;
+
+  /* brand + accents */
+  --color-brand: #4f6cf7;
+  --color-brand-dk: #3a52d6;
+  --color-teal: #11b5a4;
+  --color-amber: #f59e0b;
+  --color-rose: #ef4476;
+  --color-green: #22c55e;
+  --color-violet: #8b5cf6;
+
+  /* dark panels used inside the interactive demos */
+  --color-panel: #0f1626;
+  --color-panel-2: #16203a;
+  --color-panel-ink: #e8edf7;
+
+  --radius-card: 16px;
+
+  --shadow-card: 0 6px 24px rgba(28, 40, 79, 0.08);
+  --shadow-pop: 0 18px 50px rgba(28, 40, 79, 0.16);
+}
+
+/* ---------- dark theme: re-point the semantic tokens ----------
+   The demo panels are already dark in both themes; here we flip the page
+   chrome (surfaces, ink, lines) and lighten links for contrast. */
+.dark {
+  color-scheme: dark;
+  --color-bg: #0a0f1e;
+  --color-bg-soft: #121a30;
+  --color-surface: #111a2c;
+  --color-surface-2: #0f1730;
+  --color-ink: #e7ecf7;
+  --color-ink-soft: #aab6d0;
+  --color-ink-faint: #7e8cac;
+  --color-line: #243049;
+  --color-line-soft: #1a2440;
+  --color-brand-dk: #93a7ff;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+/* Home hero backdrop — light and dark variants. */
+.hero-bg {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(139, 92, 246, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgba(17, 181, 164, 0.16), transparent 55%),
+    linear-gradient(160deg, #f7f9ff, #eaf0ff);
+}
+.dark .hero-bg {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(139, 92, 246, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgba(17, 181, 164, 0.16), transparent 55%),
+    linear-gradient(160deg, #0d1730, #0a0f1e);
+}
+
+/* ---------- base ---------- */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-ink);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: rgba(79, 108, 247, 0.2);
+  }
+  /* page scrollbar — subtle, on-brand */
+  * {
+    scrollbar-color: #c7d0e6 transparent;
+  }
+  .dark * {
+    scrollbar-color: #38456a transparent;
+  }
+}
+
+/* ===========================================================================
+   Lesson prose — recolour Tailwind Typography to match our light theme.
+   Wrap MDX content in <article class="lesson-prose prose ...">.
+   =========================================================================== */
+@layer components {
+  .lesson-prose {
+    --tw-prose-body: #2b3346;
+    --tw-prose-headings: var(--color-ink);
+    --tw-prose-lead: var(--color-ink-soft);
+    --tw-prose-links: var(--color-brand-dk);
+    --tw-prose-bold: var(--color-ink);
+    --tw-prose-counters: var(--color-ink-faint);
+    --tw-prose-bullets: var(--color-brand);
+    --tw-prose-hr: var(--color-line);
+    --tw-prose-quotes: var(--color-ink);
+    --tw-prose-quote-borders: var(--color-violet);
+    --tw-prose-captions: var(--color-ink-faint);
+    --tw-prose-code: var(--color-brand-dk);
+    --tw-prose-th-borders: var(--color-line);
+    --tw-prose-td-borders: var(--color-line);
+    max-width: none;
+  }
+  /* inline code chips (not inside our dark <pre> code blocks) */
+  .lesson-prose :not(pre) > code {
+    background: var(--color-bg-soft);
+    padding: 0.12em 0.4em;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.88em;
+  }
+  .lesson-prose :not(pre) > code::before,
+  .lesson-prose :not(pre) > code::after {
+    content: "";
+  }
+  .lesson-prose a {
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .lesson-prose a:hover {
+    text-decoration: underline;
+  }
+  .lesson-prose h2 {
+    margin-top: 2em;
+    letter-spacing: -0.01em;
+  }
+  .lesson-prose table {
+    font-size: 0.94em;
+  }
+  .lesson-prose th {
+    text-transform: uppercase;
+    font-size: 0.78em;
+    letter-spacing: 0.04em;
+    color: var(--color-ink-soft);
+  }
+}
+
+/* Dark-theme prose colours. */
+.dark .lesson-prose {
+  --tw-prose-body: #c4cde0;
+  --tw-prose-headings: #e7ecf7;
+  --tw-prose-lead: #aab6d0;
+  --tw-prose-links: #93a7ff;
+  --tw-prose-bold: #f0f3fa;
+  --tw-prose-counters: #7e8cac;
+  --tw-prose-bullets: #6f8bff;
+  --tw-prose-hr: #243049;
+  --tw-prose-quotes: #e7ecf7;
+  --tw-prose-quote-borders: #8b5cf6;
+  --tw-prose-captions: #7e8cac;
+  --tw-prose-code: #93a7ff;
+  --tw-prose-th-borders: #243049;
+  --tw-prose-td-borders: #243049;
+}
+
+/* ===========================================================================
+   Dark demo internals that are awkward as pure utilities:
+   range-slider thumbs and the Java syntax-highlight token colours.
+   =========================================================================== */
+@layer components {
+  /* sliders inside the dark demo panels */
+  input.cl-range[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 999px;
+    background: #2a3656;
+    outline: none;
+  }
+  input.cl-range[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    cursor: pointer;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+  input.cl-range[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    cursor: pointer;
+    border: 3px solid #fff;
+  }
+
+  /* Java highlighter tokens (see lib/highlight.js) */
+  .cl-code .tok-kw {
+    color: #ff9ecb;
+  }
+  .cl-code .tok-type {
+    color: #6fe3d0;
+  }
+  .cl-code .tok-str {
+    color: #ffd479;
+  }
+  .cl-code .tok-com {
+    color: #7c89a8;
+    font-style: italic;
+  }
+  .cl-code .tok-num {
+    color: #9db8ff;
+  }
+  .cl-code .tok-ann {
+    color: #c0a6ff;
+  }
+}
+
+/* ---------- animations (used by reactbits components) ---------- */
+@keyframes cl-gradient {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- KaTeX (math in lessons) ---------- */
+.katex {
+  font-size: 1.04em;
+}
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 10px;
+}

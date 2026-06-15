@@ -1,0 +1,28 @@
+---
+title: Signal Processing
+description: Turning noisy sensor streams into signals you can control on — low-pass and moving-average filters, complementary fusion, and the Kalman family.
+tags: [filters, kalman, sensor-fusion, noise]
+---
+
+# Module 2 · Signal Processing
+
+Every sensor lies a little. An encoder quantizes, an IMU drifts, a distance sensor spikes. A controller
+fed raw, noisy measurements amplifies that noise straight into your motors — the derivative term is
+especially merciless. This module is about *cleaning the signal before you control it*.
+
+## What this module covers
+
+- **Low-pass filtering** — the exponential moving average, the one-line filter you will reach for most.
+- **Moving average** — the windowed alternative, and when its latency is worth its smoothness.
+- **Complementary filters** — fusing a fast-but-drifting gyro with a slow-but-stable reference.
+- **1-D Kalman filters** — the optimal linear estimator, derived from first principles.
+- **The Extended Kalman Filter (EKF)** — extending the same machinery to nonlinear systems.
+
+:::tip Filters and controllers are a team
+A controller is only as good as the signal it sees. The cleanest controller code in the world will
+still oscillate on a noisy encoder. Master this module before you trust the controllers in
+[Module 4](../control-theory/index.mdx).
+:::
+
+Start with [Signals & Noise](./signals.mdx), then work down the sidebar through the low-pass and
+moving-average filters, complementary fusion, and the Kalman family.

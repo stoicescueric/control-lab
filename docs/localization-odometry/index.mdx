@@ -1,0 +1,28 @@
+---
+title: Localization & Odometry
+description: Knowing where the robot is — three-wheel and two-wheel odometry, pose exponentials, and the trade-off between custom math and integrated hardware.
+tags: [odometry, localization, pose-exponential, pinpoint]
+---
+
+# Module 3 · Localization & Odometry
+
+A path follower can only be as good as its estimate of where the robot *is*. This module builds that
+estimate from dead-reckoning sensors: tracking wheels that measure how far the robot has rolled, fused
+into a continuously updated pose `(x, y, θ)`.
+
+## What this module covers
+
+- **Three-wheel and two-wheel odometry** — the geometry of tracking-wheel pods and how each recovers
+  heading.
+- **Pose exponentials** — why naively adding up small straight-line steps accumulates error on curved
+  paths, and how the exponential map integrates the arc correctly.
+- **The hardware "why"** — when to write your own odometry math and when to reach for an integrated
+  solution like the goBILDA Pinpoint.
+
+:::note Estimation feeds control
+This module produces the pose that [Module 5 · Path Following](../path-following/index.mdx) consumes.
+The two are designed to be read together.
+:::
+
+Available now: [Odometry & Pose](./odometry.mdx) — the constant-curvature pose update and why it
+drifts. Two-wheel variants and integrated-hardware localization are planned.

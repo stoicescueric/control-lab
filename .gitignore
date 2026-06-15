@@ -14,6 +14,16 @@ desktop.ini
 .vscode/
 *.swp
 
-# --- Node (only if you ever add tooling) ---
+# --- Node / Vite build ---
 node_modules/
+dist/
+.vite/
 npm-debug.log*
+*.local
+
+# --- Docusaurus build / generated ---
+/build
+.docusaurus
+.cache-loader
+yarn-debug.log*
+yarn-error.log*

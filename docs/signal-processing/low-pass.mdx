@@ -1,0 +1,99 @@
+---
+title: Low-Pass Filter
+description: The exponential moving average — the most-deployed filter on any robot. Smooth almost any noisy sensor in one dt-aware line of code.
+sidebar_position: 2
+tags: [filter, low-pass, ema, smoothing]
+---
+
+import LowPass from '@site/src/components/sims/LowPass';
+
+# Low-Pass Filter
+
+<Abstract>
+A low-pass filter (the exponential moving average) smooths a noisy signal by blending each new reading
+with a fraction of the running estimate — one multiply, one add, one stored number. This lesson derives
+that update, makes it correct across a varying loop time, and shows the direct trade-off between
+smoothness and lag.
+</Abstract>
+
+The low-pass filter is the highest-leverage line of code in embedded control: it removes most
+sensor jitter, costs one multiply and one add, and stores a single number. If a reading is too noisy
+to act on, this is the first thing to try.
+
+<Problem title="Fast noise rides on top of a slow signal">
+
+Real signals usually change slowly; noise changes quickly. A raw distance reading or encoder
+velocity carries both, and the fast component is what wrecks downstream logic — most painfully a PID
+**derivative** term, which differentiates and therefore *amplifies* high-frequency jitter into motor
+chatter. We need to admit the slow, real component and reject the fast, noisy one — to let **low**
+frequencies **pass**.
+
+<Analogy>
+<strong>A bucket with a small hole.</strong> Pour noisy readings in; the water level cannot jump
+instantly — it rises and falls gradually, ignoring quick splashes but tracking the overall trend.
+The water level is the filtered output.
+</Analogy>
+
+</Problem>
+
+<Theory title="One step toward each new reading">
+
+Each loop, move the estimate a fraction $\alpha \in (0, 1)$ of the way from its current value toward
+the new measurement:
+
+$$
+\hat{x}_k = \hat{x}_{k-1} + \alpha\,(z_k - \hat{x}_{k-1})
+$$
+
+The term $(z_k - \hat{x}_{k-1})$ is the *innovation* — how surprising the new reading is. You accept
+a fraction $\alpha$ of each surprise. This is the **exponential moving average**: past readings fade
+geometrically, so it remembers everything while storing only one number.
+
+| α | Behaviour | Character |
+|---|---|---|
+| near 0 | tiny steps → very smooth, slow, laggy | a heavy flywheel |
+| near 1 | big steps → snappy, barely filters | a twitchy needle |
+
+The smoothing is governed by a time constant $\tau \approx \Delta t / \alpha$ — which is why
+$\alpha$ must be chosen against your loop rate, not in the abstract.
+
+The demo overlays the true signal, the noisy sensor, and the filtered output. Sweep $\alpha$ from
+heavy smoothing to nearly raw, and use the step test to see the lag you trade for it.
+
+<LowPass />
+
+<Callout type="math" title="The fundamental trade-off.">
+More smoothing always means more delay. Low <code>α</code> rejects noise but lags; high <code>α</code>
+is responsive but leaks jitter. You are choosing how much to trust the latest reading versus the
+accumulated history — there is no setting that wins both.
+</Callout>
+
+</Theory>
+
+<Deploy title="One line in the loop, tuned to dt">
+
+The implementation is trivial; the engineering is choosing $\alpha$ from a target time constant and
+the measured loop time, so behaviour is independent of how fast the loop happens to run.
+
+<JavaCode league="FTC" label="Low-pass a noisy sensor before using it">{`double filtered = 0;             // persists across loops
+final double TAU = 0.08;        // desired time constant, seconds
+
+while (opModeIsActive()) {
+    double dt = timer.seconds(); timer.reset();
+    double alpha = dt / (TAU + dt);            // dt-aware: stable at any loop rate
+
+    double raw = sensor.getDistance(DistanceUnit.CM);
+    filtered += alpha * (raw - filtered);       // the whole filter
+
+    armController.update(filtered);             // feed the clean value to control
+}`}</JavaCode>
+
+<Callout type="tip" title="Free high-pass filter.">
+Subtract the low-pass output from the raw signal — <code>raw − filtered</code> — and you get a
+<em>high-pass</em> filter that keeps only fast changes: useful for detecting taps, impacts, or edges.
+</Callout>
+
+The low-pass weighs all history with a single fading factor. The next filter instead averages a
+fixed, equally-weighted window — a different trade-off worth understanding.
+
+</Deploy>

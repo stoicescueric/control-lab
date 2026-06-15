@@ -1,0 +1,137 @@
+import Flywheel from "./Flywheel.jsx";
+
+export const meta = {
+  id: "feedforward",
+  title: "Feedforward (kS, kV, kA)",
+  icon: "➡️",
+  group: "Robotics (FTC)",
+  tag: "robo",
+  short: "Predict the effort instead of only reacting.",
+  sub: "Model the mechanism so the controller commands the right effort before the error appears.",
+  order: 30,
+};
+
+Feedback is reactive by construction. Feedforward is the predictive half: a model of the mechanism
+that supplies most of the required command immediately, leaving feedback to correct only the small
+residual. It is the difference between a sluggish velocity loop and a crisp one.
+
+<Problem title="A reactive controller must first fail to respond">
+
+A pure feedback controller does nothing until an error exists, then scrambles to close it. On a
+velocity-controlled mechanism — a flywheel, a drivetrain at cruise — this guarantees lag and droop:
+the controller can only hold a speed by *maintaining* the error that produces the command. You can
+mask it with a large gain, but high feedback gain makes the system twitchy and prone to overshoot.
+The information to do better already exists: you *know* roughly what voltage a given speed requires.
+
+<Analogy>
+<strong>Cresting a hill.</strong> A skilled driver presses the accelerator <em>as</em> the hill
+begins, anticipating the load. A reactive driver waits until the car has already slowed, then
+over-corrects. Feedforward is the anticipation; feedback only cleans up the difference.
+</Analogy>
+
+</Problem>
+
+<Theory title="A physical model of the required voltage">
+
+To hold a target velocity $v$ (and optionally accelerate at $a$), the predicted voltage is:
+
+$$
+V = \underbrace{k_S\,\operatorname{sign}(v)}_{\text{break friction}}
+  + \underbrace{k_V\,v}_{\text{hold the speed}}
+  + \underbrace{k_A\,a}_{\text{accelerate}}
+$$
+
+<Formula>
+  V = <Amber>kS·sign(v)</Amber> + <Teal>kV·v</Teal> + <Blue>kA·a</Blue>
+</Formula>
+
+These constants are not fudge factors — they are the motor's own physics. A DC motor obeys
+$V = IR + k_e\omega$: the back-EMF term $k_e\omega$ rises with speed (that is $k_V v$), while the
+current term supplies torque to overcome static friction (a constant, $k_S$) and to accelerate the
+inertia, $\tau = J\alpha$ (that is $k_A a$).
+
+| Term | Counteracts | Meaning |
+|---|---|---|
+| **kS** — static | friction / stiction | the minimum voltage to start motion |
+| **kV** — velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
+| **kA** — acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
+
+<Callout type="idea" title="Gravity-loaded cousins:">
+an <strong>arm</strong> adds <code>kG·cos(θ)</code> (gravity varies with angle); an
+<strong>elevator</strong> adds a constant <code>kG</code>. Same model, one term for weight.
+</Callout>
+
+The deployable pattern is **feedforward + feedback**: the model does ~90 % of the work instantly,
+PID corrects the residual and rejects disturbances.
+
+<Formula>
+  output = <Teal>feedforward(goal)</Teal> + <Rose>PID(measurement, goal)</Rose>
+</Formula>
+
+In the demo, the motor must reach the dashed target speed. Toggle feedforward on and off with
+identical gains; the bars show how the command splits between the
+<span style={{ color: "#5ce08a" }}>feedforward prediction</span> and the
+<span style={{ color: "#ffc24d" }}>feedback correction</span>.
+
+<Flywheel />
+
+<Callout type="idea" title="Three experiments:">
+<ol>
+<li>Feedforward <strong>ON</strong>, tiny kP — it reaches and holds the target; the green prediction
+bar carries the load.</li>
+<li>Feedforward <strong>OFF</strong>, same kP — it settles below target (steady-state error).
+Raising kP to compensate makes it overshoot and twitch.</li>
+<li>Mistune <strong>kV</strong> low — the prediction under-shoots and feedback must cover the gap;
+the main benefit is lost. Accurate constants matter.</li>
+</ol>
+</Callout>
+
+</Theory>
+
+<Deploy title="Volts on a battery that sags">
+
+FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *measured* battery
+voltage keeps behaviour constant whether the pack is at 13 V or 11 V.
+
+<JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`public class Flywheel {
+    public static double kS = 0.7, kV = 2.4, kA = 0.0, kP = 2.0;   // @Config-tunable
+
+    private final DcMotorEx motor;
+    private final VoltageSensor battery;
+
+    public Flywheel(HardwareMap hw) {
+        motor   = hw.get(DcMotorEx.class, "flywheel");
+        battery = hw.voltageSensor.iterator().next();
+        motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+    }
+
+    public void run(double goalVel, double goalAccel) {        // real units, e.g. m/s
+        double measVel = motor.getVelocity() * METERS_PER_TICK;
+
+        double predict = kS * Math.signum(goalVel) + kV * goalVel + kA * goalAccel;
+        double correct = kP * (goalVel - measVel);
+
+        motor.setPower((predict + correct) / battery.getVoltage());   // volts -> -1..1
+    }
+}`}</JavaCode>
+
+The identical recipe in FRC is one line, because WPILib bundles it:
+
+<JavaCode league="FRC" label="WPILib equivalent">{`SimpleMotorFeedforward ff = new SimpleMotorFeedforward(kS, kV, kA);
+PIDController pid = new PIDController(kP, 0, 0);
+motor.setVoltage(ff.calculate(goalVel) + pid.calculate(measVel, goalVel));`}</JavaCode>
+
+The constants come from **characterisation**, not guesswork: drive the mechanism through known
+voltages and fit the steady speeds. A useful first estimate is $k_V \approx 12\,\text{V} \div
+v_{\max}$; refine from there. FRC's SysId and FTC's library tuners automate the full procedure.
+
+<Callout type="warn" title="Feedforward is only as good as its units.">
+<code>kV</code> in "volts per m/s" is meaningless unless <code>getVelocity()</code> is truly
+converted to m/s. A wrong ticks→units factor produces a wrong model — exactly the failure the
+previous page guards against.
+</Callout>
+
+Feedforward is sharpest when the target moves along a smooth, planned profile — which is what
+odometry and path following will demand once the robot drives itself.
+
+</Deploy>

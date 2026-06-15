@@ -1,0 +1,28 @@
+---
+title: Advanced Research
+description: The capstone — flywheel control with look-up tables, RK4 versus Euler integration, quadratic air drag, and full trajectory simulation.
+tags: [research, rk4, trajectory, air-drag, flywheel]
+---
+
+# Module 6 · Advanced Research
+
+The final module goes beyond what most teams implement, into the territory of original research. It is
+built around a projectile-trajectory simulation: predicting where a launched game element lands, given a
+realistic model of the physics.
+
+## What this module covers
+
+- **Subsystem control (shooting)** — flywheel velocity control and look-up tables mapping distance to
+  launch parameters.
+- **Numerical integration** — RK4 versus Euler, and why integration order changes your landing point.
+- **Quadratic air drag** — modeling drag that scales with the square of velocity, where the closed-form
+  parabola breaks down.
+- **Trajectory simulation** — assembling the above into a predictor you can run on the robot.
+
+:::note Author's capstone
+This module anchors the platform's original research contribution. The derivations here are the
+mathematical core of an RK4 trajectory-simulation study with quadratic air drag.
+:::
+
+The capstone scaffold — [Trajectory Simulation](./trajectory-simulation.mdx) — is in place, ready for
+the research write-up. The flywheel look-up-table, RK4-versus-Euler, and air-drag lessons are planned.

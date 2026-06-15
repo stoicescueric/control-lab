@@ -1,0 +1,29 @@
+---
+title: Software Architecture
+description: How to structure robot code so that control theory has somewhere clean to live — state machines versus command-based programming.
+tags: [architecture, state-machine, command-based]
+---
+
+# Module 0 · Software Architecture
+
+Control theory does not run in a vacuum — it runs inside a codebase, and the shape of that codebase
+decides whether your controllers are testable, tunable, and survivable across a season. Before we add
+a single filter or controller, this module establishes *where* that code lives.
+
+## What this module covers
+
+- **State machine architectures** — explicit states and transitions; when a finite state machine is
+  the right tool and when it collapses under combinatorial explosion.
+- **Command-based programming** — composing behavior from small, reusable commands; the model FRC
+  formalized and FTC libraries increasingly adopt.
+- **Choosing between them** — the trade-offs for an FTC-sized robot and team.
+
+:::tip Why start with architecture?
+The most common reason a good controller fails in competition is not the math — it is that the math was
+bolted onto a 600-line `OpMode` where nothing could be tested in isolation. Architecture is what makes
+the rest of this curriculum deployable.
+:::
+
+Available now: [State Machines](./state-machines.mdx) — modelling a subsystem as one explicit,
+non-blocking finite state machine — and [Command-Based Programming](./command-based.mdx), composing
+reusable commands across the whole robot. Together they cover the FSM-vs-command tradeoff.

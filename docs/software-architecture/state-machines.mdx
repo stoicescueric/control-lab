@@ -1,0 +1,178 @@
+---
+title: State Machines
+description: The finite state machine — the architecture that turns a tangle of boolean flags into one explicit, debuggable, non-blocking subsystem you can reason about a loop at a time.
+sidebar_position: 1
+tags: [architecture, state-machine, fsm, non-blocking, opmode]
+---
+
+import StateMachine from '@site/src/components/sims/StateMachine';
+
+# State Machines
+
+<Abstract>
+A finite state machine describes a subsystem as a single "current state" plus a small set of legal
+moves between states, which makes contradictory robot behaviour — running the intake while the arm is
+lifting — impossible to even express. This lesson formalises that idea as a partial transition
+function and implements it as a clean, non-blocking `enum`-and-`switch` that advances once per loop.
+</Abstract>
+
+Control theory does not run in a vacuum — it runs inside a codebase, and the shape of that codebase
+decides whether you can debug it at 11 p.m. before a competition. The single most common reason a good
+controller fails on the field is not the math; it is that the math was bolted onto a 600-line `OpMode`
+where nothing could be reasoned about in isolation. The finite state machine is the first tool for
+fixing that.
+
+<Problem title="The boolean-flag OpMode that nobody can debug">
+
+The scoring routine starts innocently. One flag: `isIntaking`. Then `hasSample`. Then `isLifting`,
+`armIsUp`, `isScoring`. Six matches later it is a thicket of nested `if`s and half of them contradict
+each other. The robot tries to run the intake *while the arm is mid-swing* and snaps a part — because
+nothing prevented `isIntaking` and `isLifting` from being true at the same time. The state of the
+robot is smeared across a dozen booleans, which means **2¹² possible combinations**, most of them
+nonsense, and any of them reachable through some unlucky sequence of button presses.
+
+Then someone "fixes" the timing with `sleep(800)` to wait for the arm — and now the entire robot is
+frozen for those 800 ms: no driving, no other subsystem, no sensor reads. One blocking call took the
+whole loop hostage.
+
+<Analogy>
+<strong>A vending machine.</strong> It will not drop a snack the instant you touch the glass. It
+*knows where it is* in the process — waiting for coins, coins inserted, selection made, dispensing —
+and it ignores inputs that don't belong to the current step. Press "dispense" before paying and
+nothing happens; the machine doesn't break, it just isn't a legal move yet. That memory of "where am
+I in the sequence" is its **state**.
+</Analogy>
+
+</Problem>
+
+<Theory title="One state variable, a set of legal transitions">
+
+Below is that scoring subsystem rebuilt as a state machine. There is exactly **one** current state.
+Each input — whether from the driver or from a sensor — only does something if it is legal from where
+you are. Try to lift while idle, or release with no sample, and the machine safely ignores it.
+
+<StateMachine />
+
+A finite state machine is three things:
+
+- a finite set of **states** $S$ — here `{IDLE, INTAKING, LOADED, RAISING, SCORING}`;
+- a set of **events** $E$ — driver buttons and sensor signals;
+- a **transition function** $\delta$ that maps a (state, event) pair to the next state:
+
+$$
+\delta : S \times E \rightharpoonup S
+$$
+
+The function is *partial* (the half-arrow $\rightharpoonup$): most (state, event) pairs are undefined,
+and an undefined transition is simply ignored. That single design choice is the whole point. Because
+the robot is always in exactly one state, the contradictory combinations from the boolean version are
+**unrepresentable** — there is no way to be `INTAKING` and `RAISING` at once, so the part-snapping bug
+cannot be written.
+
+The machine is fully described by its transition table:
+
+| State | Event | → Next state |
+|---|---|---|
+| `IDLE` | run intake | `INTAKING` |
+| `INTAKING` | sample detected | `LOADED` |
+| `INTAKING` | cancel | `IDLE` |
+| `LOADED` | lift | `RAISING` |
+| `RAISING` | arm at top | `SCORING` |
+| `SCORING` | release | `IDLE` |
+
+Anything not in this table does nothing. The behaviour is now something you can hold in your head, draw
+on a whiteboard, and check against the table line by line.
+
+<Callout type="idea" title="Outputs belong to states too.">
+What the hardware <em>does</em> is a function of the state: in <code>INTAKING</code> the intake motor
+runs; in <code>RAISING</code> the arm controller drives toward the top. Deciding actuator commands
+purely from the current state (a "Moore machine") keeps the wiring between logic and hardware
+trivially predictable.
+</Callout>
+
+</Theory>
+
+<Deploy title="An enum and a switch, ticked every loop">
+
+The deployable form is an `enum` for the states and a `switch` that runs **once per loop iteration** —
+never blocking. Timed and sensor-based transitions are checked each pass instead of waited on, so every
+other subsystem keeps running.
+
+<JavaCode league="FTC" label="A non-blocking subsystem state machine">{`public class Scorer {
+    private enum State { IDLE, INTAKING, LOADED, RAISING, SCORING }
+
+    private State state = State.IDLE;
+    private final ElapsedTime timer = new ElapsedTime();   // time-in-state, no sleeps
+    private final Intake intake;
+    private final Arm arm;
+
+    public Scorer(Intake intake, Arm arm) {
+        this.intake = intake;
+        this.arm = arm;
+    }
+
+    /** Driver request: begin a scoring cycle (only valid from rest). */
+    public void requestScore() {
+        if (state == State.IDLE) transition(State.INTAKING);
+    }
+
+    /** Run one iteration. Called every loop — must return immediately. */
+    public void update() {
+        switch (state) {
+            case INTAKING:
+                intake.run();
+                if (intake.hasSample()) transition(State.LOADED);    // sensor event
+                break;
+            case LOADED:
+                intake.stop();
+                transition(State.RAISING);                            // auto-advance
+                break;
+            case RAISING:
+                arm.goToScore();
+                if (arm.atTarget()) transition(State.SCORING);        // sensor event
+                break;
+            case SCORING:
+                arm.release();
+                if (timer.seconds() > 0.4) transition(State.IDLE);    // timed event
+                break;
+            case IDLE:
+            default:
+                intake.stop();
+                arm.retract();
+                break;
+        }
+    }
+
+    private void transition(State next) {
+        state = next;
+        timer.reset();        // every state knows how long it has been active
+    }
+}`}</JavaCode>
+
+The driver code shrinks to one line — `scorer.update();` in the loop, plus `scorer.requestScore()` on a
+button. The sequencing, the interlocks, and the timing all live in one auditable place.
+
+<Callout type="warn" title="Never block the loop.">
+<code>Thread.sleep()</code> in an OpMode freezes <em>every</em> subsystem and stops sensor reads and
+driver control until it returns. A state machine replaces "wait 0.4 s" with "advance when
+<code>timer.seconds() &gt; 0.4</code>," checked each loop — so the robot stays alive the whole time.
+This is the same loop-time discipline the controllers depend on.
+</Callout>
+
+<Callout type="tip" title="The win is correctness, not line count.">
+A state machine is occasionally <em>more</em> code than a pile of flags. That is not the point. The
+point is that illegal states become impossible to express, so an entire class of "how did it even get
+into that situation?" bugs simply cannot occur.
+</Callout>
+
+<Callout type="note" title="When one machine isn't enough.">
+Independent subsystems each get their own small machine. But when behaviours must be composed,
+sequenced, and interrupted across the whole robot, a flat FSM suffers a combinatorial explosion of
+states. The next lesson covers the model built for exactly that — composing small, reusable
+[**commands**](./command-based.mdx).
+</Callout>
+
+With a clean place for logic to live, the rest of the curriculum — filters, estimators, controllers —
+has somewhere safe to plug in.
+
+</Deploy>

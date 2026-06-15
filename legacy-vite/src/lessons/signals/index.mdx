@@ -1,0 +1,80 @@
+import SignalNoise from "./SignalNoise.jsx";
+
+export const meta = {
+  id: "signals",
+  title: "Signals & Noise",
+  icon: "📡",
+  group: "Filters",
+  tag: "filter",
+  short: "What sensors really report.",
+  sub: "Why every sensor lies a little — the premise that makes filters necessary.",
+  order: 3,
+};
+
+A filter is only worth building if the raw data is untrustworthy. It is. This page characterises
+exactly *how* sensor data is corrupted, because the structure of the noise determines which filter
+you reach for next.
+
+<Problem title="Every sensor reports the truth plus garbage">
+
+A **signal** is a value that changes over time — an arm angle, a distance to the wall, a wheel
+velocity. You never observe it directly; you observe a **sensor reading**, which is the true value
+plus error. Feed that raw reading into a controller and the error propagates: a PID derivative term
+amplifies jitter into motor chatter, a distance sensor's momentary spike trips an autonomous state
+transition, a slow bias steers odometry off the field.
+
+<Formula>
+  <Amber>measurement</Amber> = <Teal>true value</Teal> + <Rose>noise</Rose>
+</Formula>
+
+Three distinct corruptions, each demanding a different defence:
+
+- **Jitter** — fast, small, random wobble around the truth. The common case.
+- **Spikes (outliers)** — occasional wild readings: a loose connector, a reflection, a glitch.
+- **Drift / bias** — a slow, systematic lean away from the truth that accumulates.
+
+</Problem>
+
+<Theory title="Sampling, and what noise looks like">
+
+A Control Hub does not read sensors continuously; it **samples** them tens to hundreds of times per
+second (see the discretisation lesson for why the rate matters). Every filter in this track operates
+on that stream of samples and answers one question: *given the readings so far, what is the best
+estimate of the true value?*
+
+The demo synthesises a known true signal (green) and a sensor that reports it with the three
+corruptions above (amber dots). Increase the noise until the truth disappears into the scatter —
+then consider controlling a mechanism from those dots alone.
+
+<SignalNoise />
+
+<Callout type="idea" title="Your eye is already filtering.">
+You can still perceive the green wave through the scatter because your visual system averages the
+dots. The next lessons give the Control Hub the same capability, in real time and in one or two
+lines of code.
+</Callout>
+
+</Theory>
+
+<Deploy title="Measure your sensor before you filter it">
+
+Good filtering starts with knowing how noisy a sensor actually is. Sample it while the mechanism is
+held still and compute the standard deviation — that number sizes every filter that follows.
+
+<JavaCode league="FTC" label="Characterise a sensor's noise">{`// Hold the mechanism still, collect N samples, report the spread.
+int N = 200;
+double sum = 0, sumSq = 0;
+for (int i = 0; i < N; i++) {
+    double x = sensor.getDistance(DistanceUnit.CM);
+    sum += x;  sumSq += x * x;
+    sleep(5);
+}
+double mean = sum / N;
+double std  = Math.sqrt(sumSq / N - mean * mean);   // typical reading error
+telemetry.addData("mean", mean);
+telemetry.addData("noise (std)", std);              // use this to tune your filter`}</JavaCode>
+
+A large `std` means aggressive smoothing (or a Kalman filter) is justified; a small one means a light
+touch will do. With the noise quantified, the simplest effective filter is next: the low-pass.
+
+</Deploy>
