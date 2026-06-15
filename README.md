@@ -135,9 +135,9 @@ GitHub Pages on every push to `main`.
 
 ## 📚 Curriculum
 
-Preface (why the math matters) · **M0** Software Architecture · **M1** Enterprise Architecture & Loop
-Optimization · **M2** Signal Processing · **M3** Localization & Odometry · **M4** Motor Dynamics &
-Control Theory · **M5** Path Following & Kinematics · **M6** Advanced Research (capstone).
+Preface (why the math matters) · **M1** Software Architecture & Loop Optimization · **M2** Signal
+Processing · **M3** Localization & Odometry · **M4** Motor Dynamics & Control Theory · **M5** Path
+Following & Kinematics · **M6** Advanced Research (capstone).
 
 ## 📄 License
 

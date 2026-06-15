@@ -29,8 +29,7 @@ const FEATURES = [
 ];
 
 const MODULES = [
-  {n: '00', title: 'Software Architecture', blurb: 'State machines vs. command-based — where control code lives.', to: '/docs/software-architecture'},
-  {n: '01', title: 'Enterprise Architecture & Loop Optimization', blurb: 'Loop-time budgets, bulk reads, live tuning, and a Git workflow.', to: '/docs/enterprise-architecture'},
+  {n: '01', title: 'Software Architecture & Loop Optimization', blurb: 'State machines, commands, loop time, units, and tuning infrastructure.', to: '/docs/software-architecture'},
   {n: '02', title: 'Signal Processing', blurb: 'Low-pass, moving-average, complementary, and Kalman filters.', to: '/docs/signal-processing'},
   {n: '03', title: 'Localization & Odometry', blurb: 'Pose exponentials, dead wheels, and why estimates drift.', to: '/docs/localization-odometry'},
   {n: '04', title: 'Motor Dynamics & Control Theory', blurb: 'The DC-motor model, feedforward, and a hardened PID.', to: '/docs/control-theory'},

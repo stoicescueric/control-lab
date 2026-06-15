@@ -1,29 +1,44 @@
 ---
-title: Software Architecture
-description: How to structure robot code so that control theory has somewhere clean to live — state machines versus command-based programming.
-tags: [architecture, state-machine, command-based]
+title: Software Architecture & Loop Optimization
+description: State machines, command-based programming, measured loop time, units, and the infrastructure that makes FTC control code deployable.
+tags: [architecture, command-based, state-machine, loop-time, units]
 ---
 
-# Module 0 · Software Architecture
+# Module 1 · Software Architecture & Loop Optimization
 
-Control theory does not run in a vacuum — it runs inside a codebase, and the shape of that codebase
-decides whether your controllers are testable, tunable, and survivable across a season. Before we add
-a single filter or controller, this module establishes *where* that code lives.
+Control theory does not run in a vacuum. It runs inside an OpMode, inside a loop, on hardware with
+limited time and imperfect sensors.
+
+This module answers two questions before the math gets heavier:
+
+1. Where does robot behavior live in the codebase?
+2. What does it mean for control math to run once per loop on a real Control Hub?
 
 ## What this module covers
 
-- **State machine architectures** — explicit states and transitions; when a finite state machine is
-  the right tool and when it collapses under combinatorial explosion.
-- **Command-based programming** — composing behavior from small, reusable commands; the model FRC
-  formalized and FTC libraries increasingly adopt.
-- **Choosing between them** — the trade-offs for an FTC-sized robot and team.
+- **State machines** - model one subsystem as explicit modes and legal transitions.
+- **Command-based programming** - compose reusable actions across the whole robot.
+- **Discretization and units** - turn continuous equations into per-loop Java using measured
+  $\Delta t$ and real engineering units.
+- **Loop optimization** - protect the loop-time budget that filters, controllers, and estimators all
+  depend on.
 
-:::tip Why start with architecture?
-The most common reason a good controller fails in competition is not the math — it is that the math was
-bolted onto a 600-line `OpMode` where nothing could be tested in isolation. Architecture is what makes
-the rest of this curriculum deployable.
-:::
+<Admonition type="tip" title="Why architecture comes before control theory">
 
-Available now: [State Machines](./state-machines.mdx) — modelling a subsystem as one explicit,
-non-blocking finite state machine — and [Command-Based Programming](./command-based.mdx), composing
-reusable commands across the whole robot. Together they cover the FSM-vs-command tradeoff.
+The most common reason good control math fails in competition is not the equation. It is that the
+equation was dropped into a giant OpMode where timing, units, telemetry, and subsystem ownership were
+unclear. Architecture makes the rest of this curriculum deployable.
+
+</Admonition>
+
+## Lessons
+
+1. [State Machines](./state-machines.mdx) - explicit subsystem modes, legal transitions, and
+   non-blocking sequencing.
+2. [Command-Based Programming](./command-based.mdx) - reusable commands, subsystem requirements,
+   scheduling, and autonomous composition.
+3. [From Math to a Loop](./discretization.mdx) - measured loop time, unit conversion, sampling, and
+   the bridge from equations to hardware.
+
+Future lessons in this module will cover Git workflow, FTC Dashboard, manual bulk reads, and deeper
+loop-time optimization.

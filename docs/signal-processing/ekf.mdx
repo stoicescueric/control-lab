@@ -2,47 +2,182 @@
 title: Extended Kalman Filter
 description: Kalman for a nonlinear world — linearise the robot's nonlinear motion and measurement models around the current estimate with a Jacobian each step.
 sidebar_position: 6
-tags: [filter, ekf, nonlinear, localization, jacobian]
+tags: [filter, ekf, nonlinear, localization, jacobian, apriltag]
 ---
 
-import EKF from '@site/src/components/sims/EKF';
+import {AprilTagProjectionExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Extended Kalman Filter
 
 <Abstract>
-The Kalman filter is optimal only for linear systems, but real localisation — ranges, bearings, and
-headings — is full of trigonometry. This lesson extends the filter to nonlinear models by linearising
-them at each step with a Jacobian, the workhorse behind AprilTag-based pose estimation.
+The Kalman filter is optimal only for linear systems, but real localisation — camera projection,
+headings, and AprilTag geometry — is full of trigonometry and division by depth. This lesson extends
+the filter to nonlinear models by linearising them at each step with a Jacobian, the workhorse behind
+AprilTag-based pose estimation.
 </Abstract>
 
-The Kalman filter is optimal — for *linear* systems. Robot localisation is not linear: range and
-bearing, heading, and AprilTag geometry all involve trigonometry. The Extended Kalman Filter is the
-adaptation that makes the Kalman machinery work on the curved models real robots actually have, and
-it is the most widely deployed nonlinear estimator in existence.
+The Kalman filter is optimal — for *linear* systems. Robot localisation is not linear: the same
+AprilTag appears in different image locations and apparent sizes depending on robot position,
+heading, and distance from the tag. The Extended Kalman Filter is the adaptation that makes the
+Kalman machinery work on the curved models real robots actually have.
 
-<Problem title="Drift and nonlinear measurements corrupt field coordinates">
+This lesson uses Kou and Haggenmiller's FTC paper,
+[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578),
+as its applied anchor. They frame the FTC localisation problem as fusing three imperfect sources:
+frequent odometry velocity measurements, less frequent computer-vision landmark position
+measurements, and a physics-model prediction. That is exactly the reason the EKF matters in FTC:
+each source is useful, but none of them is trustworthy alone.
 
-Standard wheel-encoder odometry drifts over time — most aggressively during the wheel slip of
-high-acceleration turns — steadily corrupting the robot's absolute field coordinates. The natural
-fix is to correct it with an absolute sensor, but those measurements are **nonlinear** functions of
-the pose: a vision target or beacon reports *range and bearing*, related to $(x, y)$ through
-$\sqrt{\cdot}$ and $\operatorname{atan2}$. A plain Kalman filter, which assumes a linear
-measurement matrix $H$, cannot fold them in. Worse, the nonlinearity is uneven: a small bearing
-error becomes a large position error at long range.
+<Problem title="Drift and nonlinear vision corrupt field coordinates">
+
+Standard wheel-encoder odometry drifts over time — most aggressively during wheel slip and hard
+turns — steadily corrupting the robot's absolute field coordinates. The natural fix is to correct it
+with an absolute sensor, but AprilTag vision is not a linear measurement of pose. The camera sees a
+square in the image; that square shifts, stretches, and shrinks according to the robot's position,
+heading, and depth from the tag.
+
+A plain Kalman filter assumes a fixed linear measurement matrix $H$. It cannot directly express
+"if the robot turns a little, the tag moves left in the image" or "if the robot moves closer, the
+tag gets larger." Worse, the nonlinearity is uneven: one pixel of image error means a small
+field-position error near the tag, but a much larger error when the tag is far away.
 
 </Problem>
 
+<AprilTagProjectionExplorer />
+
+This Desmos-style graph shows what the Jacobian is measuring for an AprilTag camera update. The
+left side is the robot's field pose relative to a fixed tag. The right side is the camera image: the
+tag's horizontal pixel offset changes when the robot strafes or turns, and the tag's apparent size
+changes when the robot moves closer or farther away. The EKF needs these local slopes because the
+same one-pixel error can mean very different field-position errors depending on depth and heading.
+
 <Theory title="Linearise about the current mean with a Jacobian">
 
-The EKF keeps the Kalman predict–update heartbeat but, at each step, **linearises the nonlinear
-motion and measurement models around the current mean estimate** using their *Jacobians* — the
-matrices of partial derivatives that give the local slope. A curve, viewed close to your current
-estimate, is approximately its tangent line; on that local linearisation the ordinary Kalman update
-applies.
+The EKF keeps the Kalman predict-update heartbeat but, at each step, **linearises the nonlinear
+motion and measurement models around the current mean estimate** using their *Jacobians* — matrices
+of partial derivatives that give the local slope. A curve, viewed close to your current estimate, is
+approximately its tangent line; on that local linearisation the ordinary Kalman update applies.
 
-For a measurement model $z = h(x)$, the linearisation is the Jacobian
-$H = \left.\dfrac{\partial h}{\partial x}\right|_{\hat{x}}$, and the update uses the *true*
-nonlinear $h$ for the residual while using $H$ for the covariance:
+A derivative is "how fast one output changes when one input moves." A Jacobian is the same idea
+when the input and output are vectors. For a simplified AprilTag camera model, let the robot state
+be:
+
+$$
+\mathbf{x} =
+\begin{bmatrix}
+x_R \\
+y_R \\
+\theta
+\end{bmatrix}
+$$
+
+Here $x_R$ and $y_R$ are the robot's field position, and $\theta$ is the robot heading. Let the tag
+be fixed at field position $(x_T, y_T)$. First convert the tag from field coordinates into camera
+coordinates:
+
+$$
+\begin{bmatrix}
+X_c \\
+Y_c
+\end{bmatrix}
+=
+\begin{bmatrix}
+\cos\theta & \sin\theta \\
+-\sin\theta & \cos\theta
+\end{bmatrix}
+\begin{bmatrix}
+x_T - x_R \\
+y_T - y_R
+\end{bmatrix}
+$$
+
+Here $X_c$ is forward depth in the camera frame: bigger $X_c$ means the tag is farther in front of
+the camera. $Y_c$ is sideways offset in the camera frame: positive or negative depending on whether
+the tag appears to one side. A simplified pinhole camera then predicts two visual measurements:
+
+$$
+h(\mathbf{x}) =
+\begin{bmatrix}
+u \\
+s
+\end{bmatrix}
+=
+\begin{bmatrix}
+f\dfrac{Y_c}{X_c} \\
+f\dfrac{L}{X_c}
+\end{bmatrix}
+$$
+
+Here $u$ is the tag's horizontal image offset, $s$ is its apparent image size, $f$ is focal length in
+pixel-like units, and $L$ is the physical tag width. This is a simplified model, not a replacement
+for the full camera calibration and pose-solve used by real AprilTag pipelines, but it captures the
+important EKF fact: the measurement is not a linear combination of robot pose. It divides by depth
+$X_c$, so moving near a tag changes the image much more aggressively than moving far from it.
+
+The Jacobian asks six small questions:
+
+$$
+H =
+\begin{bmatrix}
+\dfrac{\partial u}{\partial x_R} & \dfrac{\partial u}{\partial y_R} & \dfrac{\partial u}{\partial \theta} \\
+\dfrac{\partial s}{\partial x_R} & \dfrac{\partial s}{\partial y_R} & \dfrac{\partial s}{\partial \theta}
+\end{bmatrix}
+$$
+
+The first row says how the tag's image center moves when the robot pose changes. The second row
+says how the tag's apparent size changes when the robot pose changes. This matters because
+covariance lives in robot-state space, while camera noise lives in image-measurement space; the
+Jacobian is the local converter between them.
+
+The paper replaces the linear Kalman model with two nonlinear functions:
+
+$$
+x_{a,t} = f(x_{a,t-1}, u_t) + q_t, \qquad z_t = h(x_{a,t}) + r_t
+$$
+
+Here $x_{a,t}$ is the actual robot state at time step $t$; $u_t$ is the commanded motion or control
+input; $f$ is the nonlinear state-transition function; $z_t$ is the measurement vector; $h$ maps a
+state into the measurement the sensors should see; $q_t$ is process noise with covariance $Q$; and
+$r_t$ is measurement noise with covariance $R$. The subscript $t-1$ means "previous loop" and $t$
+means "current loop."
+
+For the AprilTag projection model above, the cleanest way to see the Jacobian is as a chain rule.
+The first matrix explains how image measurements change when camera-relative coordinates change:
+
+$$
+\frac{\partial h}{\partial (X_c,Y_c)}
+=
+\begin{bmatrix}
+-fY_c/X_c^2 & f/X_c \\
+-fL/X_c^2 & 0
+\end{bmatrix}
+$$
+
+The second matrix explains how camera-relative coordinates change when the robot state changes:
+
+$$
+\frac{\partial (X_c,Y_c)}{\partial (x_R,y_R,\theta)}
+=
+\begin{bmatrix}
+-\cos\theta & -\sin\theta & Y_c \\
+\sin\theta & -\cos\theta & -X_c
+\end{bmatrix}
+$$
+
+Multiplying them gives the measurement Jacobian:
+
+$$
+H =
+\frac{\partial h}{\partial (X_c,Y_c)}
+\frac{\partial (X_c,Y_c)}{\partial (x_R,y_R,\theta)}
+$$
+
+This is why AprilTag EKF updates feel subtle. The detector may report a simple image-space error,
+but the filter must ask: at this distance and heading, how should that image error push the field
+pose estimate? The Jacobian is the answer.
+
+The EKF update then uses the *true* nonlinear $h$ for the residual while using the local Jacobian
+$H$ for the covariance:
 
 $$
 H = \frac{\partial h}{\partial x}\bigg|_{\hat{x}}, \qquad
@@ -50,24 +185,18 @@ H = \frac{\partial h}{\partial x}\bigg|_{\hat{x}}, \qquad
 K = P^- H^\top (H P^- H^\top + R)^{-1}
 $$
 
-For a radar/beacon at the origin observing position $(x, y)$ via range $r=\sqrt{x^2+y^2}$ and
-bearing $\beta=\operatorname{atan2}(y,x)$, the Jacobian is:
-
-$$
-H = \begin{bmatrix} x/r & y/r \\[4pt] -y/r^2 & x/r^2 \end{bmatrix}
-$$
-
-The $1/r^2$ terms encode exactly the "angle errors matter more at range" effect. The demo tracks a
-target from noisy range + bearing; raise the **angle noise** and the far blips fan into wide arcs,
-yet the EKF estimate barely moves — it weights each measurement by the geometry the Jacobian
-captures.
-
-<EKF />
+In that equation, $H$ is the measurement Jacobian, $\hat{x}^-$ is the predicted state before the
+sensor update, $K$ is the Kalman gain, $P^-$ is predicted covariance, and $R$ is measurement-noise
+covariance. Kou and Haggenmiller emphasize the important implementation detail: the Jacobians for
+the nonlinear functions must be recalculated at each time step because the local slope changes as
+the robot moves.
 
 <Callout type="warn" title="The approximation has limits.">
 Linearisation is only valid if the model is gently curved near the estimate. If the nonlinearity is
 severe or the estimate is far off, the tangent misleads the filter — which is why the Unscented
 Kalman Filter and particle filters exist. For typical robot localisation, the EKF is the workhorse.
+The FTC paper reports the same limitation from another angle: when the loop interval $\Delta t$
+gets large, Jacobian approximations and odometry accuracy both degrade.
 </Callout>
 
 </Theory>
@@ -76,16 +205,19 @@ Kalman Filter and particle filters exist. For typical robot localisation, the EK
 
 This predict → linearise → update loop is precisely what production localisation does when it fuses
 drifting odometry with intermittent AprilTag observations: odometry advances the state (predict), a
-detected tag provides a nonlinear measurement (update), and the Jacobian weights it by range and
-geometry. The matrix algebra is the same `linalg` used in this demo.
+detected tag provides a nonlinear camera measurement (update), and the Jacobian maps pixel-level
+uncertainty into pose-level uncertainty. In the paper's mecanum simulation, the state includes field
+position, heading, and body velocity, while the measurement function combines landmark pose
+information with odometry-derived encoder measurements. The matrix algebra is the same `linalg`
+used in the site demos.
 
 <JavaCode league="FTC" label="EKF update structure (per loop, when a tag is seen)">{`// predict: advance pose with odometry, grow covariance P
 x = motionModel(x, wheelDeltas);
 P = add(mul(mul(F, P), transpose(F)), Q);     // F = motion Jacobian
 
-// update: a tag gives nonlinear measurement z = h(x)
-double[][] H  = measurementJacobian(x, tag);  // partials of h at current x
-double[][] yk = sub(z, h(x, tag));            // residual uses the true nonlinear h
+// update: a tag gives nonlinear camera measurement z = h(x)
+double[][] H  = aprilTagMeasurementJacobian(x, tag);  // partials of h at current x
+double[][] yk = sub(z, h(x, tag));                    // residual uses true nonlinear projection
 double[][] S  = add(mul(mul(H, P), transpose(H)), R);
 double[][] K  = mul(mul(P, transpose(H)), inv(S));
 x = add(x, mul(K, yk));
@@ -96,3 +228,7 @@ The curriculum's other half, *deciding what to do* with that estimate, is the co
 stack is then synthesised in the capstone.
 
 </Deploy>
+
+## Reference
+
+Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578). *Journal of Student Research, 12*(1). Also available as [arXiv:2310.04459](https://arxiv.org/abs/2310.04459).

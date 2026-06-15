@@ -1,7 +1,7 @@
 ---
-title: Path Following (Pure Pursuit)
-description: Convert a planned path into continuous steering with one geometric rule — chase a lookahead "carrot" along the path, turn the chord into an arc, and command curvature every loop.
-sidebar_position: 1
+title: Pure Pursuit
+description: Convert a planned path into continuous steering with one geometric rule — chase a lookahead "carrot" along the path, turn the chord into an arc, and command curvature every loop. Fixed vs. dynamic lookahead.
+sidebar_position: 6
 tags: [pure-pursuit, path-following, lookahead, curvature, autonomous]
 ---
 
@@ -79,6 +79,60 @@ lookahead is smooth but slices across it. There is no universally correct value 
 the geometry the path demands.
 </Callout>
 
+### Finding the carrot precisely: line–circle intersection
+
+"Walk along the path until you are $L_d$ away" is fine for densely-sampled waypoints, but the exact
+carrot is where a **circle of radius $L_d$ around the robot crosses the path**. On a straight segment
+from $\mathbf{A}$ to $\mathbf{B}$, parametrize the point as $\mathbf{E}(t) = \mathbf{A} + t(\mathbf{B} -
+\mathbf{A})$ and solve $\lVert \mathbf{E}(t) - \mathbf{P} \rVert^2 = L_d^2$ for the robot at $\mathbf{P}$.
+With $\mathbf{d} = \mathbf{B} - \mathbf{A}$ and $\mathbf{f} = \mathbf{A} - \mathbf{P}$ that is a quadratic
+in $t$:
+
+$$
+(\mathbf{d}\cdot\mathbf{d})\,t^2 + 2(\mathbf{f}\cdot\mathbf{d})\,t + (\mathbf{f}\cdot\mathbf{f} - L_d^2) = 0
+$$
+
+Solve with the quadratic formula, keep the roots in $[0, 1]$, and take the **larger** one — the
+intersection furthest along the segment, so the carrot always moves forward. If the discriminant is
+negative the circle does not reach the path (robot too far off): fall back to the closest path point so
+the robot drives back toward the line.
+
+<JavaCode league="FTC" label="Lookahead point as a segment–circle intersection">{`/** Intersection of the lookahead circle (center P, radius Ld) with segment A->B.
+ *  Returns the furthest-forward hit in [0,1], or null if the circle misses. */
+static Double intersectT(Vector2d A, Vector2d B, Vector2d P, double Ld) {
+    Vector2d d = B.minus(A);
+    Vector2d f = A.minus(P);
+    double a = d.dot(d);
+    double b = 2 * f.dot(d);
+    double c = f.dot(f) - Ld * Ld;
+    double disc = b * b - 4 * a * c;
+    if (disc < 0) return null;                 // circle doesn't reach the segment
+    disc = Math.sqrt(disc);
+    double t2 = (-b + disc) / (2 * a);          // furthest-forward root first
+    double t1 = (-b - disc) / (2 * a);
+    if (t2 >= 0 && t2 <= 1) return t2;
+    if (t1 >= 0 && t1 <= 1) return t1;
+    return null;
+}`}</JavaCode>
+
+### Fixed vs. dynamic lookahead
+
+The table above is the case *against* a single fixed lookahead: the value that smooths a fast straight
+is the same value that cuts a tight corner. A **fixed** lookahead picks one compromise for the whole
+path. A **dynamic** lookahead changes $L_d$ as the robot drives, escaping the trade-off:
+
+- **Speed-scaled** — make lookahead grow with speed, $L_d = \operatorname{clamp}(k\,v,\ L_\text{min},\ L_\text{max})$. Long and smooth on fast straights, short and tight as the robot slows for a corner. This mirrors how a driver looks farther down the road the faster they go.
+- **Curvature-scaled** — shrink lookahead where the upcoming path bends sharply (large $|\kappa|$ from the [spline](./quintic-splines.mdx)) and grow it on gentle sections, so tight features are tracked and straights stay calm.
+
+$$
+L_d = \operatorname{clamp}\big(k_v\, v,\ L_\text{min},\ L_\text{max}\big)
+$$
+
+Dynamic lookahead is strictly more capable but adds knobs to tune, and a lookahead that changes too
+abruptly can itself induce steering jitter — rate-limit it. If you find yourself fighting a fixed
+lookahead on a path with both fast and tight sections, that is the signal to make it dynamic, or to
+switch to a [guided vector field](./guided-vector-fields.mdx) that drops the lookahead idea entirely.
+
 </Theory>
 
 <Deploy title="The loop, and what production followers add">
@@ -118,5 +172,19 @@ control.
 This completes the autonomous stack — estimate the pose, plan a path, follow it. From here the filter
 track (Kalman, EKF) deepens the "where am I" half, and the remaining controllers complete the "what do
 I do" half. The curriculum culminates in a research-grade application of all of it.
+
+<Admonition type="info" title="Source-code references">
+
+The precise-lookahead technique on this page is adapted, with attribution, from this open-source FTC team
+repository:
+
+- **Line–circle intersection lookahead** (solve the quadratic for where the radius-$L_d$ circle crosses
+  a path segment, take the furthest-forward root) —
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
+  (`subsystems/drive/Drivetrain.java`, `lineCircleIntersection`).
+
+The code here is an independent reimplementation of this idea, not a copy of any one repository.
+
+</Admonition>
 
 </Deploy>

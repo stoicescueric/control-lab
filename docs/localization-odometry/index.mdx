@@ -19,10 +19,12 @@ into a continuously updated pose `(x, y, θ)`.
 - **The hardware "why"** — when to write your own odometry math and when to reach for an integrated
   solution like the goBILDA Pinpoint.
 
-:::note Estimation feeds control
+<Admonition type="note" title="Estimation feeds control">
+
 This module produces the pose that [Module 5 · Path Following](../path-following/index.mdx) consumes.
 The two are designed to be read together.
-:::
+
+</Admonition>
 
 Available now: [Odometry & Pose](./odometry.mdx) — the constant-curvature pose update and why it
 drifts. Two-wheel variants and integrated-hardware localization are planned.

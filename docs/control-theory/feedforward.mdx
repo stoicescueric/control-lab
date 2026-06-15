@@ -134,7 +134,7 @@ v_{\max}$; refine from there. FRC's SysId and FTC's library tuners automate the 
 <Callout type="warn" title="Feedforward is only as good as its units.">
 <code>kV</code> in "volts per m/s" is meaningless unless <code>getVelocity()</code> is truly
 converted to m/s. A wrong ticks→units factor produces a wrong model — exactly the failure
-[Discretization &amp; Units](../enterprise-architecture/discretization.mdx) guards against.
+[Discretization &amp; Units](../software-architecture/discretization.mdx) guards against.
 </Callout>
 
 Feedforward is only ever half a controller, though — it is open-loop, blind to anything it didn't

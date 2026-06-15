@@ -1,178 +1,431 @@
 ---
 title: State Machines
-description: The finite state machine — the architecture that turns a tangle of boolean flags into one explicit, debuggable, non-blocking subsystem you can reason about a loop at a time.
+description: "Finite state machines for FTC subsystems: explicit modes, legal transitions, non-blocking timing, and debuggable robot behavior."
 sidebar_position: 1
 tags: [architecture, state-machine, fsm, non-blocking, opmode]
 ---
 
 import StateMachine from '@site/src/components/sims/StateMachine';
+import adaptiveAutoDiagram from '@site/static/img/wolfpackmachina-power-play-state-machine.png';
 
 # State Machines
 
 <Abstract>
-A finite state machine describes a subsystem as a single "current state" plus a small set of legal
-moves between states, which makes contradictory robot behaviour — running the intake while the arm is
-lifting — impossible to even express. This lesson formalises that idea as a partial transition
-function and implements it as a clean, non-blocking `enum`-and-`switch` that advances once per loop.
+A finite state machine models a subsystem as one current mode plus a small set of legal transitions.
+For FTC robots, that makes sequencing code easier to debug because impossible combinations, like intaking and scoring at the same time, become impossible to represent.
 </Abstract>
 
-Control theory does not run in a vacuum — it runs inside a codebase, and the shape of that codebase
-decides whether you can debug it at 11 p.m. before a competition. The single most common reason a good
-controller fails on the field is not the math; it is that the math was bolted onto a 600-line `OpMode`
-where nothing could be reasoned about in isolation. The finite state machine is the first tool for
-fixing that.
+FTC code fails in boring ways before it fails in mathematically interesting ways. A good PID controller
+does not save an arm routine that is half blocked by `sleep()`, half controlled by stale booleans, and
+impossible to reason about from telemetry.
 
-<Problem title="The boolean-flag OpMode that nobody can debug">
+A state machine is the first architecture tool that gives robot behavior a shape.
 
-The scoring routine starts innocently. One flag: `isIntaking`. Then `hasSample`. Then `isLifting`,
-`armIsUp`, `isScoring`. Six matches later it is a thicket of nested `if`s and half of them contradict
-each other. The robot tries to run the intake *while the arm is mid-swing* and snaps a part — because
-nothing prevented `isIntaking` and `isLifting` from being true at the same time. The state of the
-robot is smeared across a dozen booleans, which means **2¹² possible combinations**, most of them
-nonsense, and any of them reachable through some unlucky sequence of button presses.
+## FTC example: the boolean-flag scorer
 
-Then someone "fixes" the timing with `sleep(800)` to wait for the arm — and now the entire robot is
-frozen for those 800 ms: no driving, no other subsystem, no sensor reads. One blocking call took the
-whole loop hostage.
+A scoring subsystem often starts clean:
 
-<Analogy>
-<strong>A vending machine.</strong> It will not drop a snack the instant you touch the glass. It
-*knows where it is* in the process — waiting for coins, coins inserted, selection made, dispensing —
-and it ignores inputs that don't belong to the current step. Press "dispense" before paying and
-nothing happens; the machine doesn't break, it just isn't a legal move yet. That memory of "where am
-I in the sequence" is its **state**.
-</Analogy>
+<JavaCode league="FTC" label="The innocent beginning">{`boolean isIntaking = false;
+boolean hasSample = false;
+boolean isLifting = false;
+boolean isScoring = false;`}</JavaCode>
 
-</Problem>
+Then the robot gets more capable. The driver wants cancel. The intake has a beam-break sensor. The arm
+needs time to move. The claw needs to release after the arm reaches the top. Suddenly the robot has
+many flags, and the flags can disagree.
 
-<Theory title="One state variable, a set of legal transitions">
+What does this mean?
 
-Below is that scoring subsystem rebuilt as a state machine. There is exactly **one** current state.
-Each input — whether from the driver or from a sensor — only does something if it is legal from where
-you are. Try to lift while idle, or release with no sample, and the machine safely ignores it.
+<JavaCode league="FTC" label="Contradictory subsystem state">{`isIntaking = true;
+hasSample = true;
+isLifting = true;
+isScoring = false;`}</JavaCode>
+
+Maybe it means the robot is still pulling in a game element while the lift is already moving. Maybe it
+means the flags were not reset after the last cycle. Maybe it means the next `if` block will do
+something dangerous. The code can enter states the robot should never physically enter.
+
+The bug is not just "too many booleans." The bug is that the subsystem does not have one authoritative
+answer to the question: **what mode am I in right now?**
+
+## Visual intuition
+
+Try the machine below. Some driver requests work only from certain states. Illegal requests are not
+errors; they are ignored because the transition is not defined.
 
 <StateMachine />
 
-A finite state machine is three things:
+That is the practical win. A state machine does not merely organize code. It narrows the set of things
+the robot is allowed to be.
 
-- a finite set of **states** $S$ — here `{IDLE, INTAKING, LOADED, RAISING, SCORING}`;
-- a set of **events** $E$ — driver buttons and sensor signals;
-- a **transition function** $\delta$ that maps a (state, event) pair to the next state:
+## Theoretical rigor
+
+A finite state machine has three pieces:
+
+| Symbol | Meaning | FTC scorer example |
+|---|---|---|
+| $S$ | set of states | `IDLE`, `INTAKING`, `LOADED`, `RAISING`, `SCORING` |
+| $E$ | set of events | driver button, sample detected, arm at target |
+| $\delta$ | transition function | rule that maps state plus event to next state |
+
+The transition function is:
 
 $$
 \delta : S \times E \rightharpoonup S
 $$
 
-The function is *partial* (the half-arrow $\rightharpoonup$): most (state, event) pairs are undefined,
-and an undefined transition is simply ignored. That single design choice is the whole point. Because
-the robot is always in exactly one state, the contradictory combinations from the boolean version are
-**unrepresentable** — there is no way to be `INTAKING` and `RAISING` at once, so the part-snapping bug
-cannot be written.
+Here, $S \times E$ means "a state paired with an event." The half-arrow $\rightharpoonup$ means the
+function is partial: not every event is legal from every state.
 
-The machine is fully described by its transition table:
+A small scorer can be written as a transition table:
 
-| State | Event | → Next state |
+| Current state | Event | Next state |
 |---|---|---|
-| `IDLE` | run intake | `INTAKING` |
+| `IDLE` | driver starts intake | `INTAKING` |
 | `INTAKING` | sample detected | `LOADED` |
-| `INTAKING` | cancel | `IDLE` |
-| `LOADED` | lift | `RAISING` |
-| `RAISING` | arm at top | `SCORING` |
-| `SCORING` | release | `IDLE` |
+| `INTAKING` | driver cancels | `IDLE` |
+| `LOADED` | driver requests score | `RAISING` |
+| `RAISING` | arm reaches target | `SCORING` |
+| `SCORING` | release timer expires | `IDLE` |
 
-Anything not in this table does nothing. The behaviour is now something you can hold in your head, draw
-on a whiteboard, and check against the table line by line.
+Everything not listed is ignored. That is not laziness; it is the safety property. The machine cannot
+be `INTAKING` and `RAISING` simultaneously because `state` has exactly one value.
 
-<Callout type="idea" title="Outputs belong to states too.">
-What the hardware <em>does</em> is a function of the state: in <code>INTAKING</code> the intake motor
-runs; in <code>RAISING</code> the arm controller drives toward the top. Deciding actuator commands
-purely from the current state (a "Moore machine") keeps the wiring between logic and hardware
-trivially predictable.
-</Callout>
+State machines also make outputs easier to audit. In a simple Moore-style machine, hardware behavior
+comes from the current state:
 
-</Theory>
+$$
+u_k = g(s_k)
+$$
 
-<Deploy title="An enum and a switch, ticked every loop">
+Here, $s_k$ is the current state at loop $k$, and $u_k$ is the actuator command chosen for that state.
+For example, `INTAKING` runs the intake, `RAISING` commands the arm target, and `IDLE` stops or holds
+everything safely.
 
-The deployable form is an `enum` for the states and a `switch` that runs **once per loop iteration** —
-never blocking. Timed and sensor-based transitions are checked each pass instead of waited on, so every
-other subsystem keeps running.
+## Real robot case study: adaptive autonomous control
 
-<JavaCode league="FTC" label="A non-blocking subsystem state machine">{`public class Scorer {
-    private enum State { IDLE, INTAKING, LOADED, RAISING, SCORING }
+The same idea scales from one subsystem to a full autonomous routine. During the Power Play season,
+WolfPackMachina modeled autonomous as a graph of scoring, pickup, recovery, and parking states. The
+important architectural move is not the number of boxes; it is that every box represents one
+recoverable robot mode, and every arrow represents a condition that can be checked during the loop.
 
-    private State state = State.IDLE;
-    private final ElapsedTime timer = new ElapsedTime();   // time-in-state, no sleeps
-    private final Intake intake;
-    private final Arm arm;
+<figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+  <img
+    src={adaptiveAutoDiagram}
+    alt="WolfPackMachina Power Play adaptive autonomous state-machine diagram"
+    className="block w-full bg-white"
+  />
+  <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-ink-soft">
+    <strong className="text-ink">Adaptive autonomous state graph.</strong> Diagram from WolfPackMachina's
+    Power Play season autonomous architecture. Contact: jkc.cassidy+FTC@gmail.com.
+  </figcaption>
+</figure>
 
-    public Scorer(Intake intake, Arm arm) {
-        this.intake = intake;
-        this.arm = arm;
+## Enterprise implementation
+
+The deployable FTC pattern is an `enum`, a `switch`, and a timer, but a real autonomous machine
+needs more than a pretty transition table. It needs **entry actions**, **timed exits**,
+**path-completion guards**, **interference recovery**, and **subsystem updates** that still run every
+loop.
+
+The excerpt below is an adapted, teaching-oriented reconstruction of the WolfPackMachina
+`Auto.java` pattern. It is not the full file. The original uses `Paths.Path` objects directly as
+states; this version wraps the same idea in a smaller `AutoState` enum so the architecture is easier
+to read.
+
+<JavaCode league="FTC" label="Adaptive autonomous FSM — adapted from WolfPackMachina Power Play Auto.java">{`public abstract class AdaptiveAuto {
+    private enum AutoState {
+        WAIT_FOR_PICKUP,
+        DISLODGE_CONE,
+        ALIGN_LEFT_RAM,
+        LEFT_RAM,
+        CONTESTED_LEFT_RAM,
+        ALIGN_CONTESTED,
+        ALIGN_PARK,
+        PARK_CLOSE,
+        CYCLE_TRANSFER
     }
 
-    /** Driver request: begin a scoring cycle (only valid from rest). */
-    public void requestScore() {
-        if (state == State.IDLE) transition(State.INTAKING);
+    private AutoState currentState = AutoState.WAIT_FOR_PICKUP;
+    private AutoState scoringState = AutoState.ALIGN_CONTESTED;
+
+    private final ElapsedTime stateTimer = new ElapsedTime();
+    private final ElapsedTime settleTimer = new ElapsedTime();
+
+    private final Movement drive;
+    private final ClawIntake intake;
+    private final Depositor depositor;
+
+    private boolean pathComplete = false;
+    private boolean parking = false;
+    private boolean contracting = true;
+    private boolean robotSettled = false;
+    private double slidesPositionAtEntry = 0.0;
+
+    /**
+     * Runs exactly one autonomous loop. This method must never block.
+     */
+    public final void loop(Telemetry telemetry) {
+        switch (currentState) {
+            case ALIGN_PARK:
+                alignPark();
+                break;
+
+            case DISLODGE_CONE:
+                dislodgeCone();
+                break;
+
+            case ALIGN_LEFT_RAM:
+                alignLeftRam();
+                break;
+
+            case LEFT_RAM:
+                runLeftRam();
+                break;
+
+            case CONTESTED_LEFT_RAM:
+                recoverFromContestedLeftRam();
+                break;
+
+            case WAIT_FOR_PICKUP:
+                holdScoringPosition();
+                break;
+
+            case PARK_CLOSE:
+            case ALIGN_CONTESTED:
+            case CYCLE_TRANSFER:
+                runPathState(currentState);
+                break;
+        }
+
+        updateSubsystems();
+        telemetry.addData("auto/state", currentState);
+        telemetry.addData("auto/scoringState", scoringState);
+        telemetry.addData("auto/timeInStateMs", stateTimer.milliseconds());
+        telemetry.addData("auto/pathComplete", pathComplete);
     }
 
-    /** Run one iteration. Called every loop — must return immediately. */
-    public void update() {
-        switch (state) {
-            case INTAKING:
-                intake.run();
-                if (intake.hasSample()) transition(State.LOADED);    // sensor event
-                break;
-            case LOADED:
-                intake.stop();
-                transition(State.RAISING);                            // auto-advance
-                break;
-            case RAISING:
-                arm.goToScore();
-                if (arm.atTarget()) transition(State.SCORING);        // sensor event
-                break;
-            case SCORING:
-                arm.release();
-                if (timer.seconds() > 0.4) transition(State.IDLE);    // timed event
-                break;
-            case IDLE:
-            default:
-                intake.stop();
-                arm.retract();
-                break;
+    /**
+     * All state changes go through one gate so entry timing and local flags reset together.
+     */
+    private void transitionTo(AutoState nextState) {
+        if (nextState == currentState && nextState != AutoState.CYCLE_TRANSFER) {
+            return;
+        }
+
+        currentState = nextState;
+        pathComplete = false;
+        stateTimer.reset();
+        settleTimer.reset();
+    }
+
+    /**
+     * A driver-independent request can redirect the autonomous routine into parking.
+     */
+    public final void requestPark() {
+        if (currentState != AutoState.ALIGN_PARK) {
+            transitionTo(AutoState.ALIGN_PARK);
         }
     }
 
-    private void transition(State next) {
-        state = next;
-        timer.reset();        // every state knows how long it has been active
+    /**
+     * First-entry logic selects a park target once; later loops only wait for a safe transition.
+     */
+    private void alignPark() {
+        if (!parking) {
+            Pose2d target = getClosestParkingSquare();
+            setParkingTarget(target);
+            parking = true;
+            intake.retractSlides();
+        }
+
+        drive.stopDrive();
+
+        if (stateTimer.milliseconds() > 650) {
+            transitionTo(AutoState.PARK_CLOSE);
+        }
     }
+
+    /**
+     * Recovery state: push a stuck cone free, then return to the pickup cycle.
+     */
+    private void dislodgeCone() {
+        if (!pathComplete) {
+            depositor.setV4BState(Depositor.V4BState.HOME);
+            slidesPositionAtEntry = intake.getSlidesPosition();
+            intake.retractSlides();
+
+            pathComplete = true;
+            stateTimer.reset();
+            return;
+        }
+
+        drive.holdPosition(getScoreHoldPose());
+
+        if (stateTimer.milliseconds() > 950
+                && (slidesPositionAtEntry <= intake.getContestedHighExtension()
+                || stateTimer.milliseconds() > 1400)) {
+            intake.retractSlides();
+            transitionTo(AutoState.WAIT_FOR_PICKUP);
+            return;
+        }
+
+        double slidesTarget = slidesPositionAtEntry + 280.0;
+        intake.setSlidesPosition(slidesTarget, 0.6);
+
+        if (stateTimer.milliseconds() < 700) {
+            Pose2d pushPose = getScoreHoldPose().translatedForward(28.0);
+            drive.holdPosition(pushPose);
+        }
+    }
+
+    /**
+     * Align before ramming into the stack. The robot contracts first so mechanisms are safe.
+     */
+    private void alignLeftRam() {
+        if (contracting && depositor.getLiftPosition() > depositor.getIntakeThreshold() * 3.0) {
+            drive.holdPosition(getScoreHoldPose());
+            return;
+        }
+
+        contracting = false;
+        contractRobot(true, true);
+
+        double headingHold = getLeftRamPath().progress() < 0.15
+                ? getScoreHoldPose().heading
+                : 0.0;
+
+        boolean stillFollowing = drive.followPath(
+                getLeftRamAlignmentPath(),
+                0.75,
+                headingHold,
+                MovementDash.FAST_VELOCITY_THRESHOLD);
+
+        if (!stillFollowing) {
+            drive.shiftLocation(0.0, 0.0);
+            transitionTo(AutoState.LEFT_RAM);
+        }
+    }
+
+    /**
+     * Main pickup path. If field interference moved the robot off-line, redirect to recovery.
+     */
+    private void runLeftRam() {
+        if (getLeftRamPath().progress() > 0.05) {
+            intake.setSlidesTarget(AutoDashboard.RAM_INTAKE_EXTENSION);
+        }
+
+        boolean stillFollowing = drive.followPath(
+                getLeftRamPath(),
+                1.0,
+                0.0,
+                MovementDash.FAST_VELOCITY_THRESHOLD / 3.0);
+
+        if (stillFollowing) {
+            return;
+        }
+
+        intake.retractSlides();
+
+        if (scoringState != AutoState.ALIGN_CONTESTED) {
+            scoringState = AutoState.ALIGN_CONTESTED;
+            switchYawScoreDirection();
+            setCloseHighScorePosition();
+        }
+
+        if (robotWasPushedOffLine()) {
+            transitionTo(AutoState.CONTESTED_LEFT_RAM);
+        } else {
+            transitionTo(AutoState.ALIGN_CONTESTED);
+        }
+
+        getLeftRamPath().reset();
+    }
+
+    /**
+     * Fail-safe path after an interaction with defense or field contact.
+     */
+    private void recoverFromContestedLeftRam() {
+        boolean stillFollowing = drive.followPath(
+                getContestedLeftRamPath(),
+                0.75,
+                0.0,
+                MovementDash.FAST_VELOCITY_THRESHOLD);
+
+        if (!stillFollowing) {
+            transitionTo(AutoState.LEFT_RAM);
+        }
+    }
+
+    /**
+     * Hold the scoring pose unless the robot is not settled or has been pushed off-line.
+     */
+    private void holdScoringPosition() {
+        Pose2d scorePose = getScoreHoldPose();
+        robotSettled = drive.holdPosition(scorePose);
+
+        if (!robotSettled || robotWasPushedOffLine()) {
+            contractRobot(currentState != AutoState.WAIT_FOR_PICKUP, true);
+            return;
+        }
+
+        settleTimer.reset();
+    }
+
+    private void updateSubsystems() {
+        drive.update();
+        intake.update();
+        intake.stateMachine();
+        depositor.update();
+        depositor.stateMachine();
+    }
+
+    protected abstract Pose2d getClosestParkingSquare();
+    protected abstract Pose2d getScoreHoldPose();
+    protected abstract Path getLeftRamPath();
+    protected abstract Path getLeftRamAlignmentPath();
+    protected abstract Path getContestedLeftRamPath();
 }`}</JavaCode>
 
-The driver code shrinks to one line — `scorer.update();` in the loop, plus `scorer.requestScore()` on a
-button. The sequencing, the interlocks, and the timing all live in one auditable place.
+This is what makes the example valuable. The state machine is not just replacing `sleep()` with
+`if`; it is creating a recoverable autonomous policy. `ALIGN_LEFT_RAM` can refuse to move until the
+robot is contracted. `LEFT_RAM` can branch into `CONTESTED_LEFT_RAM` if the robot is pushed off-line.
+`ALIGN_PARK` has first-entry logic so the parking target is chosen once, not recalculated every loop.
+Every transition resets local timing so `stateTimer.milliseconds()` always means "time since this
+state began."
 
-<Callout type="warn" title="Never block the loop.">
-<code>Thread.sleep()</code> in an OpMode freezes <em>every</em> subsystem and stops sensor reads and
-driver control until it returns. A state machine replaces "wait 0.4 s" with "advance when
-<code>timer.seconds() &gt; 0.4</code>," checked each loop — so the robot stays alive the whole time.
-This is the same loop-time discipline the controllers depend on.
-</Callout>
+In mathematical language, this is still the same partial transition function:
 
-<Callout type="tip" title="The win is correctness, not line count.">
-A state machine is occasionally <em>more</em> code than a pile of flags. That is not the point. The
-point is that illegal states become impossible to express, so an entire class of "how did it even get
-into that situation?" bugs simply cannot occur.
-</Callout>
+$$
+\delta(s_k, e_k) = s_{k+1}
+$$
 
-<Callout type="note" title="When one machine isn't enough.">
-Independent subsystems each get their own small machine. But when behaviours must be composed,
-sequenced, and interrupted across the whole robot, a flat FSM suffers a combinatorial explosion of
-states. The next lesson covers the model built for exactly that — composing small, reusable
-[**commands**](./command-based.mdx).
-</Callout>
+but now the event $e_k$ is not only a button press. It can be "path finished," "650 ms elapsed,"
+"robot was interfered with," "slides are below a safe threshold," or "parking has been requested."
+That is why autonomous FSMs are so powerful: they turn a linear script into a policy that can react
+to the field.
 
-With a clean place for logic to live, the rest of the curriculum — filters, estimators, controllers —
-has somewhere safe to plug in.
+## Hardware reality
 
-</Deploy>
+<Admonition type="warning" title="Never block the OpMode loop">
+
+`sleep()` and long `while` waits freeze the entire robot. Driver control, sensor updates, telemetry,
+and other subsystems all stop. A state machine replaces "wait here" with "check whether the condition
+is true this loop."
+
+</Admonition>
+
+<Admonition type="tip" title="Telemetry should name the state">
+
+Print the current state and time-in-state every loop. During a match-debug session, "stuck in
+RAISING for 2.4 seconds" is vastly more useful than staring at four unrelated booleans.
+
+</Admonition>
+
+<Admonition type="tip" title="Use state machines inside subsystems">
+
+State machines are excellent for one mechanism with a few clear modes: intake, shooter, lift, claw,
+endgame latch. When the problem becomes composing many subsystems into a full autonomous routine, use
+[Command-Based Programming](./command-based.mdx) on top of those subsystem internals.
+
+</Admonition>

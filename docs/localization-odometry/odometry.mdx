@@ -6,6 +6,7 @@ tags: [odometry, pose, dead-wheels, pose-exponential, apriltag]
 ---
 
 import OdometryField from '@site/src/components/sims/OdometryField';
+import {ArcStepIllustration, ArcGeometryIllustration, Atan2Illustration} from '@site/src/components/kit/OdometryIllustrations';
 
 # Odometry & Pose
 
@@ -39,16 +40,69 @@ Odometry is that process, with the same failure mode.
 
 <Theory title="Integrating motion as a sequence of small arcs">
 
-Each loop, read how far the left and right sides rolled, $d_L$ and $d_R$ (in metres). The forward
-step and heading change are:
+**Step 1 — measure the loop.** Each loop, read how far the left and right sides rolled this tick,
+$d_L$ and $d_R$ (in metres). The average is how far the robot center moved forward; the difference,
+divided by the track width $T$ (the distance between the two wheel tracks), is how much it turned:
 
 $$
 ds = \frac{d_L + d_R}{2}, \qquad d\theta = \frac{d_R - d_L}{T}
 $$
 
-with $T$ the track width. Assuming the step was *straight* ($x \mathrel{+}= ds\cos\theta$) cuts
-corners on curves. The accurate model treats each step as a small constant-curvature **arc** — the
-*pose exponential* — which matters over a real trajectory:
+If $d\theta \neq 0$ the robot did **not** move in a straight line — it swept a circular **arc**, and
+pretending otherwise cuts the corner on every turn:
+
+<ArcStepIllustration />
+
+**Step 2 — the arc has a radius.** Moving forward by $ds$ while rotating by $d\theta$ is, by
+definition, riding a circle whose radius is
+
+$$
+R = \frac{ds}{d\theta}
+$$
+
+A gentle turn means a huge radius; a sharp turn means a tiny one. Driving perfectly straight is just
+$R = \infty$.
+
+**Step 3 — solve the step in the robot's own frame.** Put the start of the step at the origin with the
+robot facing along its local $+x$ axis. Sweeping through angle $d\theta$ on a circle of radius $R$
+lands the robot at
+
+$$
+\Delta x_\text{local} = R\sin d\theta,
+\qquad
+\Delta y_\text{local} = R\,(1 - \cos d\theta)
+$$
+
+<ArcGeometryIllustration />
+
+Now substitute $R = ds/d\theta$ to write both moves using only the measured $ds$ and $d\theta$:
+
+$$
+\Delta x_\text{local} = ds\,\underbrace{\frac{\sin d\theta}{d\theta}}_{\text{sinC}},
+\qquad
+\Delta y_\text{local} = ds\,\underbrace{\frac{1 - \cos d\theta}{d\theta}}_{\text{cosC}}
+$$
+
+Those two factors are the *only* difference between the exact arc and a naive straight step — they are
+exactly what the code below calls `sinC` and `cosC`.
+
+**Step 4 — rotate the step into the field.** The local move is relative to the robot's current heading
+$\theta$, so rotate it by $\theta$ and add it to the running pose:
+
+$$
+\begin{aligned}
+x &\mathrel{+}= \Delta x_\text{local}\cos\theta - \Delta y_\text{local}\sin\theta \\
+y &\mathrel{+}= \Delta x_\text{local}\sin\theta + \Delta y_\text{local}\cos\theta \\
+\theta &\mathrel{+}= d\theta
+\end{aligned}
+$$
+
+**The straight-line limit (and why the code branches).** As $d\theta \to 0$, the factors approach
+$\frac{\sin d\theta}{d\theta} \to 1$ and $\frac{1 - \cos d\theta}{d\theta} \to 0$, so the whole update
+collapses to $x \mathrel{+}= ds\cos\theta$, $y \mathrel{+}= ds\sin\theta$ — the plain "just go straight"
+formula. That is both a sanity check and the catch: near $d\theta = 0$ those factors are $0/0$
+numerically, so the code substitutes their leading-order forms ($\frac{\sin d\theta}{d\theta} \approx 1$,
+$\frac{1 - \cos d\theta}{d\theta} \approx \tfrac{1}{2}d\theta$) instead of dividing:
 
 <JavaCode league="FTC" label="Constant-curvature pose update (the algorithm)">{`double dL = leftPos  - lastLeft;       // metres rolled this loop
 double dR = rightPos - lastRight;
@@ -67,6 +121,63 @@ if (Math.abs(dth) < 1e-9) {             // nearly straight -> avoid divide-by-ze
 x       += ds * (sinC * Math.cos(heading) - cosC * Math.sin(heading));
 y       += ds * (sinC * Math.sin(heading) + cosC * Math.cos(heading));
 heading += dth;`}</JavaCode>
+
+#### The pose exponential — the formal name for this
+
+What we just derived has a name you will see all over the FTC libraries: the **pose exponential**.
+Stack the per-loop motion into a single body-frame vector called a **twist** — the constant velocity
+the robot holds for the duration of the step:
+
+$$
+\boldsymbol{\xi} =
+\begin{bmatrix} \Delta x_b \\ \Delta y_b \\ d\theta \end{bmatrix}
+$$
+
+where $(\Delta x_b, \Delta y_b)$ is the motion *in the robot's own frame* ($\Delta x_b = ds$ and
+$\Delta y_b = 0$ for a non-slipping tank/differential step; a strafing robot has $\Delta y_b \neq 0$).
+
+A planar pose $(x, y, \theta)$ is an element of the group $SE(2)$, and **integrating a constant twist
+over one step is the matrix exponential of that twist**:
+
+$$
+\mathbf{T}_{k+1} = \mathbf{T}_k \,\exp\!\big(\boldsymbol{\xi}^{\wedge}\big)
+$$
+
+Working that exponential out for $SE(2)$ produces *exactly* the $\frac{\sin d\theta}{d\theta}$ and
+$\frac{1-\cos d\theta}{d\theta}$ factors from the derivation — they are the entries of the so-called
+left-Jacobian $\mathbf{V}(d\theta)$ that maps body motion to the local displacement:
+
+$$
+\begin{bmatrix} \Delta x_\text{local} \\ \Delta y_\text{local} \end{bmatrix}
+= \mathbf{V}(d\theta)
+\begin{bmatrix} \Delta x_b \\ \Delta y_b \end{bmatrix},
+\qquad
+\mathbf{V}(d\theta) = \frac{1}{d\theta}
+\begin{bmatrix}
+\sin d\theta & -(1 - \cos d\theta) \\[2pt]
+1 - \cos d\theta & \sin d\theta
+\end{bmatrix}
+$$
+
+So "integrate each loop as a small constant-curvature arc" and "apply the $SE(2)$ exponential map to
+the body twist" are the same sentence. This matrix form is strictly more general than the scalar arc
+formula: a nonzero $\Delta y_b$ (a mecanum robot strafing while it turns) simply rides through the same
+$\mathbf{V}$, which the forward-only version cannot represent.
+
+<Callout type="idea" title="You already know this function.">
+Road Runner's <code>Pose2d.exp(...)</code>, WPILib's <code>Pose2d.exp(Twist2d)</code>, and Pedro
+Pathing's localizers all implement this exact exponential map. Recognizing it as $\exp$ on $SE(2)$ is
+what lets you read — and trust — their source instead of treating it as magic.
+</Callout>
+
+<Admonition type="note" title="So why do some teams just add tiny straight steps?">
+
+If the loop is fast enough that $d\theta$ per step is tiny, the straight-line update barely differs
+from the exponential, and the simpler code is fine. The pose exponential earns its keep at low loop
+rates, high turn rates, and over long autonomous paths — exactly where corner-cutting compounds into
+real positional error.
+
+</Admonition>
 
 Two engineering choices sharpen this in practice. **Heading from the IMU:** encoder-derived
 $d\theta$ is corrupted by wheel scrub, so most teams take heading from the gyro and use encoders
@@ -92,6 +203,31 @@ ground motion, immune to drive slip — two parallel pods give forward distance 
   </figcaption>
 </figure>
 
+#### From displacement back to an angle
+
+The pose update *accumulates* heading by adding up each $d\theta$. The reverse operation — recovering an
+angle from a known $(\Delta x, \Delta y)$ displacement — comes up constantly: the field-relative bearing
+the robot actually traveled, or the heading it must face to drive at a target on the next page. That is
+the job of the two-argument arctangent, `atan2`:
+
+$$
+\theta = \operatorname{atan2}(\Delta y, \Delta x)
+$$
+
+<Atan2Illustration />
+
+Plain $\arctan(\Delta y / \Delta x)$ throws away the individual signs of $\Delta x$ and $\Delta y$, so it
+collapses opposite directions onto the same answer and only ever returns a half-circle. `atan2` keeps both
+signs, so it resolves the correct quadrant and returns the full $-\pi$ to $\pi$ range — which is exactly
+why every heading calculation in robotics uses it.
+
+<Callout type="warn" title="Headings wrap; differences don't, unless you wrap them.">
+Angles live on a circle, so <code>179°</code> and <code>-181°</code> are the same heading. When you
+subtract a target heading from the current one, normalize the result back into <code>[-π, π]</code>
+(<code>atan2(sin(e), cos(e))</code> is the clean trick) or a controller will spin the long way around a
+seam that does not really exist.
+</Callout>
+
 The demo runs the algorithm live. The <span style={{ color: "#5ce08a" }}>green</span> robot is
 ground truth (a perfect circle); the <span style={{ color: "#ffc24d" }}>amber</span> robot is the
 odometry estimate built from imperfect encoder deltas. Raise the slip and watch it diverge — then
@@ -104,6 +240,27 @@ Errors only accumulate. The remedy is periodic correction from an <em>absolute</
 AprilTag, a wall-facing distance sensor, field markings. Fusing that correction <em>optimally</em>
 with the drifting estimate is exactly what a <strong>Kalman filter</strong> does.
 </Callout>
+
+#### Watch it built in FTC
+
+If you want to see the same ideas walked through on a real FTC robot — pod placement, wiring, and the
+pose math turning into working code — this two-part series is a good companion to the theory above.
+
+<VideoEmbed
+  title="Intro to Odometry in FTC"
+  src="https://www.youtube.com/embed/ixsxDn_ddLE"
+  href="https://www.youtube.com/watch?v=ixsxDn_ddLE">
+  The Clueless (#11212) introduce dead-wheel odometry on an FTC robot: what the pods measure and how the
+  pose comes together.
+</VideoEmbed>
+
+<VideoEmbed
+  title="Intro to Odometry in FTC — Part 2"
+  src="https://www.youtube.com/embed/XkmZq2jopT4"
+  href="https://www.youtube.com/watch?v=XkmZq2jopT4">
+  Part 2 continues into the implementation details, tying the constant-curvature update back to code on
+  the robot.
+</VideoEmbed>
 
 </Theory>
 

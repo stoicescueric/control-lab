@@ -1,8 +1,8 @@
 ---
 title: Command-Based Programming
-description: Composing robot behaviour from small, reusable Command objects that a scheduler sequences and runs in parallel — the model that scales where a single flat state machine explodes.
+description: "Command-based architecture for FTC robots: reusable actions, subsystem requirements, schedulers, sequential groups, and parallel autonomous routines."
 sidebar_position: 2
-tags: [architecture, command-based, scheduler, composition, ftclib]
+tags: [architecture, command-based, scheduler, composition, ftclib, solverslib, mercurial, ivy]
 ---
 
 import CommandScheduler from '@site/src/components/sims/CommandScheduler';
@@ -10,105 +10,146 @@ import CommandScheduler from '@site/src/components/sims/CommandScheduler';
 # Command-Based Programming
 
 <Abstract>
-Command-based programming builds robot behaviour out of small, self-contained "command" objects —
-each one knowing how to start, how to run for a moment, and how to tell when it is finished — which a
-scheduler then composes into sequences and parallel groups and ticks once per loop. This lesson walks
-from that plain idea up to a command's formal lifecycle and a clean Java implementation, and shows why
-composition succeeds at whole-robot routines where a single state machine drowns in states.
+Command-based programming builds robot behavior from small reusable command objects, then lets a scheduler run, sequence, interrupt, and compose them.
+It scales the non-blocking discipline of state machines from one subsystem to the whole robot, especially during autonomous.
 </Abstract>
 
-A [state machine](./state-machines.mdx) is the right tool for *one* subsystem. But a competition
-autonomous is not one subsystem — it is "drive over there *while* the lift goes up, *then* score,
-*then* come back," weaving several subsystems together with timing and parallelism. Try to cram that
-into one state machine and the states multiply out of control. Command-based programming is the model
-built for the whole robot.
+A state machine is excellent when one subsystem has clear modes. Command-based programming becomes
+useful when the robot needs to coordinate several subsystems at once.
 
-<Problem title="The autonomous that's one giant step counter">
+The key difference is composition. A command is not "the whole autonomous." A command is one reusable
+action: drive to a pose, raise the lift, aim the turret, score, retract, wait until a sensor trips.
+The autonomous routine is built by combining those actions.
 
-The first autonomous works: a `switch` on an `int step`, incrementing through "drive, lift, score,
-retreat." Then you want the lift to *start rising while still driving* to save time. Now a single
-state has to mean "driving **and** lifting," so you add `DRIVING_AND_LIFTING`. Then
-`DRIVING_AND_LIFTING_AND_AIMING`. Every combination of things-happening-at-once becomes its own state
-— the number of states explodes combinatorially — and the logic becomes a wall of
-`if (step == 3 && armUp && atPose)`. Worse, none of it is reusable: the "drive to a pose" code is
-copy-pasted into every routine, and reordering the routine means renumbering every step by hand.
+## FTC example: the step-counter autonomous
 
-<Analogy>
-<strong>A recipe vs. a single tangled instruction.</strong> A good recipe is a list of small steps
-("sauté the onions," "boil the pasta") you can reorder, reuse, and even do <em>at the same time</em>
-("boil the pasta <em>while</em> the sauce simmers"). The step-counter autonomous is the opposite: one
-enormous run-on instruction that only makes sense start to finish. Commands are the recipe steps.
-</Analogy>
+Most teams eventually write something like this:
 
-</Problem>
+<JavaCode league="FTC" label="The step counter that starts simple">{`switch (step) {
+    case 0:
+        driveToSpikeMark();
+        if (drive.atTarget()) step++;
+        break;
 
-<Theory title="A command's lifecycle, and a scheduler that composes them">
+    case 1:
+        liftToScore();
+        if (lift.atTarget()) step++;
+        break;
 
-Below is a real autonomous routine as the scheduler sees it: each bar is one **command**, coloured by
-the **subsystem** it controls. Press play to watch the playhead sweep through. Then flip the lift+aim
-step between **parallel** (they overlap — the routine finishes sooner) and **sequential** (one waits
-for the other) and watch the total time change.
+    case 2:
+        openClaw();
+        if (timer.seconds() > 0.4) step++;
+        break;
+}`}</JavaCode>
+
+This works until you need the lift to rise while the drivetrain is still moving. Now `step == 0` is
+not only "drive." It is "drive while maybe lifting." Then you want to aim while lifting. Then you want
+to cancel the routine if localization fails. The step counter becomes a pile of special cases.
+
+Command-based programming changes the question from:
+
+> "What numbered step am I on?"
+
+to:
+
+> "Which commands are currently scheduled, and which subsystems do they require?"
+
+That is a better question for an FTC robot.
+
+## Visual intuition
+
+The demo below shows the scheduler's view of an autonomous routine. Each bar is a command. Commands
+that require different subsystems can run in parallel. Commands that require the same subsystem cannot
+fight over it.
 
 <CommandScheduler />
 
-A **command** is a small object with a four-stage lifecycle. The scheduler calls these for you:
+Flip the lift-and-aim section between sequential and parallel. The robot is not doing less work in
+parallel mode. It is using independent subsystems at the same time.
 
-| Stage | When it runs | What it's for |
+## Theoretical rigor
+
+A command has a lifecycle:
+
+| Method | Called | Purpose |
 |---|---|---|
-| `initialize()` | once, when scheduled | set up — zero a timer, capture a target |
-| `execute()` | every loop while running | do the work — one non-blocking step |
-| `isFinished()` | every loop, after `execute()` | return `true` when the goal is met |
-| `end(interrupted)` | once, when finished or interrupted | clean up — stop the motor |
+| `initialize()` | once, when scheduled | capture targets, reset timers, prepare hardware |
+| `execute()` | every loop while active | do one non-blocking slice of work |
+| `isFinished()` | every loop after `execute()` | report whether the command is done |
+| `end(interrupted)` | once, after finish or cancellation | stop motors, hold position, clean up |
 
-Each loop, the scheduler advances every scheduled command by one step. Conceptually it holds a set of
-commands $C$ and, for each $c \in C$, runs:
+Let $C_k$ be the set of commands scheduled at loop $k$. The scheduler runs each active command once:
 
 $$
-c.\texttt{execute}() \;\rightarrow\; \textbf{if } c.\texttt{isFinished}() \textbf{ then } c.\texttt{end}(\text{false})
+\forall c \in C_k:
+\quad
+c.\texttt{execute}()
+\quad\text{then check}\quad
+c.\texttt{isFinished}()
 $$
 
-Two ideas make this powerful:
+Here, $c$ is one command object, and $C_k$ is the active command set during the current robot loop.
 
-- **Requirements give safety.** Each command declares the subsystems it *requires*. The scheduler
-  guarantees a subsystem is owned by at most one command at a time — schedule a new command that needs
-  a busy subsystem and the old one is interrupted. This is the same guarantee a state machine gave
-  ("you can't be in two states at once"), now enforced across the whole robot automatically.
-- **Groups are commands too.** A `SequentialCommandGroup` runs its children in order; a
-  `ParallelCommandGroup` runs them at once. Because a group *is itself a command* (same four-stage
-  lifecycle), groups nest into a tree — and the entire autonomous becomes one composed command you can
-  name, reuse, and drop into another routine.
+The scheduler also enforces subsystem requirements. If command $a$ and command $b$ both require the
+same subsystem, they cannot safely run together:
 
-<Callout type="idea" title="Sequential vs. parallel is a real speedup.">
-In the demo, running the lift and the aim in <strong>parallel</strong> finishes the routine noticeably
-sooner than <strong>sequential</strong> — the lift and turret are independent subsystems, so there is
-no reason to wait. Time saved in autonomous is points; composition is how you spend it.
-</Callout>
+$$
+\operatorname{req}(a) \cap \operatorname{req}(b) \ne \varnothing
+$$
 
-</Theory>
+Here, $\operatorname{req}(a)$ means "the set of subsystems required by command $a$." If the
+intersection is not empty, both commands want at least one of the same subsystems.
 
-<Deploy title="A Command interface, and a routine built by composition">
+That one rule prevents two commands from writing conflicting motor outputs to the same mechanism in
+the same loop.
 
-The lifecycle is just an interface with sensible defaults, so a simple command overrides only what it
-needs:
+### Groups are commands too
 
-<JavaCode league="FTC" label="The command abstraction (FTCLib mirrors this exactly)">{`/**
- * One unit of robot behaviour with a four-stage lifecycle. The scheduler owns
- * the calls; a command never blocks — execute() does one loop's worth of work.
- */
-public interface Command {
+The powerful part is that command groups share the same lifecycle as ordinary commands.
+
+| Group | Behavior | FTC use case |
+|---|---|---|
+| Sequential | run command A, then B, then C | drive, score, park |
+| Parallel | run A and B at the same time | drive while raising lift |
+| Race/deadline | end a group when one condition finishes | drive until pose reached or timeout |
+
+Because groups are commands, groups can contain groups. That is how a full autonomous routine becomes
+readable without becoming one huge class.
+
+## Enterprise implementation
+
+A minimal command interface is small. The complexity belongs in the scheduler and the reusable command
+objects, not in a giant OpMode.
+
+<JavaCode league="FTC" label="Command interface">{`public interface Command {
     default void initialize() {}
+
+    /**
+     * Runs one loop of work. This method must return quickly.
+     */
     default void execute() {}
-    default boolean isFinished() { return false; }
+
+    /**
+     * @return true when this command has completed its goal.
+     */
+    default boolean isFinished() {
+        return false;
+    }
+
+    /**
+     * @param interrupted true if another command or cancellation stopped this command.
+     */
     default void end(boolean interrupted) {}
 
-    /** Subsystems this command needs exclusive use of (prevents conflicts). */
+    /**
+     * @return subsystems this command needs exclusive control over.
+     */
     Set<Subsystem> getRequirements();
 }`}</JavaCode>
 
-A concrete command implements the stages and declares its requirement:
+A command should do one job and expose its requirement clearly:
 
-<JavaCode league="FTC" label="A single, reusable command">{`/** Drives the lift to a target height, then finishes. Reusable in any routine. */
-public class RaiseLift implements Command {
+<JavaCode league="FTC" label="Reusable lift command">{`public final class RaiseLift implements Command {
     private final Lift lift;
     private final double targetInches;
 
@@ -117,52 +158,149 @@ public class RaiseLift implements Command {
         this.targetInches = targetInches;
     }
 
-    @Override public void execute()       { lift.setTarget(targetInches); }   // runs the lift's PID
-    @Override public boolean isFinished() { return lift.atTarget(); }
-    @Override public void end(boolean interrupted) { lift.holdPosition(); }
+    @Override
+    public void initialize() {
+        lift.setTargetHeight(targetInches);
+    }
 
-    @Override public Set<Subsystem> getRequirements() { return Set.of(lift); }
+    @Override
+    public void execute() {
+        lift.updateController();
+    }
+
+    @Override
+    public boolean isFinished() {
+        return lift.atTarget();
+    }
+
+    @Override
+    public void end(boolean interrupted) {
+        lift.holdCurrentPosition();
+    }
+
+    @Override
+    public Set<Subsystem> getRequirements() {
+        return Set.of(lift);
+    }
 }`}</JavaCode>
 
-Now the whole autonomous is one expression — readable top to bottom, trivially reorderable, with the
-parallelism explicit:
+Now autonomous can be written as composition:
 
-<JavaCode league="FTC" label="The routine, composed from reusable pieces">{`Command auto = new SequentialCommandGroup(
-        new DriveToPose(drive, SCORING_POSE),
-        new ParallelCommandGroup(            // lift and aim at the same time
-                new RaiseLift(lift, HIGH),
-                new AimTurret(turret, GOAL)),
-        new Score(scorer));
+<JavaCode league="FTC" label="Autonomous as composed commands">{`Command scorePreload = new SequentialCommandGroup(
+        new ParallelCommandGroup(
+                new DriveToPose(drive, scoringPose),
+                new RaiseLift(lift, HIGH_JUNCTION)),
+        new ScoreGameElement(claw),
+        new ParallelCommandGroup(
+                new RetractLift(lift),
+                new DriveToPose(drive, parkPose)));
 
-scheduler.schedule(auto);
+scheduler.schedule(scorePreload);
 
-// ...then, once per loop, for the entire OpMode:
-scheduler.run();`}</JavaCode>
+while (opModeIsActive()) {
+    drive.updatePoseEstimate();
+    scheduler.run();
+    telemetry.update();
+}`}</JavaCode>
 
-<Callout type="warn" title="Declare your requirements, or two commands will fight.">
-The scheduler can only prevent two commands from driving the same motor if each command <em>declares</em>
-that motor as a requirement. Forget it, and a stray default command and your autonomous command can
-both command the drivetrain on the same loop — the exact conflict the model is supposed to make
-impossible.
-</Callout>
+That routine says what the robot should do without hiding the timing inside a pile of step numbers.
+Drive and lift overlap because they require different subsystems. Scoring waits because it comes after
+the parallel group.
 
-<Callout type="tip" title="Default commands fill the gaps.">
-Give a subsystem a <em>default command</em> (e.g. the drivetrain's teleop joystick control) and the
-scheduler runs it automatically whenever no other command requires that subsystem — so teleop "just
-works" between scheduled actions.
-</Callout>
+## FTC command frameworks worth knowing
 
-<Callout type="note" title="Same non-blocking rule, bigger scale.">
-A command's <code>execute()</code> must return immediately every loop; <code>isFinished()</code>
-replaces <code>sleep()</code>, exactly as in a state machine. Command-based doesn't repeal the
-loop-time discipline — it scales it across many composed behaviours at once.
-</Callout>
+You can write a scheduler yourself, but most serious teams should at least study the existing FTC
+frameworks. They encode the same architecture this lesson has been building: commands, subsystem
+requirements, command groups, trigger bindings, and a scheduler that runs every loop.
 
-**So which do you reach for?** A state machine is leaner for a single subsystem with a few well-defined
-modes. Command-based earns its overhead the moment you are *composing* subsystems — sequencing,
-overlapping, and interrupting behaviours across the robot, which is most of autonomous. They also
-combine cleanly: a complex subsystem can run an FSM internally while exposing simple commands to the
-scheduler. With the architecture settled, every controller and estimator in the rest of the curriculum
-has a clean place to live.
+This is not a ranking. It is a map of tradeoffs.
 
-</Deploy>
+| Framework | Best fit | Main idea | Cost |
+|---|---|---|---|
+| [FTCLib](https://docs.ftclib.org/ftclib/command-base/command-system/command-scheduler) | Understanding the original FTC command-based ecosystem | WPILib-style commands and scheduler ported into FTC | Older baseline; many teams now prefer maintained forks |
+| [SolversLib](https://docs.seattlesolvers.com/) | Teams that want FTCLib-style command-based with active maintenance | Updated maintained fork of older FTCLib, designed to avoid breaking most existing FTCLib code | Still inherits the WPILib/FTCLib mental model |
+| [Mercurial](https://docs.dairy.foundation/Mercurial/overview) | Experienced teams that want powerful composition and better developer ergonomics | Lambda-first command builders, command groups, run states, requirements, interruptibility, and stronger diagnostics | Harder first setup and a more abstract API |
+| [Ivy](https://pedropathing.com/docs/ivy) | Pedro Pathing teams that want command-based autonomous without much ceremony | Lightweight command-based control flow library built by the Pedro Pathing ecosystem | Newer, smaller ecosystem than FTCLib-style frameworks |
+
+### FTCLib: the historical FTC command baseline
+
+FTCLib is the vocabulary source for many FTC command-based projects: `Command`, `Subsystem`,
+`CommandScheduler`, command groups, default commands, and subsystem requirements. Its scheduler docs
+are still useful for learning the loop sequence, but for new robots treat it as the older baseline
+and compare it against SolversLib before committing.
+
+### SolversLib: maintained FTCLib-style command-based
+
+[SolversLib](https://docs.seattlesolvers.com/) describes itself as an updated and maintained fork of
+older FTCLib, designed to preserve most existing FTCLib code. Use it when you want the familiar
+WPILib/FTCLib architecture with current maintenance: `CommandOpMode`, command groups, requirements,
+and default commands without asking the team to learn a more abstract framework.
+
+### Mercurial: powerful composition for advanced teams
+
+[Mercurial](https://docs.dairy.foundation/Mercurial/overview) is also command-based, but it is not a
+simple FTCLib clone. It pushes teams toward `Lambda` and `StatefulLambda` builders, command utilities
+like `Parallel`, `Sequential`, `Race`, `Wait`, and `IfElse`, plus stronger error messages and a
+unit-tested scheduler. Use it when your programmers are already comfortable with lambdas,
+requirements, interruptibility, and builder-style APIs; otherwise the abstraction can become noise.
+
+### Ivy: command-based control flow for Pedro Pathing
+
+[Ivy](https://pedropathing.com/docs/ivy) is Pedro Pathing's command-based control flow library. Pedro's
+own autonomous examples recommend Ivy for composing `follow` commands with subsystem actions. If your
+robot already uses Pedro, Ivy is the low-friction way to write autos as `sequential` and `parallel`
+command compositions instead of manually managing path state.
+
+Use Ivy when your main architecture question is:
+
+> "How do I make Pedro paths and mechanism actions compose cleanly?"
+
+Use SolversLib or Mercurial when your main architecture question is broader:
+
+> "How do I organize the whole robot's teleop, autonomous, triggers, and subsystems around commands?"
+
+<Admonition type="tip" title="Framework choice is an architecture decision">
+
+Pick the framework whose complexity matches the team's maturity. A simple scheduler used correctly is
+better than an advanced framework used as a maze. The goal is not to collect abstractions; the goal is
+to make robot behavior composable, inspectable, and hard to accidentally break.
+
+</Admonition>
+
+## Hardware reality
+
+<Admonition type="warning" title="Requirements are not optional">
+
+The scheduler can only prevent command conflicts if commands declare their subsystem requirements. If
+two commands both write to the drivetrain but one forgot to require `drive`, the scheduler cannot save
+you.
+
+</Admonition>
+
+<Admonition type="warning" title="Commands must be non-blocking">
+
+`execute()` should do one loop of work and return. Do not put `sleep()`, long `while` loops, or
+blocking sensor waits inside a command. Use `isFinished()` to express completion conditions.
+
+</Admonition>
+
+<Admonition type="tip" title="State machines and commands combine cleanly">
+
+A subsystem can use a state machine internally and still expose commands externally. For example, an
+intake may have `IDLE`, `INTAKING`, and `JAM_CLEARING` states, while autonomous schedules simple
+commands like `RunIntakeUntilLoaded`.
+
+</Admonition>
+
+## Choosing the architecture
+
+Use a state machine when one subsystem has a few exclusive modes. Use command-based programming when
+you need to sequence, parallelize, cancel, and reuse behaviors across multiple subsystems.
+
+In practice, strong FTC code often uses both:
+
+- state machines inside complex subsystems,
+- commands for autonomous and operator actions,
+- measured loop time and telemetry everywhere.
+
+That last point is why the next lesson is [From Math to a Loop](./discretization.mdx).
