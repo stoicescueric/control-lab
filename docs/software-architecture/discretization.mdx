@@ -1,0 +1,116 @@
+---
+title: From Math to a Loop
+description: The bridge from continuous control theory to embedded reality — discretisation, encoder-tick unit conversion, the measured time step, and the Nyquist sampling limit.
+sidebar_position: 3
+tags: [discretization, loop-time, sampling, nyquist, units]
+---
+
+import LoopRate from '@site/src/components/sims/LoopRate';
+
+# From Math to a Loop
+
+<Abstract>
+Control theory is written in continuous time, but a robot runs it as a repeating loop over discrete
+samples — so derivatives become differences, integrals become running sums, and raw encoder counts
+become real-world units. This lesson bridges the math to the loop: the measured time step, unit
+conversion, and the Nyquist limit on how fast you must sample.
+</Abstract>
+
+Every formula in this curriculum is written in continuous time — integrals, derivatives, smooth
+curves. The hardware does none of that. This page is the bridge between the analysis and the
+embedded reality, and skipping it is the single most common reason "correct" control code
+misbehaves on a real robot.
+
+<Problem title="The hub runs discretely, in the wrong units, at a variable rate">
+
+Three hardware facts break the clean continuous math:
+
+- **It loops.** A Control Hub executes *read → compute → actuate* perhaps 20–50 times per second.
+  It cannot integrate or differentiate; it can only work with discrete samples.
+- **It counts ticks.** A motor encoder reports dimensionless counts, not metres or radians. Nothing
+  downstream — PID gains, feedforward, odometry — is meaningful until those are converted.
+- **The loop time wobbles.** Vision frames, logging, and garbage collection make each iteration take
+  a slightly different amount of time. Assuming a fixed period silently corrupts every time-based term.
+
+Get these three things right and the rest of the site's maths drops onto hardware unchanged. Get
+them wrong and even a perfect controller drifts, lags, or oscillates.
+
+</Problem>
+
+<Theory title="Discretisation, units, and the sampling limit">
+
+**Time step.** Replace "an instant" with "one loop." A derivative becomes a difference; an integral
+becomes a running sum; a state is advanced with forward Euler:
+
+$$
+\frac{dx}{dt} \approx \frac{x_k - x_{k-1}}{\Delta t}, \qquad
+\int x\,dt \approx \sum_k x_k\,\Delta t, \qquad
+x_{k+1} = x_k + \dot{x}_k\,\Delta t
+$$
+
+Every term carries a $\Delta t$, so $\Delta t$ must be the *measured* elapsed time, never a constant.
+
+**Units.** The most important conversion in the codebase turns encoder ticks into real distance:
+
+$$
+\text{metres} = \text{ticks} \times \frac{2\pi r}{N \cdot G}
+$$
+
+where $r$ is the wheel radius, $N$ the encoder counts per motor revolution, and $G$ the gear ratio.
+
+<Callout type="math" title="Worked example (goBILDA)">
+A goBILDA Yellow Jacket reports <strong>N = 537.7</strong> ticks per output revolution on a
+<strong>96 mm</strong> wheel (r = 0.048 m). One revolution covers <code>2π·0.048 ≈ 0.3016 m</code>,
+so <code>METERS_PER_TICK = 0.3016 / 537.7 ≈ 0.000561 m/tick</code>.
+</Callout>
+
+**Sampling rate.** Between loops the robot is blind: it acts on the last sample until the next
+arrives. Increase **dt** below and watch the smooth signal degrade into a coarse staircase — and,
+past the limit, alias into nonsense.
+
+<LoopRate />
+
+<Callout type="math" title="The Nyquist limit.">
+To capture a motion that repeats <code>f</code> times per second, you must sample faster than
+<code>2f</code>. Below that threshold the motion <em>aliases</em> — it appears slower than reality
+or disappears entirely. A loop that is too slow cannot control a fast, springy mechanism regardless
+of how well its gains are tuned.
+</Callout>
+
+</Theory>
+
+<Deploy title="Measure dt; define the unit conversion once">
+
+Read the true loop time every iteration, and centralise the tick conversion so every downstream
+controller speaks real units.
+
+<JavaCode league="FTC" label="Real loop time + a single source of units">{`// --- units: define once, use everywhere ---
+static final double WHEEL_R   = 0.048;       // m
+static final double TICKS_REV = 537.7;       // counts per output rev (incl. gearbox)
+static final double METERS_PER_TICK = 2 * Math.PI * WHEEL_R / TICKS_REV;
+
+ElapsedTime timer = new ElapsedTime();
+
+while (opModeIsActive()) {
+    double dt = timer.seconds();
+    timer.reset();
+    if (dt <= 0) dt = 1e-3;                   // guard the first loop
+
+    double meters     = motor.getCurrentPosition() * METERS_PER_TICK;
+    double metersPerS = motor.getVelocity()        * METERS_PER_TICK;  // ticks/s -> m/s
+
+    // every time-based term now uses the measured dt:
+    integral  += error * dt;
+    derivative = (meters - lastMeters) / dt;
+}`}</JavaCode>
+
+<Callout type="warn" title="Hard-coding dt is a classic, invisible bug.">
+If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the integral accumulates
+~1.75× too fast and the derivative is off by the same factor — with no error message. Measuring it
+costs nothing.
+</Callout>
+
+With the bridge built — discrete time, real units, adequate rate — the rest of the curriculum is
+deployable. The most useful controller of all comes next: [PID](../control-theory/pid.mdx).
+
+</Deploy>

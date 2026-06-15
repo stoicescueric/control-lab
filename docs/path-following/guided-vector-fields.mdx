@@ -1,0 +1,124 @@
+---
+title: Guided Vector Fields
+description: Follow a path as a flow field instead of chasing a moving point — blend a term that drives onto the path with one that drives along it, for convergence that pure pursuit can't guarantee.
+sidebar_position: 7
+tags: [guided-vector-field, gvf, path-following, convergence, advanced]
+---
+
+import {GuidedVectorFieldIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+
+# Guided Vector Fields
+
+<Abstract>
+A guided vector field assigns, to every point on the field, a desired velocity direction that both pulls
+the robot onto the path and pushes it along the path. Following that field gives provable convergence to
+the path itself — not to a moving lookahead point — which removes the corner-cutting and tuning
+sensitivity of pure pursuit.
+</Abstract>
+
+[Pure pursuit](./pure-pursuit.mdx) follows a path by chasing a carrot a fixed distance ahead. It works,
+but it tracks the *carrot*, not the path, so it cuts corners and its behavior swings with the lookahead
+distance. Guided vector fields (GVF) reframe following entirely: instead of a point to chase, build a
+field of arrows the robot flows along.
+
+<Problem title="Chasing a point is not the same as being on the path">
+
+A lookahead follower only ever aims at a point ahead of itself. On a curve, the straight line to that
+point lies *inside* the curve, so the robot drifts to the inside and cuts the corner. Shorten the
+lookahead to hug the path and the robot oscillates; lengthen it to smooth the oscillation and it cuts
+more. You are trading one error for another because the controller never has "distance from the path" as
+a quantity it directly drives to zero.
+
+</Problem>
+
+<Theory title="Two desires, blended into one direction">
+
+At the robot's current position $\mathbf{p}$, find the **closest point** $\mathbf{c}$ on the path. That
+gives two local facts: the path's unit **tangent** $\hat{\mathbf{t}}$ (the along-track direction) and the
+signed **cross-track error** — how far, and which side, the robot is off the path, measured along the
+unit **normal** $\hat{\mathbf{n}}$:
+
+$$
+e = (\mathbf{p} - \mathbf{c}) \cdot \hat{\mathbf{n}}
+$$
+
+A GVF combines two urges into one desired velocity direction:
+
+$$
+\mathbf{v}_\text{des} \;\propto\; \underbrace{\hat{\mathbf{t}}}_{\text{flow along}} \;-\; \underbrace{k\,e\,\hat{\mathbf{n}}}_{\text{converge onto}}
+$$
+
+<GuidedVectorFieldIllustration />
+
+When the robot is on the path ($e = 0$) the field is pure tangent — it flows along. When it drifts off,
+the second term turns the arrows toward the path, harder the farther off it is. The gain $k$ sets how
+aggressively the field reels the robot in.
+
+This is provably convergent. Take the cross-track error as an energy $V = \tfrac{1}{2}e^2$. Moving along
+the field changes $e$ at a rate proportional to the normal component of velocity, $\dot e \propto -k\,e$,
+so
+
+$$
+\dot V = e\,\dot e \;\propto\; -k\,e^2 \;\le\; 0
+$$
+
+The energy only decreases, and reaches zero only on the path — so the robot is driven onto the path and
+*stays* there, which a lookahead chasing a moving point never quite guarantees. Normalize
+$\mathbf{v}_\text{des}$ and scale by your desired speed to get the chassis command:
+
+$$
+\mathbf{u}_{xy} = v_\text{path}\,\frac{\mathbf{v}_\text{des}}{\lVert \mathbf{v}_\text{des}\rVert}
+$$
+
+The result is a true **feedback law on path distance**: the cross-track error $e$ appears directly in the
+command, so the field drives it to zero and *stays* converged, rather than asymptotically chasing a point
+that is itself moving. For a straight path the field is a textbook convergence flow; for a spline you
+evaluate $\hat{\mathbf{t}}$, $\hat{\mathbf{n}}$, and $e$ at the closest point each loop.
+
+<Callout type="idea" title="Why this beats a lookahead on curves.">
+Pure pursuit's only knob (lookahead) trades convergence speed against corner-cutting. GVF separates
+them: $v_\text{path}$ sets speed, $k$ sets how fast it converges onto the path, and there is no carrot to
+cut toward — so it can track tight curvature without shrinking a lookahead into oscillation.
+</Callout>
+
+</Theory>
+
+<Deploy title="Sampling the field each loop">
+
+<JavaCode league="FTC" label="Guided vector field follower (one loop)">{`/** Desired field-frame velocity from the guided vector field at the robot pose. */
+public Vector2d gvfCommand(Vector2d robot) {
+    PathPoint c = path.closestPoint(robot);   // closest point + tangent
+    Vector2d tangent = c.tangent.unit();      // along-track direction
+    Vector2d normal  = tangent.rotate(Math.PI / 2.0);
+
+    // signed cross-track error: how far off the path, and which side
+    double e = (robot.minus(c.position)).dot(normal);
+
+    // blend: flow along the path, minus a pull toward it
+    Vector2d desired = tangent.minus(normal.times(K_CONVERGE * e));
+    return desired.unit().times(PATH_SPEED);  // field-frame chassis velocity
+}`}</JavaCode>
+
+Feed that field-frame velocity through the field-centric rotation and the
+[mecanum mixer](./mecanum-kinematics.mdx), and add the usual heading controller for $\theta$. The path
+parameter only advances as the robot moves along it, so progress is driven by geometry, not a clock.
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: the closest-point search and local minima">
+
+Finding the closest point on a spline every loop is a small optimization — seed it from last loop's
+parameter and search locally, or the cost adds up. And a naive field can have local minima or stall where
+the converge and flow terms cancel; clamp the cross-track gain and keep a minimum along-track speed so
+the robot never freezes on the path.
+
+</Admonition>
+
+<Admonition type="tip" title="Where GVF sits in the toolbox">
+
+For point-to-point moves, [PID-to-point](./pid-to-point.mdx) is plenty. For pre-planned curves at speed,
+GVF (or a well-tuned pure pursuit over a [quintic spline](./quintic-splines.mdx)) gives the tightest,
+most repeatable tracking — the difference between a routine that scores and one that clips the
+structure.
+
+</Admonition>

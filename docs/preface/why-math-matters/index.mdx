@@ -1,0 +1,85 @@
+---
+title: Why Math Matters
+description: Why calculus, linear algebra, differential equations, and state-space thinking make FTC engineering easier to reason about instead of harder.
+sidebar_position: 1
+tags: [preface, calculus, linear-algebra, differential-equations, state-space]
+---
+
+# Why Math Matters
+
+<Abstract>
+Mathematics is not decoration on top of robotics; it is the compression language for cause and effect.
+This preface shows how four tools--calculus, linear algebra, differential equations, and state space--turn robot behavior from mystery into something you can predict, debug, and improve.
+</Abstract>
+
+You can write a working autonomous without naming a derivative, a matrix, or a state vector. Many teams
+do. The trouble arrives when the robot behaves *almost* correctly: a lift is smooth when empty but
+struggles with a game element, a drivetrain cuts a corner, an IMU heading jitters into the controller,
+or a flywheel loses speed exactly when it needs to score.
+
+At that point, "turn the gain up" is not engineering. It is guessing with a laptop.
+
+Math matters because it gives you a sharper question:
+
+- **Calculus** asks: how fast is this changing, and what has accumulated over time?
+- **Linear algebra** asks: how do several quantities combine into one motion?
+- **Differential equations** ask: how does the system evolve from one instant to the next?
+- **State space** asks: what variables fully describe the robot right now, and how do they update?
+
+These are not four school subjects to memorize. They are four lenses for seeing the same robot.
+
+## A robot failure, seen four ways
+
+Imagine an FTC robot driving to a scoring location while raising a lift. The code "works" in the pit,
+but on the field the robot arrives late, the lift overshoots, and the driver says it felt sluggish.
+
+Each math tool exposes a different piece of the failure:
+
+| Tool | What it notices | Engineering consequence |
+|---|---|---|
+| **Calculus** | Velocity is the derivative of position; acceleration is the derivative of velocity. | A step command asks the mechanism for impossible acceleration, so it overshoots or saturates. |
+| **Linear algebra** | Mecanum wheel speeds are a matrix transformation of desired robot motion. | A command that looks reasonable in joystick coordinates can exceed one wheel's physical limit. |
+| **Differential equations** | A motor's speed changes according to voltage, back-EMF, friction, inertia, and load. | The same power command produces different motion as the lift gets heavier or the battery sags. |
+| **State space** | A robot is a vector of variables: pose, velocity, heading, lift height, flywheel speed. | A controller must update the whole estimate, not patch one sensor reading at a time. |
+
+The goal of this mini-module is not to turn you into a mathematician before you write robot code. It is
+to build enough intuition that the later lessons stop feeling like formulas dropped from the sky.
+
+## The four sub-lessons
+
+### Calculus
+
+Calculus is the language of *change* and *accumulation*. If encoder position changes over time, you
+have velocity; if velocity changes over time, you have acceleration; if you integrate velocity, you
+recover distance.
+
+Read next: [Calculus](./calculus.mdx).
+
+### Linear algebra
+
+Linear algebra is the language of *many numbers moving together*. A mecanum drivetrain does not have
+one speed--it has four wheel speeds produced by a matrix acting on a desired chassis velocity.
+
+Read next: [Linear Algebra](./linear-algebra.mdx).
+
+### Differential equations
+
+Differential equations describe systems whose future depends on their current state. Motors, flywheels,
+arms, and springs all live here because their motion is not just commanded; it evolves.
+
+Read next: [Differential Equations](./differential-equations.mdx).
+
+### State space
+
+State space wraps the previous tools into one architecture: choose the variables that describe the
+system, model how they update, and use sensors to keep the estimate honest.
+
+Read next: [State Space](./state-space.mdx).
+
+<Admonition type="tip" title="Read this like an engineer">
+
+You do not need to finish every math playlist before continuing through the robotics curriculum. Use
+these pages as a map: learn the basic idea, connect it to a robot failure, then return when a later
+lesson needs more precision.
+
+</Admonition>

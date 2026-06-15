@@ -1,0 +1,284 @@
+---
+title: Quintic & Bézier Splines
+description: Two ways to describe a smooth FTC path — Bézier curves shaped by control points (approximation) and quintic Hermite splines pinned to waypoints and derivatives (interpolation) — and how each reaches the continuous curvature a follower needs.
+sidebar_position: 5
+tags: [splines, bezier, quintic, curvature, c2-continuity, trajectory]
+---
+
+import {SplineContinuityIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+import BezierExplorer from '@site/src/components/sims/BezierExplorer';
+import SplineCompare from '@site/src/components/sims/SplineCompare';
+
+# Quintic & Bézier Splines
+
+<Abstract>
+There are two common ways to describe a smooth path: a Bézier curve, shaped by dragging control points
+that pull the curve toward them, and a quintic Hermite spline, pinned to waypoints with specified
+velocity and acceleration. Béziers are intuitive to author by feel; quintics pass exactly through your
+points and reach continuous curvature by construction. This lesson builds both and shows when each wins.
+</Abstract>
+
+PID-to-point and predictive deceleration drive to *one* target. Real autonomous routines thread through
+many waypoints, and the path *between* them has to be drivable — smooth not just in position but in how
+sharply it bends. That bending is curvature, and curvature is where naive paths quietly fail.
+
+<Problem title="The robot jerks at every waypoint">
+
+Chain simple segments between waypoints and the path *looks* smooth: no kinks, continuous heading. But
+run a follower along it and the robot snaps its steering at each join. The reason is invisible in the
+drawing — **curvature** (how tightly the path turns, the second derivative) is *discontinuous* at the
+waypoints. The follower must change steering angle instantly, which means infinite angular acceleration,
+which the robot answers with a jerk and a tracking error exactly where the segments meet.
+
+The cure is a curve description that controls curvature, not just position. Two families do it, from two
+opposite philosophies.
+
+</Problem>
+
+<Theory title="Continuity: how smooth is smooth enough">
+
+"Smoothness" is graded by how many derivatives match across a join:
+
+| Class | Matches across the join | What stays continuous | The drivetrain feels |
+|---|---|---|---|
+| C⁰ | position | the path connects | a corner — a kink |
+| C¹ | + first derivative | heading (tangent direction) | a sudden curvature change — a jerk |
+| C² | + second derivative | curvature | smooth, followable steering |
+
+C² is the target: continuous curvature means the follower never has to change steering instantly. Now the
+two ways to get there.
+
+### Bézier curves — shape by control points (approximation)
+
+A cubic Bézier is built from four **control points** $P_0, P_1, P_2, P_3$ and a weighted blend called
+the Bernstein basis:
+
+$$
+\mathbf{B}(t) = (1-t)^3\,P_0 + 3(1-t)^2 t\,P_1 + 3(1-t)t^2\,P_2 + t^3\,P_3,
+\qquad t \in [0,1]
+$$
+
+The weights always sum to $1$, so the curve stays inside the control polygon's hull. It passes through
+**only the endpoints** $P_0$ and $P_3$; the interior points $P_1, P_2$ are *handles* that pull the curve
+without touching it. They set the endpoint tangents directly:
+
+$$
+\mathbf{B}'(0) = 3(P_1 - P_0), \qquad \mathbf{B}'(1) = 3(P_3 - P_2)
+$$
+
+That is why Béziers feel good to author — drag a handle and the curve leans that way. The point on the
+curve at any $t$ is found by **de Casteljau's algorithm**: repeatedly interpolate along the control
+polygon. Scrub $t$ in the demo to watch it, and drag the handles to feel how $P_1, P_2$ steer the ends:
+
+<BezierExplorer />
+
+The catch shows up when you chain Béziers. Matching the tangent across a join (C¹) forces the next
+segment's first handle to mirror the previous one, $Q_1 - Q_0 = P_3 - P_2$; demanding C² pins the second
+handle too ($Q_2 = P_1 - 4P_2 + 4P_3$). So in a Bézier *chain*, continuity steals exactly the handles
+that made Béziers convenient — you no longer get to place them freely.
+
+### Quintic Hermite — pin waypoints and derivatives (interpolation)
+
+The other philosophy: instead of points that pull the curve, specify the curve's own state at each
+**waypoint** — position, velocity, and acceleration — and let one polynomial satisfy all of it. Because
+you pin the values, the curve passes *through* every waypoint. This is the difference in one picture —
+the same four points, used as Bézier control points versus Hermite waypoints:
+
+<SplineCompare />
+
+The green curve hits all four points; the blue one only the ends. A drivetrain routine usually wants the
+green behavior: "go through these poses," not "go near them."
+
+How many degrees of freedom does it take? Matching position, velocity, and acceleration at *both* ends of
+a segment is six conditions, so you need a degree-5 — **quintic** — polynomial per coordinate:
+
+$$
+x(t) = c_5 t^5 + c_4 t^4 + c_3 t^3 + c_2 t^2 + c_1 t + c_0
+$$
+
+Evaluating it and its derivatives at $t = 0$ fixes the low coefficients straight from the start
+conditions:
+
+$$
+c_0 = x(0), \qquad c_1 = x'(0), \qquad c_2 = \tfrac{1}{2}x''(0)
+$$
+
+and the endpoint-at-$t{=}1$ conditions give the top three:
+
+$$
+\begin{bmatrix} c_3 \\ c_4 \\ c_5 \end{bmatrix}
+=
+\begin{bmatrix}
+\phantom{-}10 & -4 & \phantom{-}\tfrac{1}{2} \\
+-15 & \phantom{-}7 & -1 \\
+\phantom{-}6 & -3 & \phantom{-}\tfrac{1}{2}
+\end{bmatrix}
+\begin{bmatrix}
+x(1) - c_0 - c_1 - c_2 \\
+x'(1) - c_1 - 2c_2 \\
+x''(1) - 2c_2
+\end{bmatrix}
+$$
+
+Now the C² join is automatic: set each interior waypoint's ending acceleration equal to the next
+segment's starting acceleration, $x''_\text{seg}|_{t=1} = x''_\text{next}|_{t=0}$, and the curvature is
+continuous through the whole spline — no handles sacrificed.
+
+<SplineContinuityIllustration />
+
+Whichever family you use, the quantity a [pure-pursuit](./pure-pursuit.mdx) or feedforward follower
+actually consumes is the **curvature** at each sample:
+
+$$
+\kappa(t) = \frac{x'y'' - y'x''}{\left(x'^2 + y'^2\right)^{3/2}}
+$$
+
+<Callout type="idea" title="Which one should you use?">
+**Bézier** when a human authors the path by eye — the handles are a great editor, and the Road Runner /
+Pedro Pathing-style tools expose them. **Quintic Hermite** when you have exact poses to hit (Road
+Runner's `splineTo` is quintic under the hood) and want C² for free. They are convertible: a cubic Bézier
+*is* a cubic Hermite with $m_0 = 3(P_1-P_0)$, $m_1 = 3(P_3-P_2)$ — so editors can show handles while the
+math runs on Hermite coefficients.
+</Callout>
+
+</Theory>
+
+<Deploy title="Evaluate either curve on the Control Hub">
+
+Both reduce to evaluating a polynomial (and its derivatives) per coordinate each loop.
+
+<JavaCode league="FTC" label="Cubic Bézier and quintic Hermite segments">{`/** Cubic Bézier in one coordinate: 4 control points, t in [0,1]. */
+public static double bezier(double p0, double p1, double p2, double p3, double t) {
+    double u = 1 - t;
+    return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+}
+
+/** Quintic Hermite segment: pinned position/velocity/accel at both ends. */
+public final class Quintic {
+    private final double c0, c1, c2, c3, c4, c5;
+
+    public Quintic(double p0, double v0, double a0, double p1, double v1, double a1) {
+        c0 = p0;
+        c1 = v0;
+        c2 = 0.5 * a0;
+        double d0 = p1 - c0 - c1 - c2;   // residuals the top coeffs must absorb
+        double d1 = v1 - c1 - 2 * c2;
+        double d2 = a1 - 2 * c2;
+        c3 =  10 * d0 - 4 * d1 + 0.5 * d2;
+        c4 = -15 * d0 + 7 * d1 - 1.0 * d2;
+        c5 =   6 * d0 - 3 * d1 + 0.5 * d2;
+    }
+
+    public double pos(double t) { return ((((c5*t + c4)*t + c3)*t + c2)*t + c1)*t + c0; }
+    public double vel(double t) { return (((5*c5*t + 4*c4)*t + 3*c3)*t + 2*c2)*t + c1; }
+    public double acc(double t) { return ((20*c5*t + 12*c4)*t + 6*c3)*t + 2*c2; }
+}`}</JavaCode>
+
+Build one curve for $x$ and one for $y$ per segment. For a quintic chain, sharing endpoint velocity and
+acceleration between adjacent segments is what makes the whole path C².
+
+### Following the spline
+
+You don't follow a spline as a continuous function — you **resample it into a list of points** (the
+arc-length step the warning below insists on), tag each point with its curvature radius $R = 1/\kappa$,
+then hand that list to PID-to-point's [point-advance follower](./pid-to-point.mdx). Two spline-specific
+refinements turn that into a fast, accurate follow:
+
+**Speed from curvature.** The robot can corner only as hard as traction allows. The lateral acceleration
+on a curve is $a_\text{lat} = v^2/R$, so capping it at the slip limit gives a per-point speed:
+
+$$
+v \le \sqrt{a_\text{lat}^\text{max}\, R}
+$$
+
+Big $R$ (gentle) ⇒ full speed; small $R$ (tight) ⇒ slow down. (FTCclueless uses a cheaper ramp to the
+same effect, `speed = 0.25 + 0.75·min(|R|, 200)/200`.)
+
+**Centripetal feedforward.** To *stay* on a curve of radius $R$ at speed $v$, the robot needs a sideways
+(centripetal) acceleration toward the center; without it, feedback alone always lags and the robot drifts
+to the outside of every turn. Add it as a strafe feedforward:
+
+$$
+u_\text{strafe} \mathrel{+}= k_c\,\frac{v^2}{R}
+$$
+
+<JavaCode league="FTC" label="Spline follower: resample, then curvature speed + centripetal">{`/** A sampled point along the spline. */
+record SplinePoint(double x, double y, double heading, double radius) {}
+
+/** Resample the spline by arc length; tag each point with its curvature radius. */
+List<SplinePoint> resample(Spline s, double stepInches) {
+    List<SplinePoint> pts = new ArrayList<>();
+    for (double d = 0; d <= s.length(); d += stepInches) {
+        double t = s.tAtDistance(d);                 // arc-length -> parameter
+        double dx = s.dx(t),  dy = s.dy(t);          // first derivatives
+        double ddx = s.ddx(t), ddy = s.ddy(t);       // second derivatives
+        double kappa = (dx*ddy - dy*ddx) / Math.pow(dx*dx + dy*dy, 1.5);
+        double radius = Math.abs(kappa) < 1e-6 ? 1e6 : 1.0 / kappa;
+        pts.add(new SplinePoint(s.x(t), s.y(t), Math.atan2(dy, dx), radius));
+    }
+    return pts;
+}
+
+/** One loop: point-advance to the target, scale speed by curvature, add centripetal FF. */
+public void followSpline(List<SplinePoint> path) {
+    Pose2d robot = localizer.getPose();
+    while (index < path.size() - 1 &&
+           Math.hypot(path.get(index).x() - robot.x, path.get(index).y() - robot.y) < PATH_RADIUS) {
+        index++;
+    }
+    SplinePoint p = path.get(index);
+
+    double speed = Math.min(MAX_SPEED, Math.sqrt(LAT_ACCEL * Math.abs(p.radius())));
+
+    // robot-frame direction to the point -> forward / strafe at the curvature-limited speed
+    double ex = p.x() - robot.x, ey = p.y() - robot.y;
+    double c = Math.cos(robot.heading), s = Math.sin(robot.heading);
+    double dir = Math.atan2(ey * c - ex * s, ex * c + ey * s);
+    double vx = speed * Math.cos(dir);
+    double vy = speed * Math.sin(dir);
+
+    vy += K_CENTRIPETAL * speed * speed / p.radius();   // hold the curve, don't get flung out
+
+    drive(vx, vy, headingController(p.heading()));        // mecanum mixer desaturates
+}`}</JavaCode>
+
+This is FTCclueless's spline follower in miniature: resample with a per-point radius, advance through the
+points, slow for tight curvature, and feed forward the centripetal term so the follower tracks the curve
+instead of cutting it.
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: t is not distance">
+
+For both curves, the parameter $t$ is not arc length — equal steps in $t$ are unequal steps in metres,
+fast on straights and bunched in tight turns. Before a follower uses the path, **reparameterize by arc
+length** (integrate $\sqrt{x'^2 + y'^2}$ and resample) or your speed control will surge and stall around
+curves.
+
+</Admonition>
+
+<Admonition type="tip" title="Why C² matters for the speed plan">
+
+The curvature speed cap above is only as smooth as $\kappa$ itself. With a C¹ cubic path, $\kappa$ jumps
+at every waypoint, so the *speed limit* jumps too and the robot lurches. C² continuity from a quintic
+keeps the curvature — and therefore the whole speed profile — continuous.
+
+</Admonition>
+
+<Admonition type="info" title="Source-code references">
+
+The curve and follower techniques on this page are adapted, with attribution, from these open-source FTC
+team repositories:
+
+- **Cubic Bézier path** (Bernstein form, arc-length parametrization) —
+  [petrustoica/CenterStage](https://github.com/petrustoica/CenterStage) (`teamcode/pathfollower`,
+  `CubicBezierPath`) and [SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)
+  (`path/BezierPath`).
+- **Spline following with curvature speed scaling and centripetal feedforward** (resample to points
+  carrying $R=1/\kappa$, cap speed by $\sqrt{a_\text{lat}R}$, add a $k_c v^2/R$ strafe term) —
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`subsystems/drive/Spline.java`
+  and `Drivetrain.java`).
+
+The code here is an independent reimplementation of these ideas, not a copy of any one repository.
+
+</Admonition>

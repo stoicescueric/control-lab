@@ -1,0 +1,187 @@
+---
+title: Linear Algebra
+description: Vectors and matrices as the language of robot pose, mecanum kinematics, coordinate frames, and sensor fusion.
+sidebar_position: 3
+tags: [preface, linear-algebra, vectors, matrices, mecanum]
+---
+
+import {LinearAlgebraLiveDemo} from '@site/src/components/sims/MathDemos';
+
+# Linear Algebra
+
+<Abstract>
+Linear algebra studies vectors, matrices, and transformations, which makes it the language of robot geometry.
+In FTC, it explains pose, field-centric driving, mecanum wheel mixing, odometry updates, and the measurement models used by estimators.
+</Abstract>
+
+Linear algebra starts with a simple idea: some quantities only make sense as a package. A robot pose is
+not just $x$, not just $y$, and not just heading. It is all of them together.
+
+$$
+\mathbf{x} =
+\begin{bmatrix}
+x \\
+y \\
+\theta
+\end{bmatrix}
+$$
+
+That package is a **vector**. Here, $x$ and $y$ are field position coordinates, and $\theta$ is the
+robot's heading angle.
+
+## FTC example: field-centric drive feels rotated
+
+Your driver pushes the joystick away from the alliance wall and expects the robot to move upfield. But
+the robot is turned 90 degrees, so robot-forward is now sideways. Without coordinate transforms, the
+same joystick command means different things depending on heading.
+
+The driver says, "field-centric is broken." Linear algebra says, "you forgot to rotate a vector."
+
+## Visual intuition
+
+Vectors are arrows; matrices are transformations that move, rotate, stretch, or combine those arrows.
+
+<LinearAlgebraLiveDemo />
+
+<VideoEmbed
+  title="3Blue1Brown: Essence of Linear Algebra"
+  src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab"
+  href="https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab">
+  Watch this series before memorizing matrix rules. It makes matrices feel like geometry instead of
+  tables of numbers.
+</VideoEmbed>
+
+## The basics
+
+A vector stores related components:
+
+$$
+\mathbf{v} =
+\begin{bmatrix}
+v_x \\
+v_y
+\end{bmatrix}
+$$
+
+A matrix maps one vector into another:
+
+$$
+\mathbf{y} = A\mathbf{x}
+$$
+
+Here, $\mathbf{x}$ is the input vector, $A$ is the matrix doing the transformation, and $\mathbf{y}$ is
+the output vector after the transformation.
+
+For a robot, the most important early matrix is rotation. If the robot heading is $\theta$, a field
+velocity can be converted into the robot frame by rotating by $-\theta$:
+
+$$
+\begin{bmatrix}
+v_x^\text{robot} \\
+v_y^\text{robot}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\cos\theta & \sin\theta \\
+-\sin\theta & \cos\theta
+\end{bmatrix}
+\begin{bmatrix}
+v_x^\text{field} \\
+v_y^\text{field}
+\end{bmatrix}
+$$
+
+That is field-centric drive in one equation. Here, $v_x^\text{field}$ and $v_y^\text{field}$ are the
+driver's desired field-relative velocity components, while $v_x^\text{robot}$ and $v_y^\text{robot}$
+are the commands after converting them into the robot's own forward/strafe frame.
+
+## Engineering use case: FTC mecanum wheel mixing
+
+In FTC, mecanum drive is usually the first place where linear algebra stops feeling optional. A driver
+moves two joysticks and a trigger: forward/back, strafe, and turn. The robot has to convert that one
+driver intent into four motor commands every loop.
+
+Before the motors are involved, the driver command is a chassis velocity:
+
+$$
+\mathbf{u} =
+\begin{bmatrix}
+v_x \\
+v_y \\
+\omega
+\end{bmatrix}
+$$
+
+Here, $\mathbf{u}$ is the chassis command vector, $v_x$ is robot-forward velocity, $v_y$ is sideways
+velocity, and $\omega$ is angular velocity, or turn rate.
+
+The result is a wheel-speed vector:
+
+$$
+\mathbf{w} =
+\begin{bmatrix}
+w_{FL} \\
+w_{FR} \\
+w_{BL} \\
+w_{BR}
+\end{bmatrix}
+$$
+
+Here, $\mathbf{w}$ stores the four wheel speeds: front-left, front-right, back-left, and back-right.
+
+For this convention, positive $v_x$ means drive forward, positive $v_y$ means strafe left, and positive
+$\omega$ means rotate counterclockwise. The wheel-mixing equation is:
+
+$$
+\mathbf{w} =
+\frac{1}{r}
+\begin{bmatrix}
+1 & -1 & -(L + W) \\
+1 & 1 & (L + W) \\
+1 & 1 & -(L + W) \\
+1 & -1 & (L + W)
+\end{bmatrix}
+\mathbf{u}
+$$
+
+Here, $r$ is wheel radius. $L$ is the distance from the robot center to the front/back wheel line, and
+$W$ is the distance from the robot center to the left/right wheel line. The term $L + W$ describes how
+strongly robot rotation contributes to wheel speed. The signs depend on wheel order, roller direction,
+and your chosen coordinate convention.
+
+That matrix is exactly the FTC software problem: combine forward, strafe, and turn without writing four
+unrelated motor formulas by hand. A clean implementation computes the four wheel speeds, finds the
+largest magnitude, and scales all four together if any command is outside the legal motor range:
+
+$$
+\mathbf{w}_\text{normalized}
+=
+\frac{\mathbf{w}}{\max(1, |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|)}
+$$
+
+Here, $\mathbf{w}_\text{normalized}$ is the motor command vector after desaturation. The denominator is
+at least $1$, so small commands are not amplified, but large commands are compressed while preserving
+the requested drive direction.
+
+For a visual sanity check, open this Desmos graph: [Basic Mecanum Movement With Odo](https://www.desmos.com/calculator/x39el6adbw).
+Use it to connect the abstract vector $\mathbf{u}$ to the way an FTC robot actually translates,
+strafes, rotates, and accumulates odometry on the field.
+
+Different teams use different sign conventions depending on wheel order and coordinate choices, but
+the engineering idea is stable: wheel mixing is a linear transformation.
+
+<Admonition type="warning" title="Hardware reality: matrices do not remove saturation">
+
+The matrix may output one wheel speed larger than the motor can physically produce. Production code
+must normalize or desaturate the wheel commands while preserving the direction of the requested chassis
+motion as much as possible.
+
+</Admonition>
+
+<Admonition type="tip" title="FTC intuition">
+
+If the robot drives diagonally when it should drive straight, check coordinate frames. If one wheel
+clips before the others, check the vector after the matrix multiply. Linear algebra gives you places to
+look.
+
+</Admonition>

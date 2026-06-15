@@ -1,0 +1,116 @@
+---
+title: Differential Equations
+description: Differential equations as models of motors, flywheels, arms, drag, and every robot subsystem whose future depends on its present state.
+sidebar_position: 4
+tags: [preface, differential-equations, dynamics, motors, modeling]
+---
+
+import {DifferentialEquationsLiveDemo} from '@site/src/components/sims/MathDemos';
+
+# Differential Equations
+
+<Abstract>
+Differential equations describe systems by relating a quantity to its own rate of change.
+In robotics, they explain why mechanisms do not respond instantly: motors spin up, arms fall under gravity, flywheels coast down, and projectiles slow under drag.
+</Abstract>
+
+A differential equation sounds intimidating until you translate the phrase:
+
+> The current state tells you how the state is about to change.
+
+That is exactly how physical mechanisms behave.
+
+## FTC example: the same motor command behaves differently under load
+
+Your intake spins quickly in the air. Then it touches a game element and slows down. The code did not
+change, but the mechanism did.
+
+That is not a software mystery. The motor is a dynamic system. Voltage, back-EMF, friction, inertia,
+and load determine acceleration, and acceleration changes speed.
+
+## Visual intuition
+
+Differential equations are often easier to understand as arrows showing "where the system wants to go
+next." That is why phase-space pictures are so useful.
+
+<DifferentialEquationsLiveDemo />
+
+<VideoEmbed
+  title="3Blue1Brown: Differential Equations"
+  src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6"
+  href="https://www.youtube.com/playlist?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6">
+  This series builds the visual idea of a system evolving according to local arrows, which maps well
+  onto motors and mechanisms.
+</VideoEmbed>
+
+## The basics
+
+The simplest differential equation says a quantity changes in proportion to the gap between where it is
+and where it wants to settle:
+
+$$
+\frac{dx}{dt} = k(x_\infty - x)
+$$
+
+Here, $x$ is the current state, $x_\infty$ is the value the system approaches if nothing changes, and
+$k$ controls how quickly the system moves toward that value.
+
+<DifferentialEquationsIllustration />
+
+If $x$ is flywheel speed, $x_\infty$ is the speed the motor would eventually reach at the current
+voltage, and $k$ controls how quickly it approaches.
+
+A more physical motor model writes angular acceleration as the result of torque minus load:
+
+$$
+J\frac{d\omega}{dt} = \tau_\text{motor} - \tau_\text{load}
+$$
+
+Here, $J$ is rotational inertia, $\omega$ is angular velocity, $\tau_\text{motor}$ is the torque
+produced by the motor, and $\tau_\text{load}$ is the opposing torque from the mechanism or game
+element. The motor torque depends on current, and current depends on voltage minus back-EMF:
+
+$$
+\tau_\text{motor} = k_t I,
+\qquad
+I = \frac{V - k_e\omega}{R}
+$$
+
+Here, $k_t$ is the motor torque constant, $I$ is current, $V$ is applied voltage, $k_e$ is the back-EMF
+constant, and $R$ is motor winding resistance.
+
+Substitute them:
+
+$$
+J\frac{d\omega}{dt}
+=
+k_t\frac{V - k_e\omega}{R}
+- \tau_\text{load}
+$$
+
+That equation is the motor lesson in dynamic form.
+
+## Engineering use case: flywheel recovery
+
+A flywheel shooter does not only need a target speed. It needs to recover after a game element steals
+energy from the wheel. A differential-equation view tells you why recovery time depends on motor
+voltage, motor constants, flywheel inertia, contact load, and battery sag.
+
+If the wheel is too light, it loses speed quickly. If it is too heavy, it recovers slowly. The best
+design is a tradeoff, and differential equations are how you reason about that tradeoff instead of
+guessing.
+
+<Admonition type="warning" title="Hardware reality: models bend near limits">
+
+The equations above are idealized. Real FTC mechanisms add gearbox friction, belt compliance, voltage
+sag, current limiting, wheel slip, and sensor delay. The model is still useful because it tells you
+which physical effect to look for when behavior changes.
+
+</Admonition>
+
+<Admonition type="tip" title="FTC intuition">
+
+When something "takes time to settle," you are looking at a differential equation. PID tuning changes
+the shape of that settling; feedforward changes the destination the system is trying to settle toward.
+
+</Admonition>

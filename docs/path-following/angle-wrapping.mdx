@@ -1,0 +1,101 @@
+---
+title: Angle Wrapping
+description: Why a heading controller sometimes spins the long way around — and the one-line fix that wraps every angle error into [−π, π].
+sidebar_position: 3
+tags: [angle-wrapping, heading, atan2, control, autonomous]
+---
+
+import {AngleWrapIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+
+# Angle Wrapping
+
+<Abstract>
+Headings live on a circle, so the same direction has infinitely many numeric labels and two angles can
+be numerically far apart while being physically adjacent. Wrapping every angle difference back into the
+range $[-\pi, \pi]$ is the small, mandatory step that stops a heading controller from taking the long
+way around.
+</Abstract>
+
+This is the shortest lesson in the module and the one that fixes the most baffling bug. Everything that
+*turns* a robot to a target heading — `turnTo`, a heading-hold PID, the rotation term of a
+[PID-to-point](./pid-to-point.mdx) controller — depends on it.
+
+<Problem title="The robot spins 358° to turn 2°">
+
+Your robot is facing $179°$. You command it to $-179°$ — a gentle $2°$ nudge across "straight back."
+The controller computes its error the obvious way:
+
+$$
+e = \theta_\text{target} - \theta_\text{current} = -179° - 179° = -358°
+$$
+
+and dutifully commands a giant $-358°$ rotation. The robot whips almost all the way around the wrong
+direction to reach a heading that was $2°$ away. Same bug, subtler symptom: near the seam the error
+*flips sign* every loop, and the robot oscillates instead of settling.
+
+</Problem>
+
+<Theory title="Angles are on a circle, not a number line">
+
+Heading is **periodic**: $\theta$, $\theta + 360°$, and $\theta - 360°$ are the same direction. So
+$-179°$ and $+181°$ label the same heading — and now the error is an easy $+2°$. The subtraction wasn't
+wrong; we just forgot to read the answer *on the circle*, taking the shorter of the two ways around.
+
+<AngleWrapIllustration />
+
+The fix is to **wrap** any angle (or angle difference) into the half-open interval $(-\pi, \pi]$. The
+clean, branch-free way uses the fact that $\operatorname{atan2}$ already returns a value in that range,
+and that feeding it the sine and cosine of an angle reconstructs the angle modulo $2\pi$:
+
+$$
+\operatorname{wrap}(e) = \operatorname{atan2}\big(\sin e,\ \cos e\big)
+$$
+
+Because $\sin$ and $\cos$ are themselves periodic, the $\pm 360°$ ambiguity is erased before
+$\operatorname{atan2}$ ever runs, so the result is always the shortest signed rotation. (This is the
+same [atan2](../localization-odometry/odometry.mdx) that recovers a bearing from a displacement — here
+it is recovering the shortest angle from a raw difference.)
+
+<Callout type="warn" title="Wrap the error, not just the setpoint.">
+It is the *difference* that has to be wrapped, every loop, right before it enters the controller.
+Wrapping only the target or only the measurement still leaves a difference that can land outside
+[−π, π].
+</Callout>
+
+</Theory>
+
+<Deploy title="One helper, used everywhere a heading appears">
+
+<JavaCode league="FTC" label="Angle wrapping and a heading-hold controller">{`/** Wraps any angle (radians) into the shortest-signed range (-pi, pi]. */
+public static double wrap(double radians) {
+    return Math.atan2(Math.sin(radians), Math.cos(radians));
+}
+
+/** Proportional heading hold. Always turns the short way to the target. */
+public double headingPower(double targetRad, double headingRad) {
+    double error = wrap(targetRad - headingRad);   // <-- the whole lesson
+    return Range.clip(kP * error, -1.0, 1.0);
+}`}</JavaCode>
+
+The same `wrap` call belongs anywhere two headings are compared: the rotation term of a go-to-pose
+controller, a `turnTo` action, or the heading feedback of a path follower. Make it a static utility and
+never subtract two angles without it again.
+
+</Deploy>
+
+<Admonition type="note" title="Wrapping vs. unwrapping">
+
+Wrapping keeps an angle in $[-\pi, \pi]$ — correct for *control error*. The opposite operation,
+*unwrapping*, removes the jumps to make a continuous signal — what you want before
+**differentiating** heading for an angular-velocity estimate, since a $2\pi$ jump at the seam would
+otherwise read as an enormous spike in $\dot\theta$.
+
+</Admonition>
+
+<Admonition type="warning" title="Hardware reality: know your IMU's range">
+
+Some IMUs report heading in $[-180°, 180°]$, others in $[0°, 360°]$, and a few accumulate continuously.
+Read the docs, convert to radians once at the source, and wrap at every comparison — don't assume the
+sensor already did it.
+
+</Admonition>

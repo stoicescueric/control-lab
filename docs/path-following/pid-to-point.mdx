@@ -1,0 +1,238 @@
+---
+title: PID-to-Point
+description: The simplest autonomous path follower — run a PID loop on the error to a target pose, rotate it into the robot frame, and feed the mecanum mixer. Its failure modes motivate everything that follows.
+sidebar_position: 2
+tags: [pid-to-point, go-to-pose, autonomous, control, mecanum]
+---
+
+import {PidToPointIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+
+# PID-to-Point
+
+<Abstract>
+PID-to-point drives the robot toward a target pose by running feedback controllers on the position and
+heading error, expressed in the robot's own frame, and handing the result to the drivetrain mixer. It is
+the smallest complete autonomous follower — and its specific weaknesses are what motivate motion
+profiling, splines, and pure pursuit.
+</Abstract>
+
+You now have the three pieces autonomous needs: a [pose estimate](../localization-odometry/odometry.mdx)
+that says where the robot is, a [mecanum mixer](./mecanum-kinematics.mdx) that turns a chassis command
+into wheel powers, and [angle wrapping](./angle-wrapping.mdx) so heading errors behave. PID-to-point is
+the loop that connects them.
+
+<Problem title="Get to a target pose, with nothing but feedback">
+
+The task: drive from wherever the robot is to a target pose $(x^\*, y^\*, \theta^\*)$ and stop there.
+No precomputed path, no velocity plan — just look at how far off you are and push toward the goal each
+loop.
+
+The naive version "drive toward the point at full power until you're close" overshoots, then reverses,
+then overshoots again, circling the target like a moth. We want it to *converge*: approach quickly when
+far, ease in when close, and hold the final heading without spinning the long way around.
+
+</Problem>
+
+<Theory title="Feedback on the error, in the robot's frame">
+
+Start with the **field-frame error** — how far the target is from the robot right now:
+
+$$
+e_x = x^\* - x, \qquad e_y = y^\* - y, \qquad e_\theta = \operatorname{wrap}(\theta^\* - \theta)
+$$
+
+The heading error is wrapped into $[-\pi, \pi]$ so the robot always turns the short way — exactly the
+[angle-wrapping](./angle-wrapping.mdx) lesson. But the drivetrain does not take field commands; it takes
+forward/strafe in the **robot frame**. So rotate the translational error by $-\theta$, the same rotation
+as field-centric driving:
+
+$$
+\begin{bmatrix} e_x^\text{robot} \\ e_y^\text{robot} \end{bmatrix}
+=
+\begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix}
+\begin{bmatrix} e_x \\ e_y \end{bmatrix}
+$$
+
+<PidToPointIllustration />
+
+That rotation is the whole trick: the same field error becomes a **forward** distance and a **strafe**
+distance in the robot's own axes — the two numbers the drivetrain can act on. Now run an independent
+controller on each axis. A proportional term is often enough for the translation, with the heading on its
+own gain:
+
+$$
+v_x = k_p^{xy}\, e_x^\text{robot}, \qquad
+v_y = k_p^{xy}\, e_y^\text{robot}, \qquad
+\omega = k_p^{\theta}\, e_\theta
+$$
+
+If a plain proportional term leaves the robot drifting short of the goal or overshooting, promote each
+axis to a full discrete PID — proportional on the error, integral on its running sum, derivative on its
+change per loop:
+
+$$
+u_k = k_p\, e_k \;+\; k_i \sum_{j=0}^{k} e_j\,\Delta t \;+\; k_d\,\frac{e_k - e_{k-1}}{\Delta t}
+$$
+
+where $\Delta t$ is the measured loop time. In practice the derivative term damps the approach, while a
+small, clamped integral defeats the static friction that strands a proportional-only controller just
+short of the target.
+
+### kStatic: getting over the last bit of friction
+
+There is a cleaner fix for that "stranded just short" problem than an integral term. Near the goal the
+error is tiny, so the $k_p\,e$ command shrinks below the voltage needed to overcome **static friction**
+and the robot simply stops moving while still a centimetre off. A **static feedforward** — a constant
+push in the *direction* of the error — defeats it directly:
+
+$$
+u_k = k_p\, e_k + k_d\,\dot e_k + \underbrace{k_S\,\operatorname{sign}(e_k)}_{\text{only when } |e_k| \text{ is small}}
+$$
+
+The trick most FTC implementations use is to apply $k_S$ **only when the error is already small** (inside
+a threshold), so it acts as a final nudge rather than a constant bias that would cause limit-cycling far
+from the target. This is exactly what production drive code does — for example the SimplicityFTC
+`PDFSController` adds `sign(error) * kStatic` once `|error| < threshold`, and FTCclueless's drivetrain
+adds a flat `0.05 * sign(error)` near the goal. It is the same $k_S$ term you met in
+[feedforward](../control-theory/feedforward.mdx), now applied to a positional drive.
+
+Those three numbers — $v_x$, $v_y$, $\omega$ — are precisely the chassis command
+$\mathbf{u} = (v_x, v_y, \omega)$ that the
+[mecanum mixer](./mecanum-kinematics.mdx) expects — including its desaturation step, which keeps the
+approach direction straight when the gains ask for more than full power. The full PID adds the usual
+integral and derivative terms per axis, but on a well-localized drive the proportional + derivative pair
+usually does the job; integral mainly fights steady-state friction near the goal.
+
+<Callout type="idea" title="Three little loops, one drivetrain.">
+PID-to-point is just three 1-D controllers — forward, strafe, heading — sharing one mixer. Tune them
+roughly independently: heading first (so the frame is right), then translation.
+</Callout>
+
+### Chaining points: follow a list without stopping
+
+A real autonomous routine is a *list* of poses, not one. The naive approach — `goToPose` each one and
+wait for it to settle — works, but the robot decelerates to a halt at every intermediate point, which is
+slow and jerky. The fix is **point-advance sequencing**: keep an index into the list, drive toward the
+current target, and **advance to the next point as soon as you are within an advance radius** of this one
+(rather than fully settling). Only the *final* point uses the strict settle test.
+
+$$
+\text{if } \lVert \mathbf{p}_\text{target}^{(i)} - \mathbf{p}_\text{robot}\rVert < r_\text{advance}
+\ \text{ and not last } \Rightarrow\ i \leftarrow i + 1
+$$
+
+Because the robot switches targets while still moving, it flows through the intermediate points and only
+brakes for the last — turning a list of stop-and-go moves into one continuous motion. This is exactly how
+SimplicityFTC's `PidToPointFollower` (`pointAdvanceRadius`) and FTCclueless's drivetrain (`pathRadius`)
+sequence their waypoints, and it is what turns a [spline](./quintic-splines.mdx) — once resampled into a
+list of points — into something PID-to-point can follow.
+
+### Where it breaks (and what comes next)
+
+Pure proportional control has a built-in tension. Set the gain high and the robot is fast but overshoots
+and oscillates; set it low and it crawls into the target. Because the command is proportional to the
+*remaining* error, the robot brakes only as late as the error shrinks — so at speed it sails past the
+point. The honest fixes are the rest of this module:
+
+- **[Predictive deceleration](./predictive-deceleration.mdx)** — cap the command by the distance left to
+  stop, so the robot plans its braking instead of reacting to it.
+- **[Splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)** — follow a smooth path
+  through many points rather than aiming straight at one distant target.
+
+</Theory>
+
+<Deploy title="A go-to-pose loop">
+
+<JavaCode league="FTC" label="PID-to-point (proportional core)">{`/** One loop of driving toward a target pose. Returns true once settled. */
+public boolean goToPose(Pose2d target) {
+    Pose2d robot = localizer.getPose();
+
+    // 1) field-frame error; heading wrapped to the short way
+    double ex = target.x - robot.x;
+    double ey = target.y - robot.y;
+    double eh = wrap(target.heading - robot.heading);
+
+    // 2) rotate translational error into the robot frame (rotate by -heading)
+    double c = Math.cos(robot.heading), s = Math.sin(robot.heading);
+    double exR =  ex * c + ey * s;
+    double eyR = -ex * s + ey * c;
+
+    // 3) proportional commands + kStatic nudge once inside the threshold
+    double vx = kPxy * exR + kStatic(exR);
+    double vy = kPxy * eyR + kStatic(eyR);
+    double w  = kPheading * eh;
+
+    // 4) hand off to the mecanum mixer (it desaturates internally)
+    drive(vx, vy, w);
+
+    // 5) settle test: close in position AND heading, AND slow
+    double dist = Math.hypot(ex, ey);
+    return dist < POS_TOL && Math.abs(eh) < HEADING_TOL && robot.velocity.norm() < VEL_TOL;
+}
+
+/** A constant push toward the target, applied only near it, to beat static friction.
+ *  Far away kP is strong enough; very close (settled) we stop pushing. */
+private double kStatic(double errorRobotFrame) {
+    double e = Math.abs(errorRobotFrame);
+    if (e > K_STATIC_RANGE || e < POS_TOL) return 0;   // only nudge in the "stranded" band
+    return K_STATIC * Math.signum(errorRobotFrame);
+}`}</JavaCode>
+
+The settle test matters as much as the controller: check position **and** heading **and** that the robot
+is actually slow, or an action will report "done" while the robot is still coasting through the point.
+
+To follow a *list* of poses continuously, wrap that loop in point-advance sequencing:
+
+<JavaCode league="FTC" label="Following a list of poses (point-advance)">{`private final List<Pose2d> points = new ArrayList<>();
+private int index = 0;
+
+/** Drive the list; returns true only when the LAST point is fully settled. */
+public boolean follow() {
+    Pose2d robot = localizer.getPose();
+    boolean last = index == points.size() - 1;
+
+    // advance early through intermediate points so the robot never stops mid-path
+    if (!last && robot.position.minus(points.get(index).position).norm() < ADVANCE_RADIUS) {
+        index++;
+        last = index == points.size() - 1;
+    }
+
+    boolean settled = goToPose(points.get(index));   // the single-target loop above
+    return last && settled;                          // only the final point uses the strict test
+}`}</JavaCode>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: integral windup and the dead band">
+
+Static friction means a small position error produces a command too weak to move the robot, so it sits
+just short of the target. An integral term cures that — but if you keep integrating while saturated or
+stuck against a wall, the term winds up huge and the robot lurches when it frees. Clamp the integral and
+only accumulate it near the goal.
+
+</Admonition>
+
+<Admonition type="tip" title="Tune heading first">
+
+A wrong heading rotates your whole translational command, so a heading bug looks like a translation bug.
+Get $k_p^{\theta}$ holding heading cleanly, then tune the translational gain.
+
+</Admonition>
+
+<Admonition type="info" title="Source-code references">
+
+The production techniques on this page are adapted, with attribution, from these open-source FTC team
+repositories:
+
+- **kStatic static feedforward** (a constant push toward the target applied only once inside a small
+  error band) — [SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)
+  (`PDFSController`) and [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
+  (`subsystems/drive/Drivetrain.java`).
+- **Point-advance sequencing** (advancing to the next waypoint within an advance radius so the robot
+  never stops mid-path) — [SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)
+  (`PidToPointFollower`, `pointAdvanceRadius`) and
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`Drivetrain.java`, `pathRadius`).
+
+The code here is an independent reimplementation of these ideas, not a copy of any one repository.
+
+</Admonition>
