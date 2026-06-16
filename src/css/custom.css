@@ -62,9 +62,9 @@
   --color-panel-2: #16203a;
   --color-panel-ink: #e8edf7;
 
-  --radius-card: 16px;
-  --shadow-card: 0 6px 24px rgba(28, 40, 79, 0.08);
-  --shadow-pop: 0 18px 50px rgba(28, 40, 79, 0.16);
+  --radius-card: 8px;
+  --shadow-card: 0 1px 2px rgba(28, 40, 79, 0.06);
+  --shadow-pop: 0 10px 28px rgba(28, 40, 79, 0.1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -103,10 +103,10 @@
   --ifm-blockquote-border-color: var(--color-line);
 
   /* Shape */
-  --ifm-global-radius: 10px;
-  --ifm-button-border-radius: 9px;
-  --ifm-card-border-radius: 14px;
-  --ifm-pre-border-radius: 12px;
+  --ifm-global-radius: 8px;
+  --ifm-button-border-radius: 7px;
+  --ifm-card-border-radius: 8px;
+  --ifm-pre-border-radius: 8px;
   --ifm-code-border-radius: 6px;
 
   /* Type scale (clean, high-contrast) — sized up for in-class readability */
@@ -122,7 +122,7 @@
 
   /* Navbar: taller, translucent, hairline border */
   --ifm-navbar-height: 3.75rem;
-  --ifm-navbar-background-color: rgba(255, 255, 255, 0.8);
+  --ifm-navbar-background-color: #ffffff;
   --ifm-navbar-shadow: none;
 
   /* Sidebar menu */
@@ -158,8 +158,8 @@
   --color-line: #243049;
   --color-line-soft: #1a2440;
   --color-brand-dk: #93a7ff;
-  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.4);
-  --shadow-pop: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.32);
 
   /* Re-skin Infima chrome for dark mode off the same tokens. */
   --ifm-background-color: var(--color-bg);
@@ -175,7 +175,7 @@
   --ifm-hr-background-color: var(--color-line);
   --ifm-blockquote-border-color: var(--color-line);
   --ifm-code-background: rgba(147, 167, 255, 0.13);
-  --ifm-navbar-background-color: rgba(10, 15, 30, 0.72);
+  --ifm-navbar-background-color: #0a0f1e;
   --ifm-menu-color: var(--color-ink-soft);
   --ifm-menu-color-active: #c5d0ff;
   --ifm-menu-color-background-active: rgba(147, 167, 255, 0.14);
@@ -245,13 +245,13 @@ input.cl-range[type='range']::-moz-range-thumb {
    KaTeX (math in lessons)
    --------------------------------------------------------------------------- */
 .katex {
-  font-size: 1.24em;
+  font-size: 1.14em;
 }
 .katex-display {
-  font-size: 1.32em;
+  font-size: 1.18em;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 12px 2px 18px;
+  padding: 10px 2px 14px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -280,6 +280,18 @@ body {
   line-height: 1.78;
 }
 
+.cl-demo {
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.cl-demo canvas,
+.cl-demo svg,
+.cl-demo .rounded-xl,
+.cl-demo .rounded-2xl {
+  border-radius: 8px !important;
+}
+
 /* Headings: tighter tracking and balanced wrapping. */
 h1,
 h2,
@@ -289,15 +301,16 @@ h4,
 .markdown h1,
 .markdown h2,
 .markdown h3 {
-  letter-spacing: -0.021em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
-/* Translucent, blurred navbar with a hairline border. */
+/* Solid navbar with a hairline border. Avoid translucent text bleed while scrolling docs. */
 .navbar {
   border-bottom: 1px solid var(--ifm-toc-border-color);
-  backdrop-filter: saturate(180%) blur(12px);
-  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  background: var(--ifm-navbar-background-color);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* The mobile menu drawer inherits the navbar's translucent color, which lets the
@@ -319,7 +332,7 @@ h4,
 }
 .navbar__title {
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 .navbar__link {
   font-weight: 500;
@@ -344,6 +357,52 @@ h4,
 .theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
   font-weight: 600;
   color: var(--ifm-heading-color);
+}
+
+/* Native admonitions: replace Docusaurus's saturated defaults with the project
+   palette so :::tip and :::warning read like first-class documentation blocks. */
+.theme-admonition {
+  border: 1px solid var(--color-line) !important;
+  border-left-width: 4px !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+
+.theme-admonition .admonitionHeading_Gvgb,
+.theme-admonition [class*='admonitionHeading'] {
+  font-size: 0.82rem;
+  letter-spacing: 0;
+}
+
+.theme-admonition .admonitionIcon_Rf37,
+.theme-admonition [class*='admonitionIcon'] {
+  opacity: 0.85;
+}
+
+.theme-admonition-tip,
+.alert--success {
+  --ifm-alert-background-color: rgba(17, 181, 164, 0.1);
+  --ifm-alert-border-color: rgba(17, 181, 164, 0.55);
+  --ifm-alert-color: var(--color-ink);
+  background: rgba(17, 181, 164, 0.1) !important;
+  border-left-color: var(--color-teal) !important;
+}
+
+.theme-admonition-warning,
+.alert--warning {
+  --ifm-alert-background-color: rgba(245, 158, 11, 0.12);
+  --ifm-alert-border-color: rgba(245, 158, 11, 0.62);
+  --ifm-alert-color: var(--color-ink);
+  background: rgba(245, 158, 11, 0.12) !important;
+  border-left-color: var(--color-amber) !important;
+}
+
+.theme-admonition-note,
+.alert--secondary {
+  --ifm-alert-background-color: var(--color-surface-2);
+  --ifm-alert-border-color: var(--color-line);
+  --ifm-alert-color: var(--color-ink);
+  background: var(--color-surface-2) !important;
 }
 
 /* Code blocks: soft shadow so they lift off the off-white canvas. */
@@ -386,14 +445,10 @@ pre code {
 }
 .button {
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   transition:
-    transform 120ms ease,
     box-shadow 120ms ease,
     background-color 120ms ease;
-}
-.button--lg:hover {
-  transform: translateY(-1px);
 }
 
 /* Subtle, brand-tinted scrollbars. */

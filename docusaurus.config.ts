@@ -4,14 +4,6 @@ import type * as Preset from '@docusaurus/preset-classic';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
-// This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
-
-// ---------------------------------------------------------------------------
-// Tailwind v4 integration. Docusaurus compiles CSS through PostCSS/webpack, so
-// we hook the official Tailwind v4 PostCSS plugin into the pipeline. The actual
-// theme tokens + utilities live in src/css/custom.css (CSS-first config). We
-// import utilities only (no Preflight) there so Tailwind never clobbers Infima.
-// ---------------------------------------------------------------------------
 function tailwindPlugin() {
   return {
     name: 'control-lab-tailwind',
@@ -23,16 +15,14 @@ function tailwindPlugin() {
   };
 }
 
-// GitHub Pages target. Project site served at https://stoicescueric.github.io/control-lab/.
 const ORG = 'stoicescueric';
 const REPO = 'control-lab';
 
 const config: Config = {
   title: 'Control Lab',
-  tagline: 'Control theory, state estimation & FTC robotics — from the math to the metal.',
+  tagline: 'Control theory, state estimation & FTC robotics - from the math to the metal.',
   favicon: 'img/logo.svg',
 
-  // Faster Rust-based bundling (swc/lightningcss) — shipped with the scaffold.
   future: {
     v4: true,
     faster: true,
@@ -52,8 +42,6 @@ const config: Config = {
     locales: ['en'],
   },
 
-  // Preconnect to the Google Fonts origins so the font CSS + woff2 files start
-  // downloading as early as possible (the crossorigin one is for the font files).
   headTags: [
     {
       tagName: 'link',
@@ -66,15 +54,10 @@ const config: Config = {
   ],
 
   stylesheets: [
-    // Brand typefaces: Inter for UI/prose, JetBrains Mono for code. The font
-    // stacks in custom.css already list these first; this is what actually loads
-    // them. `display=swap` avoids invisible text while the fonts arrive.
     {
       href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
       type: 'text/css',
     },
-    // KaTeX stylesheet (math rendering). Self-version-pinned to the installed
-    // katex package; served from jsDelivr so we don't ship the font payload.
     {
       href: 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css',
       type: 'text/css',
@@ -110,7 +93,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/control-lab-social-card.svg',
+    image: 'img/control-lab-social-card.png',
     colorMode: {
       defaultMode: 'light',
       respectPrefersColorScheme: true,
@@ -135,6 +118,11 @@ const config: Config = {
           label: 'Curriculum',
         },
         {
+          to: '/docs/references',
+          label: 'References',
+          position: 'left',
+        },
+        {
           href: `https://github.com/${ORG}/${REPO}`,
           label: 'GitHub',
           position: 'right',
@@ -147,7 +135,7 @@ const config: Config = {
         {
           title: 'Curriculum',
           items: [
-            {label: 'Preface — Why Math Matters', to: '/docs/preface/why-math-matters'},
+            {label: 'Preface - Why Math Matters', to: '/docs/preface/why-math-matters'},
             {label: 'Signal Processing', to: '/docs/signal-processing'},
             {label: 'Control Theory', to: '/docs/control-theory'},
           ],
@@ -155,6 +143,7 @@ const config: Config = {
         {
           title: 'Resources',
           items: [
+            {label: 'References & Resources', to: '/docs/references'},
             {label: 'CTRL ALT FTC', href: 'https://www.ctrlaltftc.com/'},
             {label: 'Game Manual 0', href: 'https://gm0.org/en/latest/'},
             {label: 'Controls Engineering in FRC', href: 'https://file.tavsys.net/control/controls-engineering-in-frc.pdf'},
@@ -167,7 +156,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Control Lab · MIT-licensed · © ${new Date().getFullYear()}. Built with Docusaurus.`,
+      copyright: `Control Lab / MIT-licensed / Copyright ${new Date().getFullYear()}. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.oneLight,
