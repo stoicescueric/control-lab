@@ -10,6 +10,8 @@ import {ArcStepIllustration, ArcGeometryIllustration, Atan2Illustration} from '@
 
 # Odometry & Pose
 
+<Difficulty level="Medium" />
+
 <Abstract>
 Odometry reconstructs the robot's field pose — position and heading — by integrating thousands of tiny
 wheel movements, because no sensor reports absolute position directly. This lesson develops the
@@ -122,62 +124,27 @@ x       += ds * (sinC * Math.cos(heading) - cosC * Math.sin(heading));
 y       += ds * (sinC * Math.sin(heading) + cosC * Math.cos(heading));
 heading += dth;`}</JavaCode>
 
-#### The pose exponential — the formal name for this
+#### This is the pose exponential
 
-What we just derived has a name you will see all over the FTC libraries: the **pose exponential**.
-Stack the per-loop motion into a single body-frame vector called a **twist** — the constant velocity
-the robot holds for the duration of the step:
-
-$$
-\boldsymbol{\xi} =
-\begin{bmatrix} \Delta x_b \\ \Delta y_b \\ d\theta \end{bmatrix}
-$$
-
-where $(\Delta x_b, \Delta y_b)$ is the motion *in the robot's own frame* ($\Delta x_b = ds$ and
-$\Delta y_b = 0$ for a non-slipping tank/differential step; a strafing robot has $\Delta y_b \neq 0$).
-
-A planar pose $(x, y, \theta)$ is an element of the group $SE(2)$, and **integrating a constant twist
-over one step is the matrix exponential of that twist**:
+What we just derived has a name you will meet all over the FTC libraries: the **pose exponential**, the
+exact $SE(2)$ integral of one loop's body motion. Stacking the step into a body **twist**
+$\boldsymbol{\xi} = (\Delta x_b, \Delta y_b, d\theta)$, the update is the matrix exponential
 
 $$
-\mathbf{T}_{k+1} = \mathbf{T}_k \,\exp\!\big(\boldsymbol{\xi}^{\wedge}\big)
+\mathbf{T}_{k+1} = \mathbf{T}_k \,\exp\!\big(\boldsymbol{\xi}^{\wedge}\big),
 $$
 
-Working that exponential out for $SE(2)$ produces *exactly* the $\frac{\sin d\theta}{d\theta}$ and
-$\frac{1-\cos d\theta}{d\theta}$ factors from the derivation — they are the entries of the so-called
-left-Jacobian $\mathbf{V}(d\theta)$ that maps body motion to the local displacement:
+whose closed form produces *exactly* the $\frac{\sin d\theta}{d\theta}$ and $\frac{1-\cos d\theta}{d\theta}$
+factors above. Road Runner's `Pose2d.exp(...)`, WPILib's `Pose2d.exp(Twist2d)`, and Pedro Pathing's
+localizers all implement it — and it is strictly more general than this scalar arc formula, since a
+strafing mecanum robot ($\Delta y_b \neq 0$) rides through the same map.
 
-$$
-\begin{bmatrix} \Delta x_\text{local} \\ \Delta y_\text{local} \end{bmatrix}
-= \mathbf{V}(d\theta)
-\begin{bmatrix} \Delta x_b \\ \Delta y_b \end{bmatrix},
-\qquad
-\mathbf{V}(d\theta) = \frac{1}{d\theta}
-\begin{bmatrix}
-\sin d\theta & -(1 - \cos d\theta) \\[2pt]
-1 - \cos d\theta & \sin d\theta
-\end{bmatrix}
-$$
-
-So "integrate each loop as a small constant-curvature arc" and "apply the $SE(2)$ exponential map to
-the body twist" are the same sentence. This matrix form is strictly more general than the scalar arc
-formula: a nonzero $\Delta y_b$ (a mecanum robot strafing while it turns) simply rides through the same
-$\mathbf{V}$, which the forward-only version cannot represent.
-
-<Callout type="idea" title="You already know this function.">
-Road Runner's <code>Pose2d.exp(...)</code>, WPILib's <code>Pose2d.exp(Twist2d)</code>, and Pedro
-Pathing's localizers all implement this exact exponential map. Recognizing it as $\exp$ on $SE(2)$ is
-what lets you read — and trust — their source instead of treating it as magic.
+<Callout type="idea" title="A whole lesson on this map.">
+The full $SE(2)$ derivation — the left-Jacobian $\mathbf{V}(d\theta)$, the inverse `log` map, and an
+Euler-vs-exact integration demo — lives in the dedicated [Pose Exponential](./pose-exponential.mdx)
+lesson. It also covers when the simple straight-line update is good enough (fast loop, tiny $d\theta$)
+and when the exact map earns its keep.
 </Callout>
-
-<Admonition type="note" title="So why do some teams just add tiny straight steps?">
-
-If the loop is fast enough that $d\theta$ per step is tiny, the straight-line update barely differs
-from the exponential, and the simpler code is fine. The pose exponential earns its keep at low loop
-rates, high turn rates, and over long autonomous paths — exactly where corner-cutting compounds into
-real positional error.
-
-</Admonition>
 
 Two engineering choices sharpen this in practice. **Heading from the IMU:** encoder-derived
 $d\theta$ is corrupted by wheel scrub, so most teams take heading from the gyro and use encoders

@@ -1,0 +1,151 @@
+---
+title: System Identification
+description: Stop guessing your feedforward gains — measure them. Drive the mechanism through known voltages, log the response, and recover kS, kV, and kA by least-squares fit, exactly like FRC's SysId.
+sidebar_position: 6
+tags: [system-identification, sysid, least-squares, regression, characterisation, feedforward]
+---
+
+import SystemId from '@site/src/components/sims/SystemId';
+
+# System Identification
+
+<Difficulty level="Hard" />
+
+<Abstract>
+System identification is how you replace guessed feedforward constants with measured ones. You drive the
+mechanism through a set of known voltages, record the velocity and acceleration it actually reaches, and
+fit the motor model $V = k_S\,\mathrm{sign}(v) + k_V v + k_A a$ to that data by ordinary least squares.
+The intercept of the fit is $k_S$, the slope is $k_V$, and a separate accelerating test gives $k_A$ —
+the same procedure FRC's SysId tool automates.
+</Abstract>
+
+The [feedforward](./feedforward.mdx) lesson left one thing on a promissory note: *where do $k_S$, $k_V$,
+and $k_A$ come from?* Guessing them, or copying another team's, gives a model that is wrong by an unknown
+amount — and a wrong model means feedback has to cover the gap, which was the whole problem feedforward
+set out to solve. The honest answer is to **measure** them from your own robot.
+
+<Problem title="A model you guessed is a model you can't trust">
+
+You can hand-estimate $k_V \approx 12\,\text{V} \div v_\text{max}$ and call it a day, but real mechanisms
+have friction you didn't account for, a gearbox with its own losses, and a motor whose constants drift
+from the datasheet. If the feedforward prediction is 20% off, feedback silently makes up the difference —
+so the mechanism still works, but it is sluggish and you have no idea why. We want the *actual* constants
+for *this* robot, with a number that tells us how much to trust them.
+
+</Problem>
+
+<Theory title="Fit the motor model to measured data">
+
+Recall the model from [feedforward](./feedforward.mdx): to hold velocity $v$ and accelerate at $a$,
+
+$$
+V = k_S\,\operatorname{sign}(v) + k_V\,v + k_A\,a
+$$
+
+This is **linear in the unknowns** $k_S, k_V, k_A$ — which is exactly what makes it fittable. Run two
+kinds of test and the constants fall out.
+
+### The quasistatic ramp → kS and kV
+
+Drive the mechanism with a *slowly* rising voltage, so slowly that acceleration is negligible ($a \approx
+0$). The model collapses to a straight line:
+
+$$
+V = k_S + k_V\,v \qquad (\text{moving forward, } a \approx 0)
+$$
+
+Log many $(v, V)$ pairs and fit the best line through them. With $n$ samples, **ordinary least squares**
+gives the slope and intercept in closed form:
+
+$$
+k_V = \frac{\sum (v_i - \bar v)(V_i - \bar V)}{\sum (v_i - \bar v)^2},
+\qquad
+k_S = \bar V - k_V\,\bar v
+$$
+
+The **intercept is $k_S$** (the voltage that produces motion at zero speed — pure friction) and the
+**slope is $k_V$** (extra volts per unit speed — the back-EMF term). Below is the ramp test: each blue dot
+is one logged sample, the amber line is the least-squares fit, and the green dot where it crosses $v = 0$
+is $k_S$. Crank the noise up and watch the estimate wobble — then notice the fit still recovers the truth
+on average, which is the point of using *many* samples instead of two.
+
+<SystemId />
+
+### The dynamic test → kA
+
+$k_A$ never appears at steady speed, so the ramp can't see it. Run a second test: a **step** to a fixed
+voltage and record the acceleration while the mechanism speeds up. Rearranging the model for the
+accelerating phase,
+
+$$
+k_A = \frac{V - k_S - k_V\,v}{a}
+$$
+
+evaluated over the accelerating samples (again by least squares, not a single point). $k_A$ is usually
+small — it only matters when the setpoint is *changing*, which is precisely what [motion
+profiling](./motion-profiling.mdx) does.
+
+<Callout type="idea" title="This is just linear regression.">
+"System identification" sounds exotic; for a motor it is fitting a line (or a plane) to data. The same
+ordinary-least-squares machinery underlies the curve-fitting you may meet again in
+[state estimation](../signal-processing/kalman.mdx). The art is in the *test design* — isolating one term
+at a time — not the math.
+</Callout>
+
+</Theory>
+
+<Deploy title="Run the test, fit the line">
+
+The procedure is: command a ramp, log voltage and velocity each loop, then fit offline (or on the next
+init). Keep the raw log — you will want to re-fit when a gearbox wears.
+
+<JavaCode league="FTC" label="Quasistatic ramp: collect (velocity, voltage) samples">{`// During the ramp OpMode, slowly raise the command and log each loop:
+double command = RAMP_VOLTS_PER_SEC * timer.seconds() / battery.getVoltage();
+motor.setPower(Math.min(command, 1.0));
+double v = motor.getVelocity() * UNITS_PER_TICK;     // real units!
+double V = motor.getPower() * battery.getVoltage();  // volts actually applied
+samples.add(new double[]{v, V});`}</JavaCode>
+
+<JavaCode league="FTC" label="Ordinary least squares → kS (intercept), kV (slope)">{`/** Fit V = kS + kV * v to the logged samples. Returns {kS, kV}. */
+static double[] fitLine(List<double[]> samples) {
+    int n = samples.size();
+    double mv = 0, mV = 0;
+    for (double[] s : samples) { mv += s[0]; mV += s[1]; }
+    mv /= n; mV /= n;
+    double sxy = 0, sxx = 0;
+    for (double[] s : samples) {
+        sxy += (s[0] - mv) * (s[1] - mV);
+        sxx += (s[0] - mv) * (s[0] - mv);
+    }
+    double kV = sxy / sxx;
+    double kS = mV - kV * mv;
+    return new double[]{kS, kV};
+}`}</JavaCode>
+
+In FRC this is one tool: **SysId** runs the quasistatic and dynamic tests, fits all three gains, and even
+reports an $R^2$ so you know how well the model fits. FTC teams either run a small ramp OpMode like the
+above or use a library tuner; the math underneath is identical.
+
+<Callout type="tip" title="Only fit the moving data.">
+Throw away samples where the mechanism hasn't broken static friction yet (velocity ≈ 0 while voltage
+climbs) — they sit on a different regime and bias your intercept. Start the fit from the first sample with
+clearly nonzero velocity.
+</Callout>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: units, direction, and a fresh battery">
+
+Three ways a fit goes wrong: velocity not converted to real units (so $k_V$ is in nonsense per tick — see
+[units](../software-architecture/discretization.mdx)); mixing forward and reverse samples (the
+$k_S\,\mathrm{sign}(v)$ flips, so fit each direction separately); and a sagging battery during the test
+(always log the voltage *actually applied*, `power × batteryVoltage`, not the nominal 12 V).
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- **FRC SysId** — WPILib's system-identification tool (quasistatic + dynamic routines, least-squares fit
+  of $k_S/k_V/k_A$), the reference implementation this lesson mirrors.
+
+</Admonition>

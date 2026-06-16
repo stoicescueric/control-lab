@@ -1,13 +1,15 @@
 ---
 title: Feedforward (kS, kV, kA)
 description: Predict the effort instead of only reacting — model the mechanism so the controller commands the right voltage before the error appears, then let feedback clean up the residual.
-sidebar_position: 2
+sidebar_position: 3
 tags: [feedforward, ks, kv, ka, motor-model, characterisation]
 ---
 
 import Flywheel from '@site/src/components/sims/Flywheel';
 
 # Feedforward (kS, kV, kA)
+
+<Difficulty level="Medium" />
 
 <Abstract>
 Feedforward is the predictive half of a controller: instead of waiting for an error to appear, it uses
@@ -97,7 +99,8 @@ the main benefit is lost. Accurate constants matter.</li>
 <Deploy title="Volts on a battery that sags">
 
 FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *measured* battery
-voltage keeps behaviour constant whether the pack is at 13 V or 11 V.
+voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
+[voltage compensation](./voltage-compensation.mdx).
 
 <JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`public class Flywheel {
     public static double kS = 0.7, kV = 2.4, kA = 0.0, kP = 2.0;   // @Config-tunable
@@ -127,9 +130,10 @@ The identical recipe in FRC is one line, because WPILib bundles it:
 PIDController pid = new PIDController(kP, 0, 0);
 motor.setVoltage(ff.calculate(goalVel) + pid.calculate(measVel, goalVel));`}</JavaCode>
 
-The constants come from **characterisation**, not guesswork: drive the mechanism through known
-voltages and fit the steady speeds. A useful first estimate is $k_V \approx 12\,\text{V} \div
-v_{\max}$; refine from there. FRC's SysId and FTC's library tuners automate the full procedure.
+The constants come from **measurement**, not guesswork: drive the mechanism through known voltages and
+fit the steady speeds. A useful first estimate is $k_V \approx 12\,\text{V} \div v_{\max}$, but to get
+them right you measure them: [**system identification**](./system-identification.mdx) recovers $k_S$, $k_V$, and $k_A$
+by least-squares fit, exactly as FRC's SysId does.
 
 <Callout type="warn" title="Feedforward is only as good as its units.">
 <code>kV</code> in "volts per m/s" is meaningless unless <code>getVelocity()</code> is truly
@@ -138,7 +142,9 @@ converted to m/s. A wrong ticks→units factor produces a wrong model — exactl
 </Callout>
 
 Feedforward is only ever half a controller, though — it is open-loop, blind to anything it didn't
-model: a jammed mechanism, a worn gear, a battery having a bad day. The next lesson adds the feedback
-half that catches all of it and drives the residual error to zero: [**PID**](./pid.mdx).
+model: a jammed mechanism, a worn gear, a battery having a bad day. Those gains are also only as good as
+your measurement of them — so pair feedforward with [**system identification**](./system-identification.mdx)
+to measure $k_S, k_V, k_A$ from data, and with [**PID**](./pid.mdx) for the feedback half that catches
+everything the model missed.
 
 </Deploy>

@@ -1,19 +1,22 @@
 ---
 title: PID Control
-description: The three-term feedback controller — present, past, and future of an error signal — hardened for the Control Hub with derivative-on-measurement and anti-windup.
-sidebar_position: 3
-tags: [pid, feedback, control, anti-windup]
+description: The three-term feedback controller — present, past, and future of an error signal — with the mass-spring-damper insight (the D term brakes you to a zero-velocity arrival) and the upgrades that make a competition-grade PDFL controller.
+sidebar_position: 4
+tags: [pid, pidf, pdfl, feedforward, derivative-filter, anti-windup, feedback, control]
 ---
 
 import Drone from '@site/src/components/sims/Drone';
 
 # PID Control
 
+<Difficulty level="Medium" />
+
 <Abstract>
 PID is the workhorse feedback controller: it sums three reactions to the error — proportional to its
 present value, its accumulated past, and its rate of change — into a single command. This lesson builds
-each term from intuition, then hardens the loop for real hardware with derivative-on-measurement and
-anti-windup.
+each term from intuition — including *why* the derivative term lands you on the target with zero velocity —
+then upgrades the loop to the FTC "PDFL" controller: a constant feedforward and a static-friction floor
+that replace the integral entirely, plus a low-pass-filtered derivative.
 </Abstract>
 
 PID is the controller you will deploy most often: arm position, flywheel velocity, drivetrain
@@ -45,6 +48,21 @@ PID sums three responses to it:
 $$
 u(t) = K_p\,e(t) + K_i \int_0^t e(\tau)\,d\tau + K_d \frac{de(t)}{dt}
 $$
+
+<Callout type="idea" title="What the three terms really are: a mass on a spring.">
+<ul>
+<li><strong>P is the spring.</strong> It pulls toward the target with a force proportional to how far off
+you are. A spring on its own overshoots and oscillates forever.</li>
+<li><strong>D is the shock absorber.</strong> It opposes <em>motion</em>. Because the well-behaved version
+differentiates the measurement, $u_D = -K_d\,\dot m$ is literally <strong>velocity feedback</strong>: the
+faster you're moving, the harder it brakes. So D does more than "reduce overshoot" — it makes the system
+<strong>arrive at the target with ≈ zero velocity</strong> instead of barrelling through it. P + D
+together is a critically-damped mass-spring-damper: a clean settle with no overshoot.</li>
+<li><strong>I shifts the rest position.</strong> It slowly builds whatever constant push the job needs
+(holding an arm against gravity) so the spring no longer has to hold a standing error to make that
+force.</li>
+</ul>
+</Callout>
 
 The gains $K_p, K_i, K_d$ are the tunable parameters. The drone below must hover at the dashed
 target while gravity pulls it down — the canonical "standing error" problem. Drag the target, tune
@@ -122,9 +140,89 @@ low-pass filter first — a noisy encoder or distance sensor will wreck a D term
 then control it.
 </Callout>
 
+### Beyond textbook PID: the PDFL controller
+
+Notice the arm problem never actually needed an *integral*. The steady push gravity demands is
+*predictable*, so you can supply it directly and skip the slow, windup-prone I term. That is the idea
+behind the **PDFL** controller used widely in FTC — **P**roportional, **D**erivative, **F**eedforward, and
+an **L**ower-limit (static-friction) term, with **no integral at all**:
+
+- **P** — proportional to the error, exactly as before.
+- **D** — the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
+  wreck it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
+  It is still the velocity feedback that brings you in at zero velocity.
+- **F** — a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
+  It does the integral's old job instantly, with nothing to wind up.
+- **L** — a **static-friction floor**: a fixed $k_L\,\operatorname{sign}(e)$ that shoves *just hard enough*
+  to break stiction in the direction you need to move. It is applied only **outside a small dead zone**
+  around the target — inside it the sign of the error flips every loop, so dropping L there stops the
+  mechanism from buzzing.
+
+$$
+u = \underbrace{k_P\,e}_{P} + \underbrace{k_D\,\dot e_\text{filtered}}_{D}
+  + \underbrace{k_F}_{F} + \underbrace{k_L\,\operatorname{sign}(e)}_{L\ \text{(outside the dead zone)}}
+$$
+
+<Callout type="idea" title="How to actually find F and L.">
+$k_F$ is the term you'd like to tune first, but it is hard to read off directly. The trick: ease the
+command up by hand until you find the power <strong>just as the mechanism starts to move up</strong>
+($u_\text{up}$), then the power <strong>just as it starts to move down</strong> ($u_\text{down}$). Going
+up you fight gravity <em>and</em> friction ($u_\text{up} = k_F + k_L$); going down gravity helps while
+friction still resists ($u_\text{down} = k_F - k_L$). Solve the pair:
+$$
+k_F = \frac{u_\text{up} + u_\text{down}}{2}, \qquad k_L = \frac{u_\text{up} - u_\text{down}}{2}.
+$$
+The <strong>average</strong> is the gravity hold; <strong>half the difference</strong> is the friction.
+Two measurements give you both gains.
+</Callout>
+
+<VideoEmbed title="PDFL — Improving Upon PID" src="https://www.youtube.com/embed/EKSDbWL7tIY?start=6" href="https://www.youtube.com/watch?v=EKSDbWL7tIY">
+A walkthrough of these exact upgrades — swapping the integral for feedforward, differentiating the
+measurement, and low-pass-filtering the derivative — and why they beat a textbook PID on FTC mechanisms.
+</VideoEmbed>
+
+<JavaCode league="FTC" label="PDFL: P + filtered D + constant F + static-friction L (no integral)">{`@Config
+public class PDFL {                       // Proportional · Derivative · Feedforward · Lower-limit
+    public static double kP, kD, kF, kL;  // tune F & L from the up/down break-away powers
+    public static double deadzone = 5;    // inside this band (ticks), drop the L term
+
+    private double filteredD = 0;
+    private final double alpha = 0.1;     // low-pass smoothing on the derivative
+    private double lastError = 0, lastTime = 0;
+    private final ElapsedTime timer = new ElapsedTime();
+
+    /** One loop. error = target - measurement. Returns motor power. */
+    public double run(double error) {
+        double t  = timer.seconds();
+        double dt = Math.max(1e-3, t - lastTime);
+        double dError = error - lastError;
+        lastError = error;  lastTime = t;
+
+        double p = kP * error;
+
+        double rawD = dError / dt;                          // (use -measurementRate to also kill kick)
+        filteredD = alpha * rawD + (1 - alpha) * filteredD; // EMA low-pass on the derivative
+        double d = kD * filteredD;
+
+        double f = kF;                                      // constant: holds against gravity
+        double l = kL * Math.signum(error);                 // static-friction floor
+
+        // near the target, sign(error) flips each loop -> drop L so it can't buzz
+        return (Math.abs(error) < deadzone) ? p + d + f : p + d + f + l;
+    }
+}`}</JavaCode>
+
+This mirrors the widely shared FTC `PDFL` controller. There is no integral term at all: $k_F$ holds the
+steady load and $k_L$ breaks friction, so there is nothing to wind up.
+
 PID reacts only to error that has *already* happened. Pair it with the
-[feedforward](./feedforward.mdx) from the previous lesson — feedforward for the bulk of the command,
-PID for the residual it can't predict — and you have the control stack behind nearly every fast,
-accurate FTC mechanism.
+[feedforward](./feedforward.mdx) — feedforward for the bulk of the command, PID for the residual it
+can't predict — and you have the control stack behind nearly every fast, accurate FTC mechanism.
+
+From here the module branches into the techniques that make that stack *good*. For a high-inertia
+flywheel, a far simpler controller often beats PID — [**bang-bang & takeback-half**](./bang-bang.mdx). To
+move a mechanism fast *without* overshoot, stop feeding it a step and feed it a
+[**motion profile**](./motion-profiling.mdx) instead. And to keep every one of these behaving identically
+from a full battery to a sagging one, wrap them all in [**voltage compensation**](./voltage-compensation.mdx).
 
 </Deploy>

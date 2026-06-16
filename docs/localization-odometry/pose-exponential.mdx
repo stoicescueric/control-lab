@@ -1,0 +1,231 @@
+---
+title: Pose Exponential
+description: The exact way to turn a loop's body motion into a field-pose update — the SE(2) exponential map. Why straight-line (Euler) integration cuts corners, what a twist is, and the closed-form exp/log your library already uses.
+sidebar_position: 2
+tags: [pose-exponential, se2, lie-group, twist, odometry, integration]
+---
+
+import PoseExponential from '@site/src/components/sims/PoseExponential';
+
+# Pose Exponential
+
+<Difficulty level="Hard" />
+
+<Abstract>
+A robot that drives and turns at the same time follows a curved arc within a single loop, not a straight
+line. The pose exponential is the closed-form map that integrates that arc exactly: it takes the motion
+the robot felt in its own frame (a twist) and returns the precise change in field pose. It is the
+$SE(2)$ matrix exponential, and it is what Road Runner, WPILib, and Pedro Pathing all call under the
+hood — recognizing it lets you read and trust their localizers instead of treating them as magic.
+</Abstract>
+
+You met this idea in passing while building [odometry](./odometry.mdx): each loop is a small
+constant-curvature arc. This lesson gives that arc its proper name and its general matrix form, so you
+can integrate a *strafing, turning* mecanum robot exactly — not just a tank drive going forward.
+
+<Problem title="Straight-line integration quietly cuts every corner">
+
+The obvious way to integrate a pose is **Euler's method**: assume the robot went straight along its
+current heading for the whole loop, then apply the turn at the end.
+
+$$
+x \mathrel{+}= v\,\Delta t\,\cos\theta, \qquad
+y \mathrel{+}= v\,\Delta t\,\sin\theta, \qquad
+\theta \mathrel{+}= \omega\,\Delta t
+$$
+
+But if the robot is *also turning* during that loop, it actually traced a curved arc — and the straight
+step chords across it, landing short and to the inside. One loop's error is tiny. Thousands of loops over
+a turning autonomous path, and the corner-cutting compounds into centimetres of drift right where you can
+least afford it. We want the *exact* integral of "move and turn at the same time," in closed form, cheap
+enough to run every loop.
+
+</Problem>
+
+<Theory title="Integrate the motion as a group exponential">
+
+### The twist: the robot's motion in its own frame
+
+Bundle what the robot felt this loop into one body-frame vector, the **twist**:
+
+$$
+\boldsymbol{\xi} =
+\begin{bmatrix} \Delta x_b \\ \Delta y_b \\ \Delta\theta \end{bmatrix}
+$$
+
+$\Delta x_b$ is forward motion, $\Delta y_b$ is sideways (strafe) motion, $\Delta\theta$ is the turn —
+all *as measured in the robot's frame at the start of the loop*. A non-slipping tank step has
+$\Delta y_b = 0$; a mecanum robot strafing through a turn does not. The twist is the constant velocity we
+pretend the robot held for the whole step.
+
+### A pose is a matrix, and integrating a twist is its exponential
+
+A planar pose $(x, y, \theta)$ is an element of the group $SE(2)$ — write it as a $3\times3$ matrix that
+*is* "rotate by $\theta$, then translate by $(x, y)$":
+
+$$
+\mathbf{T} =
+\begin{bmatrix}
+\cos\theta & -\sin\theta & x \\
+\sin\theta & \phantom{-}\cos\theta & y \\
+0 & 0 & 1
+\end{bmatrix}
+$$
+
+The twist lives in the matching Lie algebra $\mathfrak{se}(2)$. The **hat** operator $(\cdot)^{\wedge}$
+arranges it as the matrix whose exponential advances the pose:
+
+$$
+\boldsymbol{\xi}^{\wedge} =
+\begin{bmatrix}
+0 & -\Delta\theta & \Delta x_b \\
+\Delta\theta & 0 & \Delta y_b \\
+0 & 0 & 0
+\end{bmatrix}
+$$
+
+Then one exact loop update is a matrix multiply by the **matrix exponential** of that twist:
+
+$$
+\mathbf{T}_{k+1} = \mathbf{T}_k \,\exp\!\big(\boldsymbol{\xi}^{\wedge}\big)
+$$
+
+That is the pose exponential. The name is literal: it is $e^{(\cdot)}$ of a matrix.
+
+### The closed form — no series needed
+
+You never sum the matrix series; $SE(2)$ has a tidy closed form. The rotation block is just a rotation by
+$\Delta\theta$, and the translation block is the body motion passed through the **left-Jacobian**
+$\mathbf{V}(\Delta\theta)$:
+
+$$
+\exp\!\big(\boldsymbol{\xi}^{\wedge}\big) =
+\begin{bmatrix}
+\cos\Delta\theta & -\sin\Delta\theta & \;\Delta x_\text{local} \\
+\sin\Delta\theta & \phantom{-}\cos\Delta\theta & \;\Delta y_\text{local} \\
+0 & 0 & 1
+\end{bmatrix},
+\qquad
+\begin{bmatrix} \Delta x_\text{local} \\ \Delta y_\text{local} \end{bmatrix}
+= \mathbf{V}(\Delta\theta)
+\begin{bmatrix} \Delta x_b \\ \Delta y_b \end{bmatrix}
+$$
+
+$$
+\mathbf{V}(\Delta\theta) = \frac{1}{\Delta\theta}
+\begin{bmatrix}
+\sin\Delta\theta & -(1 - \cos\Delta\theta) \\[2pt]
+1 - \cos\Delta\theta & \sin\Delta\theta
+\end{bmatrix}
+$$
+
+Those $\frac{\sin\Delta\theta}{\Delta\theta}$ and $\frac{1-\cos\Delta\theta}{\Delta\theta}$ factors are
+*exactly* the arc terms from the [odometry](./odometry.mdx) derivation — the pose exponential is the same
+constant-curvature arc, now written so a nonzero $\Delta y_b$ (strafe) rides through the very same
+$\mathbf{V}$. The forward-only scalar formula cannot represent that; this can.
+
+### The small-angle limit recovers Euler
+
+As $\Delta\theta \to 0$, $\frac{\sin\Delta\theta}{\Delta\theta} \to 1$ and
+$\frac{1-\cos\Delta\theta}{\Delta\theta} \to 0$, so $\mathbf{V} \to \mathbf{I}$ and the update collapses
+back to the straight-line step. That is *why* Euler is fine at high loop rates and tight $\Delta\theta$,
+and wrong when the per-loop turn is large.
+
+### See the gap
+
+The robot below holds one **constant twist**, so its true path is a perfect circle. The pose exponential
+lands exactly on that circle every step; Euler steps straight and rotates, chording across each arc and
+spiralling outward. Crank "turn per step" up (coarse, low-loop-rate integration) and watch the endpoint
+error balloon; bring it down and the two converge — the small-angle limit, live.
+
+<PoseExponential />
+
+### Going backwards: the log map
+
+The inverse is just as useful. Given two poses, the **log map** recovers the single body twist that
+carries one to the other — "what constant motion would take the robot from A to B?":
+
+$$
+\boldsymbol{\xi} = \log\!\big(\mathbf{T}_A^{-1}\,\mathbf{T}_B\big)^{\vee}
+$$
+
+That is how a path follower turns a *relative pose error* into a body-frame command, and how trajectory
+libraries express a move between waypoints. `exp` integrates motion into a pose; `log` differentiates a
+pose change back into motion.
+
+</Theory>
+
+<Deploy title="exp and log on the Control Hub">
+
+The whole update is the left-Jacobian applied to the body twist, then composed onto the current pose —
+the same `Pose2d.exp(Twist2d)` you will find in WPILib and Road Runner, written out:
+
+<JavaCode league="FTC" label="SE(2) pose exponential and its inverse">{`/** Body-frame motion over one loop: forward, strafe (left +), and heading change. */
+record Twist2d(double dx, double dy, double dtheta) {}
+
+/** Apply a body twist to this pose exactly (the SE(2) exponential map). */
+public Pose2d exp(Twist2d t) {
+    double dth = t.dtheta();
+    // left-Jacobian terms; fall back to the Taylor limit when the turn is tiny
+    double sinc, cosc;
+    if (Math.abs(dth) < 1e-9) {
+        sinc = 1.0 - dth * dth / 6.0;          // sin(dth)/dth
+        cosc = dth / 2.0;                        // (1 - cos(dth))/dth
+    } else {
+        sinc = Math.sin(dth) / dth;
+        cosc = (1 - Math.cos(dth)) / dth;
+    }
+    // local displacement = V(dth) * body motion
+    double lx = sinc * t.dx() - cosc * t.dy();
+    double ly = cosc * t.dx() + sinc * t.dy();
+    // rotate the local displacement by the current heading and add it on
+    double c = Math.cos(heading), s = Math.sin(heading);
+    return new Pose2d(
+        x + lx * c - ly * s,
+        y + lx * s + ly * c,
+        heading + dth);
+}
+
+/** The inverse: the body twist that carries this pose to 'target' (the log map). */
+public Twist2d log(Pose2d target) {
+    double c = Math.cos(heading), s = Math.sin(heading);
+    double dxw = target.x - x, dyw = target.y - y;
+    double exb =  dxw * c + dyw * s;            // error in this pose's frame
+    double eyb = -dxw * s + dyw * c;
+    double dth = wrap(target.heading - heading);
+    double half = dth / 2.0;
+    double cot  = Math.abs(dth) < 1e-9 ? 1.0 : half / Math.tan(half);  // V^{-1} terms
+    double dx =  cot * exb + half * eyb;
+    double dy = -half * exb + cot * eyb;
+    return new Twist2d(dx, dy, dth);
+}`}</JavaCode>
+
+Call `exp` every loop with the twist your encoders/IMU measured to integrate odometry exactly; call `log`
+to turn a pose error into a body-frame command for a follower.
+
+</Deploy>
+
+<Admonition type="tip" title="When the straight-line update is good enough">
+
+If your loop runs fast (small $\Delta\theta$ per step), Euler and the exponential agree to within encoder
+noise, and the simpler code is fine. The pose exponential earns its keep at **low loop rates, high turn
+rates, and over long autonomous paths** — exactly where corner-cutting compounds into real error.
+
+</Admonition>
+
+<Admonition type="warning" title="Hardware reality: heading still comes from the gyro">
+
+The exponential integrates *whatever twist you feed it* — it cannot fix a bad $\Delta\theta$. Wheel scrub
+corrupts encoder-derived heading, so take $\Delta\theta$ from the IMU (or dead-wheel geometry) and use
+encoders only for $\Delta x_b, \Delta y_b$. Exact integration of a wrong twist is still wrong.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- **The library functions this mirrors** — WPILib's `Pose2d.exp(Twist2d)` / `Pose2d.log()` and Road
+  Runner's `Pose2d.exp(...)`, both the $SE(2)$ exponential map.
+- **Background** — the standard Lie-group treatment of $SE(2)/SE(3)$ (e.g. Eade, *Lie Groups for 2D and
+  3D Transformations*) for the hat/vee operators and the left-Jacobian.
+
+</Admonition>

@@ -13,13 +13,18 @@ left with feedback (PID) — and combine the two into a single output.
 
 ## What this module covers
 
-- **The DC-motor model & motor curve** — torque, speed, and back-EMF; why a motor slows under load.
-- **Feedforward (kS, kV, kA)** — computing the command *before* the error appears.
-- **PID** — the three-term feedback controller, hardened for real hardware.
-- **Bang-bang control** — when the simplest possible controller is the right one (flywheels).
-- **System identification (OLS regression)** — how SysId recovers kS/kV/kA from data.
-- **Battery compensation** — holding behavior constant as voltage drops over a match.
-- **Motion profiling** — feeding the controller a physically achievable trajectory instead of a step.
+The lessons are ordered by **difficulty**, easiest first:
+
+1. **The DC-motor model & motor curve** *(Easy)* — torque, speed, and back-EMF; why a motor slows under
+   load.
+2. **Voltage compensation** *(Easy)* — holding behavior constant as the battery drops over a match.
+3. **Feedforward (kS, kV, kA)** *(Medium)* — computing the command *before* the error appears.
+4. **PID** *(Medium)* — the three-term feedback controller, hardened for real hardware.
+5. **Bang-bang & takeback-half** *(Medium)* — when the simplest possible controller is the right one
+   (flywheels).
+6. **System identification** *(Hard)* — recovering kS/kV/kA from data by least-squares, the way SysId does.
+7. **Motion profiling** *(Hard)* — feeding the controller a physically achievable trajectory instead of a
+   step.
 
 <Admonition type="warning" title="Feedback alone is always a step behind">
 
@@ -29,6 +34,15 @@ what makes that pairing possible.
 
 </Admonition>
 
-Available now: [How a Motor Works](./how-a-motor-works.mdx),
-[Feedforward (kS, kV, kA)](./feedforward.mdx), and [PID Control](./pid.mdx). The remaining lessons —
-bang-bang, system identification, battery compensation, and motion profiling — are planned.
+The lessons are arranged by difficulty — start with the two Easy ones and climb. They still chain
+conceptually (model the motor → predict its command → measure those constants → correct the residual →
+specialize and plan), so if you'd rather follow the ideas than the difficulty, the cross-links at the
+foot of each lesson keep you oriented.
+
+1. [How a Motor Works](./how-a-motor-works.mdx) *(Easy)*
+2. [Voltage Compensation](./voltage-compensation.mdx) *(Easy)*
+3. [Feedforward (kS, kV, kA)](./feedforward.mdx) *(Medium)*
+4. [PID Control](./pid.mdx) *(Medium)*
+5. [Bang-Bang & Takeback-Half](./bang-bang.mdx) *(Medium)*
+6. [System Identification](./system-identification.mdx) *(Hard)*
+7. [Motion Profiling](./motion-profiling.mdx) *(Hard)*

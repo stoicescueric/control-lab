@@ -1,19 +1,22 @@
 ---
 title: PID-to-Point
-description: The simplest autonomous path follower — run a PID loop on the error to a target pose, rotate it into the robot frame, and feed the mecanum mixer. Its failure modes motivate everything that follows.
-sidebar_position: 2
-tags: [pid-to-point, go-to-pose, autonomous, control, mecanum]
+description: Run a PID loop on the error to a target pose, rotate it into the robot frame, beat stiction with kStatic, and brake on time with predictive deceleration — the smallest complete autonomous follower.
+sidebar_position: 3
+tags: [pid-to-point, go-to-pose, predictive-deceleration, braking, autonomous, control, mecanum]
 ---
 
-import {PidToPointIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+import {PidToPointIllustration, BrakingProfileIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
 
 # PID-to-Point
+
+<Difficulty level="Medium" />
 
 <Abstract>
 PID-to-point drives the robot toward a target pose by running feedback controllers on the position and
 heading error, expressed in the robot's own frame, and handing the result to the drivetrain mixer. It is
-the smallest complete autonomous follower — and its specific weaknesses are what motivate motion
-profiling, splines, and pure pursuit.
+the smallest complete autonomous follower — here we also harden it with a kStatic nudge to beat friction
+and **predictive deceleration** to brake on time, leaving only the "aim at one point" limit that splines
+and pure pursuit remove.
 </Abstract>
 
 You now have the three pieces autonomous needs: a [pose estimate](../localization-odometry/odometry.mdx)
@@ -108,6 +111,57 @@ PID-to-point is just three 1-D controllers — forward, strafe, heading — shar
 roughly independently: heading first (so the frame is right), then translation.
 </Callout>
 
+### Braking on time: predictive deceleration
+
+Proportional control has one stubborn flaw. The command $v = k_p\,e$ is large when far and small when
+near — which sounds right, but the robot has a maximum deceleration. Far out, $k_p\,e$ is *way* above the
+speed from which the robot could still stop in time, so it charges in, brakes too late, and sails past.
+Lower $k_p$ to kill the overshoot and the whole approach turns sluggish. No single gain is both fast and
+clean.
+
+Ask a better question: *given the distance left, how fast am I allowed to go?* Constant-acceleration
+kinematics answers it. To bring speed $v$ to zero over distance $d$ at deceleration $a$:
+
+$$
+v^2 = 2 a d \quad\Longrightarrow\quad v_\text{cap} = \sqrt{2 a d}
+$$
+
+That is the fastest speed from which you can still stop on the point. Make the commanded speed the
+smallest of three limits — the braking cap, the robot's top speed, and the proportional term for a soft
+final approach:
+
+$$
+v_\text{cmd} = \min\big(\sqrt{2 a d},\ v_\text{max},\ k_p\, d\big)
+$$
+
+<BrakingProfileIllustration />
+
+Far out the square-root cap exceeds $v_\text{max}$, so the robot cruises; as it nears the point the cap
+drops below $v_\text{max}$ and throttles it smoothly to zero right at the target — a planned,
+overshoot-free stop computed from geometry. Notice the cap is *concave*: gentle braking at first, harder
+as the distance runs out — the opposite of the proportional line that stays too high until the end.
+
+<Callout type="idea" title="This is motion profiling, lazily.">
+A full motion profile precomputes position, velocity, and acceleration for every instant. The
+$\sqrt{2 a d}$ cap is the same physics evaluated on demand from the current distance — cheaper to write,
+and enough for point-to-point moves.
+</Callout>
+
+**The slicker version: predict where you'll glide to.** The same physics solves for *distance* instead of
+speed: a robot moving at speed $v$ needs $d_\text{glide} = v^2/2a$ to coast to a stop. So don't cap the
+speed at all — add that glide vector to the current pose to get a **predicted stopping pose**, and run the
+ordinary PID against *that*:
+
+$$
+\mathbf{p}_\text{predicted} = \mathbf{p}_\text{now} + \frac{\mathbf{v}\,\lVert\mathbf{v}\rVert}{2 a}
+$$
+
+While the robot races in, the predicted pose sits ahead of it; as it slows, the prediction pulls back onto
+the target. Going too fast, the predicted pose overshoots the goal, the error flips sign, and the
+controller brakes — automatically, with no separate cap. This is how Cyliis's `Odo` computes its
+`predictedX/Y` (from low-pass-filtered velocity) and how FTCclueless feeds an `expected` pose into a
+"predictive PID."
+
 ### Chaining points: follow a list without stopping
 
 A real autonomous routine is a *list* of poses, not one. The naive approach — `goToPose` each one and
@@ -127,17 +181,12 @@ SimplicityFTC's `PidToPointFollower` (`pointAdvanceRadius`) and FTCclueless's dr
 sequence their waypoints, and it is what turns a [spline](./quintic-splines.mdx) — once resampled into a
 list of points — into something PID-to-point can follow.
 
-### Where it breaks (and what comes next)
+### What comes next
 
-Pure proportional control has a built-in tension. Set the gain high and the robot is fast but overshoots
-and oscillates; set it low and it crawls into the target. Because the command is proportional to the
-*remaining* error, the robot brakes only as late as the error shrinks — so at speed it sails past the
-point. The honest fixes are the rest of this module:
-
-- **[Predictive deceleration](./predictive-deceleration.mdx)** — cap the command by the distance left to
-  stop, so the robot plans its braking instead of reacting to it.
-- **[Splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)** — follow a smooth path
-  through many points rather than aiming straight at one distant target.
+kStatic and predictive deceleration fix how PID-to-point *arrives*; the remaining limit is that it always
+aims straight at one distant target. To thread many waypoints along a smooth, drivable curve, you move on
+to **[splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)** — following a path
+instead of chasing a point.
 
 </Theory>
 
@@ -201,6 +250,38 @@ public boolean follow() {
     return last && settled;                          // only the final point uses the strict test
 }`}</JavaCode>
 
+For an overshoot-free approach, shape the command's *magnitude* by the braking cap before the mixer:
+
+<JavaCode league="FTC" label="Distance-capped approach speed">{`/** Fastest approach speed (normalized) that can still stop at the target. */
+private double brakingCap(double distance) {
+    double vStop = Math.sqrt(2.0 * MAX_DECEL * distance);   // m/s
+    return Math.min(vStop, MAX_SPEED) / MAX_SPEED;          // back to [0, 1]
+}
+
+/** Drive toward a robot-frame error, but never faster than we can still stop. */
+private void driveCapped(double exR, double eyR, double w) {
+    double dist = Math.hypot(exR, eyR);
+    double cap  = brakingCap(dist);                         // planned speed limit
+    double dir  = Math.atan2(eyR, exR);
+    drive(cap * Math.cos(dir), cap * Math.sin(dir), w);     // mixer desaturates
+}`}</JavaCode>
+
+The predicted-pose variant is even less code — feed an existing PID-to-point its target as if the robot
+were already at its stopping point:
+
+<JavaCode league="FTC" label="Glide-distance predicted pose (Cyliis-style)">{`/** Where the robot coasts to a stop if it braked now, in field coordinates. */
+public Pose2d predictedPose() {
+    Pose2d p = localizer.getPose();
+    Vector2d v = localizer.getVelocity();              // filter this — velocity is noisy
+    double speed = v.norm();
+    if (speed < 1e-6) return p;
+    double glide = speed * speed / (2.0 * MAX_DECEL);  // braking distance
+    return new Pose2d(p.x + v.x / speed * glide, p.y + v.y / speed * glide, p.heading);
+}
+
+// then run goToPose against predictedPose() instead of the live pose: it brakes early, automatically.
+`}</JavaCode>
+
 </Deploy>
 
 <Admonition type="warning" title="Hardware reality: integral windup and the dead band">
@@ -219,6 +300,15 @@ Get $k_p^{\theta}$ holding heading cleanly, then tune the translational gain.
 
 </Admonition>
 
+<Admonition type="warning" title="Hardware reality: your real decel is smaller than you think">
+
+`MAX_DECEL` is limited by traction, battery voltage, and weight transfer, not the motors. Measure it,
+then use **70–80%** of the measured value so a worn battery or slick tile doesn't turn your computed stop
+into a slide. And **filter the velocity** before computing glide — it is squared, so encoder noise gets
+amplified into a jittery predicted pose (Cyliis low-pass-filters the pod velocity first).
+
+</Admonition>
+
 <Admonition type="info" title="Source-code references">
 
 The production techniques on this page are adapted, with attribution, from these open-source FTC team
@@ -232,6 +322,12 @@ repositories:
   never stops mid-path) — [SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)
   (`PidToPointFollower`, `pointAdvanceRadius`) and
   [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`Drivetrain.java`, `pathRadius`).
+- **Predictive deceleration — glide-distance predicted stopping pose** (compute
+  $\mathbf{p} + \mathbf{v}\lVert\mathbf{v}\rVert/2a$ from low-pass-filtered velocity and run PID against
+  it) — [Cyliis_Into_The_Deep_OfficialCode](https://github.com/Cyliis/CyLiis_Into_The_Deep_OfficialCode)
+  (`Wrappers/Odo.java`, `predictedX/Y`) and
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`Drivetrain.java`, the
+  "predictive PID" on the `expected` pose).
 
 The code here is an independent reimplementation of these ideas, not a copy of any one repository.
 
