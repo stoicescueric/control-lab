@@ -308,6 +308,15 @@ h4,
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
+/* iOS Safari bug: a backdrop-filter on .navbar makes it the *containing block*
+   for the position:fixed mobile drawer, trapping the drawer inside the ~60px
+   navbar so its links never appear (the bar slides, but the menu is empty).
+   Drop the filter whenever the drawer is open so the drawer fills the viewport. */
+.navbar.navbar-sidebar--show {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .navbar__title {
   font-weight: 700;
   letter-spacing: -0.02em;
