@@ -299,6 +299,15 @@ h4,
   backdrop-filter: saturate(180%) blur(12px);
   -webkit-backdrop-filter: saturate(180%) blur(12px);
 }
+
+/* The mobile menu drawer inherits the navbar's translucent color, which lets the
+   page bleed through and makes the nav look missing. Force it fully opaque. */
+.navbar-sidebar,
+.navbar-sidebar__items {
+  background-color: var(--ifm-background-surface-color);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .navbar__title {
   font-weight: 700;
   letter-spacing: -0.02em;

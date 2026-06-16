@@ -96,8 +96,7 @@ function ControlLoopVisual() {
           strokeLinecap="round"
           strokeLinejoin="round"
           initial={reduce ? {pathLength: 1} : {pathLength: 0}}
-          whileInView={{pathLength: 1}}
-          viewport={{once: true}}
+          animate={{pathLength: 1}}
           transition={{duration: 1.8, ease: 'easeInOut'}}
         />
         <motion.circle
@@ -106,8 +105,7 @@ function ControlLoopVisual() {
           r="6"
           fill="#ffc24d"
           initial={reduce ? {opacity: 1} : {opacity: 0}}
-          whileInView={{opacity: 1}}
-          viewport={{once: true}}
+          animate={{opacity: 1}}
           transition={{delay: reduce ? 0 : 1.7, duration: 0.4}}
         />
       </svg>
