@@ -1,13 +1,17 @@
 ---
 title: Pure Pursuit
 description: Convert a planned path into continuous steering with one geometric rule — chase a lookahead "carrot" along the path, turn the chord into an arc, and command curvature every loop. Fixed vs. dynamic lookahead.
-sidebar_position: 6
+sidebar_position: 5
 tags: [pure-pursuit, path-following, lookahead, curvature, autonomous]
 ---
 
 import PurePursuit from '@site/src/components/sims/PurePursuit';
+import CurvatureCircle from '@site/src/components/sims/CurvatureCircle';
+import VelocityProfile from '@site/src/components/sims/VelocityProfile';
 
 # Path Following (Pure Pursuit)
+
+<Difficulty level="Hard" />
 
 <Abstract>
 Pure pursuit turns a planned path into smooth steering with one geometric rule: continuously aim at a
@@ -133,6 +137,94 @@ abruptly can itself induce steering jitter — rate-limit it. If you find yourse
 lookahead on a path with both fast and tight sections, that is the signal to make it dynamic, or to
 switch to a [guided vector field](./guided-vector-fields.mdx) that drops the lookahead idea entirely.
 
+### Adaptive pure pursuit: plan the speed, not just the steering
+
+Plain pure pursuit answers *where to steer*. **Adaptive** pure pursuit — the version Team 1712 (DAWGMA)
+popularised in FRC — adds the other half: *how fast to go at every point*, decided ahead of time from
+the path's own geometry. The robot then "adapts" its speed to the curve, braking for tight turns and
+opening up on straights, with no hand-authored velocity plan. It is a three-pass precompute over the
+densely-sampled path, plus a one-line runtime limit.
+
+**1 — Curvature at every point.** Take each point with its two neighbours $P_{i-1}, P_i, P_{i+1}$ and
+fit the unique circle through them; the curvature is $\kappa_i = 1/R$. The compact way to get $R$ is the
+circumscribed-circle (Menger) formula — with triangle side lengths $a, b, c$ and area $A$:
+
+$$
+R = \frac{a\,b\,c}{4A}, \qquad \kappa_i = \frac{1}{R} = \frac{4A}{a\,b\,c},
+\qquad A = \tfrac12\big\lvert (P_i - P_{i-1}) \times (P_{i+1} - P_i)\big\rvert
+$$
+
+A straight run gives $A = 0$, hence $\kappa = 0$ (infinite radius); the two endpoints have no neighbour
+pair, so their curvature is set to zero.
+
+Drag the three points below to feel it: the tighter you bend them, the smaller the circle and the larger
+$\kappa$ — pull them into a line and the curvature collapses to zero.
+
+<CurvatureCircle />
+
+**2 — A speed cap from curvature.** Slow down where the path bends. Each point's ceiling is the path's
+max speed, lowered wherever curvature is high:
+
+$$
+v_i^{\max} = \min\!\left(v_\text{path},\ \frac{k_\kappa}{\kappa_i}\right)
+$$
+
+The constant $k_\kappa$ (typically $1$–$5$) sets how cautious the robot is in turns; as $\kappa \to 0$
+the cap relaxes back to $v_\text{path}$. This is the discrete cousin of the
+[curvature speed limit](./quintic-splines.mdx) $v \le \sqrt{a_\text{lat} R}$ from the splines lesson.
+
+**3 — A backward pass so it can always stop.** A speed cap alone lets the robot reach a slow corner
+still going full tilt. Walk the path *backwards* from the end (where $v = 0$) and clamp each point to the
+fastest speed from which it could still decelerate to its successor — the very
+[braking kinematics](./pid-to-point.mdx) $v_f = \sqrt{v_i^2 + 2 a d}$, run over the path
+offline:
+
+$$
+v_i \leftarrow \min\!\left(v_i,\ \sqrt{v_{i+1}^2 + 2\,a_\text{max}\,d_i}\right)
+$$
+
+with $d_i$ the distance between consecutive points. After this pass every stored velocity is guaranteed
+decelerable to a stop at the end.
+
+**4 — A forward rate limit at runtime.** The backward pass deliberately leaves *acceleration* unbounded
+— a forward pass would force the start point to $0$ and the robot would never move. Instead, cap how fast
+the commanded speed may change each loop:
+
+$$
+\lvert \Delta v\rvert \le a_\text{max}\,\Delta t
+$$
+
+a one-line [rate limiter](../signal-processing/low-pass.mdx) applied to the target velocity the robot
+pulls from its closest point. The backward pass plans the braking; the rate limiter shapes the
+acceleration.
+
+Here is the whole plan, live. Drag the waypoints into a tight hairpin and watch the path turn red there
+as the **curvature cap** (blue, right) pulls the speed down; the **backward pass** (orange) then bends
+the profile down to zero at the end so the robot can always stop. The sliders are the three knobs from
+the equations above.
+
+<VelocityProfile />
+
+### Building the path: inject, then smooth
+
+Adaptive pure pursuit needs a *dense, smooth* list of points — the curvature and velocity passes are
+only as good as the spacing. You can get one from the [splines](./quintic-splines.mdx) in the previous
+lesson, or with the lighter trick the DAWGMA paper uses:
+
+1. **Inject** evenly-spaced points along each straight segment between your hand-placed waypoints (a
+   spacing of ~6 in works well), turning a few corners into hundreds of closely-spaced points.
+2. **Smooth** them with a gradient-descent pass that trades staying near the original points against
+   straightening local bends, iterated to convergence:
+
+$$
+P_i \leftarrow P_i + \underbrace{a\,(P_i^\text{orig} - P_i)}_{\text{stay near input}}
+  + \underbrace{b\,(P_{i-1} + P_{i+1} - 2P_i)}_{\text{pull toward neighbours}}
+$$
+
+with $b$ near $0.75$–$0.98$ (larger = smoother), $a = 1 - b$, repeated until the total change drops below
+a tolerance. It is a cheap alternative to fitting a spline — no overshoot, though it does pull slightly
+away from your original waypoints.
+
 </Theory>
 
 <Deploy title="The loop, and what production followers add">
@@ -169,21 +261,74 @@ principle is identical: look ahead, curve toward the target, with tighter accura
 control.
 </Callout>
 
+For the **adaptive** velocity plan, precompute it once over the dense path: curvature per point, a
+curvature speed cap, then the backward braking pass.
+
+<JavaCode league="FTC" label="Adaptive velocity profile (offline, over the dense path)">{`/** Fill each point's curvature, then cap and back-propagate its speed. */
+void buildVelocityProfile(List<PathPoint> pts, double vPath, double kCurv, double aMax) {
+    // 1) curvature from the circle through each triple (endpoints stay 0)
+    for (int i = 1; i < pts.size() - 1; i++) {
+        pts.get(i).curvature = mengerCurvature(pts.get(i - 1).pos, pts.get(i).pos, pts.get(i + 1).pos);
+    }
+    // 2) speed cap: slower where the path bends
+    for (PathPoint p : pts) {
+        p.velocity = (p.curvature < 1e-6) ? vPath : Math.min(vPath, kCurv / p.curvature);
+    }
+    // 3) backward pass: guarantee every point can still brake to the end
+    pts.get(pts.size() - 1).velocity = 0;
+    for (int i = pts.size() - 2; i >= 0; i--) {
+        double d = pts.get(i).pos.minus(pts.get(i + 1).pos).norm();
+        double reachable = Math.sqrt(pts.get(i + 1).velocity * pts.get(i + 1).velocity + 2 * aMax * d);
+        pts.get(i).velocity = Math.min(pts.get(i).velocity, reachable);
+    }
+}
+
+/** 4*Area / (a*b*c): curvature of the circle through three points (0 if collinear). */
+static double mengerCurvature(Vector2d A, Vector2d B, Vector2d C) {
+    double area = 0.5 * Math.abs((B.x - A.x) * (C.y - A.y) - (C.x - A.x) * (B.y - A.y));
+    double a = B.minus(C).norm(), b = A.minus(C).norm(), c = A.minus(B).norm();
+    double denom = a * b * c;
+    return denom < 1e-9 ? 0 : 4 * area / denom;
+}
+
+// runtime: pull the closest point's planned speed, then rate-limit how fast it may change
+double target  = pts.get(closestIndex).velocity;
+double maxStep = A_MAX * loopDt;
+commanded += Math.max(-maxStep, Math.min(maxStep, target - commanded));`}</JavaCode>
+
+<Callout type="idea" title="On a tank (differential) drive">
+Pure pursuit outputs a signed curvature and a speed; a differential drive turns those straight into
+wheel speeds. With track width $T$, $\;L = v(2 + \kappa T)/2\;$ and $\;R = v(2 - \kappa T)/2$. (Our
+mecanum stack instead feeds the same $(v,\ \omega = \kappa v)$ into the
+[mixer](./mecanum-kinematics.mdx).) Use a track width a few inches larger than the real one to absorb
+turning scrub.
+</Callout>
+
 This completes the autonomous stack — estimate the pose, plan a path, follow it. From here the filter
 track (Kalman, EKF) deepens the "where am I" half, and the remaining controllers complete the "what do
 I do" half. The curriculum culminates in a research-grade application of all of it.
 
-<Admonition type="info" title="Source-code references">
+<Admonition type="info" title="Sources & references">
 
-The precise-lookahead technique on this page is adapted, with attribution, from this open-source FTC team
-repository:
+The techniques on this page are adapted, with attribution, from these references and open-source
+repositories:
 
-- **Line–circle intersection lookahead** (solve the quadratic for where the radius-$L_d$ circle crosses
-  a path segment, take the furthest-forward root) —
-  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
+- **Adaptive pure pursuit — curvature velocity profile, inject-and-smooth path generation, signed
+  curvature, differential-drive wheel split** — Team 1712 (DAWGMA), *Implementation of the Adaptive
+  Pure Pursuit Controller*
+  ([whitepaper on Chief Delphi](https://www.chiefdelphi.com/t/paper-implementation-of-the-adaptive-pure-pursuit-controller/166552)).
+- **The original pure-pursuit derivation** — R. C. Coulter, *Implementation of the Pure Pursuit Path
+  Tracking Algorithm*, CMU Robotics Institute, 1992
+  ([PDF](https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf)).
+- **Interactive reference implementation** —
+  [xiaoxiae/PurePursuitAlgorithm](https://github.com/xiaoxiae/PurePursuitAlgorithm) (an adaptive
+  pure-pursuit visualiser).
+- **The path-smoothing pass** — [KHEngineering/SmoothPathPlanner](https://github.com/KHEngineering/SmoothPathPlanner)
+  (the gradient-descent smoother the DAWGMA paper borrows from Team 2168).
+- **Line–circle intersection lookahead** — [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
   (`subsystems/drive/Drivetrain.java`, `lineCircleIntersection`).
 
-The code here is an independent reimplementation of this idea, not a copy of any one repository.
+The code here is an independent reimplementation of these ideas, not a copy of any one source.
 
 </Admonition>
 

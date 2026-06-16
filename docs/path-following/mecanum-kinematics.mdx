@@ -1,69 +1,65 @@
 ---
 title: Mecanum Kinematics
-description: The matrix that turns one chassis command into four wheel powers — plus field-centric driving, joystick response curves, and the desaturation step that keeps the robot driving straight.
+description: How four mecanum wheels turn one driver command into sideways, forward, and spinning motion — the wheel-mixing equations, field-centric driving, and the joystick dead zone and response curve that make the robot feel good to drive.
 sidebar_position: 1
-tags: [mecanum, kinematics, field-centric, desaturation, teleop]
+tags: [mecanum, kinematics, field-centric, desaturation, dead-zone, teleop]
 ---
 
 import MecanumDrive from '@site/src/components/sims/MecanumDrive';
+import JoystickShaping from '@site/src/components/sims/JoystickShaping';
 
 # Mecanum Kinematics
 
+<Difficulty level="Easy" />
+
 <Abstract>
-A mecanum drivetrain converts one desired chassis motion — forward, strafe, and turn — into four
-independent wheel powers through a fixed linear map. This lesson builds that map from the rollers up,
-adds the field-centric rotation and joystick shaping drivers actually want, and shows why the
-desaturation step is what keeps a "full speed" command driving in a straight line.
+A mecanum drive can slide in any direction without turning. This lesson shows the one idea behind it —
+each wheel can only push along a 45° diagonal, so the right *combination* of four wheels makes any motion
+— then turns that into the handful of lines of code you actually write: mix the command into four wheel
+powers, rotate it for field-centric driving, scale the joystick for fine control, and add a dead zone so
+a twitchy stick doesn't creep the robot.
 </Abstract>
 
-Mecanum wheels are the reason an FTC robot can slide sideways without turning. Each wheel has rollers
-canted at 45°, so the wheel's grip points diagonally. Drive the four wheels in the right *combination*
-and those diagonal forces add up to pure forward, pure sideways, pure rotation, or anything between. The
-whole skill is choosing that combination — and it is exactly one matrix multiply.
+Good news: this is one of the easier topics in the whole curriculum. There is no calculus and no big
+matrix to invert — just some adding and subtracting, done sixty times a second. By the end you will be
+able to write a clean teleop drive from memory.
 
-<Problem title="One driver intent, four motors, every loop">
+<Problem title="Three numbers in, four motors out">
 
-The driver gives you three numbers from two sticks: how much to go **forward**, how much to **strafe**,
-and how much to **turn**. The robot has four motors. Somewhere in your `OpMode` you must turn three
-numbers into four, sixty times a second, and get the signs right — or the robot strafes when it should
-spin.
+The driver gives you three numbers from two thumbsticks: how much to go **forward**, how much to
+**strafe** (slide sideways), and how much to **turn**. Your robot has four motors. Every loop you have to
+turn those three numbers into four wheel powers — and get the signs right, or the robot strafes when you
+meant to spin.
 
-Worse, the obvious "just add the joystick axes" code has two silent bugs. It drives relative to the
-*robot*, so a disoriented driver fights the controls the moment the robot turns; and when you push two
-sticks at once it asks a wheel for more than 100% power, which the hardware quietly clips — turning your
-straight-line command into a curve.
+There are also two traps the naïve "just add the sticks together" code falls into: it drives relative to
+the *robot*, so a turned-around driver fights the controls; and when you push two sticks at once it asks a
+wheel for more than 100% power, which the motor silently clips — bending your straight line into a curve.
+We'll fix both.
 
 </Problem>
 
-<Theory title="From rollers to a wheel-mixing matrix">
+<Theory title="One idea: each wheel pushes along a diagonal">
 
-Work in the robot's own frame first. Call the chassis command
+A mecanum wheel has little rollers wrapped around it at **45°**. Because of that angle, when the wheel
+spins it doesn't grip straight forward like a normal wheel — it grips along a **diagonal**. The four
+wheels are mirrored so their diagonals form an **X** when you look down at the robot.
+
+That one fact is the whole lesson. A single wheel can only push along its diagonal, but *add up* the four
+diagonal pushes and the sideways parts can cancel (giving pure forward), or the forward parts can cancel
+(giving pure strafe), or they can reinforce into a spin. Choosing the four wheel speeds to get the motion
+you want is the only skill here — and it's just addition.
+
+### Mixing: add the three things you want
+
+Work in the robot's own frame first. Call the command
 
 $$
 \mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
 $$
 
-where $v_x$ is forward speed, $v_y$ is strafe speed (positive to the **left**), and $\omega$ is turn
-rate (positive **counter-clockwise**). Because of the 45° rollers, each wheel responds to forward and
-strafe with opposite signs on the diagonal, and to rotation by how far it sits from the center. Writing
-that out for the four wheels — front-left, front-right, back-left, back-right — gives the **mecanum
-inverse-kinematics matrix**:
-
-$$
-\begin{bmatrix} w_{FL} \\ w_{FR} \\ w_{BL} \\ w_{BR} \end{bmatrix}
-=
-\begin{bmatrix}
-1 & -1 & -(L+W) \\
-1 & \phantom{-}1 & \phantom{-}(L+W) \\
-1 & \phantom{-}1 & -(L+W) \\
-1 & -1 & \phantom{-}(L+W)
-\end{bmatrix}
-\begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
-$$
-
-Here $L$ and $W$ are the distances from the robot center to the wheel axles (front-to-back and
-side-to-side); the term $L+W$ sets how strongly turning loads each wheel. In normalized teleop you can
-fold those constants into $\omega$ and just read off the pattern:
+where $v_x$ is forward speed, $v_y$ is strafe speed (positive to the **left**), and $\omega$ is turn rate
+(positive **counter-clockwise**). Each wheel gets a share of all three. Writing out the four wheels —
+front-left, front-right, back-left, back-right:
 
 $$
 \begin{aligned}
@@ -74,15 +70,41 @@ w_{BR} &= v_x - v_y + \omega
 \end{aligned}
 $$
 
-This is the same idea as the [linear-algebra preface](../preface/why-math-matters/linear-algebra.mdx):
-a single matrix is the clean way to combine forward, strafe, and turn instead of four hand-tuned
-formulas.
+Read it one column at a time and it's obvious:
+
+- **Forward** ($v_x$) adds to **all four** equally → the robot drives straight.
+- **Strafe** ($v_y$) adds to one diagonal (FR, BL) and subtracts from the other (FL, BR) → the X-pattern
+  pushes the robot sideways.
+- **Turn** ($\omega$) adds to the **right** wheels and subtracts from the **left** → the robot spins in
+  place.
+
+That's the same thing as one matrix multiply, which is the compact way to write it (and how the ECAM and
+gm0 references at the end of this lesson present it):
+
+$$
+\begin{bmatrix} w_{FL} \\ w_{FR} \\ w_{BL} \\ w_{BR} \end{bmatrix}
+=
+\begin{bmatrix}
+1 & -1 & -1 \\
+1 & \phantom{-}1 & \phantom{-}1 \\
+1 & \phantom{-}1 & -1 \\
+1 & -1 & \phantom{-}1
+\end{bmatrix}
+\begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
+$$
+
+The full physics version replaces that $\omega$ column with $\pm(L+W)$, where $L$ and $W$ are the
+distances from the robot's center to the wheels — it just says wheels farther out get loaded more when
+turning. For normalized teleop you can fold those constants into $\omega$ and use the clean $\pm 1$
+pattern above. Push the sticks in the demo and watch each wheel's number come straight from that sum:
+
+<MecanumDrive />
 
 ### Field-centric: rotate the command first
 
-Drivers think in *field* directions — "go to the scoring side" — not robot directions. So before the
-matrix, rotate the driver's field command into the robot frame by the robot's heading $\theta$ (read
-from the IMU). This is the rotation from the linear-algebra lesson, by $-\theta$:
+Drivers think in **field** directions — "go toward the goal" — not robot directions. So *before* the
+mixing step, rotate the driver's field command into the robot's frame by the robot's heading $\theta$
+(read from the IMU). It's a 2-D rotation by $-\theta$:
 
 $$
 \begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{robot}
@@ -91,38 +113,67 @@ $$
 \begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{field}
 $$
 
-Now "push the stick away from you" means the same field direction no matter which way the robot faces.
+Now "push the stick away from you" means the same field direction no matter which way the robot is facing.
+Toggle field-centric in the demo and spin the heading to feel the difference.
 
-### Joystick response curves
+### Desaturation: keep the robot driving straight
 
-A raw stick is linear, but fine alignment near the goal needs gentle low-stick response while still
-reaching full speed at the top. Shape the **magnitude** (so you don't distort the direction) by raising
-it to a power $k \ge 1$:
+The mixing sum can hand back a wheel power bigger than $1.0$ — for example, full forward *and* full turn
+asks the front-right wheel for $v_x + v_y + \omega = $ way over 100%. If you just clip that one wheel to
+$1.0$, the *other* wheels keep their values, the ratios between wheels change, and the robot curves away
+from where you aimed.
+
+The fix is to scale **all four together** by the largest magnitude, but only when it exceeds one:
+
+$$
+\text{scale} = \max\big(1,\ |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|\big),
+\qquad w_i \leftarrow \frac{w_i}{\text{scale}}
+$$
+
+Small commands pass through untouched; oversized ones shrink while **keeping their ratios**, so the
+direction of travel is preserved. (gm0's tutorial does the same job with a single divisor
+$\,\max(|v_x| + |v_y| + |\omega|,\ 1)\,$ — a slightly more conservative version of the same idea.) In the
+demo, push forward and turn to the top and watch the "desaturate ÷" readout climb above 1 — that divisor
+is the only thing keeping the robot honest.
+
+### Scaling the joystick for fine control
+
+A raw stick is **linear**: half stick gives half speed. But the moments you need precision — nudging up to
+score — are exactly the small-stick moments, and linear response makes them twitchy. The fix is to bend
+the response so small pushes give *very* small speeds while full stick still reaches full speed. Raise the
+**magnitude** to a power $k \ge 1$ (shaping the magnitude, not each axis, so you don't distort the
+direction):
 
 $$
 m_\text{out} = m_\text{in}^{\,k}, \qquad m_\text{in} = \sqrt{v_x^2 + v_y^2}
 $$
 
-$k = 1$ is linear; $k = 2$ (squared) is the classic FTC feel — half stick gives a quarter speed, so
-slow moves are precise and the top end is untouched.
+$k = 1$ is linear; $k = 2$ (squared) is the classic FTC feel — half stick now gives a quarter speed, so
+slow moves are gentle and the top end is untouched. Some drivers prefer cubic ($k = 3$).
 
-### Desaturation: the step everyone forgets
+### Dead zone: ignore a stick that won't sit still
 
-The matrix can hand back a wheel power above $1.0$. If you just clip it, the *other* wheels keep their
-values and the ratio between wheels changes — so the robot curves away from the commanded direction. The
-fix is to scale **all four together** by the largest magnitude, but only if it exceeds one:
+Thumbsticks don't return to exactly zero. Let go and the stick reports something like $0.03$ forever —
+so the robot **creeps** on its own. A **dead zone** fixes it: any stick value smaller than a threshold
+$d$ counts as zero.
+
+But a plain dead zone has a side effect — the instant you cross $d$, the output jumps from $0$ to $d$,
+giving a little lurch. The clean version **re-expands** the leftover range so the output rises smoothly
+from $0$ at the edge of the dead zone up to $1$ at full stick. Combine it with the response curve and you
+get one tidy shaping function:
 
 $$
-\text{scale} = \max\big(1,\ |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|\big),
-\qquad
-w_i \leftarrow \frac{w_i}{\text{scale}}
+\text{shape}(s) =
+\begin{cases}
+0 & |s| \le d \\[4pt]
+\operatorname{sign}(s)\,\left(\dfrac{|s| - d}{1 - d}\right)^{\!k} & |s| > d
+\end{cases}
 $$
 
-Small commands pass through untouched; oversized ones shrink while **keeping their ratios**, so the
-direction of travel is preserved. Drive the demo's forward and turn sticks both to the top and watch the
-"desaturate ÷" readout climb above 1 — that divisor is the only thing keeping the robot honest.
+Drag the input below: the flat red band is the dead zone (output stays $0$), and past it the blue curve
+is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills drift without you feeling it.
 
-<MecanumDrive />
+<JoystickShaping />
 
 </Theory>
 
@@ -130,27 +181,36 @@ direction of travel is preserved. Drive the demo's forward and turn sticks both 
 
 The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
 
-<JavaCode league="FTC" label="Field-centric mecanum with response curve + desaturation">{`/** Drives a mecanum chassis from field-relative stick input.
- *  @param fwd   forward command, +1 away from the driver   [-1, 1]
- *  @param strafe strafe command, +1 to the left             [-1, 1]
- *  @param turn  turn command, +1 counter-clockwise          [-1, 1]
+<JavaCode league="FTC" label="Field-centric mecanum with dead zone, response curve, and desaturation">{`/** Dead zone + response curve in one step: 0 inside the dead zone, then a
+ *  smoothly re-expanded, curved response out to full stick. */
+private double shape(double s) {
+    double a = Math.abs(s);
+    if (a < DEADZONE) return 0;                          // ignore stick drift
+    double scaled = (a - DEADZONE) / (1 - DEADZONE);     // re-expand: 0 at the edge, 1 at full
+    return Math.signum(s) * Math.pow(scaled, DRIVE_CURVE);  // DEADZONE~0.06, DRIVE_CURVE~2.0
+}
+
+/** Drives a mecanum chassis from field-relative stick input.
+ *  @param fwd     forward command, +1 away from the driver  [-1, 1]
+ *  @param strafe  strafe command,  +1 to the left           [-1, 1]
+ *  @param turn    turn command,    +1 counter-clockwise      [-1, 1]
  *  @param heading robot heading from the IMU, radians (field frame)
  */
 public void driveFieldCentric(double fwd, double strafe, double turn, double heading) {
-    // 1) response curve on the translation magnitude (direction preserved)
+    // 1) dead zone + response curve on the translation MAGNITUDE (direction preserved)
     double mag = Math.min(1.0, Math.hypot(fwd, strafe));
     double dir = Math.atan2(strafe, fwd);
-    double curved = Math.pow(mag, DRIVE_CURVE);          // DRIVE_CURVE = 2.0 feels good
-    double fwdC = curved * Math.cos(dir);
-    double strC = curved * Math.sin(dir);
+    double m   = shape(mag);
+    double fwdC = m * Math.cos(dir);
+    double strC = m * Math.sin(dir);
+    double w    = shape(turn);                 // same shaping on the turn stick
 
     // 2) rotate the field command into the robot frame (rotate by -heading)
     double cos = Math.cos(heading), sin = Math.sin(heading);
     double vx =  fwdC * cos + strC * sin;
     double vy = -fwdC * sin + strC * cos;
-    double w  = turn;
 
-    // 3) wheel-mixing matrix
+    // 3) wheel-mixing: add the three things you want
     double fl = vx - vy - w;
     double fr = vx + vy + w;
     double bl = vx + vy - w;
@@ -166,17 +226,32 @@ public void driveFieldCentric(double fwd, double strafe, double turn, double hea
     backRight.setPower(br / scale);
 }`}</JavaCode>
 
+In an FTC `OpMode` the sticks map in like this (the Y axis is inverted on the gamepad, so negate it):
+
+<JavaCode league="FTC" label="Reading the gamepad">{`double fwd    = -gamepad1.left_stick_y;   // up on the stick = forward
+double strafe = -gamepad1.left_stick_x;   // left on the stick = +left (our convention)
+double turn   = -gamepad1.right_stick_x;  // left = counter-clockwise
+driveFieldCentric(fwd, strafe, turn, imu.getHeading());`}</JavaCode>
+
 With teleop solid, the same chassis command becomes the *output* of an autonomous controller. The
 simplest one drives straight at a target pose — that is [**PID-to-point**](./pid-to-point.mdx), the next
 lesson.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: mecanum is not a precise odometry source">
+<Admonition type="warning" title="Hardware reality: strafing is weaker than driving">
 
-Those canted rollers slip sideways by design, so wheel encoders on a mecanum drive over-report strafe
-distance and drift fast. Use the drive for *motion*, but localize from dedicated dead-wheel pods or
-fused vision — see [Odometry & Pose](../localization-odometry/odometry.mdx).
+Those canted rollers lose a little grip sideways, so a mecanum robot strafes *slower* than it drives
+forward at the same power. The common fix (straight from gm0) is to multiply the strafe command by about
+**1.1** before mixing, so sideways and forward feel matched. Tune the exact number on your robot.
+
+</Admonition>
+
+<Admonition type="warning" title="Hardware reality: don't navigate from mecanum encoders">
+
+The same sideways slip means wheel encoders on a mecanum drive over-report strafe distance and drift
+fast. Use the drive for *motion*, but localize from dedicated dead-wheel pods or fused vision — see
+[Odometry & Pose](../localization-odometry/odometry.mdx).
 
 </Admonition>
 
@@ -185,5 +260,17 @@ fused vision — see [Odometry & Pose](../localization-odometry/odometry.mdx).
 If a wheel fights the others, flip its motor direction, not the math. Pick one convention (+x forward,
 +y left, +ω CCW), write it in a comment, and make every wheel obey it. Half of all "mecanum is broken"
 posts are one inverted motor.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+This lesson follows two excellent public tutorials, adapted to our curriculum's conventions
+(+x forward, +y left, +ω CCW):
+
+- **Wheel kinematics and the mixing matrix** — ECAM Eurobot,
+  [*Mecanum wheel kinematics*](https://ecam-eurobot.github.io/Tutorials/mechanical/mecanum.html).
+- **The FTC wheel-power equations, field-centric rotation, normalization, and the strafe correction** —
+  gm0, [*Mecanum Drive*](https://gm0.org/en/latest/docs/software/tutorials/mecanum-drive.html).
 
 </Admonition>

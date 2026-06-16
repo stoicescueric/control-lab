@@ -1,0 +1,154 @@
+---
+title: Motion Profiling
+description: Don't ask a mechanism to teleport. A motion profile hands the controller a physically achievable trajectory — accelerate, cruise, decelerate — so feedforward can lead and feedback only trims.
+sidebar_position: 7
+tags: [motion-profiling, trapezoidal, trajectory, feedforward, control]
+---
+
+import MotionProfile from '@site/src/components/sims/MotionProfile';
+
+# Motion Profiling
+
+<Difficulty level="Hard" />
+
+<Abstract>
+A motion profile replaces an instantaneous setpoint jump with a smooth, time-parametrized trajectory the
+mechanism can actually follow: ramp up at the acceleration limit, cruise at the speed limit, ramp down to
+stop exactly on target. Feeding the controller this trajectory — position, velocity, and acceleration at
+every instant — lets feedforward do the heavy lifting and leaves feedback only a small error to correct,
+giving fast moves that don't overshoot.
+</Abstract>
+
+[PID](./pid.mdx) and [feedforward](./feedforward.mdx) answer "what command *now*?" Motion profiling answers
+the question before it: *what should the target even be at this instant?* Instead of commanding the final
+position and hoping, you command a moving target that respects the mechanism's real limits.
+
+<Problem title="A step command asks for infinite acceleration">
+
+Tell a lift "go to the top" and your controller sees the full error immediately. A proportional term
+slams full power, the lift lurches, the current spikes, and feedforward — which is fed the *target*
+velocity — has no idea how fast you actually intend to move, so it can't help. The mechanism either
+overshoots (if the gain is high) or crawls (if it's low). The setpoint asked for a jump no motor can
+deliver: an instantaneous change in position means infinite velocity, an instantaneous change in velocity
+means infinite acceleration. Real hardware has a top speed and a max acceleration. Plan within them.
+
+</Problem>
+
+<Theory title="The trapezoidal profile">
+
+The simplest profile that respects both limits is the **trapezoid**: accelerate at the limit $a_\text{max}$
+until you hit the cruise speed $v_\text{max}$, hold it, then decelerate at $a_\text{max}$ to arrive at the
+target with zero velocity. Plotted against time, the velocity traces a trapezoid — hence the name.
+
+The geometry is just kinematics. The ramp to cruise speed takes
+
+$$
+t_\text{ramp} = \frac{v_\text{max}}{a_\text{max}},
+\qquad
+d_\text{ramp} = \tfrac12 a_\text{max} t_\text{ramp}^2 = \frac{v_\text{max}^2}{2 a_\text{max}}
+$$
+
+If the move is long enough to fit both ramps ($2\,d_\text{ramp} \le d$), the middle is spent cruising for
+
+$$
+t_\text{cruise} = \frac{d - 2\,d_\text{ramp}}{v_\text{max}}
+$$
+
+If the move is **too short** to ever reach $v_\text{max}$, the trapezoid collapses to a **triangle**: you
+accelerate to a lower peak and immediately decelerate, peaking at $v_\text{peak} = \sqrt{a_\text{max}\,d}$.
+Drag the sliders below — shrink the distance or raise the cruise speed and watch the trapezoid become a
+triangle, while the total time and peak speed update.
+
+<MotionProfile />
+
+At each instant the profile gives you a full target state — position $x(t)$, velocity $v(t)$, and
+acceleration $a(t)$. That triplet is exactly what the rest of the stack wants: feed $v(t)$ and $a(t)$ to
+[feedforward](./feedforward.mdx) ($k_V v + k_A a$) so it leads the motion, and feed $x(t)$ to
+[PID](./pid.mdx) so feedback only corrects the small tracking error. The mechanism follows a plan instead
+of chasing a cliff.
+
+<Callout type="idea" title="The braking cap you already met is the deceleration ramp.">
+The $v \le \sqrt{2 a d}$ speed cap from [PID-to-point](../path-following/pid-to-point.mdx) is the
+*decelerating half* of this trapezoid, evaluated on the fly from the distance left. A full profile is the
+same physics, planned ahead of time for the whole move instead of reacted to each loop.
+</Callout>
+
+<Callout type="note" title="Beyond the trapezoid: S-curves.">
+A trapezoid's acceleration jumps instantly between $0$, $+a_\text{max}$, and $-a_\text{max}$ — those
+corners are infinite <em>jerk</em>, which can make a tall mechanism wobble. An <strong>S-curve</strong>
+profile rounds them by limiting jerk too, at the cost of a longer move. The trapezoid is the right default;
+reach for S-curves only when jerk visibly hurts.
+</Callout>
+
+</Theory>
+
+<Deploy title="Sample the profile each loop">
+
+Build the profile once from your limits, then ask it for the target state at the current time every loop
+and hand that to your feedforward + PID controller.
+
+<JavaCode league="FTC" label="Trapezoidal profile (build once, sample each loop)">{`public class TrapezoidalProfile {
+    private final double aMax, vPeak, tAcc, tFlat, total, distance, sign;
+
+    public TrapezoidalProfile(double distance, double vMax, double aMax) {
+        this.aMax = aMax;
+        this.distance = Math.abs(distance);
+        this.sign = Math.signum(distance);
+        double tRamp = vMax / aMax;
+        double dRamp = 0.5 * aMax * tRamp * tRamp;
+        if (2 * dRamp >= this.distance) {           // triangle: never reaches vMax
+            tAcc  = Math.sqrt(this.distance / aMax);
+            vPeak = aMax * tAcc;
+            tFlat = 0;
+        } else {                                     // full trapezoid
+            tAcc  = tRamp;
+            vPeak = vMax;
+            tFlat = (this.distance - 2 * dRamp) / vMax;
+        }
+        total = 2 * tAcc + tFlat;
+    }
+
+    public double duration() { return total; }
+
+    /** Target {position, velocity, acceleration} at time t. */
+    public double[] sample(double t) {
+        t = Math.max(0, Math.min(t, total));
+        double x, v, a;
+        if (t < tAcc) {                              // accelerating
+            a = aMax;  v = aMax * t;  x = 0.5 * aMax * t * t;
+        } else if (t < tAcc + tFlat) {               // cruising
+            a = 0;     v = vPeak;     x = 0.5 * aMax * tAcc * tAcc + vPeak * (t - tAcc);
+        } else {                                     // decelerating
+            double td = t - tAcc - tFlat;
+            a = -aMax; v = vPeak - aMax * td;
+            x = 0.5 * aMax * tAcc * tAcc + vPeak * tFlat + vPeak * td - 0.5 * aMax * td * td;
+        }
+        return new double[]{sign * x, sign * v, sign * a};
+    }
+}`}</JavaCode>
+
+<JavaCode league="FTC" label="Following the profile with feedforward + PID">{`double t = timer.seconds();
+double[] s = profile.sample(t);                 // {x*, v*, a*}
+double ff  = kS * Math.signum(s[1]) + kV * s[1] + kA * s[2];
+double fb  = pid.calculate(encoderPos, s[0]);   // correct the tracking error
+motor.setPower((ff + fb) / battery.getVoltage());
+boolean done = t >= profile.duration() && Math.abs(target - encoderPos) < TOL;`}</JavaCode>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: profile within your *real* limits">
+
+The profile is only honest if $v_\text{max}$ and $a_\text{max}$ are achievable. Use ~80% of the
+mechanism's measured top speed and acceleration so a tired battery or extra game-piece load doesn't make
+the plan impossible to follow — the moment the mechanism can't keep up, the tracking error explodes and
+feedback saturates.
+
+</Admonition>
+
+<Admonition type="tip" title="This is what Road Runner and trajectories are">
+
+A drivetrain **trajectory** is a motion profile run along a [path](../path-following/quintic-splines.mdx):
+the spline says *where*, the profile says *how fast along it*. Road Runner and Pedro Pathing combine the
+two and add feedforward + PID — exactly the stack in this module, applied in 2-D.
+
+</Admonition>

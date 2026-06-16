@@ -1,27 +1,31 @@
 /* The DC motor's defining tradeoff: the torque–speed curve. Set the applied
    voltage and the load (resisting) torque; the operating point is where the
    motor's line meets the load. Read off current, output power, efficiency, and
-   heat. Every number comes from one self-consistent ideal-DC-motor model with
-   constants representative of an FTC-class motor — NOT a specific product's
-   datasheet. The physics (the straight line, the power parabola, I²R heat) is
-   exact regardless of the particular constants. */
+   heat. The constants are fit to the real goBILDA 5000-0002-0117 (MATRIX) motor
+   at 12 V (free speed 5900 RPM, stall torque 0.19 N·m, stall current 11 A) — so
+   peak power lands at 29 W near 2950 RPM, matching its published curve. The ideal
+   line omits the ~0.3 A free current (friction); the physics is otherwise exact.
+   Data: gm0.org motor guide. */
 
 import {useRef, useState} from 'react';
 import {usePlot, useRaf} from '@site/src/lib/canvas';
 import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 
-// Self-consistent ideal-motor constants (representative FTC-class motor):
-//   K = ke = kt  (SI: V·s/rad equals N·m/A)
-//   12 V / 628.3 rad/s (6000 RPM) free speed  ->  K ≈ 0.0191
-//   12 V / 11 A stall current                 ->  R ≈ 1.09 Ω
-const K = 0.0191; // back-EMF == torque constant
+// Constants fit to the goBILDA 5000-0002-0117 (MATRIX) motor at 12 V:
+//   R  = 12 V / 11 A stall current                      -> 1.0909 Ω
+//   kt = 0.19 N·m stall torque / 11 A stall current     -> 0.017273 N·m/A
+//   ke = 12 V / 617.8 rad/s (5900 RPM) free speed       -> 0.019426 V·s/rad
+// Separate kt/ke (they differ slightly because of friction) so the curve hits
+// all three published points exactly; peak power then falls at 29 W / 2950 RPM.
+const KT = 0.017273; // torque constant (N·m/A)
+const KE = 0.019426; // back-EMF constant (V·s/rad)
 const R = 1.0909; // armature resistance (Ω)
 const VNOM = 12; // nominal voltage
 const RAD_TO_RPM = 60 / (2 * Math.PI);
 
-const freeSpeedRpm = (v: number) => (v / K) * RAD_TO_RPM; // where torque = 0
-const stallTorque = (v: number) => (K * v) / R; // where speed = 0
+const freeSpeedRpm = (v: number) => (v / KE) * RAD_TO_RPM; // where torque = 0
+const stallTorque = (v: number) => (KT * v) / R; // where speed = 0
 
 export default function MotorCurve() {
   const [volts, setVolts] = useState(12);
@@ -52,11 +56,11 @@ export default function MotorCurve() {
     if (!p) return;
     const {volts: v, load: tau} = ctrl.current;
 
-    // Operating point: the motor's line, τ(ω) = K(V − Kω)/R, meets the load τ.
-    const wRad = v / K - (tau * R) / (K * K); // rad/s
+    // Operating point: the motor's line, τ(ω) = kt(V − ke·ω)/R, meets the load τ.
+    const wRad = v / KE - (tau * R) / (KT * KE); // rad/s
     const stalled = wRad <= 0 || v <= 0;
     const wOp = stalled ? 0 : wRad;
-    const current = (v - K * wOp) / R; // A
+    const current = (v - KE * wOp) / R; // A
     const torqueOut = stalled ? stallTorque(v) : tau; // torque actually produced
     const pOut = torqueOut * wOp; // mechanical power out (0 at stall)
     const pIn = v * current; // electrical power in
@@ -112,7 +116,7 @@ export default function MotorCurve() {
   useRaf(() => draw());
 
   return (
-    <Demo title="The motor torque–speed curve">
+    <Demo title="Torque–speed curve — goBILDA 5000-0002-0117 (MATRIX), 12 V">
       <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
       <Legend
         items={[

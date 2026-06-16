@@ -1,0 +1,106 @@
+---
+title: Voltage Compensation
+description: A robot's battery sags from 13.5 V to under 12 V across a match, so the same power command does less work as the game goes on. Dividing by the measured voltage holds behavior constant start to finish.
+sidebar_position: 2
+tags: [voltage-compensation, battery, feedforward, brownout, control]
+---
+
+import VoltageComp from '@site/src/components/sims/VoltageComp';
+
+# Voltage Compensation
+
+<Difficulty level="Easy" />
+
+<Abstract>
+A motor power command in $[-1, 1]$ delivers that fraction of the *battery's current voltage*, not a fixed
+voltage — so as the pack sags over a match, the same command produces less and less. Voltage compensation
+divides the intended voltage by the measured battery voltage before sending it, delivering a constant
+target voltage (until the battery physically can't), which keeps feedforward gains valid and behavior
+repeatable from the first second to the last.
+</Abstract>
+
+This is the shortest lesson in the module and one of the highest-leverage: a few characters of code that
+make every other controller — [feedforward](./feedforward.mdx), [PID](./pid.mdx),
+[profiles](./motion-profiling.mdx) — behave the same on a fresh pack and a tired one.
+
+<Problem title="The same command, quietly doing less">
+
+`motor.setPower(0.6)` does **not** apply a fixed voltage. It applies 60% of whatever the battery happens
+to read right now. A freshly charged pack sits near 13.5 V; after a few sprints and a climb it sags toward
+11 V under load. So `0.6` is $0.6 \times 13.5 = 8.1$ V early in the match and $0.6 \times 11 = 6.6$ V
+late — nearly a 20% drop in effort for the identical command. Your auto that was tuned on a full battery
+now undershoots; your flywheel that was on speed now falls short. Worse, your carefully *measured*
+feedforward gains are in **volts** — and they're being applied to a command that no longer maps to volts.
+
+</Problem>
+
+<Theory title="Divide by what you actually have">
+
+Every controller in this module computes a desired *voltage* — feedforward's $k_S + k_V v + k_A a$, PID's
+output, a profile's command. To turn a desired voltage $V_\text{cmd}$ into the power fraction that will
+actually deliver it, divide by the **measured** battery voltage:
+
+$$
+\text{power} = \frac{V_\text{cmd}}{V_\text{battery}}
+$$
+
+Now the delivered voltage is $\text{power} \times V_\text{battery} = V_\text{cmd}$ — independent of the
+battery, exactly what you asked for. The only thing that can break the guarantee is physics: you cannot
+deliver more than the battery holds, so once $V_\text{cmd} > V_\text{battery}$ the command saturates at
+full power and the output follows the sagging pack down.
+
+In the demo, the rose line is a raw command (delivered volts $=$ power $\times$ battery, drifting as the
+pack changes); the green line is the compensated command, flat at your target until the battery can no
+longer reach it. Drag the battery marker from full to sagging and watch the raw output fall away while the
+compensated one holds.
+
+<VoltageComp />
+
+<Callout type="idea" title="It makes your gains portable in time.">
+Because compensation pins the command to real volts, the feedforward constants you
+[measured](./system-identification.mdx) stay correct all match — and even transfer better between two
+robots with the same mechanism. Without it, every gain is implicitly "valid at whatever voltage I tuned
+on," which is never the voltage you compete on.
+</Callout>
+
+</Theory>
+
+<Deploy title="One division, or one SDK call">
+
+Apply it at the very end, after the controller has produced a voltage. Read the battery once per loop
+(reading it is not free) and clamp the result to the legal power range.
+
+<JavaCode league="FTC" label="Voltage-compensated output">{`private final VoltageSensor battery = hardwareMap.voltageSensor.iterator().next();
+
+/** Send a desired VOLTAGE to a motor, compensated for the live battery voltage. */
+public void setVoltage(DcMotorEx motor, double desiredVolts) {
+    double vbat = battery.getVoltage();              // measured this loop
+    double power = desiredVolts / vbat;              // volts -> [-1, 1]
+    motor.setPower(Math.max(-1.0, Math.min(1.0, power)));
+}
+
+// every controller in this module ends the same way:
+//   double volts = kS*Math.signum(v) + kV*v + kA*a + pid.calculate(meas, target);
+//   setVoltage(motor, volts);`}</JavaCode>
+
+In FRC, the motor controllers do it for you with `enableVoltageCompensation(nominalVolts)` — set it once
+and command in volts with `setVoltage(...)` thereafter. The idea is identical: stop thinking in
+unitless "power" and start thinking in volts the battery may or may not be able to supply.
+
+<Callout type="tip" title="Compensation is not a brownout cure.">
+Holding the *command* constant as voltage drops means drawing *more current* to do it — which sags the
+pack further. Compensation keeps behavior consistent within the battery's ability; it cannot create energy
+that isn't there. If you're browning out, the fix is in the [motor model](./how-a-motor-works.mdx) (you're
+living too near stall), not here.
+</Callout>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: filter the voltage reading">
+
+Battery voltage spikes downward sharply under sudden load (a drivetrain slamming to full power), so a raw
+reading can momentarily read very low and make your compensation over-command. Run the voltage through a
+light [low-pass filter](../signal-processing/low-pass.mdx), and read it once per loop rather than per
+motor — the sensor call has real latency.
+
+</Admonition>
