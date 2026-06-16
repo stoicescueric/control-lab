@@ -351,7 +351,7 @@ export default function Drone() {
         <Button primary onClick={() => setGains(6, 2, 4)}>
           PID (tuned)
         </Button>
-        <Button onClick={() => setGains(14, 3, 2)}>Too much Kp 🔥</Button>
+        <Button onClick={() => setGains(14, 3, 2)}>Too much Kp</Button>
         <Button onClick={() => (st.current.gust -= 22)}>🌬️ Wind gust</Button>
         <Button onClick={reset}>↺ Reset</Button>
       </Buttons>

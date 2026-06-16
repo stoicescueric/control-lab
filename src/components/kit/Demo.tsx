@@ -23,11 +23,11 @@ export function Demo({
   className?: string;
 }) {
   return (
-    <div className={`cl-demo not-prose my-7 rounded-2xl bg-panel p-[18px] text-panel-ink shadow-pop ${className}`}>
+    <div className={`cl-demo not-prose my-7 rounded-[10px] bg-panel p-[18px] text-panel-ink shadow-card ${className}`}>
       {(title || pill) && (
         <div className="mb-3.5 flex flex-wrap items-center gap-2.5 px-1 text-[1.02rem] font-bold text-white">
           {pill && (
-            <span className="rounded-full bg-white/10 px-2.5 py-[3px] text-[0.68rem] font-bold uppercase tracking-wide text-[#cfe0ff]">
+            <span className="rounded-[5px] bg-white/10 px-2.5 py-[3px] text-[0.68rem] font-bold uppercase tracking-wide text-[#cfe0ff]">
               {pill}
             </span>
           )}
@@ -83,7 +83,7 @@ export function Button({primary = false, active = false, className = '', ...rest
   return (
     <button
       type="button"
-      className={`cursor-pointer rounded-[9px] border px-3.5 py-2 text-[0.85rem] font-semibold transition-colors ${tone} ${className}`}
+      className={`cursor-pointer rounded-[7px] border px-3.5 py-2 text-[0.85rem] font-semibold transition-colors ${tone} ${className}`}
       {...rest}
     />
   );
@@ -150,7 +150,7 @@ export function DemoCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className={`block w-full rounded-xl bg-[#0b1120] ${className}`}
+      className={`block w-full rounded-[8px] bg-[#0b1120] ${className}`}
       style={style}
       {...rest}
     />

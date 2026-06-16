@@ -1,17 +1,12 @@
-/* Homepage-only styling. Layout lives in index.tsx via Tailwind utilities;
-   this holds the one thing utilities express poorly — the layered hero glow,
-   which differs by color theme. */
+/* Homepage-only styling. Layout lives in index.tsx via Tailwind utilities.
+   Keep the hero quiet: a faint technical canvas, not a generic SaaS glow. */
 
 .heroGlow {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(1100px 460px at 78% -12%, rgba(79, 108, 247, 0.14), transparent 60%),
-    radial-gradient(820px 460px at 2% 6%, rgba(17, 181, 164, 0.1), transparent 55%);
+  background: linear-gradient(180deg, var(--color-surface-2), var(--color-bg));
 }
 
 [data-theme='dark'] .heroGlow {
-  background:
-    radial-gradient(1100px 480px at 78% -12%, rgba(79, 108, 247, 0.2), transparent 60%),
-    radial-gradient(820px 480px at 2% 6%, rgba(17, 181, 164, 0.14), transparent 55%);
+  background: linear-gradient(180deg, #0d1426, var(--color-bg));
 }

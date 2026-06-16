@@ -1,12 +1,8 @@
 import type {ReactNode} from 'react';
 
-/* Coloured callout boxes used throughout the lessons.
-
-   For standard asides, prefer Docusaurus native admonitions (:::tip / :::warning).
-   This component covers the extra flavours the lessons use (idea, math) and keeps
-   the original palette where an admonition would feel too heavy.
-
-   <Callout type="tip|idea|math|warn|note" title="...">body</Callout> */
+/* Lesson callout boxes for non-standard aside types. Prefer native Docusaurus
+   admonitions for :::tip and :::warning blocks; this component covers inline
+   idea/math/note asides while keeping the same restrained visual language. */
 
 type Tone = 'tip' | 'idea' | 'math' | 'warn' | 'note';
 
@@ -18,7 +14,13 @@ const TONES: Record<Tone, string> = {
   note: 'bg-surface-2 border-line',
 };
 
-const ICONS: Record<Tone, string> = {tip: '✅', idea: '💡', math: '🧮', warn: '⚠️', note: '📌'};
+const LABELS: Record<Tone, string> = {
+  tip: 'Tip',
+  idea: 'Idea',
+  math: 'Math',
+  warn: 'Warn',
+  note: 'Note',
+};
 
 interface CalloutProps {
   type?: Tone;
@@ -30,8 +32,10 @@ interface CalloutProps {
 export function Callout({type = 'note', icon, title, children}: CalloutProps) {
   return (
     <div
-      className={`cl-callout my-6 flex gap-3.5 rounded-[10px] border p-4 text-ink [&_p]:my-2 [&>div>:last-child]:mb-0 ${TONES[type] ?? TONES.note}`}>
-      <span className="shrink-0 text-2xl leading-tight">{icon ?? ICONS[type]}</span>
+      className={`cl-callout my-6 flex gap-3.5 rounded-[8px] border p-4 text-ink [&_p]:my-2 [&>div>:last-child]:mb-0 ${TONES[type] ?? TONES.note}`}>
+      <span className="mt-0.5 shrink-0 rounded-[5px] border border-current/20 px-2 py-0.5 font-mono text-[0.68rem] font-bold uppercase leading-tight text-ink-soft">
+        {icon ?? LABELS[type]}
+      </span>
       <div>
         {title && <strong className="text-ink">{title} </strong>}
         {children}
@@ -40,10 +44,9 @@ export function Callout({type = 'note', icon, title, children}: CalloutProps) {
   );
 }
 
-/* A purple "analogy" aside. */
 export function Analogy({children}: {children?: ReactNode}) {
   return (
-    <div className="cl-callout my-5 rounded-r-[10px] border-l-4 border-violet bg-gradient-to-r from-violet/10 to-transparent px-[18px] py-3.5 text-ink [&>:last-child]:mb-0">
+    <div className="cl-callout my-5 border-l-4 border-brand bg-brand/10 px-[18px] py-3.5 text-ink [&>:last-child]:mb-0">
       {children}
     </div>
   );

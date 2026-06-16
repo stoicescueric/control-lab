@@ -1,35 +1,46 @@
 ---
 title: Guided Vector Fields
-description: Follow a path as a flow field instead of chasing a moving point — blend a term that drives onto the path with one that drives along it, for convergence that pure pursuit can't guarantee.
+description: Follow a path as a flow field instead of chasing a moving point. Blend a term that drives onto the path with one that drives along it for provable convergence — and learn the implicit-function form behind it, the curvature speed cap, and how real FTC teams ship it.
 sidebar_position: 6
 tags: [guided-vector-field, gvf, path-following, convergence, advanced]
 ---
 
 import {GuidedVectorFieldIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+import {GuidedVectorField} from '@site/src/components/sims/GuidedVectorField';
 
 # Guided Vector Fields
 
 <Difficulty level="Hard" />
 
 <Abstract>
-A guided vector field assigns, to every point on the field, a desired velocity direction that both pulls
-the robot onto the path and pushes it along the path. Following that field gives provable convergence to
-the path itself — not to a moving lookahead point — which removes the corner-cutting and tuning
-sensitivity of pure pursuit.
+A guided vector field (GVF) assigns, to **every** point of the field, a desired direction of travel that
+both pulls the robot **onto** the path and pushes it **along** the path. Follow that field and you get
+*provable* convergence to the path itself — not to a moving lookahead point — which removes the
+corner-cutting and lookahead-tuning sensitivity of pure pursuit. We build it two ways (the closest-point
+form you'll code, and the implicit level-set form the controls literature proves convergence with), add a
+curvature speed cap, and ship a working FTC follower.
 </Abstract>
 
-[Pure pursuit](./pure-pursuit.mdx) follows a path by chasing a carrot a fixed distance ahead. It works,
-but it tracks the *carrot*, not the path, so it cuts corners and its behavior swings with the lookahead
-distance. Guided vector fields (GVF) reframe following entirely: instead of a point to chase, build a
-field of arrows the robot flows along.
+[Pure pursuit](./pure-pursuit.mdx) follows a path by chasing a carrot a fixed distance ahead. It works, but
+it tracks the *carrot*, not the path, so it cuts corners and its behavior swings with the lookahead
+distance. Guided vector fields reframe following entirely: instead of a point to chase, build a field of
+arrows the robot flows along. Drag the robot below — drop it anywhere, on either side — and watch its flow
+line bend onto the path and ride it to the end.
+
+<GuidedVectorField />
 
 <Problem title="Chasing a point is not the same as being on the path">
 
-A lookahead follower only ever aims at a point ahead of itself. On a curve, the straight line to that
-point lies *inside* the curve, so the robot drifts to the inside and cuts the corner. Shorten the
-lookahead to hug the path and the robot oscillates; lengthen it to smooth the oscillation and it cuts
-more. You are trading one error for another because the controller never has "distance from the path" as
-a quantity it directly drives to zero.
+A lookahead follower only ever aims at a point ahead of itself. On a curve, the straight line to that point
+lies *inside* the curve, so the robot drifts to the inside and cuts the corner. Shorten the lookahead to hug
+the path and the robot oscillates; lengthen it to smooth the oscillation and it cuts more. You are trading
+one error for another, because the controller never has "distance from the path" as a quantity it directly
+drives to zero.
+
+A GVF fixes exactly that: the cross-track error becomes the thing the field cancels. Knock the robot
+sideways mid-run and it simply re-enters the flow and slides back on — *"you could run up and kick the robot
+during auto, and it will move back to the programmed path automagically"* (the THOR library's own
+description of the behavior).
 
 </Problem>
 
@@ -37,90 +48,201 @@ a quantity it directly drives to zero.
 
 At the robot's current position $\mathbf{p}$, find the **closest point** $\mathbf{c}$ on the path. That
 gives two local facts: the path's unit **tangent** $\hat{\mathbf{t}}$ (the along-track direction) and the
-signed **cross-track error** — how far, and which side, the robot is off the path, measured along the
-unit **normal** $\hat{\mathbf{n}}$:
+signed **cross-track error** — how far, and which side, the robot is off the path — measured along the unit
+**normal** $\hat{\mathbf{n}}$ (the tangent rotated 90°):
 
 $$
 e = (\mathbf{p} - \mathbf{c}) \cdot \hat{\mathbf{n}}
 $$
 
-A GVF combines two urges into one desired velocity direction:
+A GVF combines two urges into one desired direction of travel:
 
 $$
-\mathbf{v}_\text{des} \;\propto\; \underbrace{\hat{\mathbf{t}}}_{\text{flow along}} \;-\; \underbrace{k\,e\,\hat{\mathbf{n}}}_{\text{converge onto}}
+\boldsymbol{\chi} \;=\; \underbrace{\hat{\mathbf{t}}}_{\text{flow along}} \;-\; \underbrace{k_N\,e\,\hat{\mathbf{n}}}_{\text{converge onto}}
 $$
 
 <GuidedVectorFieldIllustration />
 
-When the robot is on the path ($e = 0$) the field is pure tangent — it flows along. When it drifts off,
-the second term turns the arrows toward the path, harder the farther off it is. The gain $k$ sets how
-aggressively the field reels the robot in.
+When the robot is on the path ($e = 0$) the field is pure tangent — it flows along. When it drifts off, the
+second term turns the arrows back toward the path, harder the farther off it is. The gain $k_N$ (units of
+$1/\text{length}$) sets how aggressively the field reels the robot in: too small and it converges lazily; too
+large and the field points nearly straight at the path, so the robot overshoots and zig-zags across it.
+That trade-off is the one knob worth tuning — slide $k_N$ in the demo and watch the flow line go from a long
+graceful merge to a tight, slightly overshooting snap.
 
-This is provably convergent. Take the cross-track error as an energy $V = \tfrac{1}{2}e^2$. Moving along
-the field changes $e$ at a rate proportional to the normal component of velocity, $\dot e \propto -k\,e$,
-so
+### The same field, written as a level set
+
+The closest-point recipe is what you'll code, but it isn't the cleanest object to *prove* things about,
+because "closest point" is itself the output of a search. The control-theory formulation (Kapitanyuk,
+Proskurnikov & Cao) writes the path as the **zero level set of a smooth function** $\varphi(x,y)$ — for a
+circle of radius $R$, $\varphi = x^2 + y^2 - R^2$; for a line $ax+by+c=0$, $\varphi = ax+by+c$. The value of
+$\varphi$ *is* a cross-track error (zero exactly on the path), and its gradient $\nabla\varphi$ points along
+the normal. The guiding vector field is then
 
 $$
-\dot V = e\,\dot e \;\propto\; -k\,e^2 \;\le\; 0
+\boldsymbol{\chi} \;=\; \underbrace{E\,\nabla\varphi}_{\text{propagate along}} \;-\; \underbrace{k\,\varphi\,\nabla\varphi}_{\text{converge onto}},
+\qquad
+E = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}
 $$
 
-The energy only decreases, and reaches zero only on the path — so the robot is driven onto the path and
-*stays* there, which a lookahead chasing a moving point never quite guarantees. Normalize
-$\mathbf{v}_\text{des}$ and scale by your desired speed to get the chassis command:
+$E$ is a 90° rotation, so $E\nabla\varphi$ is **tangent** to the level curve (it propagates the robot along
+the path) and $-k\,\varphi\,\nabla\varphi$ points down the gradient toward $\varphi = 0$ (it converges). This
+is *exactly* the same idea as the closest-point form: $E\nabla\varphi$ plays the role of $\hat{\mathbf{t}}$,
+$\nabla\varphi$ the role of $\hat{\mathbf{n}}$, and $\varphi$ the role of $e$. The level-set view is what
+makes the convergence proof clean.
 
-$$
-\mathbf{u}_{xy} = v_\text{path}\,\frac{\mathbf{v}_\text{des}}{\lVert \mathbf{v}_\text{des}\rVert}
-$$
-
-The result is a true **feedback law on path distance**: the cross-track error $e$ appears directly in the
-command, so the field drives it to zero and *stays* converged, rather than asymptotically chasing a point
-that is itself moving. For a straight path the field is a textbook convergence flow; for a spline you
-evaluate $\hat{\mathbf{t}}$, $\hat{\mathbf{n}}$, and $e$ at the closest point each loop.
-
-<Callout type="idea" title="Why this beats a lookahead on curves.">
-Pure pursuit's only knob (lookahead) trades convergence speed against corner-cutting. GVF separates
-them: $v_\text{path}$ sets speed, $k$ sets how fast it converges onto the path, and there is no carrot to
-cut toward — so it can track tight curvature without shrinking a lookahead into oscillation.
+<Callout type="idea" title="Two views, one field.">
+Use the **implicit/level-set** form ($\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$) to reason
+about and prove convergence — it needs no closest-point search. Use the **closest-point** form
+($\boldsymbol{\chi}=\hat{\mathbf{t}}-k_N e\,\hat{\mathbf{n}}$) to actually code it for a Bézier or Hermite
+spline, where you don't have a tidy $\varphi$ but you can always project onto the curve.
 </Callout>
+
+### Why it provably converges
+
+Take the cross-track error as an energy $V = \tfrac{1}{2}e^2 \ge 0$. Moving along the normalized field, the
+rate of change of $e$ is set by the normal component of the velocity, which the converging term makes
+proportional to $-e$: $\dot e \propto -k_N\,e$. So
+
+$$
+\dot V = e\,\dot e \;\propto\; -k_N\,e^2 \;\le\; 0
+$$
+
+The energy only ever **decreases**, and it reaches zero **only** on the path. By Lyapunov's theorem the path
+is asymptotically stable: the robot is driven onto the path and *stays* there. A lookahead chasing a moving
+point never gets this guarantee — its tracking error depends on speed and lookahead, and it never has a
+Lyapunov function in the cross-track error. Normalize $\boldsymbol{\chi}$ and scale by your commanded speed
+to get the chassis velocity:
+
+$$
+\mathbf{u}_{xy} = v\,\frac{\boldsymbol{\chi}}{\lVert \boldsymbol{\chi}\rVert}, \qquad v = k_S\,v_{\max}
+$$
+
+### Slow down for the bends: the curvature speed cap
+
+Convergence says *where* to go, not *how fast*. Just like [adaptive pure pursuit](./pure-pursuit.mdx), real
+GVF followers cap speed where the path bends so the robot can physically make the turn. With path curvature
+$\kappa = 1/R$ and a lateral-acceleration budget $a_{\max}$, the fastest feasible speed through a bend is
+$v \le \sqrt{a_{\max}/\kappa}$. KookyBotz's follower writes this as a tunable cap
+
+$$
+v_{\max} \;=\; \min\!\left(v_{\max},\;\sqrt{\frac{a_{\max}}{k_C\,\kappa}}\right)
+$$
+
+where $k_C$ trades cornering speed against grip. On a straight ($\kappa\to 0$) the cap lifts and you run at
+full $v_{\max}$; in a tight arc it clamps the speed down automatically.
 
 </Theory>
 
 <Deploy title="Sampling the field each loop">
 
-<JavaCode league="FTC" label="Guided vector field follower (one loop)">{`/** Desired field-frame velocity from the guided vector field at the robot pose. */
-public Vector2d gvfCommand(Vector2d robot) {
-    PathPoint c = path.closestPoint(robot);   // closest point + tangent
-    Vector2d tangent = c.tangent.unit();      // along-track direction
+Three pieces every loop: **project** the robot onto the path (closest point + tangent + curvature), **blend**
+the field and cap the speed, then **rotate** the field-frame velocity into wheel commands.
+
+<JavaCode league="FTC" label="Guided vector field follower">{`// kN  — converge gain (1/in): how hard the field pulls toward the path
+// kS  — speed scale (0..1): fraction of max speed to command
+// kC  — curvature caution: bigger => slower through bends
+public static double kN = 0.5, kS = 1.0, kC = 1e-7, kStatic = 0.1;
+
+/** Desired field-frame chassis velocity from the guiding vector field. */
+public Vector2d gvfVelocity(Pose2d robot) {
+    // 1) PROJECT: closest point on the spline, seeded from last loop's t so the
+    //    search is local and cheap (a few Newton steps, not a global scan).
+    double t = path.project(robot.vec(), lastT);   // Newton-Raphson, seeded
+    lastT = t;
+    Vector2d c       = path.get(t);                // closest point
+    Vector2d tangent = path.tangent(t).unit();     // along-track direction
     Vector2d normal  = tangent.rotate(Math.PI / 2.0);
 
-    // signed cross-track error: how far off the path, and which side
-    double e = (robot.minus(c.position)).dot(normal);
+    // signed cross-track error via the 2D cross product (sign = which side)
+    Vector2d offset = robot.vec().minus(c);
+    double e = offset.cross(tangent);              // = offset . normal
 
-    // blend: flow along the path, minus a pull toward it
-    Vector2d desired = tangent.minus(normal.times(K_CONVERGE * e));
-    return desired.unit().times(PATH_SPEED);  // field-frame chassis velocity
+    // 2) BLEND: flow along the path, minus a pull toward it (chi = t - kN*e*n)
+    Vector2d chi = tangent.minus(normal.times(kN * e)).unit();
+
+    // 3) SPEED: cap by curvature so the robot can actually make the bend
+    double kappa = path.curvature(t);
+    double vMax  = MAX_LINEAR_SPEED;
+    if (kappa > 1e-6) vMax = Math.min(vMax, Math.sqrt(MAX_ACCEL / (kC * kappa)));
+
+    return chi.times(vMax * kS);                   // field-frame velocity
 }`}</JavaCode>
 
-Feed that field-frame velocity through the field-centric rotation and the
-[mecanum mixer](./mecanum-kinematics.mdx), and add the usual heading controller for $\theta$. The path
-parameter only advances as the robot moves along it, so progress is driven by geometry, not a clock.
+The path parameter $t$ only advances as the robot moves along the curve, so progress is driven by geometry,
+not a clock — and seeding the projection from last loop's $t$ keeps the closest-point search to a few Newton
+iterations instead of re-scanning the whole spline.
+
+Heading is its own controller, and a nice touch from KookyBotz is to profile it: instead of a raw P term on
+heading error, command $\omega = \min\!\big(\omega_{\max}, \sqrt{2\,a_\theta\,|\Delta\theta|}\big)$, the
+speed a constant-deceleration stop would need — it eases into the target heading without overshoot. A small
+**kStatic** feedforward, $\operatorname{sign}(u)\cdot k_{\text{static}}$, breaks stiction so tiny corrections
+near the path don't stall.
+
+<JavaCode league="FTC" label="Field-frame velocity → mecanum powers">{`public void drive(Pose2d robot) {
+    Vector2d v = gvfVelocity(robot);                 // field frame
+    Vector2d body = v.rotate(-robot.getHeading());   // into robot frame
+    double fwd = body.getX() / MAX_LINEAR_SPEED;
+    double str = body.getY() / MAX_LINEAR_SPEED;
+
+    // heading: sqrt (motion-profiled) approach to the path tangent's heading
+    double dTheta = wrap(targetHeading - robot.getHeading());   // see Angle Wrapping
+    double turn = Math.min(MAX_TURN, Math.sqrt(2 * A_THETA * Math.abs(dTheta)))
+                * Math.signum(dTheta) / MAX_TURN;
+
+    // kStatic feedforward to overcome stiction on the strafe axis
+    str += Math.signum(str) * kStatic;
+
+    drivetrain.driveRobotCentric(fwd, str, turn);    // your mecanum mixer
+}
+
+public boolean isFinished(Pose2d robot) {
+    return robot.vec().minus(path.end()).norm() < FINISH_TOLERANCE;   // ~1.5 in
+}`}</JavaCode>
+
+Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); use
+[angle wrapping](./angle-wrapping.mdx) on the heading error so it always turns the short way.
 
 </Deploy>
 
 <Admonition type="warning" title="Hardware reality: the closest-point search and local minima">
 
-Finding the closest point on a spline every loop is a small optimization — seed it from last loop's
-parameter and search locally, or the cost adds up. And a naive field can have local minima or stall where
-the converge and flow terms cancel; clamp the cross-track gain and keep a minimum along-track speed so
-the robot never freezes on the path.
+The whole method rests on the projection. Finding the closest point on a spline every loop is a small
+optimization — **seed it from last loop's parameter** and take a few Newton-Raphson steps locally, or the
+cost adds up and (worse) it can jump to a far branch of a self-approaching path. A naive field can also have
+**local minima or stall points** where the converge and flow terms cancel; clamp the cross-track term and
+keep a **minimum along-track speed** so the robot never freezes. And don't let $k_N$ run away: a huge gain
+makes the field point almost straight at the path, so the robot overshoots and zig-zags — the same
+oscillation you were trying to escape from pure pursuit.
 
 </Admonition>
 
 <Admonition type="tip" title="Where GVF sits in the toolbox">
 
-For point-to-point moves, [PID-to-point](./pid-to-point.mdx) is plenty. For pre-planned curves at speed,
-GVF (or a well-tuned pure pursuit over a [quintic spline](./quintic-splines.mdx)) gives the tightest,
-most repeatable tracking — the difference between a routine that scores and one that clips the
-structure.
+For point-to-point moves, [PID-to-point](./pid-to-point.mdx) is plenty. For pre-planned curves at speed, GVF
+(or a well-tuned pure pursuit over a [quintic spline](./quintic-splines.mdx)) gives the tightest, most
+repeatable tracking — and GVF's disturbance rejection (get bumped, slide right back on) is its standout
+trait. The difference between a routine that scores and one that clips the structure.
+
+</Admonition>
+
+<Admonition type="note" title="Sources & references">
+
+- **Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao, *A Guiding Vector Field Algorithm for Path Following
+  Control* ([arXiv:1610.04391](https://arxiv.org/abs/1610.04391))** — *the rigorous theory.* The
+  implicit/level-set field $\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$ and its Lyapunov
+  convergence proof come from here.
+- **[FTC-9974-THOR/GuidedVectorField](https://github.com/FTC-9974-THOR/GuidedVectorField)** — *a reference
+  FTC GVF library.* Bézier-path guidance and the disturbance-rejection framing ("kick the robot and it
+  comes back") this lesson quotes.
+- **[KookyBotz/CenterStage `GVFCommand`](https://github.com/KookyBotz/CenterStage/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/common/commandbase/drivecommand/GVFCommand.java)**
+  — *the shipped implementation we model the Deploy on.* The $k_N$/$k_S$/$k_C$ gains, the cross-product
+  cross-track error, the curvature speed cap $\sqrt{a_{\max}/(k_C\kappa)}$, seeded Newton-Raphson
+  projection, the $\sqrt{2a|\Delta\theta|}$ heading profile, and the kStatic feedforward all trace to this.
+- **[FTC Tech Toolbox — Guided Vector Fields](https://ftc-tech-toolbox.vercel.app/docs/Autonomous%20Movement/zpt)**
+  — *the FTC-level intro* (field of vectors over a Bézier spline; closest-point + derivative → field-centric
+  command) that frames this lesson.
+
+All code here is an independent reimplementation, not a copy. See the full [references](../references.mdx).
 
 </Admonition>
