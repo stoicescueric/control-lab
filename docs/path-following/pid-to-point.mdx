@@ -23,7 +23,7 @@ the loop that connects them.
 
 <Problem title="Get to a target pose, with nothing but feedback">
 
-The task: drive from wherever the robot is to a target pose $(x^\*, y^\*, \theta^\*)$ and stop there.
+The task: drive from wherever the robot is to a target pose $(x^*, y^*, \theta^*)$ and stop there.
 No precomputed path, no velocity plan — just look at how far off you are and push toward the goal each
 loop.
 
@@ -38,7 +38,7 @@ far, ease in when close, and hold the final heading without spinning the long wa
 Start with the **field-frame error** — how far the target is from the robot right now:
 
 $$
-e_x = x^\* - x, \qquad e_y = y^\* - y, \qquad e_\theta = \operatorname{wrap}(\theta^\* - \theta)
+e_x = x^* - x, \qquad e_y = y^* - y, \qquad e_\theta = \operatorname{wrap}(\theta^* - \theta)
 $$
 
 The heading error is wrapped into $[-\pi, \pi]$ so the robot always turns the short way — exactly the
