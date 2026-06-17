@@ -26,7 +26,23 @@ function Figure({title, caption, children}: {title: string; caption: string; chi
   );
 }
 
-function Label({x, y, lx, ly, text, color = MUTED, anchor = 'middle'}: {x: number; y: number; lx: number; ly: number; text: string; color?: string; anchor?: string}) {
+function Label({
+  x,
+  y,
+  lx,
+  ly,
+  text,
+  color = MUTED,
+  anchor = 'middle',
+}: {
+  x: number;
+  y: number;
+  lx: number;
+  ly: number;
+  text: string;
+  color?: string;
+  anchor?: 'start' | 'middle' | 'end' | 'inherit';
+}) {
   return (
     <>
       <line x1={x} y1={y} x2={lx} y2={ly} stroke={color} strokeWidth="1" opacity="0.7" />

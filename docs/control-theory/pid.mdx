@@ -114,9 +114,11 @@ Two refinements are mandatory on real hardware:
   "winds up" and causes a large overshoot once the target is reached. The full implementation lives in
   [Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx).
 
-FTCLib provides the controller, and FTC Dashboard tunes the gains live over Wi-Fi:
+FTCLib provides a convenient baseline controller, and FTC Dashboard tunes the gains live over Wi-Fi.
+Treat the refinements above as production requirements: verify whether your library implements them
+the way your mechanism needs, or use the explicit anti-windup controller in the next lesson.
 
-<JavaCode league="FTC" label="FTCLib + Dashboard, with the refinements built in">{`@Config            // exposes the gains to FTC Dashboard for live tuning
+<JavaCode league="FTC" label="FTCLib + Dashboard baseline PID">{`@Config            // exposes the gains to FTC Dashboard for live tuning
 public class ArmController {
     public static double kP = 0.012, kI = 0.0, kD = 0.0006;
 
@@ -232,7 +234,7 @@ from a full battery to a sagging one, wrap them all in [**voltage compensation**
 <Admonition type="info" title="Sources & references">
 
 - [CTRL ALT FTC](https://www.ctrlaltftc.com/) - FTC-focused PID, feedforward, and tuning explanations.
-- [FTCLib PIDFController](https://docs.ftclib.org/ftclib/master/features/controllers) - FTC library reference
+- [FTCLib Controllers](https://docs.ftclib.org/ftclib/features/controllers) - FTC library reference
   for PID/PIDF controller structure.
 - [PDFL - Improving Upon PID](https://www.youtube.com/watch?v=EKSDbWL7tIY) - video reference for the
   feedforward, derivative filtering, and lower-limit refinements discussed here.

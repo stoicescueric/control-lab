@@ -6,6 +6,7 @@ tags: [angle-wrapping, heading, atan2, control, autonomous]
 ---
 
 import {AngleWrapIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+import AngleWrap from '@site/src/components/sims/AngleWrap';
 
 # Angle Wrapping
 
@@ -45,6 +46,8 @@ wrong; we just forgot to read the answer *on the circle*, taking the shorter of 
 
 <AngleWrapIllustration />
 
+<AngleWrap />
+
 The fix is to **wrap** any angle (or angle difference) into the half-open interval $(-\pi, \pi]$. The
 clean, branch-free way uses the fact that $\operatorname{atan2}$ already returns a value in that range,
 and that feeding it the sine and cosine of an angle reconstructs the angle modulo $2\pi$:
@@ -52,6 +55,15 @@ and that feeding it the sine and cosine of an angle reconstructs the angle modul
 $$
 \operatorname{wrap}(e) = \operatorname{atan2}\big(\sin e,\ \cos e\big)
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'e', meaning: 'the raw heading error before wrapping, computed as target minus current heading', unit: 'rad'},
+    {symbol: 'sin(e), cos(e)', meaning: 'periodic functions that erase the extra full rotations hidden inside the raw error'},
+    {symbol: 'atan2(y, x)', meaning: 'the quadrant-aware inverse tangent; here it reconstructs the shortest signed angle from sine and cosine'},
+    {symbol: 'wrap(e)', meaning: 'the shortest signed rotation the controller should command', unit: 'rad'},
+  ]}
+/>
 
 Because $\sin$ and $\cos$ are themselves periodic, the $\pm 360°$ ambiguity is erased before
 $\operatorname{atan2}$ ever runs, so the result is always the shortest signed rotation. (This is the

@@ -109,13 +109,13 @@ where:
 - $\mathbf{p}$ is the robot position.
 - The factor $\frac{1}{2}$ does not change the closest point; it just makes the derivative cleaner.
 
-The closest point occurs at an endpoint or where the derivative is zero:
+A candidate for the closest point occurs at an endpoint of the segment or where the derivative is zero:
 
 $$
 D'(t) = \left(\phi(t) - \mathbf{p}\right) \cdot \phi'(t) = 0
 $$
 
-That dot product has a geometric meaning. At the closest point, the vector from the path to the robot is perpendicular to the path tangent. The follower can use the previous loop's parameter as a seed, because in a normal FTC loop the robot cannot teleport from one part of the curve to another.
+That dot product has a geometric meaning. At an *interior* closest point, the vector from the path to the robot is perpendicular to the path tangent. Because $D'(t) = 0$ is necessary but not sufficient — it also marks local *maxima* of distance — the follower takes the global minimum among the interior candidates and the two endpoints. It can use the previous loop's parameter as a seed, because in a normal FTC loop the robot cannot teleport from one part of the curve to another.
 
 Drag the robot below. The green point is $\phi(\psi(\mathbf{p}))$: the path point the follower currently believes is closest to the robot. The yellow arrow is the tangent direction used for forward motion, and the blue arrow is the normal direction used for correction.
 
@@ -150,7 +150,7 @@ where:
 - $\mathbf{a}_{\text{attract}}$ is the correction acceleration toward the path.
 - $k_p^t$ is the translational proportional gain.
 - $k_d^t$ is the translational damping gain.
-- $\mathbf{v}_{\perp}$ is the part of robot velocity moving away from or toward the path normal.
+- $\mathbf{v}_{\perp} = (\mathbf{v} \cdot \hat{\mathbf{N}})\,\hat{\mathbf{N}}$ is the component of robot velocity along the path normal $\hat{\mathbf{N}}$ (positive when the robot is moving away from the path), so the damping term opposes that motion.
 
 The exact paper expression is more careful about singular cases and dot products, but this is the physical story: if the robot is off the curve, push it back; if it is already moving back too aggressively, damp it.
 
@@ -171,7 +171,7 @@ where:
 - $\kappa$ is curvature, equal to $\frac{1}{R}$ for a circle.
 - $R$ is the radius of the turn.
 
-Drag the points below. Tighter curvature means smaller radius, larger $\kappa$, and more required inward acceleration for the same speed.
+Drag the points below. Tighter curvature means smaller radius, larger $\kappa$, and more required inward acceleration for the same speed. (The demo fits a circle through three *separate* points — the Menger curvature — so it equals a path's true local curvature only in the limit as the points coincide; drag them close together to approximate the curvature at a single point.)
 
 <CurvatureCircle />
 
@@ -343,7 +343,7 @@ public final class ReactivePathFollower {
 
 <Admonition type="warning" title="This is architecture, not drop-in Pedro source">
 
-The snippet shows the decomposition, not the exact Pedro Pathing implementation. Real teams still need localization, tuning, completion constraints, acceleration limits, and a reliable projection method. Treat this as the whiteboard version of the follower.
+The snippet shows the decomposition, not the exact Pedro Pathing implementation. Real teams still need localization, tuning, completion constraints, acceleration limits, and a reliable projection method. One detail it leaves implicit: the centripetal term is only correct if `path.normal()` and `path.curvature()` share a consistent sign convention — the normal must point toward the center of curvature (inward-positive) — otherwise the feedforward pushes the robot the wrong way through a turn. Treat this as the whiteboard version of the follower.
 
 </Admonition>
 
@@ -367,14 +367,13 @@ $$
 \xi(x) = (v, R\Omega, \xi_P(x), \xi_R(x))
 $$
 
-where:
+where the tuple is the commanded time-derivative of the state $x = (\mathbf{p}, R, \mathbf{v}, \Omega)$ (position, rotation, translational velocity, angular velocity):
 
-- $\xi(x)$ is the complete second-order guiding vector field.
-- $v$ is translational velocity.
-- $R$ is robot rotation.
-- $\Omega$ is angular velocity.
-- $\xi_P(x)$ is the translational acceleration component.
-- $\xi_R(x)$ is the rotational acceleration component.
+- $\xi(x)$ is the complete second-order guiding vector field, i.e. the commanded state derivative $(\dot{\mathbf{p}}, \dot{R}, \dot{\mathbf{v}}, \dot{\Omega})$.
+- $v$ is translational velocity, so $\dot{\mathbf{p}} = v$.
+- $R\Omega$ is the rotational kinematics term, where $\Omega$ is the skew-symmetric angular-velocity matrix and $\dot{R} = R\Omega$.
+- $\xi_P(x)$ is the translational acceleration component $\dot{\mathbf{v}}$.
+- $\xi_R(x)$ is the rotational acceleration component $\dot{\Omega}$.
 
 For an FTC mecanum robot, the friendly version is:
 
@@ -391,7 +390,7 @@ That is the core idea Pedro exposes to teams: a path follower that is reactive l
 
 <Admonition type="info" title="Sources & references">
 
-- Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. [Zenodo record](https://zenodo.org/records/20725319).
+- Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. Preprint, [Zenodo](https://zenodo.org/records/20725319), DOI [10.5281/zenodo.20725319](https://doi.org/10.5281/zenodo.20725319).
 - Pedro Pathing documentation, [Introduction](https://pedropathing.com/docs/pathing): Bezier curves, PIDF control, centripetal force correction, localization prerequisites, and tuning overview.
 - Pedro Pathing documentation, [PedroPathing vs Road Runner](https://pedropathing.com/docs/pathing/pedro-v-roadrunner): speed, disturbance correction, centripetal force correction, and command-base options.
 - Pedro Pathing documentation, [Constraints](https://pedropathing.com/docs/pathing/reference/constraints): completion criteria used by `follower.isBusy()`.

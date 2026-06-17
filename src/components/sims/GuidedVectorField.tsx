@@ -131,8 +131,8 @@ export function GuidedVectorField() {
 
   const here = field(samples, tans, robot, kN);
   const arrowColor = (e: number) => {
-    const m = clamp(Math.abs(e) / 50, 0, 1); // 0 in -> teal, far -> blue
-    return `hsl(${190 - m * 40}, ${55 + m * 20}%, ${62 - m * 6}%)`;
+    const m = clamp(Math.abs(e) / 50, 0, 1); // 0 in -> teal (190), far -> blue (230)
+    return `hsl(${190 + m * 40}, ${60 - m * 5}%, ${62 - m * 8}%)`;
   };
 
   return (
@@ -231,7 +231,7 @@ export function GuidedVectorField() {
           {color: '#5ce08a', label: 'path (○ = end)'},
           {color: '#ff6f9c', label: 'robot', dot: true},
           {color: '#ffc24d', label: 'flow line it would follow'},
-          {color: '#3ba7c4', label: 'field arrows (bluer = farther off path)'},
+          {color: '#5a8fd0', label: 'field arrows (teal near path → blue far off)'},
           {color: '#6f8bff', label: 'Bézier control points', dot: true},
         ]}
       />

@@ -11,6 +11,7 @@ import MDXComponents from '@theme-original/MDXComponents';
 import Admonition from '@theme/Admonition';
 import {Abstract} from '@site/src/components/kit/Abstract';
 import {Difficulty} from '@site/src/components/kit/Difficulty';
+import {EquationLegend} from '@site/src/components/kit/EquationLegend';
 import {VideoEmbed} from '@site/src/components/kit/VideoEmbed';
 import {
   CalculusIllustration,
@@ -41,6 +42,7 @@ export default {
   Abstract,
   // Easy / Medium / Hard badge under the lesson title
   Difficulty,
+  EquationLegend,
   VideoEmbed,
   CalculusIllustration,
   LinearAlgebraIllustration,
