@@ -1,0 +1,303 @@
+---
+title: Actuator Saturation & Anti-Windup
+description: "Why motors, batteries, and mechanisms have hard output limits, how those limits break a naive PID integral term, and how to implement anti-windup in FTC code."
+sidebar_position: 4.5
+tags: [pid, anti-windup, saturation, integral, actuator-limits, controls]
+---
+
+import AntiWindup from '@site/src/components/sims/AntiWindup';
+
+# Actuator Saturation & Anti-Windup
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Actuator saturation is what happens when the controller asks for more effort than the robot can physically
+deliver. Anti-windup is the controller design that prevents the integral term from accumulating fake
+authority while the motor, battery, servo, or mechanism is already pinned at its limit.
+</Abstract>
+
+PID is often written as if the output can be any number:
+
+$$
+u_{raw} = K_p e + K_i \int e\,dt + K_d\dot e
+$$
+
+FTC hardware cannot do that. A DC motor command is bounded, a battery can only supply so much voltage, a
+servo has a finite range, and a mechanism may hit a hard stop. The controller can ask for the impossible,
+but the robot will silently deliver the nearest possible command.
+
+That one nonlinearity is enough to break textbook integral control.
+
+<Problem title="The controller asks for 19 volts. The motor gets 12.">
+
+The demo compares two identical position controllers. Both command the same saturated actuator. The pink
+controller keeps integrating while saturated, so its integral term stores a large command the motor never
+actually received. The green controller uses anti-windup: it clamps the integral contribution and pauses
+integration when the actuator is already pinned in the same direction as the error.
+
+<AntiWindup />
+
+</Problem>
+
+<Theory title="Saturation is the real actuator model">
+
+Write the controller output before limits as:
+
+$$
+u_{raw} = u_P + u_I + u_D + u_{FF}
+$$
+
+where:
+
+- $u_{raw}$ is the command the controller wants to send.
+- $u_P = K_p e$ is the proportional contribution.
+- $u_I = K_i I$ is the integral contribution, with $I = \int e\,dt$.
+- $u_D$ is the derivative contribution, usually computed from measurement velocity.
+- $u_{FF}$ is any feedforward prediction.
+
+The actuator applies a saturated command:
+
+$$
+\boxed{
+u = \operatorname{sat}(u_{raw}, u_{min}, u_{max})
+}
+$$
+
+where $u_{min}$ and $u_{max}$ are the physical output limits. For normalized FTC motor power, those limits
+are usually $-1$ and $1$. For voltage-based code:
+
+$$
+u_{max} = V_{battery}, \qquad u_{min} = -V_{battery}
+$$
+
+and the final motor power is:
+
+$$
+\text{power} = \frac{u}{V_{battery}}
+$$
+
+### What windup means
+
+The integral state evolves as:
+
+$$
+I_{k+1} = I_k + e_k\Delta t
+$$
+
+where $I_k$ is the stored integral at loop $k$, $e_k$ is the current error, and $\Delta t$ is the measured
+loop time. If the target is far away, $e_k$ is large. The controller may request:
+
+$$
+u_{raw} > u_{max}
+$$
+
+but the actuator only receives:
+
+$$
+u = u_{max}
+$$
+
+If the integrator continues to accumulate during that time, $u_I$ grows even though the robot cannot
+apply the extra effort. When the mechanism finally reaches the target, the error may be near zero, but the
+stored integral is still large. The controller keeps pushing and overshoots.
+
+That is integral windup: the integral term stores a command that the actuator never had the authority to
+execute.
+
+### Three practical anti-windup tools
+
+The first tool is **integrator clamping**:
+
+$$
+u_I = \operatorname{clamp}(K_i I, I_{min}, I_{max})
+$$
+
+where $I_{min}$ and $I_{max}$ are output-sized limits on the integral contribution. Do not think of them
+as error limits; think in actuator units. If your motor command is voltage, clamp the integral in volts.
+
+The second tool is **conditional integration**:
+
+$$
+\text{integrate only if the actuator is not saturated, or if the error would pull it out of saturation.}
+$$
+
+In code form, if $u_{raw} > u_{max}$ and $e > 0$, more integration only pushes further into the positive
+limit, so pause it. If $u_{raw} < u_{min}$ and $e < 0$, pause it in the negative direction. If the error
+has changed sign and would pull the command back toward the valid range, integration is allowed again.
+
+The third tool is an **I-zone**:
+
+$$
+I = 0 \quad \text{when} \quad |e| > e_{zone}
+$$
+
+where $e_{zone}$ is a chosen error threshold. This says: do not use integral control while the mechanism
+is far away. Let feedforward, proportional, and derivative control do the large movement; allow integral
+only near the setpoint where it is correcting a small persistent bias.
+
+<Callout type="idea" title="The strongest anti-windup is often no integral.">
+For gravity-loaded mechanisms, prefer a real [feedforward](./feedforward.mdx): $k_G$ for slides and
+$k_G\cos(\theta)$ for arms. Feedforward supplies the predictable holding effort directly, so the integral
+does not have to slowly discover it by accumulating error.
+</Callout>
+
+</Theory>
+
+<Deploy title="A saturating PID controller with anti-windup">
+
+This controller works in volts internally. That makes saturation physically meaningful: clamp the desired
+voltage to what the battery can deliver, then divide by measured battery voltage when commanding the
+motor. If your project still uses normalized power internally, the same pattern works with limits
+$[-1, 1]$.
+
+<JavaCode league="FTC" label="PID with integrator clamp, I-zone, and conditional integration">{`/**
+ * PID controller with explicit actuator saturation and anti-windup.
+ *
+ * <p>The output is in volts. Convert to FTC motor power by dividing by the
+ * measured battery voltage after calculate() returns.</p>
+ */
+public final class SaturatingPidController {
+    private final double kP;
+    private final double kI;
+    private final double kD;
+    private final double iZone;
+    private final double minIntegralVolts;
+    private final double maxIntegralVolts;
+
+    private double integral;
+    private double previousMeasurement;
+    private boolean firstLoop = true;
+
+    public SaturatingPidController(
+            double kP,
+            double kI,
+            double kD,
+            double iZone,
+            double minIntegralVolts,
+            double maxIntegralVolts) {
+        this.kP = kP;
+        this.kI = kI;
+        this.kD = kD;
+        this.iZone = iZone;
+        this.minIntegralVolts = minIntegralVolts;
+        this.maxIntegralVolts = maxIntegralVolts;
+    }
+
+    /**
+     * Calculates a saturated voltage command.
+     *
+     * @param setpoint desired position or velocity
+     * @param measurement measured position or velocity
+     * @param dtSeconds measured loop time in seconds
+     * @param minVolts lower actuator limit, usually -battery voltage
+     * @param maxVolts upper actuator limit, usually +battery voltage
+     * @return saturated voltage command
+     */
+    public double calculate(
+            double setpoint,
+            double measurement,
+            double dtSeconds,
+            double minVolts,
+            double maxVolts) {
+        double dt = Math.max(1e-3, dtSeconds);
+        double error = setpoint - measurement;
+
+        if (Math.abs(error) > iZone) {
+            integral = 0.0;
+        }
+
+        double measurementRate = firstLoop ? 0.0 : (measurement - previousMeasurement) / dt;
+        firstLoop = false;
+        previousMeasurement = measurement;
+
+        double candidateIntegral = integral + error * dt;
+        double candidateIntegralVolts = clamp(
+            kI * candidateIntegral,
+            minIntegralVolts,
+            maxIntegralVolts);
+        candidateIntegral = kI == 0.0 ? 0.0 : candidateIntegralVolts / kI;
+
+        double rawWithCandidate =
+            kP * error
+            + kI * candidateIntegral
+            - kD * measurementRate;
+
+        boolean saturatedHigh = rawWithCandidate > maxVolts;
+        boolean saturatedLow = rawWithCandidate < minVolts;
+        boolean pushesFurtherHigh = saturatedHigh && error > 0.0;
+        boolean pushesFurtherLow = saturatedLow && error < 0.0;
+
+        if (!pushesFurtherHigh && !pushesFurtherLow) {
+            integral = candidateIntegral;
+        }
+
+        double raw =
+            kP * error
+            + kI * integral
+            - kD * measurementRate;
+
+        return clamp(raw, minVolts, maxVolts);
+    }
+
+    public void reset() {
+        integral = 0.0;
+        firstLoop = true;
+    }
+
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+}`}</JavaCode>
+
+Use it from a subsystem by measuring both loop time and battery voltage:
+
+<JavaCode league="FTC" label="Applying the saturated voltage to an FTC motor">{`public void update(double targetTicks) {
+    double now = timer.seconds();
+    double dt = now - lastTime;
+    lastTime = now;
+
+    double batteryVolts = voltageSensor.getVoltage();
+    double commandVolts = controller.calculate(
+        targetTicks,
+        motor.getCurrentPosition(),
+        dt,
+        -batteryVolts,
+        batteryVolts);
+
+    motor.setPower(commandVolts / batteryVolts);
+}`}</JavaCode>
+
+This pattern belongs anywhere the integral term is nonzero: slides, arms, heading hold, velocity hold,
+and any mechanism that can spend real time pinned at full output.
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: saturation is not only motor power">
+
+`setPower(1.0)` is the obvious saturation limit, but it is not the only one. Current limits, brownout
+protection, gear skipping, belt slip, servo travel, joint stops, and motion-profile velocity limits are
+also saturations. If the controller keeps asking for effort that the robot cannot deliver, the integral
+term can still wind up.
+
+</Admonition>
+
+<Admonition type="tip" title="Tune the model before adding integral">
+
+If a mechanism needs a lot of integral to hold position, it is usually missing feedforward. Add
+gravity/feedforward first, then use a small integral term only for residual bias. That keeps the integral
+small enough that anti-windup has an easy job.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- WPILib, [*PID Control in WPILib*](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/controllers/pidcontroller.html)
+  and [*PIDController API*](https://github.wpilib.org/allwpilib/docs/release/java/edu/wpi/first/math/controller/PIDController.html) -
+  integrator range and I-zone tools used to prevent windup.
+- CTRL ALT FTC, [*Improvements to the PID Controller*](https://www.ctrlaltftc.com/the-pid-controller/practical-improvements-to-pid) -
+  FTC-oriented discussion of practical PID upgrades, including anti-integral windup.
+- [Feedforward](./feedforward.mdx) - the Control Lab lesson that replaces much of the integral's job with
+  a model-based command.
+
+</Admonition>

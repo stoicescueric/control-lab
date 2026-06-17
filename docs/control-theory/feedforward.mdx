@@ -1,13 +1,14 @@
 ---
-title: Feedforward (kS, kV, kA)
-description: Predict the effort instead of only reacting — model the mechanism so the controller commands the right voltage before the error appears, then let feedback clean up the residual.
+title: Feedforward (kS, kV, kA, kG)
+description: Predict the effort instead of only reacting — model the mechanism so the controller commands the right voltage before the error appears, including gravity terms for arms and slides.
 sidebar_position: 3
-tags: [feedforward, ks, kv, ka, motor-model, characterisation]
+tags: [feedforward, ks, kv, ka, kg, motor-model, arms, slides, characterisation]
 ---
 
 import Flywheel from '@site/src/components/sims/Flywheel';
+import MechanismFeedforward from '@site/src/components/sims/MechanismFeedforward';
 
-# Feedforward (kS, kV, kA)
+# Feedforward (kS, kV, kA, kG)
 
 <Difficulty level="Medium" />
 
@@ -15,7 +16,7 @@ import Flywheel from '@site/src/components/sims/Flywheel';
 Feedforward is the predictive half of a controller: instead of waiting for an error to appear, it uses
 a model of the mechanism to command most of the required effort up front, leaving feedback to mop up
 the rest. This lesson derives the kS, kV, and kA terms straight from the motor's physics and combines
-them with PID.
+them with PID, then extends the model to gravity-loaded FTC mechanisms: slides/elevators and arms.
 </Abstract>
 
 Feedback is reactive by construction. Feedforward is the predictive half: a model of the mechanism
@@ -64,10 +65,99 @@ inertia, $\tau = J\alpha$ (that is $k_A a$).
 | **kV** — velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
 | **kA** — acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
 
-<Callout type="idea" title="Gravity-loaded cousins:">
-an <strong>arm</strong> adds <code>kG·cos(θ)</code> (gravity varies with angle); an
-<strong>elevator</strong> adds a constant <code>kG</code>. Same model, one term for weight.
-</Callout>
+## Mechanism feedforward: add gravity
+
+The flywheel model is missing one thing many FTC mechanisms care about: **weight**. A flywheel does not
+need voltage to hold still against gravity. A vertical slide does. An arm definitely does, and the amount
+changes with angle.
+
+<MechanismFeedforward />
+
+### Slides and elevators: gravity is mostly constant
+
+For a vertical slide, define:
+
+- $h$ as slide height.
+- $v = \dot h$ as slide velocity, positive upward.
+- $a = \ddot h$ as slide acceleration.
+- $k_G$ as the voltage needed to hold the slide still against gravity.
+
+The ideal vertical-slide feedforward is:
+
+$$
+\boxed{
+V_{slide} =
+k_S\,\operatorname{sign}(v)
++ k_G
++ k_V\,v
++ k_A\,a
+}
+$$
+
+The important detail is that $k_G$ does **not** flip sign when the slide moves downward. Static friction
+depends on direction, so $k_S\operatorname{sign}(v)$ changes. Gravity still pulls down, so the motor still
+needs an upward holding term.
+
+Real FTC slides are not always ideal elevators. String wrap diameter, cable routing, elastic tension,
+carriage friction, arm coupling, or changing extension geometry can make the required hold voltage drift
+with height. When one constant $k_G$ is not enough, measure the hold voltage at several heights and
+interpolate:
+
+$$
+V_{slide} =
+k_S\,\operatorname{sign}(v)
++ k_G(h)
++ k_V\,v
++ k_A\,a
+$$
+
+Between two calibration points $(h_i, k_{G,i})$ and $(h_{i+1}, k_{G,i+1})$:
+
+$$
+\boxed{
+k_G(h)
+=
+k_{G,i}
++
+\frac{h - h_i}{h_{i+1} - h_i}
+\left(k_{G,i+1} - k_{G,i}\right)
+}
+$$
+
+where $h$ is the current or target slide height, $h_i$ and $h_{i+1}$ are the two measured heights around
+it, and $k_{G,i}$ / $k_{G,i+1}$ are the measured hold voltages at those heights.
+
+### Arms: gravity changes with angle
+
+For an arm, define:
+
+- $\theta$ as the arm angle measured from **horizontal**.
+- $\omega = \dot\theta$ as angular velocity.
+- $\alpha = \ddot\theta$ as angular acceleration.
+- $k_G$ as the voltage needed to hold the arm when it is horizontal.
+
+Gravity torque is largest when the arm is horizontal and nearly zero when the arm is vertical. That gives
+the arm feedforward:
+
+$$
+\boxed{
+V_{arm} =
+k_S\,\operatorname{sign}(\omega)
++ k_G\cos(\theta)
++ k_V\,\omega
++ k_A\,\alpha
+}
+$$
+
+This convention matters. If your encoder reads zero somewhere else, convert it first:
+
+$$
+\theta_{horizontal} = \theta_{encoder} + \theta_{offset}
+$$
+
+Then use $\cos(\theta_{horizontal})$. If the sign is wrong, do not randomly negate the whole controller;
+fix the angle convention and motor direction until a horizontal arm receives the expected upward holding
+voltage.
 
 The deployable pattern is **feedforward + feedback**: the model does ~90 % of the work instantly,
 [PID](./pid.mdx) corrects the residual and rejects disturbances.
@@ -124,16 +214,119 @@ voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
     }
 }`}</JavaCode>
 
+<JavaCode league="FTC" label="Arm feedforward with kG * cos(theta)">{`/**
+ * Feedforward model for a single-joint arm.
+ *
+ * <p>Angle convention: angleRad = 0 means the arm is horizontal.
+ * If your encoder zero is elsewhere, add an offset before calling calculate().</p>
+ */
+public final class ArmFeedforward {
+    private final double kS;
+    private final double kG;
+    private final double kV;
+    private final double kA;
+
+    public ArmFeedforward(double kS, double kG, double kV, double kA) {
+        this.kS = kS;
+        this.kG = kG;
+        this.kV = kV;
+        this.kA = kA;
+    }
+
+    /**
+     * @param angleRad arm angle from horizontal, radians
+     * @param velocityRadPerSec target angular velocity
+     * @param accelRadPerSecSq target angular acceleration
+     * @return predicted motor voltage
+     */
+    public double calculate(double angleRad, double velocityRadPerSec, double accelRadPerSecSq) {
+        double staticVolts = Math.abs(velocityRadPerSec) < 1e-4
+            ? 0.0
+            : kS * Math.signum(velocityRadPerSec);
+
+        return staticVolts
+            + kG * Math.cos(angleRad)
+            + kV * velocityRadPerSec
+            + kA * accelRadPerSecSq;
+    }
+}`}</JavaCode>
+
+<JavaCode league="FTC" label="Slide feedforward with interpolated gravity">{`/**
+ * Feedforward model for a vertical slide/elevator.
+ *
+ * <p>The gravity term is interpolated from measured hold voltages at known
+ * heights. Use this when one constant kG is not accurate across the full travel.</p>
+ */
+public final class InterpolatedSlideFeedforward {
+    private final double kS;
+    private final double kV;
+    private final double kA;
+    private final double[] heights;
+    private final double[] holdVolts;
+
+    public InterpolatedSlideFeedforward(
+            double kS,
+            double kV,
+            double kA,
+            double[] heights,
+            double[] holdVolts) {
+        if (heights.length != holdVolts.length || heights.length < 2) {
+            throw new IllegalArgumentException("Need matching height and hold-voltage samples.");
+        }
+        this.kS = kS;
+        this.kV = kV;
+        this.kA = kA;
+        this.heights = heights.clone();
+        this.holdVolts = holdVolts.clone();
+    }
+
+    /**
+     * @param height slide height in your chosen real unit
+     * @param velocity target slide velocity, positive upward
+     * @param acceleration target slide acceleration, positive upward
+     * @return predicted motor voltage
+     */
+    public double calculate(double height, double velocity, double acceleration) {
+        double staticVolts = Math.abs(velocity) < 1e-4
+            ? 0.0
+            : kS * Math.signum(velocity);
+
+        return staticVolts
+            + interpolateHoldVolts(height)
+            + kV * velocity
+            + kA * acceleration;
+    }
+
+    private double interpolateHoldVolts(double height) {
+        if (height <= heights[0]) {
+            return holdVolts[0];
+        }
+
+        for (int i = 0; i < heights.length - 1; i++) {
+            double leftH = heights[i];
+            double rightH = heights[i + 1];
+            if (height <= rightH) {
+                double t = (height - leftH) / (rightH - leftH);
+                return holdVolts[i] + t * (holdVolts[i + 1] - holdVolts[i]);
+            }
+        }
+
+        return holdVolts[holdVolts.length - 1];
+    }
+}`}</JavaCode>
+
 The identical recipe in FRC is one line, because WPILib bundles it:
 
 <JavaCode league="FRC" label="WPILib equivalent">{`SimpleMotorFeedforward ff = new SimpleMotorFeedforward(kS, kV, kA);
 PIDController pid = new PIDController(kP, 0, 0);
 motor.setVoltage(ff.calculate(goalVel) + pid.calculate(measVel, goalVel));`}</JavaCode>
 
-The constants come from **measurement**, not guesswork: drive the mechanism through known voltages and
-fit the steady speeds. A useful first estimate is $k_V \approx 12\,\text{V} \div v_{\max}$, but to get
-them right you measure them: [**system identification**](./system-identification.mdx) recovers $k_S$, $k_V$, and $k_A$
-by least-squares fit, exactly as FRC's SysId does.
+The constants come from **measurement**, not guesswork. For velocity mechanisms, drive the mechanism
+through known voltages and fit the steady speeds. For gravity mechanisms, measure the hold voltage at the
+important positions: a slide at several heights, or an arm at known angles. A useful first estimate is
+$k_V \approx 12\,\text{V} \div v_{\max}$, but to get them right you measure them:
+[**system identification**](./system-identification.mdx) recovers $k_S$, $k_V$, and $k_A$ by
+least-squares fit, exactly as FRC's SysId does.
 
 <Callout type="warn" title="Feedforward is only as good as its units.">
 <code>kV</code> in "volts per m/s" is meaningless unless <code>getVelocity()</code> is truly
@@ -144,15 +337,18 @@ converted to m/s. A wrong ticks→units factor produces a wrong model — exactl
 Feedforward is only ever half a controller, though — it is open-loop, blind to anything it didn't
 model: a jammed mechanism, a worn gear, a battery having a bad day. Those gains are also only as good as
 your measurement of them — so pair feedforward with [**system identification**](./system-identification.mdx)
-to measure $k_S, k_V, k_A$ from data, and with [**PID**](./pid.mdx) for the feedback half that catches
-everything the model missed.
+to measure $k_S, k_V, k_A$ from data, measure $k_G$ on the mechanism itself, and use [**PID**](./pid.mdx)
+for the feedback half that catches everything the model missed.
 
 </Deploy>
 
 <Admonition type="info" title="Sources & references">
 
 - [WPILib: Feedforward Control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/controllers/feedforward.html) -
-  competition-robotics reference for $k_S$, $k_V$, $k_A$, and model-based voltage prediction.
+  competition-robotics reference for $k_S$, $k_V$, $k_A$, elevator $k_G$, arm $k_G\cos(\theta)$, and
+  model-based voltage prediction.
+- [WPILib ArmFeedforward API](https://github.wpilib.org/allwpilib/docs/release/java/edu/wpi/first/math/controller/ArmFeedforward.html) -
+  documents the horizontal-angle convention used by the $\cos(\theta)$ arm term.
 - Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) -
   rigorous derivation of motor feedforward and feedback composition.
 - [System Identification](./system-identification.mdx) - the next Control Lab lesson that estimates

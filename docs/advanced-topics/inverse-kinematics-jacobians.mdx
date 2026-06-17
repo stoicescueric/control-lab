@@ -1,0 +1,327 @@
+---
+title: "Inverse Kinematics: Jacobians & Numerical Solvers"
+description: "The advanced side of inverse kinematics: using Jacobians to turn small end-effector errors into joint corrections when a closed-form geometry solution is no longer convenient."
+sidebar_position: 1.5
+tags: [inverse-kinematics, jacobian, numerical-methods, mechanisms, robotics, advanced]
+---
+
+import InverseKinematicsArm from '@site/src/components/sims/InverseKinematicsArm';
+
+# Inverse Kinematics: Jacobians & Numerical Solvers
+
+<Difficulty level="Hard" />
+
+<Abstract>
+The core [Inverse Kinematics](../path-following/inverse-kinematics.mdx) lesson solves a two-link arm with
+triangle geometry. This advanced note explains the more general method: use a Jacobian to ask how a tiny
+change in joint angles changes the claw position, then repeatedly correct the angles until the mechanism
+reaches the target.
+</Abstract>
+
+<Admonition type="note" title="Prerequisite">
+
+Read [Inverse Kinematics](../path-following/inverse-kinematics.mdx) first. This page assumes you already
+know the two-link forward equations and the difference between task space $(x, y)$ and joint space
+$(\theta_1, \theta_2)$.
+
+</Admonition>
+
+The closed-form two-link solution is beautiful because it collapses into one triangle. Real mechanisms
+are often messier: an arm has a wrist, a linkage is offset, a turret rotates the coordinate frame, or a
+slide changes the effective link length. Once the geometry stops fitting on a napkin, the useful question
+becomes local instead of global:
+
+> If I nudge each joint by a tiny amount, which way does the claw move?
+
+That question is answered by a **Jacobian**.
+
+## Where Jacobians fit among IK algorithms
+
+The Quality Control workshop separates IK methods by how much structure the mechanism gives you:
+
+| Method | Best when | Core idea |
+|---|---|---|
+| Closed-form trigonometry | The mechanism has about the same freedoms as the target, like a two-link arm reaching $(x, y)$. | Break links into vector components and solve the equations directly. |
+| FABRIK | You have a chain of links and want a geometric, constraint-friendly approximation. | Move the end to the target, then sweep backward and forward while preserving link lengths. |
+| Cyclic coordinate descent | You can adjust one joint at a time and want a simple iterative solve. | Rotate each joint so the end effector points closer to the target, then repeat. |
+| Jacobian transpose / pseudoinverse | You want a general local solver that also connects to control theory. | Use derivatives to turn a small end-effector error into small joint corrections. |
+
+FABRIK stands for **Forward And Backward Reaching Inverse Kinematics**. It is popular in graphics and
+robotics demos because it is intuitive: pull the end of the chain to the target, rebuild the chain toward
+the base, then rebuild it back out toward the target. CCD is similarly intuitive but works by rotating
+joint angles one at a time.
+
+The catch is that iterative methods need a **configuration policy**. If the same target has many valid
+solutions, the solver may jump between them or curl into an awkward pose unless you add constraints:
+joint limits, a fixed wrist angle, "keep the claw parallel to the floor," "prefer elbow-up," or "stay near
+the previous solution." A virtual four-bar is the hardware version of such a constraint: it removes a
+degree of freedom so the end of the mechanism stays parallel to the base.
+
+<Problem title="Keep the same picture, change the question">
+
+In the demo below, the closed-form solver jumps directly to the exact two-link answer. A numerical IK
+solver would do something more iterative: start from the current arm pose, measure the claw error, use the
+Jacobian to estimate a joint-angle correction, move a little, and repeat.
+
+<InverseKinematicsArm />
+
+</Problem>
+
+<Theory title="The Jacobian is a sensitivity matrix">
+
+For the same two-link arm, forward kinematics gives:
+
+$$
+\begin{aligned}
+x &= L_1\cos(\theta_1) + L_2\cos(\theta_1 + \theta_2) \\
+y &= L_1\sin(\theta_1) + L_2\sin(\theta_1 + \theta_2)
+\end{aligned}
+$$
+
+where:
+
+- $x$ is the claw's horizontal position.
+- $y$ is the claw's vertical position.
+- $L_1$ is the shoulder-to-elbow link length.
+- $L_2$ is the elbow-to-claw link length.
+- $\theta_1$ is the shoulder angle.
+- $\theta_2$ is the elbow angle relative to the first link.
+
+The Jacobian collects the partial derivatives of position with respect to joint angles:
+
+$$
+J(\theta_1,\theta_2) =
+\begin{bmatrix}
+\dfrac{\partial x}{\partial \theta_1} & \dfrac{\partial x}{\partial \theta_2} \\[8pt]
+\dfrac{\partial y}{\partial \theta_1} & \dfrac{\partial y}{\partial \theta_2}
+\end{bmatrix}
+$$
+
+For this arm:
+
+$$
+\boxed{
+J =
+\begin{bmatrix}
+-L_1\sin(\theta_1) - L_2\sin(\theta_1 + \theta_2) &
+-L_2\sin(\theta_1 + \theta_2) \\[6pt]
+\phantom{-}L_1\cos(\theta_1) + L_2\cos(\theta_1 + \theta_2) &
+\phantom{-}L_2\cos(\theta_1 + \theta_2)
+\end{bmatrix}
+}
+$$
+
+Read each column as a physical experiment:
+
+- Column 1 asks: if only the shoulder angle changes a little, how does the claw move?
+- Column 2 asks: if only the elbow angle changes a little, how does the claw move?
+
+In differential form:
+
+$$
+\Delta \mathbf{x} \approx J\,\Delta\boldsymbol{\theta}
+$$
+
+where:
+
+- $\Delta \mathbf{x} = \begin{bmatrix}\Delta x & \Delta y\end{bmatrix}^T$ is a small desired change in
+  claw position.
+- $\Delta\boldsymbol{\theta} =
+  \begin{bmatrix}\Delta\theta_1 & \Delta\theta_2\end{bmatrix}^T$ is the small joint-angle change that
+  should cause it.
+
+Forward velocity kinematics is easy:
+
+$$
+\dot{\mathbf{x}} = J\,\dot{\boldsymbol{\theta}}
+$$
+
+Inverse velocity kinematics asks for the reverse:
+
+$$
+\dot{\boldsymbol{\theta}} = J^{-1}\dot{\mathbf{x}}
+$$
+
+when $J$ is square and invertible. That is the advanced version of the same idea behind mecanum wheel
+mixing: desired task-space motion becomes actuator-space motion.
+
+### What if the matrix cannot be inverted?
+
+Near singularities, $J^{-1}$ becomes unstable or does not exist. A two-link arm is singular when it is
+nearly straight or nearly folded: the claw loses an easy direction of motion, so the solver demands huge
+joint changes for tiny target changes.
+
+The practical fix is a damped pseudoinverse:
+
+$$
+\Delta\boldsymbol{\theta}
+=
+J^T\left(JJ^T + \lambda^2 I\right)^{-1}\Delta\mathbf{x}
+$$
+
+where:
+
+- $J^T$ is the transpose of the Jacobian.
+- $I$ is the identity matrix.
+- $\lambda$ is a damping constant. Larger $\lambda$ makes the correction safer but slower.
+- $\Delta\mathbf{x}$ is the current claw-position error.
+
+This is called **damped least squares**. It gives up on the perfect correction when the math is fragile,
+and instead chooses a correction that is stable enough for hardware.
+
+### Jacobian transpose: the gradient-descent view
+
+The workshop also frames Jacobian transpose as a form of gradient descent. Instead of solving a matrix
+inverse, compute the target error and push the joints in the direction that most reduces that error:
+
+$$
+\Delta\boldsymbol{\theta} = \alpha J^T\mathbf{e}
+$$
+
+where:
+
+- $\mathbf{e} = \mathbf{x}_{target} - \mathbf{x}_{current}$ is the end-effector error.
+- $J^T$ is the transpose of the Jacobian.
+- $\alpha$ is a small step size chosen so the mechanism moves smoothly instead of overshooting.
+
+This is less exact than the pseudoinverse, but it is conceptually clean: the Jacobian says how joints
+affect the claw; the transpose turns "move the claw this way" into "nudge the joints this way." For FTC,
+that simplicity can be valuable when the mechanism is slow and the solver runs every loop.
+
+### Numerical IK loop
+
+The loop is short:
+
+1. Compute the current claw position with forward kinematics.
+2. Compute the error $\mathbf{e} = \mathbf{x}_{target} - \mathbf{x}_{current}$.
+3. Compute the Jacobian at the current angles.
+4. Solve for a small correction $\Delta\boldsymbol{\theta}$.
+5. Add the correction to the joint targets.
+6. Clamp joint limits and repeat next loop.
+
+That is not just a math trick. It is a control loop in geometry space.
+
+</Theory>
+
+<Deploy title="A practical numerical IK skeleton">
+
+This is intentionally a skeleton rather than a copy-paste subsystem. The point is the separation:
+geometry computes small angle corrections; your real subsystem still owns encoder offsets, feedforward,
+limits, and motor commands.
+
+<JavaCode league="FTC" label="Damped least-squares IK iteration">{`/**
+ * One damped least-squares inverse-kinematics step for a planar two-link arm.
+ *
+ * <p>This class computes a small correction from the current joint angles
+ * toward a desired wrist position. It does not command motors directly.</p>
+ */
+public final class TwoLinkNumericalIk {
+    private final double link1;
+    private final double link2;
+    private final double damping;
+    private final double maxStepRad;
+
+    public TwoLinkNumericalIk(double link1, double link2, double damping, double maxStepRad) {
+        this.link1 = link1;
+        this.link2 = link2;
+        this.damping = damping;
+        this.maxStepRad = maxStepRad;
+    }
+
+    /**
+     * Computes one joint-space correction toward the target.
+     *
+     * @param theta1 current shoulder angle, radians
+     * @param theta2 current elbow angle, radians
+     * @param targetX desired wrist x position
+     * @param targetY desired wrist y position
+     * @return small shoulder/elbow angle update, radians
+     */
+    public JointDelta step(double theta1, double theta2, double targetX, double targetY) {
+        double x = link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
+        double y = link1 * Math.sin(theta1) + link2 * Math.sin(theta1 + theta2);
+
+        double errorX = targetX - x;
+        double errorY = targetY - y;
+
+        double j00 = -link1 * Math.sin(theta1) - link2 * Math.sin(theta1 + theta2);
+        double j01 = -link2 * Math.sin(theta1 + theta2);
+        double j10 =  link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
+        double j11 =  link2 * Math.cos(theta1 + theta2);
+
+        // A = J * J^T + lambda^2 I
+        double a00 = j00 * j00 + j01 * j01 + damping * damping;
+        double a01 = j00 * j10 + j01 * j11;
+        double a10 = a01;
+        double a11 = j10 * j10 + j11 * j11 + damping * damping;
+
+        double det = a00 * a11 - a01 * a10;
+        if (Math.abs(det) < 1e-9) {
+            return new JointDelta(0.0, 0.0);
+        }
+
+        // y = A^-1 * error
+        double y0 = ( a11 * errorX - a01 * errorY) / det;
+        double y1 = (-a10 * errorX + a00 * errorY) / det;
+
+        // deltaTheta = J^T * y
+        double dTheta1 = j00 * y0 + j10 * y1;
+        double dTheta2 = j01 * y0 + j11 * y1;
+
+        return new JointDelta(clampStep(dTheta1), clampStep(dTheta2));
+    }
+
+    private double clampStep(double value) {
+        return Math.max(-maxStepRad, Math.min(maxStepRad, value));
+    }
+
+    /** Small correction to apply to the joint targets. */
+    public static final class JointDelta {
+        public final double shoulderRad;
+        public final double elbowRad;
+
+        public JointDelta(double shoulderRad, double elbowRad) {
+            this.shoulderRad = shoulderRad;
+            this.elbowRad = elbowRad;
+        }
+    }
+}`}</JavaCode>
+
+In FTC, this becomes useful when the mechanism has more variables than the clean two-link formula:
+
+- a turret plus an arm, where the turret chooses the plane and the arm solves within that plane;
+- an arm plus slides, where extension changes the reachable workspace;
+- a wrist that must preserve end-effector angle while the shoulder and elbow move;
+- a linkage whose exact geometry is easier to evaluate with forward kinematics than to solve by hand.
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: numerical IK can chase noise">
+
+A numerical solver is only as good as its measured joint angles. Encoder quantization, backlash, flex, and
+loose chain tension make the computed claw position wiggle. Use damping, step-size limits, and reasonable
+target tolerances; do not let an IK loop spam large corrections into a compliant mechanism.
+
+</Admonition>
+
+<Admonition type="tip" title="Start with the closed-form solver">
+
+If your mechanism is a simple two-link arm, use the closed-form solution in the core
+[Inverse Kinematics](../path-following/inverse-kinematics.mdx) lesson. Reach for Jacobians when the
+mechanism gets coupled, redundant, constrained, or too awkward to solve cleanly by geometry.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- Kevin Lynch and Frank Park, [*Modern Robotics*](https://modernrobotics.northwestern.edu/) - standard
+  open robotics text for Jacobians, velocity kinematics, singularities, and numerical IK.
+- 21229 Quality Control,
+  [*The Basics of Inverse Kinematics in Robotics*](https://www.youtube.com/watch?v=xXWveqIQObo) - FTC
+  workshop discussion of degree-of-freedom analysis, FABRIK, CCD, constraints, and Jacobian transpose.
+- WPILib, [*Kinematics and Odometry*](https://docs.wpilib.org/en/stable/docs/software/kinematics-and-odometry/index.html)
+  - drivetrain kinematics as the mobile-robot version of task-space to actuator-space mapping.
+- Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf)
+  - competitive-robotics controls context for applying math carefully on hardware.
+
+</Admonition>

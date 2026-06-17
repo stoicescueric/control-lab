@@ -18,12 +18,15 @@ The lessons are ordered by **difficulty**, easiest first:
 1. **The DC-motor model & motor curve** *(Easy)* — torque, speed, and back-EMF; why a motor slows under
    load.
 2. **Voltage compensation** *(Easy)* — holding behavior constant as the battery drops over a match.
-3. **Feedforward (kS, kV, kA)** *(Medium)* — computing the command *before* the error appears.
+3. **Feedforward (kS, kV, kA, kG)** *(Medium)* — computing the command *before* the error appears,
+   including gravity terms for arms and slides.
 4. **PID** *(Medium)* — the three-term feedback controller, hardened for real hardware.
-5. **Bang-bang** *(Medium)* — when the simplest possible controller is the right one (flywheels); its
+5. **Actuator Saturation & Anti-Windup** *(Medium)* — what happens when the controller asks for more
+   than the robot can deliver, and how to stop the integral from storing impossible commands.
+6. **Bang-bang** *(Medium)* — when the simplest possible controller is the right one (flywheels); its
    take-back-half upgrade lives in [Advanced Topics](../advanced-topics/takeback-half.mdx).
-6. **System identification** *(Hard)* — recovering kS/kV/kA from data by least-squares, the way SysId does.
-7. **Motion profiling** *(Hard)* — feeding the controller a physically achievable trajectory instead of a
+7. **System identification** *(Hard)* — recovering kS/kV/kA from data by least-squares, the way SysId does.
+8. **Motion profiling** *(Hard)* — feeding the controller a physically achievable trajectory instead of a
    step.
 
 <Admonition type="warning" title="Feedback alone is always a step behind">
@@ -41,8 +44,9 @@ foot of each lesson keep you oriented.
 
 1. [How a Motor Works](./how-a-motor-works.mdx) *(Easy)*
 2. [Voltage Compensation](./voltage-compensation.mdx) *(Easy)*
-3. [Feedforward (kS, kV, kA)](./feedforward.mdx) *(Medium)*
+3. [Feedforward (kS, kV, kA, kG)](./feedforward.mdx) *(Medium)*
 4. [PID Control](./pid.mdx) *(Medium)*
-5. [Bang-Bang Control](./bang-bang.mdx) *(Medium)*
-6. [System Identification](./system-identification.mdx) *(Hard)*
-7. [Motion Profiling](./motion-profiling.mdx) *(Hard)*
+5. [Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx) *(Medium)*
+6. [Bang-Bang Control](./bang-bang.mdx) *(Medium)*
+7. [System Identification](./system-identification.mdx) *(Hard)*
+8. [Motion Profiling](./motion-profiling.mdx) *(Hard)*

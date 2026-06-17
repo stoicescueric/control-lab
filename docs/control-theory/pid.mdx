@@ -111,7 +111,8 @@ Two refinements are mandatory on real hardware:
   changes ("derivative kick"). Differentiate the *measurement* instead — $-K_d\,\dot{m}$ — for the
   same damping without the kick. (The drone above already does this with $-K_d\,\dot{y}$.)
 - **Anti-windup.** When the actuator is saturated, stop accumulating the integral; otherwise it
-  "winds up" and causes a large overshoot once the target is reached.
+  "winds up" and causes a large overshoot once the target is reached. The full implementation lives in
+  [Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx).
 
 FTCLib provides the controller, and FTC Dashboard tunes the gains live over Wi-Fi:
 
