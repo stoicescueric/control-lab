@@ -17,6 +17,12 @@ import PathProjection from '@site/src/components/sims/PathProjection';
 Pedro Pathing is best understood as a reactive path follower: it continuously measures the robot pose, finds where that pose belongs on a curve, and combines several correction vectors into a drive command. This page connects the public Pedro documentation and the supplied second-order GVF paper to the FTC mental model: projection, path progress, cross-track correction, centripetal feedforward, heading control, and completion logic.
 </Abstract>
 
+<Admonition type="info" title="Based on the Pedro Pathing whitepaper">
+
+This page is based on the whitepaper posted by the Pedro Pathing developers, *Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints* (Havish Sripada & Baron Henderson, 2026), available on [Zenodo](https://zenodo.org/records/20725319).
+
+</Admonition>
+
 <Admonition type="note" title="Scope">
 
 This is not a line-by-line source-code audit of Pedro Pathing. It explains the control architecture at the level a strong FTC programmer needs before tuning or modifying a follower: what the follower is trying to compute, why the terms exist, and where the math sits underneath the API.
@@ -385,7 +391,7 @@ That is the core idea Pedro exposes to teams: a path follower that is reactive l
 
 <Admonition type="info" title="Sources & references">
 
-- Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. User-supplied PDF.
+- Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. [Zenodo record](https://zenodo.org/records/20725319).
 - Pedro Pathing documentation, [Introduction](https://pedropathing.com/docs/pathing): Bezier curves, PIDF control, centripetal force correction, localization prerequisites, and tuning overview.
 - Pedro Pathing documentation, [PedroPathing vs Road Runner](https://pedropathing.com/docs/pathing/pedro-v-roadrunner): speed, disturbance correction, centripetal force correction, and command-base options.
 - Pedro Pathing documentation, [Constraints](https://pedropathing.com/docs/pathing/reference/constraints): completion criteria used by `follower.isBusy()`.
