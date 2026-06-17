@@ -1,0 +1,127 @@
+---
+title: Common Implementation
+description: The shared building blocks every follower in this module assumes — the Pose2d/Vector2d geometry types, angle wrapping, the one canonical completion check (atTarget), kStatic, and the drivetrain entry point — defined once so the lessons can reference them instead of re-introducing them.
+sidebar_position: 2.5
+tags: [implementation, utilities, pose2d, vector2d, completion, atTarget, reference]
+---
+
+# Common Implementation
+
+<Abstract>
+Every follower in this module — <a href="./pid-to-point">PID-to-point</a>,
+<a href="./pure-pursuit">pure pursuit</a>, the <a href="./guided-vector-fields">guided vector field</a> —
+leans on the same handful of primitives: a pose and a vector type, angle wrapping, a single "are we there
+yet?" completion check, the kStatic friction nudge, and one drivetrain entry point. They are collected
+here, defined <em>once</em>, so each lesson can show only the logic that is actually new and link back here
+for the plumbing. Treat this as the module's small standard library.
+</Abstract>
+
+The lesson code throughout Modules 4–5 calls things like `robot.vec()`, `wrap(error)`, `atTarget(...)`,
+and `drive(vx, vy, omega)` without re-deriving them every time. This page is where they live. Production
+libraries (Road Runner, FTCLib) ship their own equivalents; these are the minimal versions the lessons
+assume.
+
+## Geometry: `Vector2d` and `Pose2d`
+
+A 2-D vector with the operations the followers use (dot, cross, norm, rotate), and a pose that bundles a
+position with a heading. Field coordinates are $+x$ forward of the field, $+y$ to the left, heading CCW.
+
+<JavaCode league="FTC" label="The two geometry primitives">{`/** A 2-D vector in field (or robot) coordinates. */
+public record Vector2d(double x, double y) {
+    public Vector2d plus(Vector2d o)  { return new Vector2d(x + o.x, y + o.y); }
+    public Vector2d minus(Vector2d o) { return new Vector2d(x - o.x, y - o.y); }
+    public Vector2d times(double s)   { return new Vector2d(x * s, y * s); }
+    public double dot(Vector2d o)     { return x * o.x + y * o.y; }
+    public double cross(Vector2d o)   { return x * o.y - y * o.x; }   // signed area / z of 3-D cross
+    public double norm()              { return Math.hypot(x, y); }
+    public Vector2d unit()            { double n = norm(); return n < 1e-9 ? this : times(1 / n); }
+    /** Rotate by angle a (radians), CCW positive. */
+    public Vector2d rotate(double a) {
+        double c = Math.cos(a), s = Math.sin(a);
+        return new Vector2d(x * c - y * s, x * s + y * c);
+    }
+}
+
+/** Position + heading. velocity is the field-frame chassis velocity from the localizer. */
+public record Pose2d(double x, double y, double heading) {
+    public Vector2d vec() { return new Vector2d(x, y); }
+}`}</JavaCode>
+
+## Angle wrapping
+
+Heading errors must be wrapped to $[-\pi, \pi]$ so the robot always turns the short way. This is the whole
+point of the [angle-wrapping lesson](./angle-wrapping.mdx); the canonical one-liner:
+
+<JavaCode league="FTC" label="wrap(angle) -> [-pi, pi]">{`/** Smallest signed angle equivalent to a (radians), in [-pi, pi]. */
+public static double wrap(double a) {
+    a = (a + Math.PI) % (2 * Math.PI);
+    if (a < 0) a += 2 * Math.PI;
+    return a - Math.PI;
+}`}</JavaCode>
+
+## The completion check: `atTarget`
+
+This is **Step 5** of the [pipeline](./index.mdx) — and the one piece worth having exactly one copy of.
+A follower must report "done" only when the robot is **at the target pose AND moving slowly**, with a
+**timeout** so a stuck routine still yields the field. Checking distance alone reports done while the robot
+is still coasting through the point; that was the inconsistency this page exists to remove.
+
+<JavaCode league="FTC" label="One completion check, used by every follower">{`// Tolerances live in one place too — tune them once, here.
+public static final double POS_TOL     = 1.0;   // inches
+public static final double HEADING_TOL = Math.toRadians(2.0);
+public static final double VEL_TOL     = 2.0;   // inches/sec (chassis speed)
+public static final double TIMEOUT     = 3.0;   // seconds, backstop per move
+
+/** True when the robot is at the target pose AND slow, OR the move has timed out. */
+public static boolean atTarget(Pose2d robot, Pose2d target, ElapsedTime timer) {
+    double dist       = robot.vec().minus(target.vec()).norm();
+    double headingErr = Math.abs(wrap(target.heading() - robot.heading()));
+    boolean settled   = dist < POS_TOL
+                     && headingErr < HEADING_TOL
+                     && robot.velocity().norm() < VEL_TOL;
+    return settled || timer.seconds() > TIMEOUT;   // pose + velocity, timeout backstop
+}`}</JavaCode>
+
+<Callout type="idea" title="Why one copy matters.">
+Each follower used to inline its own version of this test, and they drifted apart — some checked velocity
+and heading, one checked only distance. With a single <code>atTarget</code>, every follower terminates the
+same way, and tightening a tolerance is a one-line change instead of a scavenger hunt.
+</Callout>
+
+## kStatic: the static-friction nudge
+
+Near the goal the proportional command shrinks below what it takes to overcome static friction, stranding
+the robot just short. A constant push *in the direction of the error*, applied **only inside a small
+band**, defeats it — see [PID-to-point](./pid-to-point.mdx) and [feedforward](../control-theory/feedforward.mdx).
+
+<JavaCode league="FTC" label="kStatic(error)">{`public static final double K_STATIC       = 0.06;  // power units
+public static final double K_STATIC_RANGE = 4.0;   // inches: outer edge of the nudge band
+
+/** A constant push toward the target, applied only in the "stranded" band
+ *  (close enough that kP is too weak, but not yet settled). */
+public static double kStatic(double errorRobotFrame) {
+    double e = Math.abs(errorRobotFrame);
+    if (e > K_STATIC_RANGE || e < POS_TOL) return 0;
+    return K_STATIC * Math.signum(errorRobotFrame);
+}`}</JavaCode>
+
+## The drivetrain entry point: `drive(vx, vy, omega)`
+
+Every follower ends by handing a **chassis command** $(v_x, v_y, \omega)$ to the mecanum mixer, which
+converts it to four wheel powers and desaturates. That mixer — including field-centric rotation, joystick
+shaping, and the desaturation step — is derived in full in
+[Mecanum kinematics](./mecanum-kinematics.mdx); the followers just call its entry point:
+
+<JavaCode league="FTC" label="The one method the followers call">{`/** Robot-frame chassis command -> wheel powers. Defined in Mecanum kinematics:
+ *  mix the four wheels, then divide by the max magnitude if any exceeds 1.0. */
+public void drive(double vx, double vy, double omega) { /* see Mecanum kinematics */ }`}</JavaCode>
+
+<Admonition type="note" title="How the lessons use this page">
+
+When a lesson writes `robot.vec()`, `wrap(...)`, `atTarget(...)`, `kStatic(...)`, or `drive(...)`, the
+definition is here. The lessons show only the part that is genuinely new to that technique — the control
+law, the geometry, the speed plan — and link back to this page for the shared plumbing. In your own
+codebase these belong in a small `util` package (or you adopt a library's equivalents), imported by every
+OpMode rather than copy-pasted.
+
+</Admonition>

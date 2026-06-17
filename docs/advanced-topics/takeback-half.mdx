@@ -1,0 +1,95 @@
+---
+title: Take-Back-Half
+description: The one-line upgrade to bang-bang flywheel control — integrate the error, and each time it changes sign give back half the accumulated drive — converging to a steady, ripple-free hold while keeping bang-bang's fast recovery after a shot.
+sidebar_position: 2
+tags: [takeback-half, tbh, bang-bang, flywheel, control, advanced]
+---
+
+import BangBang from '@site/src/components/sims/BangBang';
+
+# Take-Back-Half
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Bang-bang recovers a flywheel's speed fast but chatters and never truly settles. <strong>Take-back-half</strong>
+(TBH) is a tiny modification — integrate the error like an integrator, and when the error changes sign, give
+back half the accumulated drive — that converges to a steady, ripple-free hold while keeping bang-bang's
+fast recovery after a shot. One gain, no derivative, no windup.
+</Abstract>
+
+<Admonition type="note" title="Prerequisite">
+
+This page extends [**Bang-Bang Control**](../control-theory/bang-bang.mdx). It assumes you know why a
+high-inertia flywheel suits an on/off law and why plain bang-bang chatters in a limit cycle around the
+setpoint.
+
+</Admonition>
+
+<Theory title="Settle without giving up recovery">
+
+Take-back-half keeps an accumulating drive like an integrator, but adds one trick. Each loop, integrate the
+error into the drive. When the error **crosses zero** — the moment you pass the setpoint — you have
+integrated too far, so "take back half": set the drive to the average of its current value and its value
+at the *previous* crossing. Successive crossings bracket the true holding drive and converge onto it.
+
+$$
+\text{drive} \mathrel{+}= g\,e\,\Delta t;
+\qquad
+\text{on a sign change of } e:\quad
+\text{drive} \leftarrow \tfrac12\big(\text{drive} + \text{drive}_\text{last-cross}\big)
+$$
+
+The result (green below) recovers nearly as fast as bang-bang on the first approach, then quickly stops
+oscillating and holds the speed flat. One gain $g$, no derivative, no windup to manage. Run the demo:
+bang-bang chatters around the line forever; TBH locks on.
+
+<BangBang />
+
+<Callout type="idea" title="Why take back half?">
+At each zero crossing the true steady drive lies somewhere between the current over-driven value and the
+last under-driven one. Halving splits the difference — a bisection search on the holding voltage that
+converges geometrically. It is the cheapest possible way to find the steady command without a model.
+</Callout>
+
+</Theory>
+
+<Deploy title="Take-back-half on the Control Hub">
+
+<JavaCode league="FTC" label="Takeback-half velocity controller">{`public class TakeBackHalf {
+    public static double gain = 0.0009;   // @Config-tunable
+    private double drive = 0, driveAtZero = 0, lastError = 0;
+
+    public double update(double measuredRpm, double targetRpm) {
+        double error = targetRpm - measuredRpm;
+        drive += gain * error;                       // integrate the error
+        drive = Math.max(0, Math.min(1, drive));     // clamp to valid power
+        if (Math.signum(error) != Math.signum(lastError)) {
+            drive = 0.5 * (drive + driveAtZero);     // take back half
+            driveAtZero = drive;                     // remember this crossing
+        }
+        lastError = error;
+        return drive;
+    }
+}`}</JavaCode>
+
+Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate ($k_V \cdot v_\text{target}$)
+and TBH converges in a single oscillation instead of several — the two techniques compose nicely.
+
+</Deploy>
+
+<Admonition type="tip" title="When to reach for which">
+
+Use **[bang-bang](../control-theory/bang-bang.mdx)** when recovery speed is everything and the plant is
+high-inertia (a shooter you re-spin between shots). Use **take-back-half** when you also need a steady,
+repeatable speed (consistent shot distance). Use **[PID](../control-theory/pid.mdx) + feedforward** when
+you need both tight holding *and* controlled acceleration, or the mechanism isn't a flywheel.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- **Take-back-half** — the algorithm popularized in the VEX/FRC community for flywheel speed control
+  (originally described by Tim Lindquist / "BLRS"); this lesson is an independent reimplementation.
+
+</Admonition>
