@@ -84,11 +84,16 @@ export default function LowPass() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="Exponential low-pass filter">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated plot of an exponential low-pass filter smoothing a noisy signal."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#2fd3c0', label: 'True signal'},

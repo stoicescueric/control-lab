@@ -1,0 +1,394 @@
+---
+title: How Does Pedro Pathing Work?
+description: "A research-to-robot explanation of Pedro Pathing's path follower: Bezier paths, closest-point projection, guided-vector-field correction, centripetal feedforward, heading control, and completion constraints."
+sidebar_position: 2
+tags: [pedro-pathing, guided-vector-field, path-following, centripetal-feedforward, ftc, advanced]
+---
+
+import {GuidedVectorField} from '@site/src/components/sims/GuidedVectorField';
+import CurvatureCircle from '@site/src/components/sims/CurvatureCircle';
+import PathProjection from '@site/src/components/sims/PathProjection';
+
+# How Does Pedro Pathing Work?
+
+<Difficulty level="Hard" />
+
+<Abstract>
+Pedro Pathing is best understood as a reactive path follower: it continuously measures the robot pose, finds where that pose belongs on a curve, and combines several correction vectors into a drive command. This page connects the public Pedro documentation and the supplied second-order GVF paper to the FTC mental model: projection, path progress, cross-track correction, centripetal feedforward, heading control, and completion logic.
+</Abstract>
+
+<Admonition type="note" title="Scope">
+
+This is not a line-by-line source-code audit of Pedro Pathing. It explains the control architecture at the level a strong FTC programmer needs before tuning or modifying a follower: what the follower is trying to compute, why the terms exist, and where the math sits underneath the API.
+
+</Admonition>
+
+## The FTC problem Pedro is solving
+
+Pure Pursuit chases a point ahead of the robot. That is intuitive, but it has a weakness: when the robot is disturbed, the follower is always negotiating between "catch the moving target" and "get back onto the path." Pedro's public documentation describes a different goal: follow Bezier curves while maintaining speed, consistency, and correction for disturbances.
+
+The clean way to think about it is this:
+
+1. The path is not just a list of waypoints. It is a smooth curve.
+2. The robot estimates its current pose from localization.
+3. The follower projects the robot onto the curve to find the closest or most relevant path parameter.
+4. It computes correction vectors around that point.
+5. It converts the desired field motion into mecanum drive power.
+
+That is why Pedro feels more "reactive" than a precomputed trajectory. The follower is not blindly replaying a timed script; it keeps asking, "Given where the robot actually is, what field should pull it back onto the path and keep it moving forward?"
+
+## Visual intuition: a path becomes a field
+
+The picture below is the first-order idea. Each arrow says where a robot would like to move if it were currently at that field position. Near the path, the arrow points mostly along the curve. Far from the path, the arrow leans back toward the curve.
+
+<GuidedVectorField />
+
+The second-order Pedro paper takes this idea one level deeper. Instead of treating the field as only a desired velocity direction, it builds a field over pose plus velocity. In FTC language: the follower cares not only where the robot is, but also how fast it is already moving and whether it must brake, curve, or correct heading.
+
+## Step 1: represent the path as a parameterized curve
+
+Pedro uses smooth curves, commonly Bezier-style path primitives. A generic path can be written as
+
+$$
+\phi(t) =
+\begin{bmatrix}
+x(t) \\
+y(t)
+\end{bmatrix},
+\qquad 0 \le t \le 1
+$$
+
+where:
+
+- $\phi(t)$ is the point on the path at parameter $t$.
+- $x(t)$ is the field x-coordinate of that point.
+- $y(t)$ is the field y-coordinate of that point.
+- $t$ is progress along this path segment, with $t = 0$ at the start and $t = 1$ at the end.
+
+The tangent direction is
+
+$$
+\hat{\mathbf{T}}(t) = \frac{\phi'(t)}{\|\phi'(t)\|}
+$$
+
+where:
+
+- $\phi'(t)$ is the derivative of the path position with respect to $t$.
+- $\|\phi'(t)\|$ is the length of that derivative vector.
+- $\hat{\mathbf{T}}(t)$ is the unit tangent, meaning the "forward along the curve" direction.
+
+This is already the first important jump: once the path is a curve instead of a waypoint list, you can ask for its tangent, curvature, distance remaining, and desired heading at any point.
+
+## Step 2: project the robot onto the path
+
+Let the robot's current field position be
+
+$$
+\mathbf{p} =
+\begin{bmatrix}
+p_x \\
+p_y
+\end{bmatrix}
+$$
+
+The follower needs the path parameter that best corresponds to the robot's current position. The paper writes this as a closest-point problem:
+
+$$
+D(t) = \frac{1}{2}\|\phi(t) - \mathbf{p}\|^2
+$$
+
+where:
+
+- $D(t)$ is the squared distance from the robot to the path point $\phi(t)$.
+- $\mathbf{p}$ is the robot position.
+- The factor $\frac{1}{2}$ does not change the closest point; it just makes the derivative cleaner.
+
+The closest point occurs at an endpoint or where the derivative is zero:
+
+$$
+D'(t) = \left(\phi(t) - \mathbf{p}\right) \cdot \phi'(t) = 0
+$$
+
+That dot product has a geometric meaning. At the closest point, the vector from the path to the robot is perpendicular to the path tangent. The follower can use the previous loop's parameter as a seed, because in a normal FTC loop the robot cannot teleport from one part of the curve to another.
+
+Drag the robot below. The green point is $\phi(\psi(\mathbf{p}))$: the path point the follower currently believes is closest to the robot. The yellow arrow is the tangent direction used for forward motion, and the blue arrow is the normal direction used for correction.
+
+<PathProjection />
+
+<Callout type="idea" title="Projection is the hidden primitive.">
+Most path-following math starts after this step, but projection is the part that makes the rest local. Once the follower knows "the robot belongs near this point on the curve," every correction term can be computed from that one neighborhood: tangent, normal, curvature, heading target, and remaining distance.
+</Callout>
+
+## Step 3: correct back onto the path
+
+Define the positional error used in the paper:
+
+$$
+\mathbf{e}_p = \phi(\psi(\mathbf{p})) - \mathbf{p}
+$$
+
+where:
+
+- $\psi(\mathbf{p})$ is the path parameter associated with the robot position.
+- $\phi(\psi(\mathbf{p}))$ is the closest path point.
+- $\mathbf{e}_p$ points from the robot back toward that path point.
+
+The attractive term is a spring-like acceleration back toward the curve. A simplified FTC reading is:
+
+$$
+\mathbf{a}_{\text{attract}} \approx k_p^t\,\mathbf{e}_p - k_d^t\,\mathbf{v}_{\perp}
+$$
+
+where:
+
+- $\mathbf{a}_{\text{attract}}$ is the correction acceleration toward the path.
+- $k_p^t$ is the translational proportional gain.
+- $k_d^t$ is the translational damping gain.
+- $\mathbf{v}_{\perp}$ is the part of robot velocity moving away from or toward the path normal.
+
+The exact paper expression is more careful about singular cases and dot products, but this is the physical story: if the robot is off the curve, push it back; if it is already moving back too aggressively, damp it.
+
+## Step 4: add centripetal feedforward
+
+A robot on a curved path needs inward acceleration even if it has zero cross-track error. Without that term, it tends to cut wide or rely on feedback after it is already off the path.
+
+For a curve with curvature $\kappa$, the required normal acceleration is
+
+$$
+a_c = v^2 \kappa
+$$
+
+where:
+
+- $a_c$ is centripetal acceleration.
+- $v$ is speed along the path tangent.
+- $\kappa$ is curvature, equal to $\frac{1}{R}$ for a circle.
+- $R$ is the radius of the turn.
+
+Drag the points below. Tighter curvature means smaller radius, larger $\kappa$, and more required inward acceleration for the same speed.
+
+<CurvatureCircle />
+
+The paper writes the centripetal component in the language of the path:
+
+$$
+\xi_C(x) =
+k_c
+\left(
+\operatorname{comp}_{\hat{\mathbf{T}}}( \mathbf{v} )
+\right)^2
+\frac{\hat{\mathbf{T}}'(\psi(\mathbf{p}))}{\|\phi'(\psi(\mathbf{p}))\|}
+$$
+
+where:
+
+- $\xi_C(x)$ is the centripetal acceleration component of the field.
+- $x$ is the full robot state, including pose and velocity.
+- $k_c$ is a tunable scale factor absorbing robot-specific effects.
+- $\operatorname{comp}_{\hat{\mathbf{T}}}(\mathbf{v})$ is the scalar component of robot velocity along the tangent direction.
+- $\hat{\mathbf{T}}'$ measures how quickly the tangent direction changes along the curve.
+- $\|\phi'\|$ converts parameter-rate curvature into distance-rate curvature.
+
+In FTC terms: if the path is bending and the robot is already moving fast along it, apply an anticipatory sideways correction before the robot drifts.
+
+## Step 5: drive forward and brake at the end
+
+The follower also needs to decide how much to push along the tangent. The paper uses remaining path distance:
+
+$$
+d =
+\int_{\psi(\mathbf{p})}^{1}
+\|\phi'(s)\|\,ds
+$$
+
+where:
+
+- $d$ is remaining arc length along the path.
+- $s$ is a dummy integration variable.
+- $\psi(\mathbf{p})$ is the robot's current projected path parameter.
+- $\|\phi'(s)\|$ converts parameter change into physical distance.
+
+If the robot can decelerate at magnitude $a$, a basic kinematic estimate gives
+
+$$
+v_{\text{desired}} = \sqrt{2ad}
+$$
+
+where:
+
+- $v_{\text{desired}}$ is the desired tangential speed.
+- $a$ is available deceleration magnitude.
+- $d$ is remaining distance.
+
+This is the same intuition as stopping a car before a wall: far away, drive quickly; close to the endpoint, reduce the target speed so the robot can arrive without overshooting.
+
+<Admonition type="tip" title="Why this feels different from fixed motion profiles">
+
+A timed trajectory decides speed as a function of planned time. A reactive follower can decide speed as a function of measured progress. If the robot gets bumped or slips, the follower still computes distance remaining from where the robot actually is.
+
+</Admonition>
+
+## Step 6: control heading separately
+
+FTC autos often need to move one direction while facing another: intake while strafing, score while rotating, or approach a stack with a fixed camera angle. Pedro's docs describe heading control as part of the path-following behavior, and the paper models the target heading as a smooth interpolation:
+
+$$
+\theta(t)
+$$
+
+where:
+
+- $\theta(t)$ is the desired robot orientation at path parameter $t$.
+- For FTC in the plane, this is usually a single heading angle.
+- In the paper's general setting, it lives in $SO(n)$, the space of rotation matrices.
+
+For FTC, you can read the rotational correction as the familiar heading loop:
+
+$$
+\alpha_{\text{cmd}}
+=
+k_p^r\,\operatorname{wrap}(\theta(\psi(\mathbf{p})) - \theta_{\text{robot}})
+- k_d^r\,\omega
+$$
+
+where:
+
+- $\alpha_{\text{cmd}}$ is commanded angular acceleration or rotational correction.
+- $k_p^r$ is the heading proportional gain.
+- $k_d^r$ is the heading damping gain.
+- $\theta_{\text{robot}}$ is the measured robot heading.
+- $\omega$ is measured angular velocity.
+- `wrap` maps the angle error into the shortest equivalent angle.
+
+The important architecture point is separation. Translation can follow the curve while heading follows its own interpolation.
+
+## The four-vector mental model
+
+Pedro's public docs describe its follower as combining multiple vectors. The paper's second-order GVF makes that idea mathematically precise. At each loop, the follower conceptually blends:
+
+| Component | Physical job | FTC symptom if missing |
+| --- | --- | --- |
+| Tangential drive | Move forward along the curve | Robot corrects but crawls or stalls |
+| Attractive correction | Pull back toward the curve | Robot never recovers cleanly from bumps |
+| Centripetal feedforward | Stay inside curved paths at speed | Robot cuts wide on fast turns |
+| Heading correction | Track the desired orientation | Robot arrives translated correctly but facing wrong |
+
+The drivebase then receives the combined translational and rotational command. For mecanum, that final command still passes through the wheel-mixing math from [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx).
+
+## Implementation shape
+
+The exact Pedro implementation has its own classes, tuners, and APIs. A clean FTC architecture inspired by the same decomposition would look like this:
+
+<JavaCode league="FTC" label="Pedro-style follower decomposition">{`/**
+ * A path follower decomposes path tracking into projection, translation,
+ * curvature feedforward, heading correction, and completion constraints.
+ */
+public final class ReactivePathFollower {
+    private final ParametricPath path;
+    private final HolonomicDrive drive;
+    private double lastT = 0.0;
+
+    public ReactivePathFollower(ParametricPath path, HolonomicDrive drive) {
+        this.path = path;
+        this.drive = drive;
+    }
+
+    /**
+     * Computes one follower update from measured pose and velocity.
+     *
+     * @param pose measured robot pose from localization
+     * @param velocity measured field-relative velocity
+     */
+    public void update(Pose2d pose, Vector2d velocity) {
+        Projection projection = path.project(pose.position(), lastT);
+        lastT = projection.t();
+
+        Vector2d tangent = path.tangent(lastT);
+        Vector2d normal = path.normal(lastT);
+        double curvature = path.curvature(lastT);
+        double remaining = path.remainingArcLength(lastT);
+
+        Vector2d pathPoint = path.position(lastT);
+        Vector2d errorToPath = pathPoint.minus(pose.position());
+
+        double tangentSpeed = velocity.dot(tangent);
+        double desiredSpeed = Math.sqrt(2.0 * Constraints.MAX_DECEL * remaining);
+
+        Vector2d tangentialDrive =
+                tangent.times(Gains.DRIVE_KP * (desiredSpeed - tangentSpeed));
+
+        Vector2d attractiveCorrection =
+                errorToPath.times(Gains.TRANSLATION_KP);
+
+        Vector2d centripetalFeedforward =
+                normal.times(Gains.CENTRIPETAL_K * tangentSpeed * tangentSpeed * curvature);
+
+        double targetHeading = path.heading(lastT);
+        double headingError = Angle.wrapRadians(targetHeading - pose.heading());
+        double turn = Gains.HEADING_KP * headingError;
+
+        Vector2d fieldCommand = tangentialDrive
+                .plus(attractiveCorrection)
+                .plus(centripetalFeedforward);
+
+        drive.setFieldCentricCommand(fieldCommand, turn);
+    }
+}`}</JavaCode>
+
+<Admonition type="warning" title="This is architecture, not drop-in Pedro source">
+
+The snippet shows the decomposition, not the exact Pedro Pathing implementation. Real teams still need localization, tuning, completion constraints, acceleration limits, and a reliable projection method. Treat this as the whiteboard version of the follower.
+
+</Admonition>
+
+## What completion really means
+
+A path is not "done" just because $t$ reaches one. A robust follower checks several kinds of completion:
+
+- path progress is at or near the end;
+- position error is small enough;
+- heading error is small enough;
+- velocity has settled enough for the next action;
+- a timeout or correction window has elapsed.
+
+Pedro's docs describe completion constraints around `follower.isBusy()`. That matters for autonomous state machines: if you transition too early, the robot begins the next mechanism action while still correcting; if you transition too late, the robot wastes match time waiting after it is already good enough.
+
+## Why the paper matters
+
+The supplied paper, *Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints*, gives the theoretical version of this architecture. The big contribution is not merely "draw arrows around a path." It defines a smooth second-order vector field over the robot's configuration and velocity state:
+
+$$
+\xi(x) = (v, R\Omega, \xi_P(x), \xi_R(x))
+$$
+
+where:
+
+- $\xi(x)$ is the complete second-order guiding vector field.
+- $v$ is translational velocity.
+- $R$ is robot rotation.
+- $\Omega$ is angular velocity.
+- $\xi_P(x)$ is the translational acceleration component.
+- $\xi_R(x)$ is the rotational acceleration component.
+
+For an FTC mecanum robot, the friendly version is:
+
+$$
+\text{next command}
+=
+\text{drive along}
++ \text{pull back}
++ \text{curve feedforward}
++ \text{turn to heading}
+$$
+
+That is the core idea Pedro exposes to teams: a path follower that is reactive like a field, but practical enough to tune on real FTC hardware.
+
+<Admonition type="info" title="Sources & references">
+
+- Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. User-supplied PDF.
+- Pedro Pathing documentation, [Introduction](https://pedropathing.com/docs/pathing): Bezier curves, PIDF control, centripetal force correction, localization prerequisites, and tuning overview.
+- Pedro Pathing documentation, [PedroPathing vs Road Runner](https://pedropathing.com/docs/pathing/pedro-v-roadrunner): speed, disturbance correction, centripetal force correction, and command-base options.
+- Pedro Pathing documentation, [Constraints](https://pedropathing.com/docs/pathing/reference/constraints): completion criteria used by `follower.isBusy()`.
+- This lesson extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx), [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx), and [GVF Convergence Theory](./gvf-convergence.mdx).
+
+</Admonition>

@@ -136,11 +136,16 @@ export default function Flywheel() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="Velocity control — feedforward vs. PID-only">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated flywheel velocity-control simulation comparing feedforward-plus-PID against PID-only."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#6f8bff', label: 'Target', dot: true},

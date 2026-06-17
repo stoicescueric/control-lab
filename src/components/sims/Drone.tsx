@@ -11,6 +11,7 @@ import {Trace} from '@site/src/lib/plot';
 import {useDprCanvas, useRaf, usePlot} from '@site/src/lib/canvas';
 import {Demo, Stage, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {track} from '@site/src/lib/analytics';
 
 const g = 10;
 const drag = 0.6;
@@ -36,9 +37,9 @@ function roundRect(
 }
 
 export default function Drone() {
-  const [Kp, setKp] = useState(6);
+  const [Kp, setKp] = useState(8);
   const [Ki, setKi] = useState(2);
-  const [Kd, setKd] = useState(4);
+  const [Kd, setKd] = useState(5);
   const gains = useRef({Kp, Ki, Kd});
   gains.current = {Kp, Ki, Kd};
 
@@ -93,11 +94,12 @@ export default function Drone() {
     s.tgtT.clear();
   }
 
-  function setGains(p: number, i: number, d: number) {
+  function setGains(p: number, i: number, d: number, preset?: string) {
     setKp(p);
     setKi(i);
     setKd(d);
     st.current.I = 0;
+    if (preset) track('pid_preset', {preset});
   }
 
   function step() {
@@ -256,7 +258,7 @@ export default function Drone() {
       k++;
     }
     draw();
-  });
+  }, droneRef);
 
   // dragging the target altitude
   function pointToTarget(
@@ -281,6 +283,8 @@ export default function Drone() {
         <div>
           <canvas
             ref={droneRef}
+            role="img"
+            aria-label="Animated PID altitude-hold simulation; drag vertically to move the target altitude."
             className="block w-full touch-none rounded-xl bg-[#0b1120]"
             onMouseDown={(e) => {
               dragging.current = true;
@@ -306,7 +310,12 @@ export default function Drone() {
           </div>
         </div>
         <div>
-          <canvas ref={plotCanvas} className="block w-full rounded-xl bg-[#0b1120]" />
+          <canvas
+            ref={plotCanvas}
+            role="img"
+            aria-label="Live plot of drone altitude versus the target over time."
+            className="block w-full rounded-xl bg-[#0b1120]"
+          />
           <Legend
             items={[
               {color: '#6f8bff', label: 'Target', dot: true},
@@ -346,13 +355,19 @@ export default function Drone() {
       </div>
 
       <Buttons>
-        <Button onClick={() => setGains(6, 0, 0)}>P only</Button>
-        <Button onClick={() => setGains(6, 0, 4)}>PD</Button>
-        <Button primary onClick={() => setGains(6, 2, 4)}>
+        <Button onClick={() => setGains(8, 0, 0, 'p_only')}>P only</Button>
+        <Button onClick={() => setGains(8, 0, 5, 'pd')}>PD</Button>
+        <Button primary onClick={() => setGains(8, 2, 5, 'pid_tuned')}>
           PID (tuned)
         </Button>
-        <Button onClick={() => setGains(14, 3, 2)}>Too much Kp</Button>
-        <Button onClick={() => (st.current.gust -= 22)}>🌬️ Wind gust</Button>
+        <Button onClick={() => setGains(14, 3, 2, 'too_much_kp')}>Too much Kp</Button>
+        <Button
+          onClick={() => {
+            st.current.gust -= 22;
+            track('wind_gust');
+          }}>
+          🌬️ Wind gust
+        </Button>
         <Button onClick={reset}>↺ Reset</Button>
       </Buttons>
 

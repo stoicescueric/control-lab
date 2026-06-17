@@ -256,7 +256,7 @@ reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (m
   output speed = <Blue>ω_free / G</Blue> &nbsp;·&nbsp; output torque = <Rose>τ_stall · G · η</Rose>
 </Formula>
 
-<JavaCode league="FTC" label="Motor specs → geared output (fill in your datasheet numbers)">{`/** The three numbers every brushed DC motor publishes at 12 V. */
+<JavaCode league="FTC" label="Motor specs -> geared output (use your datasheet numbers)">{`/** The three numbers every brushed DC motor publishes at 12 V. */
 public record MotorSpec(
         double freeSpeedRpm,    // RPM at no load
         double stallTorqueNm,   // N·m at zero speed

@@ -203,11 +203,16 @@ export default function OdometryField() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="Odometry vs. truth">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated field view comparing an odometry-estimated robot pose against ground truth."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#5ce08a', label: 'true pose'},

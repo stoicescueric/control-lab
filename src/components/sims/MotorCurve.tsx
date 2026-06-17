@@ -113,11 +113,16 @@ export default function MotorCurve() {
     }
   }
 
-  useRaf(() => draw());
+  useRaf(() => draw(), canvas);
 
   return (
     <Demo title="Torque–speed curve — goBILDA 5000-0002-0117 (MATRIX), 12 V">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Plot of a DC motor torque versus speed curve with the operating point marked."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#6f8bff', label: 'motor line (applied voltage)'},

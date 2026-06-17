@@ -35,6 +35,8 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        aria-label={label}
+        aria-valuetext={String(format(value))}
         onChange={(e) => onChange(parseFloat(e.target.value))}
       />
     </div>

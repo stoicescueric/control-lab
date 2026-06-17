@@ -244,7 +244,7 @@ export default function PurePursuit() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   // drag waypoints
   function evtPos(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>): [number, number] {
@@ -280,6 +280,8 @@ export default function PurePursuit() {
     <Demo title="Pure pursuit path follower">
       <canvas
         ref={canvas}
+        role="img"
+        aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path the robot chases."
         className="block w-full touch-none rounded-xl bg-[#0b1120]"
         onMouseDown={onDown}
         onMouseMove={onMove}

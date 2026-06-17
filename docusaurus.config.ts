@@ -51,6 +51,8 @@ const config: Config = {
       tagName: 'link',
       attributes: {rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous'},
     },
+    // Note: manifest / theme-color / apple-touch-icon are injected by the PWA
+    // plugin's `pwaHead` (see the plugins array) so they aren't duplicated here.
   ],
 
   stylesheets: [
@@ -156,6 +158,7 @@ const config: Config = {
         {
           title: 'More',
           items: [
+            {label: 'Contributors', to: '/contributors'},
             {label: 'GitHub', href: `https://github.com/${ORG}/${REPO}`},
           ],
         },
@@ -169,7 +172,39 @@ const config: Config = {
     },
   } satisfies Preset.ThemeConfig,
 
-  plugins: [tailwindPlugin],
+  themes: [
+    [
+      // Offline, build-time full-text search (no external service). Adds the
+      // navbar search box and indexes every doc page.
+      require.resolve('@easyops-cn/docusaurus-search-local'),
+      {
+        hashed: true,
+        indexDocs: true,
+        indexBlog: false,
+        docsRouteBasePath: '/docs',
+        highlightSearchTermsOnTargetPage: true,
+        explicitSearchResultPath: true,
+      },
+    ],
+  ],
+
+  plugins: [
+    tailwindPlugin,
+    [
+      // Offline support + installability. Registers a service worker (production
+      // builds only) and injects the PWA head tags. Reads the static manifest.
+      '@docusaurus/plugin-pwa',
+      {
+        debug: false,
+        offlineModeActivationStrategies: ['appInstalled', 'standalone', 'queryString'],
+        pwaHead: [
+          {tagName: 'link', rel: 'manifest', href: `/${REPO}/manifest.webmanifest`},
+          {tagName: 'meta', name: 'theme-color', content: '#4f6cf7'},
+          {tagName: 'link', rel: 'apple-touch-icon', href: `/${REPO}/img/logo.svg`},
+        ],
+      },
+    ],
+  ],
 };
 
 export default config;

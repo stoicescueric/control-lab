@@ -13,22 +13,22 @@ import {AprilTagProjectionExplorer} from '@site/src/components/sims/FilterMathDe
 
 <Abstract>
 The Kalman filter is optimal only for linear systems, but real localisation — camera projection,
-headings, and AprilTag geometry — is full of trigonometry and division by depth. This lesson extends
-the filter to nonlinear models by linearising them at each step with a Jacobian, the workhorse behind
-AprilTag-based pose estimation.
+headings, and landmark geometry — is full of trigonometry and division by depth. This lesson extends
+the filter to nonlinear models by linearising them at each step with a Jacobian, then uses an
+FTC AprilTag-style vision update as the concrete example.
 </Abstract>
 
 The Kalman filter is optimal — for *linear* systems. Robot localisation is not linear: the same
-AprilTag appears in different image locations and apparent sizes depending on robot position,
-heading, and distance from the tag. The Extended Kalman Filter is the adaptation that makes the
+field landmark appears in different image locations and apparent sizes depending on robot position,
+heading, and distance from the target. The Extended Kalman Filter is the adaptation that makes the
 Kalman machinery work on the curved models real robots actually have.
 
 This lesson uses Kou and Haggenmiller's FTC paper,
 [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578),
 as its applied anchor. They frame the FTC localisation problem as fusing three imperfect sources:
 frequent odometry velocity measurements, less frequent computer-vision landmark position
-measurements, and a physics-model prediction. That is exactly the reason the EKF matters in FTC:
-each source is useful, but none of them is trustworthy alone.
+measurements, and a physics-model prediction. This lesson's AprilTag model is an FTC-specific
+landmark example built from the same EKF idea: each source is useful, but none of them is trustworthy alone.
 
 <Problem title="Drift and nonlinear vision corrupt field coordinates">
 
@@ -205,13 +205,12 @@ gets large, Jacobian approximations and odometry accuracy both degrade.
 
 <Deploy title="Where this runs on a robot">
 
-This predict → linearise → update loop is precisely what production localisation does when it fuses
-drifting odometry with intermittent AprilTag observations: odometry advances the state (predict), a
-detected tag provides a nonlinear camera measurement (update), and the Jacobian maps pixel-level
-uncertainty into pose-level uncertainty. In the paper's mecanum simulation, the state includes field
-position, heading, and body velocity, while the measurement function combines landmark pose
-information with odometry-derived encoder measurements. The matrix algebra is the same `linalg`
-used in the site demos.
+This predict → linearise → update loop is the pattern behind fusing drifting odometry with intermittent
+vision landmarks. In the AprilTag-style example here, odometry advances the state (predict), a detected
+tag provides a nonlinear camera measurement (update), and the Jacobian maps pixel-level uncertainty into
+pose-level uncertainty. In Kou and Haggenmiller's mecanum simulation, the state includes field position,
+heading, and body velocity, while the measurement function combines landmark pose information with
+odometry-derived encoder measurements. The matrix algebra is the same `linalg` used in the site demos.
 
 <JavaCode league="FTC" label="EKF update structure (per loop, when a tag is seen)">{`// predict: advance pose with odometry, grow covariance P
 x = motionModel(x, wheelDeltas);

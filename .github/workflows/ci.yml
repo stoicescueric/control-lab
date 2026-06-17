@@ -1,0 +1,29 @@
+name: CI
+
+# Build the site on every PR and on pushes to non-main branches. Pushes to
+# main are handled by deploy.yml, which builds before publishing. Because
+# `onBrokenLinks: 'throw'`, a successful build also guarantees no broken links.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # NOTE: `npm run typecheck` is intentionally not run yet -- there are
+      # pre-existing `usePlot` ref-typing errors (the ref is typed `null`, so
+      # `if (p)` narrows to `never`). Re-enable this once that type is fixed:
+      # - run: npm run typecheck

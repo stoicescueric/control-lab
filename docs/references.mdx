@@ -1,6 +1,6 @@
 ---
 title: References & Resources
-description: Every source cited across Control Lab — official docs and libraries, FTC community guides, the papers, articles, source repositories, and videos the lessons draw on — plus where to go next.
+description: "Every source cited across Control Lab: official docs and libraries, FTC community guides, papers, team repositories, and videos the lessons draw on."
 sidebar_position: 100
 tags: [references, resources, bibliography, sources]
 ---
@@ -8,107 +8,112 @@ tags: [references, resources, bibliography, sources]
 # References & Resources
 
 <Abstract>
-This page collects every external source the curriculum draws on, grouped by kind, plus the best places
-to learn more. Each lesson also carries its own "Sources & references" admonition; this is the master
-list. Everything here is freely available online.
+This page collects the external sources the curriculum draws on, grouped by kind, plus the best places
+to learn more. Each finished lesson should also carry its own local "Sources & references" admonition;
+this page is the master list.
 </Abstract>
 
-Control Lab is built on the shoulders of the FTC/FRC community's open documentation, the control-theory
-literature, and a handful of teams who published their code. If a technique in a lesson helped you, the
-original source below will take you deeper.
+Control Lab is built on open FTC/FRC documentation, control-theory literature, public team code, and
+carefully cited community writing. If a technique in a lesson helped you, the original source below is
+usually the best place to go deeper.
 
-## Start here — community guides
+## Start here: community guides
 
-The fastest on-ramps to FTC software, and the references this site leans on most.
-
-- **[Game Manual 0 (gm0)](https://gm0.org/en/latest/)** — the community encyclopedia of FTC hardware and
-  software. Used directly for the [motor model](./control-theory/how-a-motor-works.mdx)
-  ([motor power guide](https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html))
-  and [mecanum kinematics](./path-following/mecanum-kinematics.mdx)
-  ([mecanum drive](https://gm0.org/en/latest/docs/software/tutorials/mecanum-drive.html)).
-- **[CTRL ALT FTC](https://www.ctrlaltftc.com/)** — a focused, math-forward guide to PID, feedforward, and
-  control for FTC.
-- **[FTC Tech Toolbox](https://ftc-tech-toolbox.vercel.app/)** — autonomous-movement walkthroughs; an
-  influence on the [Path Following](./path-following/index.mdx) module's framing.
+- **[Game Manual 0](https://gm0.org/en/latest/)** - FTC hardware and software reference. Used for motor,
+  drivetrain, odometry, mecanum, and general FTC software context.
+- **[CTRL ALT FTC](https://www.ctrlaltftc.com/)** - focused FTC control-theory explanations for PID,
+  feedforward, filtering, and tuning.
+- **[FTC Tech Toolbox](https://ftc-tech-toolbox.vercel.app/)** - FTC autonomous movement walkthroughs and
+  path-following framing.
 - **[Controls Engineering in FRC](https://file.tavsys.net/control/controls-engineering-in-frc.pdf)**
-  (Tyler Veness) — a rigorous, free textbook on state-space control for competitive robotics.
+  by Tyler Veness - rigorous open textbook for state-space control, feedback, modeling, and estimation in
+  competitive robotics.
 
 ## Libraries & official documentation
 
-- **[FTC SDK / FtcRobotController](https://github.com/FIRST-Tech-Challenge/FtcRobotController)** — the
+- **[FTC SDK / FtcRobotController](https://github.com/FIRST-Tech-Challenge/FtcRobotController)** - the
   official Android-based robot controller and API.
-- **[FTCLib](https://docs.ftclib.org/)** — community library; its `PIDFController` and command-based
-  framework appear in the [PID](./control-theory/pid.mdx) and
-  [command-based](./software-architecture/command-based.mdx) lessons.
-- **[Road Runner](https://rr.brott.dev/)** — FTC motion-planning library; its `Pose2d.exp`/`splineTo`
-  back the [pose exponential](./localization-odometry/pose-exponential.mdx) and
-  [spline](./path-following/quintic-splines.mdx) lessons.
-- **[Pedro Pathing](https://pedropathing.com/)** — a reactive FTC path follower (Bézier + heading
-  control).
-- **[WPILib](https://docs.wpilib.org/)** — the FRC standard library; source of `Pose2d.exp(Twist2d)`,
-  `SimpleMotorFeedforward`, and **SysId** (referenced in
-  [system identification](./control-theory/system-identification.mdx)).
-- **[goBILDA](https://www.gobilda.com/)** & **[REV Robotics](https://www.revrobotics.com/)** — motors and
-  the hardware the lessons anchor to (e.g. the goBILDA 5000-0002-0117 motor curve).
+- **[WPILib](https://docs.wpilib.org/)** - FRC standard library and reference documentation for PID,
+  feedforward, motion profiles, state-space control, observers, and command-based programming.
+- **[WPILib Command-Based Programming](https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html)** -
+  the original command architecture reference that many FTC frameworks adapt.
+- **[FTCLib](https://docs.ftclib.org/)** - FTC library; its `PIDFController` and command-based framework
+  appear in the [PID](./control-theory/pid.mdx) and [Command-Based](./software-architecture/command-based.mdx)
+  lessons.
+- **[SolversLib](https://docs.seattlesolvers.com/)** - maintained FTCLib-style command-based framework.
+- **[Mercurial](https://docs.dairy.foundation/Mercurial/overview)** - command-based framework for advanced
+  FTC teams using lambda-style command composition.
+- **[Ivy by Pedro Pathing](https://pedropathing.com/docs/ivy)** - lightweight command-based control flow
+  for composing Pedro paths with mechanism actions.
+- **[Road Runner](https://rr.brott.dev/)** - FTC motion-planning library; its `Pose2d.exp` and spline
+  material support the pose-exponential and spline lessons.
+- **[Pedro Pathing](https://pedropathing.com/)** - reactive FTC path follower, visualizer, and Ivy command
+  framework.
+- **[goBILDA](https://www.gobilda.com/)** and **[REV Robotics](https://www.revrobotics.com/)** - vendor
+  hardware references used when anchoring motor, encoder, and mechanism examples.
 
 ## Papers & articles
 
 - R. C. Coulter, **[Implementation of the Pure Pursuit Path Tracking Algorithm](https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf)**,
-  CMU Robotics Institute, 1992 — the original pure-pursuit derivation
-  ([Pure Pursuit](./path-following/pure-pursuit.mdx)).
-- Team 1712 (DAWGMA), **[Implementation of the Adaptive Pure Pursuit Controller](https://www.chiefdelphi.com/t/paper-implementation-of-the-adaptive-pure-pursuit-controller/166552)**
-  — the whitepaper behind the curvature velocity profile and inject-and-smooth path generation.
-- Timo Denk, **[Cubic Spline Interpolation](https://blog.timodenk.com/cubic-spline-interpolation/)** — the
-  natural cubic spline tridiagonal derivation ([Splines](./path-following/quintic-splines.mdx)).
-- Vikramaditya Nishant, **[Introducing Torque-Current Control for FTC](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)**
-  — the $V = k_e\omega + IR$ current-command and current-limiting argument
-  ([How a Motor Works](./control-theory/how-a-motor-works.mdx)).
-- E. Eade, *Lie Groups for 2D and 3D Transformations* — background for the $SE(2)$ exponential/log maps
-  ([Pose Exponential](./localization-odometry/pose-exponential.mdx)).
-- Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao, **[A Guiding Vector Field Algorithm for Path Following Control](https://arxiv.org/abs/1610.04391)**
-  — the implicit/level-set field $\chi = E\nabla\varphi - k\varphi\nabla\varphi$ and its Lyapunov
-  convergence proof ([Advanced Topics — GVF convergence theory](./advanced-topics/gvf-convergence.mdx)).
+  CMU Robotics Institute, 1992 - original pure-pursuit derivation.
+- Team 1712 DAWGMA, **[Implementation of the Adaptive Pure Pursuit Controller](https://www.chiefdelphi.com/t/paper-implementation-of-the-adaptive-pure-pursuit-controller/166552)** -
+  curvature velocity profile and inject-and-smooth path generation.
+- Timo Denk, **[Cubic Spline Interpolation](https://blog.timodenk.com/cubic-spline-interpolation/)** -
+  natural cubic spline continuity conditions and tridiagonal solve.
+- Vikramaditya Nishant, **[Introducing Torque-Current Control for FTC](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)** -
+  current, voltage, back-EMF, and current-limiting discussion.
+- E. Eade, *Lie Groups for 2D and 3D Transformations* - background for the $SE(2)$ exponential/log maps.
+- Kou, E. & Haggenmiller, A., **[Extended Kalman Filter State Estimation for Autonomous Competition Robots](https://arxiv.org/abs/2310.04459)** -
+  FTC-oriented EKF paper used by the [Kalman](./signal-processing/kalman.mdx) and
+  [EKF](./signal-processing/ekf.mdx) lessons.
+- Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao,
+  **[A Guiding Vector Field Algorithm for Path Following Control](https://arxiv.org/abs/1610.04391)** -
+  implicit/level-set GVF formulation and Lyapunov convergence proof.
+- Havish Sripada and Baron Henderson, **Second-Order Multidimensional Guiding Vector Field for Parametric
+  Path-Following Under Holonomic Constraints**, Pedro Pathing, 2026 - second-order GVF framework behind
+  Pedro Pathing. User-supplied PDF.
 
 ## Source code referenced
 
-Open-source FTC team code the lessons translate, each with the technique it anchors. All code in Control
-Lab is an independent reimplementation, not a copy.
+Open-source FTC team code the lessons translate. All code in Control Lab is an independent
+reimplementation, not a copy.
 
-- **[petrustoica/CenterStage](https://github.com/petrustoica/CenterStage)** — cubic Bézier path follower.
-- **[SimplicityFTC/SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)** —
-  PID-to-point, kStatic, point-advance sequencing.
-- **[Cyliis/CyLiis_Into_The_Deep_OfficialCode](https://github.com/Cyliis/CyLiis_Into_The_Deep_OfficialCode)** —
-  predictive deceleration (glide-distance predicted pose).
-- **[FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)** — kStatic, spline following
-  (curvature speed + centripetal feedforward), line–circle lookahead.
-- **[KHEngineering/SmoothPathPlanner](https://github.com/KHEngineering/SmoothPathPlanner)** — the
-  gradient-descent path smoother (Team 2168).
-- **[xiaoxiae/PurePursuitAlgorithm](https://github.com/xiaoxiae/PurePursuitAlgorithm)** — an adaptive
-  pure-pursuit visualizer.
-- **[FTC-9974-THOR/GuidedVectorField](https://github.com/FTC-9974-THOR/GuidedVectorField)** — a reference
-  FTC guided-vector-field library (Bézier-path guidance, disturbance rejection).
-- **[KookyBotz/CenterStage `GVFCommand`](https://github.com/KookyBotz/CenterStage/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/common/commandbase/drivecommand/GVFCommand.java)**
-  — a shipped GVF follower: $k_N/k_S/k_C$ gains, curvature speed cap, seeded projection, motion-profiled
-  heading ([Guided Vector Fields](./path-following/guided-vector-fields.mdx)).
+- **[petrustoica/CenterStage](https://github.com/petrustoica/CenterStage)** - cubic Bezier path follower.
+- **[SimplicityFTC/SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)** -
+  PID-to-point, kStatic, and point-advance sequencing.
+- **[Cyliis/CyLiis_Into_The_Deep_OfficialCode](https://github.com/Cyliis/CyLiis_Into_The_Deep_OfficialCode)** -
+  predictive deceleration through a glide-distance predicted pose.
+- **[FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)** - kStatic, spline following,
+  curvature speed caps, centripetal feedforward, and line-circle lookahead.
+- **[KHEngineering/SmoothPathPlanner](https://github.com/KHEngineering/SmoothPathPlanner)** - gradient-descent
+  path smoother from Team 2168.
+- **[xiaoxiae/PurePursuitAlgorithm](https://github.com/xiaoxiae/PurePursuitAlgorithm)** - adaptive pure-pursuit
+  visualizer.
+- **[FTC-9974-THOR/GuidedVectorField](https://github.com/FTC-9974-THOR/GuidedVectorField)** - reference FTC
+  guided-vector-field library.
+- **[KookyBotz/CenterStage `GVFCommand`](https://github.com/KookyBotz/CenterStage/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/common/commandbase/drivecommand/GVFCommand.java)** -
+  shipped GVF follower with projection, gains, curvature speed cap, and motion-profiled heading.
+- WolfPack Machina Power Play autonomous example supplied by the site author - representative FSM excerpt
+  credited in [State Machines](./software-architecture/state-machines.mdx). Contact: jkc.cassidy+FTC@gmail.com.
 
 ## Videos
 
-- **[PDFL — Improving Upon PID](https://www.youtube.com/watch?v=EKSDbWL7tIY)** — the feedforward +
-  filtered-derivative + static-friction upgrades in [PID Control](./control-theory/pid.mdx).
-- **[Wolfpack Movement Breakdown](https://www.youtube.com/watch?v=ri06orPFaKo)** — a team's autonomous
-  movement stack end to end ([Path Following](./path-following/index.mdx)).
-- **Intro to Odometry in FTC** —
-  [Part 1](https://www.youtube.com/watch?v=ixsxDn_ddLE) ·
-  [Part 2](https://www.youtube.com/watch?v=XkmZq2jopT4) ([Odometry](./localization-odometry/odometry.mdx)).
-- **3Blue1Brown** —
-  [Essence of Calculus](https://www.youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr) and
-  [Essence of Linear Algebra](https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab),
-  woven through the [Preface](./preface/why-math-matters/index.mdx).
+- **[PDFL - Improving Upon PID](https://www.youtube.com/watch?v=EKSDbWL7tIY)** - feedforward,
+  filtered derivative, and static-friction upgrades in [PID Control](./control-theory/pid.mdx).
+- **[Wolfpack Movement Breakdown](https://www.youtube.com/watch?v=ri06orPFaKo)** - team autonomous movement
+  stack example.
+- **Intro to Odometry in FTC** -
+  [Part 1](https://www.youtube.com/watch?v=ixsxDn_ddLE) and
+  [Part 2](https://www.youtube.com/watch?v=XkmZq2jopT4).
+- **3Blue1Brown** -
+  [Essence of Calculus](https://www.youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr),
+  [Essence of Linear Algebra](https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab), and
+  [Differential Equations](https://www.youtube.com/playlist?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6).
 
 <Admonition type="note" title="Found a source we should credit?">
 
-Control Lab is open source. If a technique here came from your code or writing and isn't credited — or a
-link has rotted — open an issue or pull request on
-[GitHub](https://github.com/stoicescueric/control-lab) and we'll fix it.
+Control Lab is open source. If a technique here came from your code or writing and is not credited, or a
+link has rotted, open an issue or pull request on
+[GitHub](https://github.com/stoicescueric/control-lab) and we will fix it.
 
 </Admonition>
