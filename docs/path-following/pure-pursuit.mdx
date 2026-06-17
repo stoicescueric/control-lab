@@ -63,6 +63,22 @@ This drops out of geometry: the chord to the carrot has length $L_d$ and lateral
 unique tangent circle through both has radius $r = L_d^2 / (2y)$, hence curvature $1/r = 2y/L_d^2$.
 If the carrot is dead ahead ($y = 0$), curvature is zero — drive straight.
 
+<Callout type="warning" title="This derivation assumes a nonholonomic robot — mecanum isn't one.">
+The "follow one arc to the carrot" rule is built on a <strong>nonholonomic</strong> drive: a tank, car,
+or differential robot can only move along its heading and must <em>steer</em> (change curvature) to go
+sideways. That constraint is the whole reason a single arc — coupling forward speed to turn rate
+$\omega = \kappa v$ — is the natural command. A <strong>mecanum</strong> drive is
+<strong>holonomic</strong>: it can translate in any direction <em>independently</em> of where it is
+facing. So on mecanum you have two choices. (a) Run pure pursuit as written — treat the chassis like a
+diff-drive, steering toward the carrot and letting heading follow the path tangent; simple, and fine for
+gentle paths. (b) Exploit the holonomy — drive the velocity vector <em>straight at the lookahead point</em>
+and control heading with a <em>separate</em> loop. Option (b) is exactly what the holonomic followers in
+this module do: <a href="./pid-to-point">PID-to-point</a> and the
+<a href="./guided-vector-fields">guided vector field</a> command $(v_x, v_y, \omega)$ directly and never
+need the curvature trick. Use pure pursuit's curvature form when the geometry genuinely couples steering
+and motion (tank/diff); reach for decoupled translation + heading on mecanum.
+</Callout>
+
 The single tuning parameter is the lookahead distance, and it is a direct trade-off:
 
 | Lookahead $L_d$ | Behaviour |
@@ -170,8 +186,8 @@ v_i^{\max} = \min\!\left(v_\text{path},\ \frac{k_\kappa}{\kappa_i}\right)
 $$
 
 The constant $k_\kappa$ (typically $1$–$5$) sets how cautious the robot is in turns; as $\kappa \to 0$
-the cap relaxes back to $v_\text{path}$. This is the discrete cousin of the
-[curvature speed limit](./quintic-splines.mdx) $v \le \sqrt{a_\text{lat} R}$ from the splines lesson.
+the cap relaxes back to $v_\text{path}$. This is the discrete cousin of the continuous curvature speed limit
+$v \le \sqrt{a_\text{lat} R}$ applied per point in *[Following a spline at speed](#following-a-spline-at-speed)* below.
 
 **3 — A backward pass so it can always stop.** A speed cap alone lets the robot reach a slow corner
 still going full tilt. Walk the path *backwards* from the end (where $v = 0$) and clamp each point to the
@@ -224,6 +240,28 @@ $$
 with $b$ near $0.75$–$0.98$ (larger = smoother), $a = 1 - b$, repeated until the total change drops below
 a tolerance. It is a cheap alternative to fitting a spline — no overshoot, though it does pull slightly
 away from your original waypoints.
+
+### Following a spline at speed
+
+The [splines lesson](./quintic-splines.mdx) gives you a smooth curve; to *follow* it, **resample it into a
+list of points by arc length**, tagging each with its curvature radius $R = 1/\kappa$ (computed from the
+spline's derivatives). The curvature speed cap from the adaptive plan above applies per point — the lateral
+acceleration on a curve is $a_\text{lat} = v^2/R$, so the slip limit gives a per-point speed
+$v \le \sqrt{a_\text{lat}^{\max}\, R}$: gentle (big $R$) ⇒ full speed, tight (small $R$) ⇒ slow down.
+(FTCclueless uses a cheaper ramp to the same effect, `speed = 0.25 + 0.75·min(|R|, 200)/200`.)
+
+One refinement a *curved* follow needs that a straight lookahead does not is a **centripetal feedforward**.
+To *stay* on a curve of radius $R$ at speed $v$ the robot needs a sideways acceleration toward the centre;
+without it, feedback alone always lags and the robot drifts to the outside of every turn. Add it as a strafe
+feedforward:
+
+$$
+u_\text{strafe} \mathrel{+}= k_c\,\frac{v^2}{R}
+$$
+
+Then follow the resampled list with PID-to-point's [point-advance follower](./pid-to-point.mdx) — drive
+toward the current point, advance to the next within a radius — so the whole curve is tracked as one
+continuous motion. The code is in the Deploy section below.
 
 </Theory>
 
@@ -296,6 +334,64 @@ double target  = pts.get(closestIndex).velocity;
 double maxStep = A_MAX * loopDt;
 commanded += Math.max(-maxStep, Math.min(maxStep, target - commanded));`}</JavaCode>
 
+To follow a **resampled spline**, advance through its points, cap speed by each point's curvature radius,
+and add the centripetal feedforward:
+
+<JavaCode league="FTC" label="Spline follower: resample, then curvature speed + centripetal">{`/** A sampled point along the spline. */
+record SplinePoint(double x, double y, double heading, double radius) {}
+
+/** Resample the spline by arc length; tag each point with its curvature radius. */
+List<SplinePoint> resample(Spline s, double stepInches) {
+    List<SplinePoint> pts = new ArrayList<>();
+    for (double d = 0; d <= s.length(); d += stepInches) {
+        double t = s.tAtDistance(d);                 // arc-length -> parameter
+        double dx = s.dx(t),  dy = s.dy(t);          // first derivatives
+        double ddx = s.ddx(t), ddy = s.ddy(t);       // second derivatives
+        double kappa = (dx*ddy - dy*ddx) / Math.pow(dx*dx + dy*dy, 1.5);
+        double radius = Math.abs(kappa) < 1e-6 ? 1e6 : 1.0 / kappa;
+        pts.add(new SplinePoint(s.x(t), s.y(t), Math.atan2(dy, dx), radius));
+    }
+    return pts;
+}
+
+/** One loop: point-advance to the target, scale speed by curvature, add centripetal FF. */
+public void followSpline(List<SplinePoint> path) {
+    Pose2d robot = localizer.getPose();
+    while (index < path.size() - 1 &&
+           Math.hypot(path.get(index).x() - robot.x, path.get(index).y() - robot.y) < PATH_RADIUS) {
+        index++;
+    }
+    SplinePoint p = path.get(index);
+
+    double speed = Math.min(MAX_SPEED, Math.sqrt(LAT_ACCEL * Math.abs(p.radius())));
+
+    // robot-frame direction to the point -> forward / strafe at the curvature-limited speed
+    double ex = p.x() - robot.x, ey = p.y() - robot.y;
+    double c = Math.cos(robot.heading), s = Math.sin(robot.heading);
+    double dir = Math.atan2(ey * c - ex * s, ex * c + ey * s);
+    double vx = speed * Math.cos(dir);
+    double vy = speed * Math.sin(dir);
+
+    vy += K_CENTRIPETAL * speed * speed / p.radius();   // hold the curve, don't get flung out
+
+    drive(vx, vy, headingController(p.heading()));        // mecanum mixer desaturates
+}`}</JavaCode>
+
+This is FTCclueless's spline follower in miniature: resample with a per-point radius, advance through the
+points, slow for tight curvature, and feed forward the centripetal term so the follower tracks the curve
+instead of cutting it.
+
+<Admonition type="tip" title="Why C² matters for the speed plan">
+
+The curvature speed cap is only as smooth as $\kappa$ itself. A **C¹** path — a cubic Hermite or
+Catmull-Rom spline that matches only *tangents* at each waypoint — has $\kappa$ jump at every join, so the
+*speed limit* jumps too and the robot lurches. A **C²** path keeps $\kappa$ continuous, and so the whole
+speed profile is smooth. This is *not* unique to quintics: a [natural cubic spline](./quintic-splines.mdx)
+is C² as well (it just can't set its end curvature). Either C² family gives you a continuous curvature plan;
+a tangent-only cubic does not.
+
+</Admonition>
+
 <Callout type="idea" title="On a tank (differential) drive">
 Pure pursuit outputs a signed curvature and a speed; a differential drive turns those straight into
 wheel speeds. With track width $T$, $\;L = v(2 + \kappa T)/2\;$ and $\;R = v(2 - \kappa T)/2$. (Our
@@ -327,6 +423,10 @@ repositories:
   (the gradient-descent smoother the DAWGMA paper borrows from Team 2168).
 - **Line–circle intersection lookahead** — [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
   (`subsystems/drive/Drivetrain.java`, `lineCircleIntersection`).
+- **Spline following with curvature speed scaling and centripetal feedforward** (resample to points
+  carrying $R = 1/\kappa$, cap speed by $\sqrt{a_\text{lat} R}$, add a $k_c v^2/R$ strafe term) —
+  [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage) (`subsystems/drive/Spline.java`
+  and `Drivetrain.java`).
 
 The code here is an independent reimplementation of these ideas, not a copy of any one source.
 

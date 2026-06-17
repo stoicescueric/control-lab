@@ -1,0 +1,97 @@
+---
+title: GVF — Convergence Theory
+description: The rigorous side of guided vector fields — write the path as the zero level set of a function, build the field from its gradient, and prove with a Lyapunov argument that following the field drives the robot onto the path and keeps it there.
+sidebar_position: 1
+tags: [guided-vector-field, gvf, convergence, lyapunov, level-set, advanced]
+---
+
+# Guided Vector Fields — Convergence Theory
+
+<Difficulty level="Hard" />
+
+<Abstract>
+The [guided-vector-field lesson](../path-following/guided-vector-fields.mdx) builds the field from the
+closest point on the path — the form you code. This page gives the other half: the control-theory
+formulation that writes the path as the zero level set of a smooth function, builds the same field from its
+gradient, and <em>proves</em> convergence with a Lyapunov argument. Read the core lesson first; this is the
+"why it provably works."
+</Abstract>
+
+<Admonition type="note" title="Prerequisite">
+
+This page extends [**Guided Vector Fields**](../path-following/guided-vector-fields.mdx). It assumes you
+already know the closest-point field $\boldsymbol{\chi} = \hat{\mathbf{t}} - k_N\,e\,\hat{\mathbf{n}}$ and
+the cross-track error $e$ from that lesson.
+
+</Admonition>
+
+## The same field, written as a level set
+
+The closest-point recipe is what you code, but it isn't the cleanest object to *prove* things about,
+because "closest point" is itself the output of a search. The control-theory formulation (Kapitanyuk,
+Proskurnikov & Cao) writes the path as the **zero level set of a smooth function** $\varphi(x,y)$ — for a
+circle of radius $R$, $\varphi = x^2 + y^2 - R^2$; for a line $ax+by+c=0$, $\varphi = ax+by+c$. The value of
+$\varphi$ *is* a cross-track error (zero exactly on the path), and its gradient $\nabla\varphi$ points along
+the normal. The guiding vector field is then
+
+$$
+\boldsymbol{\chi} \;=\; \underbrace{E\,\nabla\varphi}_{\text{propagate along}} \;-\; \underbrace{k\,\varphi\,\nabla\varphi}_{\text{converge onto}},
+\qquad
+E = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}
+$$
+
+$E$ is a 90° rotation, so $E\nabla\varphi$ is **tangent** to the level curve (it propagates the robot along
+the path) and $-k\,\varphi\,\nabla\varphi$ points down the gradient toward $\varphi = 0$ (it converges). This
+is *exactly* the same idea as the closest-point form: $E\nabla\varphi$ plays the role of $\hat{\mathbf{t}}$,
+$\nabla\varphi$ the role of $\hat{\mathbf{n}}$, and $\varphi$ the role of $e$. The level-set view is what
+makes the convergence proof clean.
+
+<Callout type="idea" title="Two views, one field.">
+Use the **implicit/level-set** form ($\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$) to reason
+about and prove convergence — it needs no closest-point search. Use the **closest-point** form
+($\boldsymbol{\chi}=\hat{\mathbf{t}}-k_N e\,\hat{\mathbf{n}}$) to actually code it for a Bézier or Hermite
+spline, where you don't have a tidy $\varphi$ but you can always project onto the curve.
+</Callout>
+
+## Why it provably converges
+
+Take the cross-track error as an energy $V = \tfrac{1}{2}e^2 \ge 0$. Moving along the normalized field, the
+rate of change of $e$ is set by the normal component of the velocity, which the converging term makes
+proportional to $-e$: $\dot e \propto -k_N\,e$. So
+
+$$
+\dot V = e\,\dot e \;\propto\; -k_N\,e^2 \;\le\; 0
+$$
+
+The energy only ever **decreases**, and it reaches zero **only** on the path. By Lyapunov's theorem the path
+is asymptotically stable: the robot is driven onto the path and *stays* there. A lookahead chasing a moving
+point never gets this guarantee — its tracking error depends on speed and lookahead, and it never has a
+Lyapunov function in the cross-track error.
+
+In the level-set form the same argument runs on $\varphi$ directly: with $V = \tfrac12\varphi^2$, the
+converging term $-k\varphi\nabla\varphi$ gives $\dot\varphi = \nabla\varphi \cdot \dot{\mathbf{p}} \propto
+-k\varphi\lVert\nabla\varphi\rVert^2$, so $\dot V \propto -k\varphi^2\lVert\nabla\varphi\rVert^2 \le 0$, and
+the propagating term $E\nabla\varphi$ contributes nothing to $\dot\varphi$ because it is orthogonal to
+$\nabla\varphi$. The robot slides *along* the path without changing how far off it is, while the converging
+term drives that distance to zero.
+
+<Admonition type="warning" title="Where the guarantee bends in practice">
+
+The proof assumes the field is followed exactly and the path's $\varphi$ (or its closest point) is known
+everywhere. On a real robot, finite loop time, the closest-point search, actuator limits, and
+singular points where $\nabla\varphi = 0$ all chip at it — which is why the
+[core lesson](../path-following/guided-vector-fields.mdx) clamps the converge
+gain and keeps a minimum along-track speed. The Lyapunov result is the *ideal* the implementation
+approximates, not a free lunch.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- **Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao, *A Guiding Vector Field Algorithm for Path Following
+  Control* ([arXiv:1610.04391](https://arxiv.org/abs/1610.04391))** — the implicit/level-set field
+  $\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$ and its Lyapunov convergence proof.
+- The practical, closest-point side of this technique — gains, curvature speed cap, and the FTC
+  implementation — is in the core [Guided Vector Fields](../path-following/guided-vector-fields.mdx) lesson.
+
+</Admonition>

@@ -4,7 +4,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import {motion, useReducedMotion} from 'framer-motion';
 import PurePursuit from '@site/src/components/sims/PurePursuit';
-import styles from './index.module.css';
+import MathMatrixHero from '@site/src/components/MathMatrixHero';
 
 type FeatureIcon = 'signal' | 'sum' | 'deploy';
 
@@ -89,103 +89,6 @@ function Icon({type}: {type: FeatureIcon}) {
       <path {...common} d="M5 12h14M12 5v14" />
       <path {...common} d="M7.5 7.5h9v9h-9z" />
     </svg>
-  );
-}
-
-function ControlLoopVisual() {
-  const reduce = useReducedMotion();
-  const vlines = [40, 80, 120, 160, 200, 240, 280, 320, 360, 400];
-  const hlines = [40, 80, 120, 160, 200, 240, 280];
-  const response =
-    'M40 250 C 120 250 150 58 220 58 C 280 58 300 92 360 88 C 395 86 410 90 430 90';
-
-  return (
-    <div className="border border-line bg-surface p-3 shadow-card">
-      <svg viewBox="0 0 460 300" className="block w-full" role="img" aria-label="A step response settling onto its setpoint">
-        <rect x="0" y="0" width="460" height="300" rx="8" fill="#0b1120" />
-        <g stroke="#ffffff" strokeOpacity="0.06" strokeWidth="1">
-          {vlines.map((x) => (
-            <line key={`v${x}`} x1={x} y1="0" x2={x} y2="300" />
-          ))}
-          {hlines.map((y) => (
-            <line key={`h${y}`} x1="0" y1={y} x2="460" y2={y} />
-          ))}
-        </g>
-        <line x1="40" y1="90" x2="430" y2="90" stroke="#ffffff" strokeOpacity="0.32" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 9" />
-        <text x="40" y="80" fill="#7e8cac" fontSize="13" fontFamily="var(--font-mono)">setpoint</text>
-        <motion.path
-          d={response}
-          fill="none"
-          stroke="#6f8bff"
-          strokeWidth="3.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          initial={reduce ? {pathLength: 1} : {pathLength: 0}}
-          animate={{pathLength: 1}}
-          transition={{duration: 1.3, ease: 'easeInOut'}}
-        />
-        <motion.circle
-          cx="430"
-          cy="90"
-          r="6"
-          fill="#ffc24d"
-          initial={reduce ? {opacity: 1} : {opacity: 0}}
-          animate={{opacity: 1}}
-          transition={{delay: reduce ? 0 : 1.2, duration: 0.25}}
-        />
-      </svg>
-    </div>
-  );
-}
-
-function Hero() {
-  const reduce = useReducedMotion();
-  const rise = (delay: number) => ({
-    initial: reduce ? false : {opacity: 0, y: 12},
-    animate: {opacity: 1, y: 0},
-    transition: {duration: 0.4, delay, ease: EASE},
-  });
-
-  return (
-    <header className={`${styles.heroGlow} border-b border-line`}>
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 lg:grid-cols-[1.04fr_0.96fr] lg:py-20">
-        <div>
-          <motion.div {...rise(0)} className="mb-5 inline-flex items-center gap-2 border border-line bg-surface px-3 py-1 font-mono text-xs font-medium text-ink-soft uppercase">
-            <span className="inline-block h-1.5 w-1.5 bg-brand" />
-            Interactive control-theory curriculum
-          </motion.div>
-
-          <motion.h1 {...rise(0.04)} className="m-0 max-w-3xl text-[2.35rem] leading-[1.08] font-extrabold text-ink sm:text-[2.9rem]">
-            Control theory you can see, derive, and deploy.
-          </motion.h1>
-
-          <motion.p {...rise(0.1)} className="mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
-            A rigorous, interactive curriculum for competitive robotics programmers who want to
-            understand the math and architecture beneath the libraries they use in competition.
-          </motion.p>
-
-          <motion.div {...rise(0.16)} className="mt-8 flex flex-wrap items-center gap-3">
-            <Link className="button button--primary button--lg" to="/docs/preface/why-math-matters">
-              Start with the Preface
-            </Link>
-            <Link className="button button--secondary button--lg" to="/docs/control-theory">
-              Jump to Control Theory
-            </Link>
-          </motion.div>
-
-          <motion.p {...rise(0.22)} className="mt-6 font-mono text-xs text-ink-faint">
-            Open source / MIT licensed / Built for FTC and FRC programmers
-          </motion.p>
-        </div>
-
-        <motion.div
-          initial={reduce ? false : {opacity: 0, scale: 0.98}}
-          animate={{opacity: 1, scale: 1}}
-          transition={{duration: 0.45, delay: 0.14, ease: EASE}}>
-          <ControlLoopVisual />
-        </motion.div>
-      </div>
-    </header>
   );
 }
 
@@ -314,7 +217,7 @@ export default function Home(): ReactNode {
     <Layout
       title={siteConfig.title}
       description="Control theory, state estimation, and FTC robotics: an interactive, mathematically rigorous learning platform for competitive robotics programmers.">
-      <Hero />
+      <MathMatrixHero />
       <main>
         <Features />
         <Showcase />

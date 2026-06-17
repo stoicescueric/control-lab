@@ -226,7 +226,14 @@ V_\text{cmd} = k_e\,\omega + I^*\,R
 $$
 
    You read $\omega$ from the encoder, predict the back-EMF, add the bit of voltage that pushes your
-   target current, and send it. **Current-limiting** this way is how good drives stop wheel slip (cap the
+   target current, and send it. Be precise about what this is: it is **open-loop, model-based** current
+   control — a current *feedforward*. It trusts the constants $k_e, k_t, R$ and never measures the actual
+   current, so any error in the model (a warm motor's higher $R$, a sagging battery) shows up directly as
+   current error. **True closed-loop current control** measures the current each loop (`getCurrent()`) and
+   runs a feedback controller on the error — what a dedicated motor controller or FOC drive does
+   internally. FTC's hub exposes no fast current loop to command, so the model-based version above is the
+   practical one, optionally backstopped by the *measured*-current limiter in the Deploy section below.
+   **Current-limiting** this way is how good drives stop wheel slip (cap the
    torque the tires can use), avoid cooking motors, and survive defense: in a pushing match the wheels are
    stalled ($\omega = 0$), so a raw full-power command pulls ~$V/R$ — tens of amps — and pops a fuse,
    whereas a current limit drops the applied voltage to whatever delivers the safe current.
@@ -234,8 +241,8 @@ $$
 <Callout type="idea" title="This is the whole module in one equation.">
 $V = k_e\omega + IR$ is the seed of everything ahead. <strong>Feedforward</strong> is this equation solved
 for the voltage a target speed needs ($k_S, k_V, k_A$ are its terms). <strong>System identification</strong>
-measures $k_e, k_t, R$ for your real motor. <strong>Current control</strong> is it solved for a target
-torque. Learn the motor and the controllers stop being magic.
+measures $k_e, k_t, R$ for your real motor. <strong>Current control</strong> (model-based here, closed-loop
+on a real controller) is it solved for a target torque. Learn the motor and the controllers stop being magic.
 </Callout>
 
 </Theory>
@@ -266,16 +273,18 @@ public record MotorSpec(
 At runtime, a motor near stall is the fastest way to cook a mechanism and brown out the robot. The hub can
 read current, so guard it — or, better, command current directly using the model.
 
-<JavaCode league="FTC" label="Torque / current control via the motor model">{`/** Drive a target CURRENT (= target torque) instead of a raw power, using
- *  V = ke*omega + I*R, then voltage-compensate. This caps torque cleanly:
- *  stalled wheels can't pull more than the limit, so no fuse-popping spikes. */
+<JavaCode league="FTC" label="Feedforward (model-based) current control, and a measured-current limiter">{`/** FEEDFORWARD / model-based (OPEN-LOOP) current control: command the voltage the
+ *  model predicts will yield targetAmps, via V = ke*omega + I*R, then voltage-
+ *  compensate. It never reads the actual current, so it is only as good as ke/R.
+ *  For a TRUE closed loop, run a controller on the getCurrent() error instead. */
 public void setCurrent(DcMotorEx motor, double targetAmps) {
     double omega = motor.getVelocity(AngleUnit.RADIANS);  // rad/s from the encoder
     double vCmd  = KE * omega + targetAmps * R;           // predicted back-EMF + IR
     motor.setPower(vCmd / battery.getVoltage());          // volts -> [-1, 1]
 }
 
-/** Simpler safety net if you only command power: throttle to a current budget. */
+/** Closed-loop safety net: MEASURE the current and scale the command down if it
+ *  exceeds the budget. This is feedback (it reads getCurrent), unlike setCurrent. */
 public void driveSafely(DcMotorEx motor, double command, double maxCurrentA) {
     double current = motor.getCurrent(CurrentUnit.AMPS);
     if (current > maxCurrentA) command *= maxCurrentA / current;

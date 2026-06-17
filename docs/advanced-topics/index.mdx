@@ -1,0 +1,32 @@
+---
+title: Advanced Topics
+description: Optional deep-dives that extend the core curriculum — the convergence theory behind guided vector fields, take-back-half flywheel control, and the full derivation of the natural cubic spline — kept separate so the core path stays approachable.
+tags: [advanced, optional, theory, gvf, takeback-half, splines]
+---
+
+# Advanced Topics
+
+These are **optional deep-dives**. Each one extends a core lesson with the heavier mathematics or a
+specialised technique that would slow a first read of the main path. Come here once you are already
+comfortable with [PID](../control-theory/pid.mdx), [localization](../localization-odometry/odometry.mdx),
+and [kinematics](../path-following/mecanum-kinematics.mdx) — nothing in the core curriculum depends on this
+section, and every page below names the core lesson it builds on.
+
+## What's here
+
+- **[Guided Vector Fields — convergence theory](./gvf-convergence.mdx)** — the implicit / level-set
+  formulation $\chi = E\nabla\varphi - k\varphi\nabla\varphi$ and the Lyapunov proof that the field drives
+  a robot onto the path and keeps it there. Extends the intuitive
+  [guided-vector-field lesson](../path-following/guided-vector-fields.mdx).
+- **[Take-Back-Half](./takeback-half.mdx)** — the one-line upgrade that turns a chattering bang-bang
+  flywheel into a steady, ripple-free hold. Extends [Bang-Bang Control](../control-theory/bang-bang.mdx).
+- **[Natural cubic splines — the tridiagonal derivation](./natural-cubic-derivation.mdx)** — solving for
+  the spline's interior moments with one $O(n)$ tridiagonal sweep (the Thomas algorithm), and why a robot
+  path needs two of them. Extends [Splines](../path-following/quintic-splines.mdx).
+
+<Admonition type="tip" title="Read the core lesson first">
+
+Each page assumes you have read the lesson it extends. They are written as the "next layer," not as
+standalone introductions.
+
+</Admonition>

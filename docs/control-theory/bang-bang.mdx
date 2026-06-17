@@ -1,22 +1,21 @@
 ---
-title: Bang-Bang & Takeback-Half
-description: The simplest controller that works — full power below the setpoint, off above it — and takeback-half, the one-line upgrade that turns a chattering flywheel into a smoothly held speed.
+title: Bang-Bang Control
+description: The simplest controller that works — full power below the setpoint, off above it. For a high-inertia flywheel it is fast and impossible to destabilize; its one flaw is that it chatters and never truly settles.
 sidebar_position: 5
-tags: [bang-bang, takeback-half, tbh, flywheel, control, hysteresis]
+tags: [bang-bang, flywheel, control, hysteresis, limit-cycle]
 ---
 
 import BangBang from '@site/src/components/sims/BangBang';
 
-# Bang-Bang & Takeback-Half
+# Bang-Bang Control
 
 <Difficulty level="Medium" />
 
 <Abstract>
 Bang-bang is the most primitive feedback law: if you are below the target, give full power; if above, give
 none. For a high-inertia flywheel it is shockingly effective and impossible to make unstable, but it
-chatters and never truly settles. Takeback-half (TBH) is a tiny modification — when the error changes
-sign, give back half the accumulated drive — that converges to a steady, ripple-free hold while keeping
-bang-bang's fast recovery after a shot.
+chatters and never truly settles. That last flaw is what motivates its one-line upgrade,
+<a href="../advanced-topics/takeback-half">take-back-half</a>, in the Advanced Topics section.
 </Abstract>
 
 Not every mechanism needs [PID](./pid.mdx). A shooter flywheel has huge rotational inertia and one job:
@@ -33,9 +32,7 @@ recovers. That is literally bang-bang. The catch is what it does once it gets th
 
 </Problem>
 
-<Theory title="Two one-line controllers">
-
-### Bang-bang: the on/off law
+<Theory title="The on/off law">
 
 Compare the measured speed to the target and choose one of two outputs:
 
@@ -60,35 +57,25 @@ flywheel is the textbook case. Adding a small <strong>hysteresis</strong> band (
 $v_\text{target}-\delta$, off above $v_\text{target}+\delta$) limits the switching frequency.
 </Callout>
 
-### Takeback-half: settle without giving up recovery
-
-Takeback-half keeps an accumulating drive like an integrator, but adds one trick. Each loop, integrate the
-error into the drive. When the error **crosses zero** — the moment you pass the setpoint — you have
-integrated too far, so "take back half": set the drive to the average of its current value and its value
-at the *previous* crossing. Successive crossings bracket the true holding drive and converge onto it.
-
-$$
-\text{drive} \mathrel{+}= g\,e\,\Delta t;
-\qquad
-\text{on a sign change of } e:\quad
-\text{drive} \leftarrow \tfrac12\big(\text{drive} + \text{drive}_\text{last-cross}\big)
-$$
-
-The result (green below) recovers nearly as fast as bang-bang on the first approach, then quickly stops
-oscillating and holds the speed flat. One gain $g$, no derivative, no windup to manage. Run the demo:
-bang-bang chatters around the line forever; TBH locks on.
+Run the demo. The red trace is bang-bang: it recovers fast after each shot but chatters around the line
+forever. The green trace previews **take-back-half**, the upgrade that keeps the fast recovery but locks
+onto a steady speed — its derivation and code are in
+[Advanced Topics → Take-Back-Half](../advanced-topics/takeback-half.mdx).
 
 <BangBang />
 
-<Callout type="idea" title="Why take back half?">
-At each zero crossing the true steady drive lies somewhere between the current over-driven value and the
-last under-driven one. Halving splits the difference — a bisection search on the holding voltage that
-converges geometrically. It is the cheapest possible way to find the steady command without a model.
-</Callout>
+### The limitation, and the upgrade
+
+Bang-bang's flaw is structural, not a tuning problem: an on/off law has no steady state to rest at, so it
+*must* limit-cycle. If a chattering hold is acceptable (the flywheel's inertia keeps the actual speed
+ripple small), bang-bang with a hysteresis band is all you need. If you need a steady, repeatable
+speed — for consistent shot distance — you keep bang-bang's fast recovery but add a settling mechanism:
+**[take-back-half](../advanced-topics/takeback-half.mdx)**, a one-gain integrator-with-a-twist that
+converges onto the holding drive instead of bouncing across it.
 
 </Theory>
 
-<Deploy title="Both controllers, on the Control Hub">
+<Deploy title="Bang-bang on the Control Hub">
 
 <JavaCode league="FTC" label="Bang-bang with a hysteresis band">{`/** Full power below the target, off above it — with a small dead band so the
  *  motor doesn't switch every single loop. Good for high-inertia flywheels. */
@@ -100,40 +87,13 @@ public void bangBang(DcMotorEx motor, double measuredRpm, double targetRpm) {
     motor.setPower(power);
 }`}</JavaCode>
 
-<JavaCode league="FTC" label="Takeback-half velocity controller">{`public class TakeBackHalf {
-    public static double gain = 0.0009;   // @Config-tunable
-    private double drive = 0, driveAtZero = 0, lastError = 0;
-
-    public double update(double measuredRpm, double targetRpm) {
-        double error = targetRpm - measuredRpm;
-        drive += gain * error;                       // integrate the error
-        drive = Math.max(0, Math.min(1, drive));     // clamp to valid power
-        if (Math.signum(error) != Math.signum(lastError)) {
-            drive = 0.5 * (drive + driveAtZero);     // take back half
-            driveAtZero = drive;                     // remember this crossing
-        }
-        lastError = error;
-        return drive;
-    }
-}`}</JavaCode>
-
-Seed `driveAtZero` with a [feedforward](./feedforward.mdx) estimate ($k_V \cdot v_\text{target}$) and TBH
-converges in a single oscillation instead of several — the two techniques compose nicely.
-
 </Deploy>
 
 <Admonition type="tip" title="When to reach for which">
 
 Use **bang-bang** when recovery speed is everything and the plant is high-inertia (a shooter you re-spin
-between shots). Use **takeback-half** when you also need a steady, repeatable speed (consistent shot
-distance). Use **[PID](./pid.mdx) + feedforward** when you need both tight holding *and* controlled
-acceleration, or the mechanism isn't a flywheel.
-
-</Admonition>
-
-<Admonition type="info" title="Sources & references">
-
-- **Takeback-half** — the algorithm popularized in the VEX/FRC community for flywheel speed control
-  (originally described by Tim Lindquist / "BLRS"); this lesson is an independent reimplementation.
+between shots). Use **[take-back-half](../advanced-topics/takeback-half.mdx)** when you also need a steady,
+repeatable speed (consistent shot distance). Use **[PID](./pid.mdx) + feedforward** when you need both
+tight holding *and* controlled acceleration, or the mechanism isn't a flywheel.
 
 </Admonition>

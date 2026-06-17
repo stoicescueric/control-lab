@@ -214,9 +214,8 @@ public boolean goToPose(Pose2d target) {
     // 4) hand off to the mecanum mixer (it desaturates internally)
     drive(vx, vy, w);
 
-    // 5) settle test: close in position AND heading, AND slow
-    double dist = Math.hypot(ex, ey);
-    return dist < POS_TOL && Math.abs(eh) < HEADING_TOL && robot.velocity.norm() < VEL_TOL;
+    // 5) done? one shared check: at the pose AND slow, with a timeout backstop
+    return atTarget(robot, target, timer);   // defined once in Common Implementation
 }
 
 /** A constant push toward the target, applied only near it, to beat static friction.
@@ -228,7 +227,11 @@ private double kStatic(double errorRobotFrame) {
 }`}</JavaCode>
 
 The settle test matters as much as the controller: check position **and** heading **and** that the robot
-is actually slow, or an action will report "done" while the robot is still coasting through the point.
+is actually slow, or an action will report "done" while the robot is still coasting through the point. Add
+a **timeout** as a backstop so a stuck move — jammed on a wall, or a bad pose estimate — still yields the
+field instead of hanging the routine. That trio (pose tolerance, low velocity, timeout) is exactly the
+shared [`atTarget` check](./common-implementation.mdx) every follower in this module calls — defined once,
+so they all terminate the same way.
 
 To follow a *list* of poses continuously, wrap that loop in point-advance sequencing:
 

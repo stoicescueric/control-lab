@@ -1,0 +1,120 @@
+---
+title: Natural Cubic Splines — The Derivation
+description: The full linear algebra behind the natural cubic spline — turn the C² continuity conditions into a tridiagonal system in the second derivatives (moments), solve it in O(n) with the Thomas algorithm, and read off each cubic piece. Plus why a robot path needs two of them.
+sidebar_position: 3
+tags: [natural-cubic-spline, tridiagonal, thomas-algorithm, moments, splines, advanced]
+---
+
+import NaturalCubicSpline from '@site/src/components/sims/NaturalCubicSpline';
+
+# Natural Cubic Splines — The Derivation
+
+<Difficulty level="Hard" />
+
+<Abstract>
+The [Splines lesson](../path-following/quintic-splines.mdx) introduces the natural cubic spline as the
+cheapest C² curve through a set of points and shows it in action. This page is the full derivation: turn the
+continuity conditions into a single <strong>tridiagonal</strong> system in the second derivatives
+("moments"), solve it in $O(n)$ with the <strong>Thomas algorithm</strong>, and read off each cubic piece —
+plus why a robot path actually needs two of these splines.
+</Abstract>
+
+<Admonition type="note" title="Prerequisite">
+
+This page extends [**Splines**](../path-following/quintic-splines.mdx). It assumes you know that a natural
+cubic spline lays one cubic per interval, is C² across every interior knot, and uses the *natural* boundary
+$S''(x_0) = S''(x_n) = 0$.
+
+</Admonition>
+
+## Conditions to a tridiagonal system
+
+Lay a cubic $S_i(x)$ on each interval $[x_i, x_{i+1}]$ and impose:
+
+- **C⁰** — each piece hits its endpoints, $S_i(x_i) = y_i$ and $S_i(x_{i+1}) = y_{i+1}$;
+- **C¹ and C²** — neighbouring pieces share first *and* second derivative at every interior knot.
+
+That is two conditions short of a unique solution. The **natural** boundary closes the gap by setting
+curvature to zero at the two ends, $S''(x_0) = S''(x_n) = 0$ — the spline leaves the path straight, like a
+drafting spline released at its tips.
+
+Writing the unknowns as the second derivatives ("moments") $M_i = S''(x_i)$ collapses all of that into a
+single **tridiagonal** system. With knot spacing $h_i = x_{i+1} - x_i$:
+
+$$
+h_{i-1} M_{i-1} + 2(h_{i-1} + h_i)\,M_i + h_i M_{i+1}
+  = 6\!\left(\frac{y_{i+1} - y_i}{h_i} - \frac{y_i - y_{i-1}}{h_{i-1}}\right),
+\qquad M_0 = M_n = 0
+$$
+
+Each row touches only three unknowns. With the moments in hand, the piece on $[x_i, x_{i+1}]$ is
+
+$$
+S_i(x) = \frac{M_i (x_{i+1}-x)^3 + M_{i+1}(x - x_i)^3}{6 h_i}
+  + \left(\frac{y_i}{h_i} - \frac{M_i h_i}{6}\right)(x_{i+1}-x)
+  + \left(\frac{y_{i+1}}{h_i} - \frac{M_{i+1} h_i}{6}\right)(x - x_i)
+$$
+
+Drag the waypoints below: the spline always threads through every point, the curvature comb stays smooth
+across each knot (that is the C²), and it flattens to nothing at the two ends — the natural boundary
+$M_0 = M_n = 0$ in action.
+
+<NaturalCubicSpline />
+
+## Solving it in O(n): the Thomas algorithm
+
+Because each row touches only three unknowns, you never form or invert a general matrix. The **Thomas
+algorithm** — Gaussian elimination specialised to a tridiagonal system — does a forward sweep that
+eliminates the sub-diagonal, then a back substitution, both linear in the number of points:
+
+<JavaCode league="FTC" label="Natural cubic spline: solve the tridiagonal moment system">{`/** Second derivatives (moments) for a natural cubic spline through (x[i], y[i]). */
+static double[] naturalCubicMoments(double[] x, double[] y) {
+    int n = x.length;
+    double[] h = new double[n - 1];
+    for (int i = 0; i < n - 1; i++) h[i] = x[i + 1] - x[i];
+
+    // tridiagonal rows: sub[i]*M[i-1] + diag[i]*M[i] + sup[i]*M[i+1] = rhs[i]
+    double[] diag = new double[n], sup = new double[n], sub = new double[n], rhs = new double[n];
+    diag[0] = diag[n - 1] = 1;                       // natural boundary: M[0] = M[n-1] = 0
+    for (int i = 1; i < n - 1; i++) {
+        sub[i]  = h[i - 1];
+        diag[i] = 2 * (h[i - 1] + h[i]);
+        sup[i]  = h[i];
+        rhs[i]  = 6 * ((y[i + 1] - y[i]) / h[i] - (y[i] - y[i - 1]) / h[i - 1]);
+    }
+
+    // Thomas algorithm: forward sweep, then back substitution -- O(n)
+    for (int i = 1; i < n; i++) {
+        double m = sub[i] / diag[i - 1];
+        diag[i] -= m * sup[i - 1];
+        rhs[i]  -= m * rhs[i - 1];
+    }
+    double[] M = new double[n];
+    M[n - 1] = rhs[n - 1] / diag[n - 1];
+    for (int i = n - 2; i >= 0; i--) M[i] = (rhs[i] - sup[i] * M[i + 1]) / diag[i];
+    return M;   // feed M[i], M[i+1] into the S_i(x) formula above to evaluate
+}`}</JavaCode>
+
+## A path is not a function
+
+<Callout type="warning" title="Fit x(t) and y(t), not y(x)">
+$S(x)$ needs $x$ to increase monotonically — a robot path that doubles back has two $y$'s for one $x$.
+Fit <strong>two</strong> natural cubic splines instead, $x(t)$ and $y(t)$ against the point index (or arc
+length) $t$, and evaluate them together. The same fix applies to any interpolating spline used as a 2-D
+trajectory. So for a 2-D path, run <code>naturalCubicMoments</code> twice — once for $x(t)$ and once for
+$y(t)$ against the index $t$.
+</Callout>
+
+The trade against quintic Hermite is the one from the core lesson: a natural cubic is already C² with the
+fewest degrees of freedom and no slope input, but the natural boundary pins the endpoint curvature to zero
+— you don't get to choose it. A quintic's extra coefficients per segment buy that boundary control.
+
+<Admonition type="info" title="Sources & references">
+
+- **Natural cubic spline interpolation** (continuity conditions, natural boundary, the tridiagonal moment
+  system, the Thomas algorithm) — Timo Denk, *Cubic Spline Interpolation*
+  ([blog.timodenk.com](https://blog.timodenk.com/cubic-spline-interpolation/)).
+- The curve menu this sits in — Bézier, quintic Hermite, and where natural cubic fits — is in the core
+  [Splines](../path-following/quintic-splines.mdx) lesson.
+
+</Admonition>

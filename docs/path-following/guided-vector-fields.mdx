@@ -70,49 +70,15 @@ large and the field points nearly straight at the path, so the robot overshoots 
 That trade-off is the one knob worth tuning — slide $k_N$ in the demo and watch the flow line go from a long
 graceful merge to a tight, slightly overshooting snap.
 
-### The same field, written as a level set
+### Provable convergence (in brief)
 
-The closest-point recipe is what you'll code, but it isn't the cleanest object to *prove* things about,
-because "closest point" is itself the output of a search. The control-theory formulation (Kapitanyuk,
-Proskurnikov & Cao) writes the path as the **zero level set of a smooth function** $\varphi(x,y)$ — for a
-circle of radius $R$, $\varphi = x^2 + y^2 - R^2$; for a line $ax+by+c=0$, $\varphi = ax+by+c$. The value of
-$\varphi$ *is* a cross-track error (zero exactly on the path), and its gradient $\nabla\varphi$ points along
-the normal. The guiding vector field is then
-
-$$
-\boldsymbol{\chi} \;=\; \underbrace{E\,\nabla\varphi}_{\text{propagate along}} \;-\; \underbrace{k\,\varphi\,\nabla\varphi}_{\text{converge onto}},
-\qquad
-E = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}
-$$
-
-$E$ is a 90° rotation, so $E\nabla\varphi$ is **tangent** to the level curve (it propagates the robot along
-the path) and $-k\,\varphi\,\nabla\varphi$ points down the gradient toward $\varphi = 0$ (it converges). This
-is *exactly* the same idea as the closest-point form: $E\nabla\varphi$ plays the role of $\hat{\mathbf{t}}$,
-$\nabla\varphi$ the role of $\hat{\mathbf{n}}$, and $\varphi$ the role of $e$. The level-set view is what
-makes the convergence proof clean.
-
-<Callout type="idea" title="Two views, one field.">
-Use the **implicit/level-set** form ($\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$) to reason
-about and prove convergence — it needs no closest-point search. Use the **closest-point** form
-($\boldsymbol{\chi}=\hat{\mathbf{t}}-k_N e\,\hat{\mathbf{n}}$) to actually code it for a Bézier or Hermite
-spline, where you don't have a tidy $\varphi$ but you can always project onto the curve.
-</Callout>
-
-### Why it provably converges
-
-Take the cross-track error as an energy $V = \tfrac{1}{2}e^2 \ge 0$. Moving along the normalized field, the
-rate of change of $e$ is set by the normal component of the velocity, which the converging term makes
-proportional to $-e$: $\dot e \propto -k_N\,e$. So
-
-$$
-\dot V = e\,\dot e \;\propto\; -k_N\,e^2 \;\le\; 0
-$$
-
-The energy only ever **decreases**, and it reaches zero **only** on the path. By Lyapunov's theorem the path
-is asymptotically stable: the robot is driven onto the path and *stays* there. A lookahead chasing a moving
-point never gets this guarantee — its tracking error depends on speed and lookahead, and it never has a
-Lyapunov function in the cross-track error. Normalize $\boldsymbol{\chi}$ and scale by your commanded speed
-to get the chassis velocity:
+This is GVF's headline property. Treat the cross-track error as an energy $V = \tfrac12 e^2$: the converging
+term makes it only ever *decrease* ($\dot V \propto -k_N e^2 \le 0$), reaching zero only on the path — so the
+robot is driven onto the path and *stays* there, which a lookahead chasing a moving point never guarantees.
+The full Lyapunov proof, and the cleaner **implicit / level-set** formulation
+$\boldsymbol{\chi} = E\nabla\varphi - k\varphi\nabla\varphi$ it is usually proved with, are in
+[Advanced Topics → GVF convergence theory](../advanced-topics/gvf-convergence.mdx). Normalize
+$\boldsymbol{\chi}$ and scale by your commanded speed to get the chassis velocity:
 
 $$
 \mathbf{u}_{xy} = v\,\frac{\boldsymbol{\chi}}{\lVert \boldsymbol{\chi}\rVert}, \qquad v = k_S\,v_{\max}
@@ -197,11 +163,16 @@ near the path don't stall.
 }
 
 public boolean isFinished(Pose2d robot) {
-    return robot.vec().minus(path.end()).norm() < FINISH_TOLERANCE;   // ~1.5 in
+    // Shared completion check (see Common Implementation): at the end pose AND slow,
+    // with a timeout backstop. Distance alone would report "done" while the robot
+    // is still coasting through the end of the path.
+    return atTarget(robot, path.endPose(), timer);
 }`}</JavaCode>
 
 Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); use
-[angle wrapping](./angle-wrapping.mdx) on the heading error so it always turns the short way.
+[angle wrapping](./angle-wrapping.mdx) on the heading error so it always turns the short way. The
+`Vector2d`/`Pose2d` types and the `atTarget` completion check come from
+[Common Implementation](./common-implementation.mdx).
 
 </Deploy>
 

@@ -220,7 +220,8 @@ PID reacts only to error that has *already* happened. Pair it with the
 can't predict — and you have the control stack behind nearly every fast, accurate FTC mechanism.
 
 From here the module branches into the techniques that make that stack *good*. For a high-inertia
-flywheel, a far simpler controller often beats PID — [**bang-bang & takeback-half**](./bang-bang.mdx). To
+flywheel, a far simpler controller often beats PID — [**bang-bang**](./bang-bang.mdx) (and its
+take-back-half upgrade). To
 move a mechanism fast *without* overshoot, stop feeding it a step and feed it a
 [**motion profile**](./motion-profiling.mdx) instead. And to keep every one of these behaving identically
 from a full battery to a sagging one, wrap them all in [**voltage compensation**](./voltage-compensation.mdx).
