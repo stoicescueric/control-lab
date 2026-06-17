@@ -1,16 +1,17 @@
 ---
-title: Advanced Topics
-description: "Optional deep-dives that extend the core curriculum: GVF convergence, Pedro Pathing internals, take-back-half flywheel control, and the full derivation of the natural cubic spline."
-tags: [advanced, optional, theory, gvf, pedro-pathing, takeback-half, splines]
+title: Advanced Topics & Misc
+description: "Optional deep-dives that extend the core curriculum: GVF convergence, inverse kinematics with Jacobians, Pedro Pathing internals, take-back-half flywheel control, and the full derivation of the natural cubic spline."
+tags: [advanced, optional, theory, inverse-kinematics, gvf, pedro-pathing, takeback-half, splines]
 ---
 
-# Advanced Topics
+# Advanced Topics & Misc
 
 These are **optional deep-dives**. Each one extends a core lesson with the heavier mathematics or a
 specialized technique that would slow a first read of the main path. Come here once you are already
 comfortable with [PID](../control-theory/pid.mdx), [localization](../localization-odometry/odometry.mdx),
-and [kinematics](../path-following/mecanum-kinematics.mdx). Nothing in the core curriculum depends on this
-section, and every page below names the core lesson it builds on.
+and [kinematics](../path-following/mecanum-kinematics.mdx). This section also holds useful side quests
+that are too specialized for the main sequence. Nothing in the core curriculum depends on this section,
+and every page below names the core lesson it builds on.
 
 ## What's here
 
@@ -18,6 +19,10 @@ section, and every page below names the core lesson it builds on.
   formulation $\chi = E\nabla\varphi - k\varphi\nabla\varphi$ and the Lyapunov proof that the field drives
   a robot onto the path and keeps it there. Extends the intuitive
   [guided-vector-field lesson](../path-following/guided-vector-fields.mdx).
+- **[Inverse Kinematics: Jacobians & Numerical Solvers](./inverse-kinematics-jacobians.mdx)** - the
+  advanced form of IK: use a Jacobian to translate small end-effector errors into joint-angle corrections,
+  then stabilize the solve with damping near singularities. Extends
+  [Inverse Kinematics](../path-following/inverse-kinematics.mdx).
 - **[How does Pedro Pathing work?](./how-pedro-pathing-works.mdx)** - a research-to-robot bridge from
   Bezier curves and closest-point projection to guided-vector-field correction, centripetal feedforward,
   heading control, and completion constraints. Extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx).
