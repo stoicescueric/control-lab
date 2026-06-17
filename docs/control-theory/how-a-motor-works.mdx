@@ -135,6 +135,16 @@ $$
 V = \underbrace{I\,R}_{\text{across the windings}} + \underbrace{k_e\,\omega}_{\text{back-EMF}}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'V', meaning: 'voltage applied to the motor terminals', unit: 'volts'},
+    {symbol: 'I', meaning: 'current through the motor windings', unit: 'amps'},
+    {symbol: 'R', meaning: 'electrical resistance of the windings', unit: 'ohms'},
+    {symbol: 'k_e', meaning: 'back-EMF constant: how many volts the spinning motor generates per angular speed', unit: 'V*s/rad'},
+    {symbol: 'omega', meaning: 'motor shaft angular speed', unit: 'rad/s'},
+  ]}
+/>
+
 That one equation is the entire electrical model of the motor. Read it three ways and the whole
 torque–speed story falls out.
 
@@ -148,6 +158,16 @@ I = \frac{V - k_e\,\omega}{R}, \qquad
 = \underbrace{\frac{k_t V}{R}}_{\text{stall torque}} - \underbrace{\frac{k_t k_e}{R}}_{\text{slope}}\,\omega
 $$
 
+<EquationLegend
+  title="Torque-speed symbols"
+  items={[
+    {symbol: 'tau', meaning: 'motor torque, the twisting force available at the motor shaft', unit: 'N*m'},
+    {symbol: 'k_t', meaning: 'torque constant: torque produced per amp of winding current', unit: 'N*m/A'},
+    {symbol: 'omega', meaning: 'motor shaft angular speed; higher speed creates more back-EMF', unit: 'rad/s'},
+    {symbol: 'R', meaning: 'winding resistance, which turns high current into heat', unit: 'ohms'},
+  ]}
+/>
+
 A straight line: maximum torque at zero speed, zero torque at top speed. Drive it below — set the voltage
 and the load, and the green dot shows where the motor actually settles (where its line meets the load).
 Watch **current**, **efficiency**, and **heat** as you push toward stall.
@@ -159,7 +179,7 @@ Read off the two ends — the only points most datasheets list:
 | Operating point | Speed | Torque | Current | What's happening |
 |---|---|---|---|---|
 | **Stall** ($\omega = 0$) | 0 | max, $\tau_\text{stall} = \frac{k_t V}{R} =$ **0.19 N·m** | max, $I_\text{stall} = \frac{V}{R} =$ **11 A** | no back-EMF, so current — and heat — peak |
-| **Free run** ($\tau = 0$) | max, $\omega_\text{free} = \frac{V}{k_e} =$ **5900 RPM** | 0 | ≈ **0.3 A** | back-EMF nearly cancels the supply |
+| **Free run** (external load $\tau_\text{load} \approx 0$) | max, $\omega_\text{free} \approx \frac{V}{k_e} =$ **5900 RPM** | load torque ≈ 0 | ≈ **0.3 A** | back-EMF nearly cancels the supply; the small current covers internal friction |
 
 Two facts fall straight out of the algebra. **Voltage slides the line, it doesn't tilt it:** stall torque
 and free speed both scale with $V$, but the slope $-k_t k_e/R$ has no $V$ in it. When your code sets power
@@ -175,7 +195,9 @@ at both ends, so it peaks in the middle — for this motor, **29 W at ~2950 RPM*
 The demo is the real <strong>goBILDA 5000-0002-0117 (MATRIX)</strong> motor at 12 V: free speed 5900 RPM,
 stall torque 0.19 N·m, stall current 11 A, free current ≈ 0.3 A, peak 29 W. From those three published
 numbers you get the constants: $R = 12/11 = 1.09\,\Omega$, $k_t = 0.19/11 = 0.0173$ N·m/A, and
-$k_e = 12/(5900\cdot 2\pi/60) = 0.0194$ V·s/rad. (Data:
+$k_e = 12/(5900\cdot 2\pi/60) = 0.0194$ V·s/rad. These are endpoint estimates: free current and
+internal friction mean $k_t$ and $k_e$ will not match perfectly even though, in ideal SI motor units,
+they describe the same electromechanical coupling. (Data:
 <a href="https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html">gm0's motor guide</a>.)
 </Callout>
 

@@ -1,6 +1,6 @@
 ---
 title: Kalman Filter
-description: The optimal linear state estimator — predict then correct, blending model and measurement in the provably minimum-variance proportion, while tracking its own uncertainty.
+description: The optimal linear state estimator under linear-Gaussian assumptions — predict then correct, blending model and measurement by covariance while tracking uncertainty.
 sidebar_position: 5
 tags: [filter, kalman, state-estimation, sensor-fusion]
 ---
@@ -13,18 +13,19 @@ import {KalmanGainExplorer} from '@site/src/components/sims/FilterMathDemos';
 <Difficulty level="Hard" />
 
 <Abstract>
-The Kalman filter is the optimal linear state estimator: it predicts the state from a motion model,
-then corrects with each measurement in exactly the proportion that minimises variance, all while
-tracking its own uncertainty. This lesson derives that predict–correct cycle and the gain that decides
-how far to trust the model versus the measurement.
+The Kalman filter is the optimal linear state estimator under the usual linear-Gaussian assumptions:
+it predicts the state from a motion model, then corrects with each measurement in the proportion that
+minimises variance, all while tracking its own uncertainty. This lesson derives that predict-correct
+cycle and the gain that decides how far to trust the model versus the measurement.
 </Abstract>
 
-The Kalman filter is the optimal linear state estimator: given a motion model and noisy
-measurements, it produces the minimum-variance estimate of the true state, and tracks its own
-uncertainty while doing so. It is the principled successor to the hand-tuned complementary filter.
+The Kalman filter is the optimal linear state estimator when the model is linear, the noise is
+Gaussian, and the covariances are honest: given a motion model and noisy measurements, it produces
+the minimum-variance estimate of the true state, and tracks its own uncertainty while doing so. It is
+the principled successor to the hand-tuned complementary filter.
 
 Kou and Haggenmiller's FTC-focused paper,
-[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578),
+[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459),
 is the applied reference for this lesson. Their competition-robot setup is exactly the FTC pattern
 we care about: odometry gives frequent motion information, computer vision landmarks give less
 frequent absolute position information, and the filter fuses them by comparing their covariance.
@@ -57,6 +58,18 @@ $$
 \hat{x}^- = A\hat{x} + Bu, \qquad P^- = A P A^\top + Q
 $$
 
+<EquationLegend
+  title="Prediction symbols"
+  items={[
+    {symbol: 'x-hat', meaning: 'the filter estimate of the state, such as position or velocity'},
+    {symbol: 'A', meaning: 'state-transition matrix: how the state naturally advances one loop'},
+    {symbol: 'B', meaning: 'input matrix: how the control command changes the state'},
+    {symbol: 'u', meaning: 'control input, such as commanded velocity or acceleration'},
+    {symbol: 'P', meaning: 'state covariance: uncertainty attached to the estimate'},
+    {symbol: 'Q', meaning: 'process-noise covariance: uncertainty added because the model is imperfect'},
+  ]}
+/>
+
 Here $\hat{x}$ is the current best estimate of the state, such as position or velocity; $A$ is the
 state-transition matrix that advances the state by one loop; $u$ is the control input; $B$ maps that
 control input into state change; $P$ is the covariance matrix, meaning the uncertainty attached to
@@ -84,6 +97,17 @@ K = P^- H^\top (H P^- H^\top + R)^{-1}, \qquad
 \hat{x} = \hat{x}^- + K\,(z - H\hat{x}^-), \qquad
 P = (I - KH)P^-
 $$
+
+<EquationLegend
+  title="Update symbols"
+  items={[
+    {symbol: 'z', meaning: 'sensor measurement received this loop'},
+    {symbol: 'H', meaning: 'measurement matrix: maps state space into sensor space'},
+    {symbol: 'R', meaning: 'measurement-noise covariance: how noisy the sensor is'},
+    {symbol: 'K', meaning: 'Kalman gain: how strongly the innovation should correct the prediction'},
+    {symbol: 'I', meaning: 'identity matrix, used to shrink covariance after the correction'},
+  ]}
+/>
 
 In this update, $z$ is the sensor measurement, $H$ maps the state into whatever the sensor can
 observe, $R$ is measurement-noise covariance, and $I$ is the identity matrix. The term
@@ -155,6 +179,9 @@ not — range/bearing and heading involve trigonometry. The Extended Kalman Filt
 
 </Deploy>
 
-## Reference
+<Admonition type="info" title="Sources & references">
 
-Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578). *Journal of Student Research, 12*(1). Also available as [arXiv:2310.04459](https://arxiv.org/abs/2310.04459).
+- Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459). *Journal of Student Research, 12*(1).
+- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) - official robotics reference for model + measurement fusion.
+
+</Admonition>

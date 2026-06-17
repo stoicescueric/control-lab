@@ -81,7 +81,9 @@ $$
 k_A = \frac{V - k_S - k_V\,v}{a}
 $$
 
-evaluated over the accelerating samples (again by least squares, not a single point). $k_A$ is usually
+evaluated over the accelerating samples (again by least squares, not a single point). This simplified
+form assumes a forward-moving test; when you combine forward and reverse data, keep the full
+$k_S\,\operatorname{sign}(v)$ term so static friction points the correct way. $k_A$ is usually
 small — it only matters when the setpoint is *changing*, which is precisely what [motion
 profiling](./motion-profiling.mdx) does.
 

@@ -93,6 +93,15 @@ $$
 \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'w_FL, w_FR, w_BL, w_BR', meaning: 'front-left, front-right, back-left, and back-right wheel commands'},
+    {symbol: 'v_x', meaning: 'robot-forward chassis command: positive drives the robot forward'},
+    {symbol: 'v_y', meaning: 'robot-left strafe command: positive drives the robot left'},
+    {symbol: 'omega', meaning: 'counterclockwise turn command, normalized for teleop in this simplified matrix'},
+  ]}
+/>
+
 The full physics version replaces that $\omega$ column with $\pm(L+W)$, where $L$ and $W$ are the
 distances from the robot's center to the wheels — it just says wheels farther out get loaded more when
 turning. For normalized teleop you can fold those constants into $\omega$ and use the clean $\pm 1$
@@ -112,6 +121,15 @@ $$
 \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix}
 \begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{field}
 $$
+
+<EquationLegend
+  title="Field-centric rotation symbols"
+  items={[
+    {symbol: 'theta', meaning: 'robot heading from the IMU, measured relative to the field frame'},
+    {symbol: '[v_x, v_y]_field', meaning: 'driver command in field coordinates'},
+    {symbol: '[v_x, v_y]_robot', meaning: 'the same command after rotating into robot coordinates'},
+  ]}
+/>
 
 Now "push the stick away from you" means the same field direction no matter which way the robot is facing.
 Toggle field-centric in the demo and spin the heading to feel the difference.

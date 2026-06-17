@@ -51,16 +51,34 @@ function project(points: Point[], robot: Point): Projection {
   let bestPoint = bezier(points, 0);
   let bestDistance = Infinity;
 
+  const d2 = (t: number): number => {
+    const p = bezier(points, t);
+    return (p.x - robot.x) ** 2 + (p.y - robot.y) ** 2;
+  };
+
   for (let i = 0; i <= 260; i++) {
     const t = i / 260;
-    const point = bezier(points, t);
-    const distance = (point.x - robot.x) ** 2 + (point.y - robot.y) ** 2;
+    const distance = d2(t);
     if (distance < bestDistance) {
       bestDistance = distance;
       bestT = t;
-      bestPoint = point;
     }
   }
+
+  // Local ternary refinement around the coarse minimum (distance is locally
+  // unimodal), so the projected parameter and the perpendicularity it implies
+  // are accurate to far better than the 1/260 sampling grid.
+  let lo = Math.max(0, bestT - 1 / 260);
+  let hi = Math.min(1, bestT + 1 / 260);
+  for (let k = 0; k < 40; k++) {
+    const m1 = lo + (hi - lo) / 3;
+    const m2 = hi - (hi - lo) / 3;
+    if (d2(m1) < d2(m2)) hi = m2;
+    else lo = m1;
+  }
+  bestT = (lo + hi) / 2;
+  bestPoint = bezier(points, bestT);
+  bestDistance = d2(bestT);
 
   const tangent = unitTangent(points, bestT);
   const normal = {x: -tangent.y, y: tangent.x};
@@ -122,6 +140,7 @@ export function PathProjection() {
 
   const path = `M ${points[0].x} ${points[0].y} C ${points[1].x} ${points[1].y}, ${points[2].x} ${points[2].y}, ${points[3].x} ${points[3].y}`;
   const projection = project(points, robot);
+  const atEndpoint = projection.t <= 0.002 || projection.t >= 0.998;
   const errorVector = {
     x: robot.x - projection.point.x,
     y: robot.y - projection.point.y,
@@ -240,7 +259,12 @@ export function PathProjection() {
           ['psi(p)', projection.t.toFixed(3)],
           ['distance', `${projection.distanceIn.toFixed(1)} in`],
           ['signed error e', `${projection.signedErrorIn.toFixed(1)} in`],
-          ['condition', 'error line is perpendicular to tangent at the closest point'],
+          [
+            'condition',
+            atEndpoint
+              ? 'projected to a path endpoint — not perpendicular here'
+              : 'error line ⊥ tangent at the closest point',
+          ],
         ]}
       />
       <Legend

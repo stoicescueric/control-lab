@@ -24,7 +24,7 @@ heading, and distance from the target. The Extended Kalman Filter is the adaptat
 Kalman machinery work on the curved models real robots actually have.
 
 This lesson uses Kou and Haggenmiller's FTC paper,
-[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578),
+[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459),
 as its applied anchor. They frame the FTC localisation problem as fusing three imperfect sources:
 frequent odometry velocity measurements, less frequent computer-vision landmark position
 measurements, and a physics-model prediction. This lesson's AprilTag model is an FTC-specific
@@ -230,6 +230,9 @@ stack is then synthesised in the capstone.
 
 </Deploy>
 
-## Reference
+<Admonition type="info" title="Sources & references">
 
-Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://doi.org/10.47611/jsrhs.v12i1.5578). *Journal of Student Research, 12*(1). Also available as [arXiv:2310.04459](https://arxiv.org/abs/2310.04459).
+- Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459). *Journal of Student Research, 12*(1).
+- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) - official robotics reference for pose estimation from model and sensor updates.
+
+</Admonition>

@@ -120,9 +120,10 @@ public Vector2d gvfVelocity(Pose2d robot) {
     Vector2d tangent = path.tangent(t).unit();     // along-track direction
     Vector2d normal  = tangent.rotate(Math.PI / 2.0);
 
-    // signed cross-track error via the 2D cross product (sign = which side)
+    // signed cross-track error measured along the chosen normal.
+    // Positive e means the robot is on the +normal side of the path.
     Vector2d offset = robot.vec().minus(c);
-    double e = offset.cross(tangent);              // = offset . normal
+    double e = offset.dot(normal);
 
     // 2) BLEND: flow along the path, minus a pull toward it (chi = t - kN*e*n)
     Vector2d chi = tangent.minus(normal.times(kN * e)).unit();
@@ -197,7 +198,7 @@ trait. The difference between a routine that scores and one that clips the struc
 
 </Admonition>
 
-<Admonition type="note" title="Sources & references">
+<Admonition type="info" title="Sources & references">
 
 - **Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao, *A Guiding Vector Field Algorithm for Path Following
   Control* ([arXiv:1610.04391](https://arxiv.org/abs/1610.04391))** — *the rigorous theory.* The
@@ -207,7 +208,7 @@ trait. The difference between a routine that scores and one that clips the struc
   FTC GVF library.* Bézier-path guidance and the disturbance-rejection framing ("kick the robot and it
   comes back") this lesson quotes.
 - **[KookyBotz/CenterStage `GVFCommand`](https://github.com/KookyBotz/CenterStage/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/common/commandbase/drivecommand/GVFCommand.java)**
-  — *the shipped implementation we model the Deploy on.* The $k_N$/$k_S$/$k_C$ gains, the cross-product
+  — *the shipped implementation we model the Deploy on.* The $k_N$/$k_S$/$k_C$ gains, signed
   cross-track error, the curvature speed cap $\sqrt{a_{\max}/(k_C\kappa)}$, seeded Newton-Raphson
   projection, the $\sqrt{2a|\Delta\theta|}$ heading profile, and the kStatic feedforward all trace to this.
 - **[FTC Tech Toolbox — Guided Vector Fields](https://ftc-tech-toolbox.vercel.app/docs/Autonomous%20Movement/zpt)**
