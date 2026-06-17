@@ -42,12 +42,16 @@ export function useDprCanvas(ref, height) {
  * Run `callback(dt, now)` once per animation frame, where `dt` is seconds since
  * the previous frame. The callback is always the latest one passed in, so it can
  * close over fresh state without restarting the loop.
+ *
+ * Pass `targetRef` (a ref to any element inside the demo, usually the canvas) to
+ * gate the loop on visibility: the physics/draw loop only runs while that element
+ * is on (or near) screen, so off-screen sims cost zero CPU. Omit it to always run.
  */
-export function useRaf(callback) {
+export function useRaf(callback, targetRef) {
   const cb = useRef(callback);
   cb.current = callback;
   useEffect(() => {
-    let raf;
+    let raf = null;
     let last = performance.now();
     const loop = (now) => {
       const dt = (now - last) / 1000;
@@ -55,9 +59,34 @@ export function useRaf(callback) {
       cb.current(dt, now);
       raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    const start = () => {
+      if (raf == null) {
+        last = performance.now();
+        raf = requestAnimationFrame(loop);
+      }
+    };
+    const stop = () => {
+      if (raf != null) {
+        cancelAnimationFrame(raf);
+        raf = null;
+      }
+    };
+    const el = targetRef?.current;
+    let io;
+    if (el && typeof IntersectionObserver !== "undefined") {
+      io = new IntersectionObserver(
+        ([entry]) => (entry.isIntersecting ? start() : stop()),
+        { rootMargin: "200px" },
+      );
+      io.observe(el);
+    } else {
+      start();
+    }
+    return () => {
+      stop();
+      if (io) io.disconnect();
+    };
+  }, [targetRef]);
 }
 
 /**

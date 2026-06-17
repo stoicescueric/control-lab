@@ -219,11 +219,16 @@ export default function Kalman() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="2-D Kalman tracking">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated two-dimensional Kalman filter tracking a moving target from noisy measurements."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#5ce08a', label: 'True target', dot: true},

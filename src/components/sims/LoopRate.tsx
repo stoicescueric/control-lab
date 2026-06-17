@@ -85,11 +85,16 @@ export default function LoopRate() {
     }
   }
 
-  useRaf((_: number, now: number) => draw(now));
+  useRaf((_: number, now: number) => draw(now), canvas);
 
   return (
     <Demo title="What your robot loop actually sees">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated plot showing how the control loop rate affects what a continuous signal is sampled as."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#5ce08a', label: 'true (continuous) signal'},

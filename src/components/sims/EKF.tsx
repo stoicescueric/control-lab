@@ -249,11 +249,16 @@ export default function EKF() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="EKF radar tracking">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated extended Kalman filter tracking a moving target on a radar-style display."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#2fd3c0', label: 'Radar', dot: true},

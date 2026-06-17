@@ -100,11 +100,16 @@ export default function Heater() {
       n++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="Open loop vs. closed loop heating">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated simulation comparing open-loop and closed-loop room heating toward a setpoint."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#ffc24d', label: 'Closed-loop room (feedback)'},

@@ -136,13 +136,18 @@ export default function Complementary() {
       k++;
     }
     draw();
-  });
+  }, beamRef);
 
   return (
     <Demo title="Fusing a gyro & accelerometer">
       <Stage split>
         <div>
-          <canvas ref={beamRef} className="block w-full rounded-xl bg-[#0b1120]" />
+          <canvas
+            ref={beamRef}
+            role="img"
+            aria-label="Animated tilting beam fusing gyroscope and accelerometer estimates with a complementary filter."
+            className="block w-full rounded-xl bg-[#0b1120]"
+          />
           <Legend
             items={[
               {color: '#5ce08a', label: 'True tilt'},
@@ -151,7 +156,12 @@ export default function Complementary() {
           />
         </div>
         <div>
-          <canvas ref={plotCanvas} className="block w-full rounded-xl bg-[#0b1120]" />
+          <canvas
+            ref={plotCanvas}
+            role="img"
+            aria-label="Live plot of the estimated tilt angle over time from gyro, accelerometer, and the fused estimate."
+            className="block w-full rounded-xl bg-[#0b1120]"
+          />
           <Legend
             items={[
               {color: '#5ce08a', label: 'True'},

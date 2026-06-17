@@ -75,11 +75,16 @@ export default function MovingAverage() {
       k++;
     }
     draw();
-  });
+  }, canvas);
 
   return (
     <Demo title="Sliding-window average">
-      <canvas ref={canvas} className="block w-full rounded-xl bg-[#0b1120]" />
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated plot of a sliding-window moving average filtering a noisy signal."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
       <Legend
         items={[
           {color: '#2fd3c0', label: 'True signal'},
