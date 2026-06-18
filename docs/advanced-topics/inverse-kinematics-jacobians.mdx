@@ -51,7 +51,7 @@ robotics demos because it is intuitive: pull the end of the chain to the target,
 the base, then rebuild it back out toward the target. CCD is similarly intuitive but works by rotating
 joint angles one at a time.
 
-The catch is that iterative methods need a **configuration policy**. If the same target has many valid
+The problem is that iterative methods need a **configuration policy**. If the same target has many valid
 solutions, the solver may jump between them or curl into an awkward pose unless you add constraints:
 joint limits, a fixed wrist angle, "keep the claw parallel to the floor," "prefer elbow-up," or "stay near
 the previous solution." A virtual four-bar is the hardware version of such a constraint: it removes a

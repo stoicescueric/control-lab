@@ -85,7 +85,7 @@ $$
 \Delta y_\text{local} = ds\,\underbrace{\frac{1 - \cos d\theta}{d\theta}}_{\text{cosC}}
 $$
 
-Those two factors are the *only* difference between the exact arc and a naive straight step — they are
+Those two factors are the *only* difference between the exact arc and a simple straight step — they are
 exactly what the code below calls `sinC` and `cosC`.
 
 **Step 4 — rotate the step into the field.** The local move is relative to the robot's current heading
@@ -102,7 +102,7 @@ $$
 **The straight-line limit (and why the code branches).** As $d\theta \to 0$, the factors approach
 $\frac{\sin d\theta}{d\theta} \to 1$ and $\frac{1 - \cos d\theta}{d\theta} \to 0$, so the whole update
 collapses to $x \mathrel{+}= ds\cos\theta$, $y \mathrel{+}= ds\sin\theta$ — the plain "just go straight"
-formula. That is both a sanity check and the catch: near $d\theta = 0$ those factors are $0/0$
+formula. That is both a way to check the result and the problem: near $d\theta = 0$ those factors are $0/0$
 numerically, so the code substitutes their leading-order forms ($\frac{\sin d\theta}{d\theta} \approx 1$,
 $\frac{1 - \cos d\theta}{d\theta} \approx \tfrac{1}{2}d\theta$) instead of dividing:
 

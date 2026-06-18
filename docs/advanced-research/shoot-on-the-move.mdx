@@ -1,0 +1,145 @@
+---
+title: On-Bot Control & Dynamic Targeting
+description: "A three-part interactive case study on flywheel recovery, safe interpolation, and shoot-on-the-move virtual targeting."
+sidebar_position: 2
+tags: [research, flywheel, bang-bang, interpolation, lookup-table, shoot-on-the-move, fixed-point]
+---
+
+import DynamicTargetingDashboard from '@site/src/components/sims/DynamicTargetingDashboard';
+
+# On-Bot Control & Dynamic Targeting
+
+<Difficulty level="Hard" />
+
+<Abstract>
+Once the projectile model exists, the robot still has to execute it under match conditions: a flywheel loses momentum after every shot, lookup tables can invent fake commands, and a moving chassis changes the aiming geometry. This lesson makes those three deployment problems interactive so the control logic can be inspected instead of trusted blindly.
+</Abstract>
+
+The simulator answers "what should the shot be?" The robot has a harder question: "can I make that shot right now?" If the flywheel is not recovered, if interpolation overshoots a calibration shelf, or if the robot aims at the real target while moving sideways, the paper model is technically correct and the shot still misses.
+
+<DynamicTargetingDashboard />
+
+## Step 1: Taming the flywheel
+
+A flywheel shot is a disturbance. The projectile leaves with energy that used to be stored in the wheel, so the measured velocity drops. A basic velocity controller tries to recover with error feedback:
+
+$$
+u = k_S + k_V r + k_P(r - y)
+$$
+
+<EquationLegend
+  items={[
+    {symbol: '$u$', meaning: 'motor command or voltage request', unit: 'V'},
+    {symbol: '$r$', meaning: 'target flywheel velocity', unit: 'ticks/s or rad/s'},
+    {symbol: '$y$', meaning: 'measured flywheel velocity', unit: 'ticks/s or rad/s'},
+    {symbol: '$k_S$', meaning: 'static friction compensation term', unit: 'V'},
+    {symbol: '$k_V$', meaning: 'velocity feedforward gain', unit: 'V per velocity'},
+    {symbol: '$k_P$', meaning: 'proportional feedback gain', unit: 'V per velocity error'},
+  ]}
+/>
+
+The research controller adds an asymmetric recovery mode: if the wheel is below the ready band after a shot, command aggressively upward; if it is above target, do not kick downward with the same violence. That asymmetry matters because a flywheel below target causes a short shot, while a small overspeed can often be absorbed by the calibration margin.
+
+## Step 2: Lookup tables can lie between points
+
+Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the match it needs values between those distances.
+
+A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf, the spline can overshoot between equal points and command a speed that was never measured. The safer choice for monotone data is a monotone cubic Hermite interpolant, using the Fritsch-Carlson slope constraint:
+
+$$
+\alpha_k^2 + \beta_k^2 \le 9
+$$
+
+<EquationLegend
+  items={[
+    {symbol: '$\\alpha_k$', meaning: 'left endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
+    {symbol: '$\\beta_k$', meaning: 'right endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
+    {symbol: '$9$', meaning: 'radius-squared boundary for the Fritsch-Carlson monotonicity projection', unit: 'unitless'},
+  ]}
+/>
+
+The dashboard lets you drag calibration knots. The red curve shows what a natural spline can do in a dangerous flat region. The blue curve shows the monotone Hermite alternative staying inside the behavior implied by the data.
+
+## Step 3: Shoot-on-the-move is a fixed-point problem
+
+When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim at the real target; it should aim at a virtual target shifted by the robot motion during the projectile's flight:
+
+$$
+\mathbf{p}^{(i+1)}_{\text{virtual}}
+=
+\mathbf{p}_{\text{target}}
++
+G\mathbf{v}_{R}\left(t_d + t_f^{(i)}\right)
+$$
+
+<EquationLegend
+  items={[
+    {symbol: '$\\mathbf{p}_{\\text{virtual}}$', meaning: 'virtual point the turret aims at', unit: 'field position'},
+    {symbol: '$\\mathbf{p}_{\\text{target}}$', meaning: 'fixed real target location', unit: 'field position'},
+    {symbol: '$G$', meaning: 'empirical lead gain from the research controller', unit: 'unitless'},
+    {symbol: '$\\mathbf{v}_R$', meaning: 'robot chassis velocity vector', unit: 'distance/s'},
+    {symbol: '$t_d$', meaning: 'feeder or launch delay before free flight', unit: 's'},
+    {symbol: '$t_f$', meaning: 'projectile flight time from lookup or simulator', unit: 's'},
+  ]}
+/>
+
+This is circular: the virtual target changes the distance, the distance changes flight time, and flight time changes the virtual target. Fixed-point iteration breaks the loop. Start with the real target, compute a flight time, shift the target, compute the new flight time, and stop when the time changes by less than the tolerance.
+
+## Implementation sketch
+
+The robot code should make the fixed-point solver explicit and bounded. It is a real-time system, so the loop gets a maximum number of iterations even if a bad table or impossible geometry prevents convergence.
+
+```java
+/**
+ * Computes the virtual target used for shoot-on-the-move aiming.
+ * The solver is intentionally bounded so autonomous loop timing remains predictable.
+ */
+public final class ShootOnMoveSolver {
+    private static final int MAX_ITERATIONS = 5;
+    private static final double CONVERGENCE_SECONDS = 0.05;
+
+    private final FlightTimeLookup flightTimeLookup;
+    private final double feederDelaySeconds;
+    private final double leadGain;
+
+    public ShootOnMoveSolver(
+            FlightTimeLookup flightTimeLookup,
+            double feederDelaySeconds,
+            double leadGain
+    ) {
+        this.flightTimeLookup = flightTimeLookup;
+        this.feederDelaySeconds = feederDelaySeconds;
+        this.leadGain = leadGain;
+    }
+
+    public Vector2d solve(Vector2d shooter, Vector2d target, Vector2d robotVelocity) {
+        Vector2d virtualTarget = target;
+        double previousFlightTime = flightTimeLookup.seconds(shooter.distanceTo(virtualTarget));
+
+        for (int i = 0; i < MAX_ITERATIONS; i++) {
+            double leadTime = feederDelaySeconds + previousFlightTime;
+            virtualTarget = target.plus(robotVelocity.times(leadGain * leadTime));
+
+            double nextFlightTime = flightTimeLookup.seconds(shooter.distanceTo(virtualTarget));
+            if (Math.abs(nextFlightTime - previousFlightTime) < CONVERGENCE_SECONDS) {
+                break;
+            }
+            previousFlightTime = nextFlightTime;
+        }
+
+        return virtualTarget;
+    }
+}
+```
+
+<Admonition type="warning" title="Hardware reality: ready is a band, not one number">
+
+Do not wait for an encoder reading to equal the target exactly. A match robot should use a readiness band, because encoder quantization, loop timing, shot disturbance, and battery sag make exact equality a trap.
+
+</Admonition>
+
+<Admonition type="info" title="Source trail">
+
+This lesson references the research paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator.
+
+</Admonition>

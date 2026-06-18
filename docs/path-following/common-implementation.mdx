@@ -1,6 +1,6 @@
 ---
 title: Common Implementation
-description: The shared building blocks every follower in this module assumes — the Pose2d/Vector2d geometry types, angle wrapping, the one canonical completion check (atTarget), kStatic, and the drivetrain entry point — defined once so the lessons can reference them instead of re-introducing them.
+description: The shared building blocks every follower in this module assumes — the Pose2d/Vector2d geometry types, angle wrapping, the one standard completion check (atTarget), kStatic, and the drivetrain entry point — defined once so the lessons can reference them instead of re-introducing them.
 sidebar_position: 2.5
 tags: [implementation, utilities, pose2d, vector2d, completion, atTarget, reference]
 ---
@@ -50,7 +50,7 @@ public record Pose2d(double x, double y, double heading) {
 ## Angle wrapping
 
 Heading errors must be wrapped to $[-\pi, \pi]$ so the robot always turns the short way. This is the whole
-point of the [angle-wrapping lesson](./angle-wrapping.mdx); the canonical one-liner:
+point of the [angle-wrapping lesson](./angle-wrapping.mdx); the standard one-liner:
 
 <JavaCode league="FTC" label="wrap(angle) -> [-pi, pi]">{`/** Smallest signed angle equivalent to a (radians), in [-pi, pi]. */
 public static double wrap(double a) {

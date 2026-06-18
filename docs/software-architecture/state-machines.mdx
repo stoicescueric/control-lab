@@ -130,12 +130,20 @@ needs more than a pretty transition table. It needs **entry actions**, **timed e
 **path-completion guards**, **interference recovery**, and **subsystem updates** that still run every
 loop.
 
-The excerpt below is an adapted, teaching-oriented reconstruction of the WolfPackMachina
-`Auto.java` pattern. It is not the full file. The original uses `Paths.Path` objects directly as
-states; this version wraps the same idea in a smaller `AutoState` enum so the architecture is easier
-to read.
+What follows is an adapted, teaching-oriented reconstruction of the WolfPackMachina `Auto.java`
+pattern — **not** the full file. The original uses `Paths.Path` objects directly as states; this
+version wraps the same idea in a smaller `AutoState` enum so the architecture is easier to read.
 
-<JavaCode league="FTC" label="Adaptive autonomous FSM — adapted from WolfPackMachina Power Play Auto.java">{`public abstract class AdaptiveAuto {
+It is all one class, `AdaptiveAuto`, shown here in pieces so each idea stands on its own. Read them
+in order; stacked together they are the whole pattern.
+
+### The skeleton: one field holds the mode
+
+The states live in an `enum`, and a single `currentState` field is the one authoritative answer to
+"what is the robot doing right now?" Everything else — a pair of timers, the subsystem handles, a few
+local flags — is just bookkeeping the handlers will lean on.
+
+<JavaCode league="FTC" label="AdaptiveAuto — the state enum and fields">{`public abstract class AdaptiveAuto {
     private enum AutoState {
         WAIT_FOR_PICKUP,
         DISLODGE_CONE,
@@ -163,8 +171,17 @@ to read.
     private boolean contracting = true;
     private boolean robotSettled = false;
     private double slidesPositionAtEntry = 0.0;
+    // methods follow ↓
+`}</JavaCode>
 
-    /**
+### The loop: dispatch on the state, then tick everything
+
+The loop never blocks. It runs the current state's handler and then — whatever state it is in —
+updates every subsystem and prints the state to telemetry. One gate, `transitionTo`, owns every mode
+change so timing and flags always reset together. An outside request like `requestPark()` is just
+another event handed to that gate.
+
+<JavaCode league="FTC" label="AdaptiveAuto — the loop and the transition gate">{`    /**
      * Runs exactly one autonomous loop. This method must never block.
      */
     public final void loop(Telemetry telemetry) {
@@ -230,7 +247,16 @@ to read.
         }
     }
 
-    /**
+`}</JavaCode>
+
+### Entry actions and non-blocking "waits"
+
+This is where "don't block the loop" becomes concrete. `alignPark` does its one-time setup — pick a
+park square, retract the slides — behind a `parking` flag the first time it runs, then on every later
+loop just checks whether enough time has passed to move on. `dislodgeCone` does the same dance: act
+once, then poll a timer and a sensor. The robot keeps driving and reading sensors the entire time.
+
+<JavaCode league="FTC" label="AdaptiveAuto — entry actions and timed exits">{`    /**
      * First-entry logic selects a park target once; later loops only wait for a safe transition.
      */
     private void alignPark() {
@@ -281,7 +307,15 @@ to read.
         }
     }
 
-    /**
+`}</JavaCode>
+
+### Branching and recovery: the part that makes it a _policy_
+
+These handlers are why an FSM beats a linear script. `alignLeftRam` refuses to drive until the robot
+has contracted to a safe size. `runLeftRam` follows its path, but if the robot is pushed off-line it
+branches into `CONTESTED_LEFT_RAM` instead of blindly continuing.
+
+<JavaCode league="FTC" label="AdaptiveAuto — branching and recovery">{`    /**
      * Align before ramming into the stack. The robot contracts first so mechanisms are safe.
      */
     private void alignLeftRam() {
@@ -359,7 +393,13 @@ to read.
         }
     }
 
-    /**
+`}</JavaCode>
+
+The last piece is the steady-state hold plus the per-loop tick. `holdScoringPosition` re-checks that
+the robot is settled every loop, and `updateSubsystems` runs the intake's and depositor's _own_
+internal state machines underneath all of this — every loop, no matter which mode we are in.
+
+<JavaCode league="FTC" label="AdaptiveAuto — holding, and the per-loop subsystem tick">{`    /**
      * Hold the scoring pose unless the robot is not settled or has been pushed off-line.
      */
     private void holdScoringPosition() {

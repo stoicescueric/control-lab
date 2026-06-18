@@ -30,7 +30,7 @@ The task: drive from wherever the robot is to a target pose $(x^*, y^*, \theta^*
 No precomputed path, no velocity plan — just look at how far off you are and push toward the goal each
 loop.
 
-The naive version "drive toward the point at full power until you're close" overshoots, then reverses,
+The simple version "drive toward the point at full power until you're close" overshoots, then reverses,
 then overshoots again, circling the target like a moth. We want it to *converge*: approach quickly when
 far, ease in when close, and hold the final heading without spinning the long way around.
 
@@ -92,7 +92,7 @@ $$
 u_k = k_p\, e_k + k_d\,\dot e_k + \underbrace{k_S\,\operatorname{sign}(e_k)}_{\text{only when } |e_k| \text{ is small}}
 $$
 
-The trick most FTC implementations use is to apply $k_S$ **only when the error is already small** (inside
+The method most FTC implementations use is to apply $k_S$ **only when the error is already small** (inside
 a threshold), so it acts as a final nudge rather than a constant bias that would cause limit-cycling far
 from the target. This is exactly what production drive code does — for example the SimplicityFTC
 `PDFSController` adds `sign(error) * kStatic` once `|error| < threshold`, and FTCclueless's drivetrain
@@ -164,7 +164,7 @@ controller brakes — automatically, with no separate cap. This is how Cyliis's 
 
 ### Chaining points: follow a list without stopping
 
-A real autonomous routine is a *list* of poses, not one. The naive approach — `goToPose` each one and
+A real autonomous routine is a *list* of poses, not one. The simple approach — `goToPose` each one and
 wait for it to settle — works, but the robot decelerates to a halt at every intermediate point, which is
 slow and jerky. The fix is **point-advance sequencing**: keep an index into the list, drive toward the
 current target, and **advance to the next point as soon as you are within an advance radius** of this one

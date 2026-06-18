@@ -23,7 +23,7 @@ estimator is eventually required.
 
 <Problem title="Steady jitter needs averaging; bursts and lag do not forgive it">
 
-A signal buried in steady random jitter is best cleaned by averaging — but a naïve average over *all*
+A signal buried in steady random jitter is best cleaned by averaging — but a simple average over *all*
 history can never track a moving signal. The fix is a **sliding window**: average only the most
 recent N readings, discarding the oldest as each new one arrives. The window size is a direct
 smooth-versus-responsive trade-off, and — as the demo will show — a single outlier contaminates the
@@ -77,7 +77,7 @@ It is a close cousin of the low-pass filter, with a different memory model:
 |---|---|---|
 | Remembers | last N readings, **equally** | all readings, **fading** |
 | Storage | N values | one number |
-| Knob | window size N | smoothing α |
+| Setting | window size N | smoothing α |
 | Best at | killing steady jitter | cheap real-time smoothing |
 
 The demo overlays truth, sensor, and the windowed average. Grow N for smoothness, then run the step

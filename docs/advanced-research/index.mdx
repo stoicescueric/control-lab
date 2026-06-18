@@ -1,30 +1,30 @@
 ---
 title: Advanced Research
-description: The capstone — flywheel control with look-up tables, RK4 versus Euler integration, quadratic air drag, and full trajectory simulation.
-tags: [research, rk4, trajectory, air-drag, flywheel]
+description: "The capstone module: RK4 trajectory simulation, quadratic air drag, launcher transfer losses, flywheel recovery, monotone interpolation, and shoot-on-the-move control."
+tags: [research, rk4, trajectory, air-drag, flywheel, shoot-on-the-move]
 ---
 
-# Module 6 · Advanced Research
+# Module 6 - Advanced Research
 
-The final module goes beyond what most teams implement, into the territory of original research. It is
-built around a projectile-trajectory simulation: predicting where a launched game element lands, given a
-realistic model of the physics.
+This module is the capstone: the point where the curriculum stops being only FTC control theory and becomes an original engineering case study. The research problem is not "how do we shoot a ball?" It is more precise:
 
-## What this module covers
+> How can a robot compensate a projectile shot in real time while the projectile loses energy to drag, the launcher loses energy to contact, and the chassis is still moving?
 
-- **Subsystem control (shooting)** — flywheel velocity control and look-up tables mapping distance to
-  launch parameters.
-- **Numerical integration** — RK4 versus Euler, and why integration order changes your landing point.
-- **Quadratic air drag** — modeling drag that scales with the square of velocity, where the closed-form
-  parabola breaks down.
-- **Trajectory simulation** — assembling the above into a predictor you can run on the robot.
+The answer is a pipeline:
+
+1. Build a physical simulator that is honest about drag and numerical integration.
+2. Calibrate the real launcher instead of trusting ideal energy transfer.
+3. Control the flywheel so it recovers after each shot.
+4. Read sparse calibration tables without inventing unsafe overshoot.
+5. Aim at a virtual target when the robot is moving.
+
+## Lessons
+
+- [**Simulating Physical Reality**](./trajectory-simulation.mdx) - RK4 vs. Euler, vacuum vs. drag, and wheel-speed-to-exit-velocity transfer losses.
+- [**On-Bot Control & Dynamic Targeting**](./shoot-on-the-move.mdx) - flywheel recovery, monotone interpolation, and fixed-point shoot-on-the-move aiming.
 
 <Admonition type="note" title="Author's capstone">
 
-This module anchors the platform's original research contribution. The derivations here are the
-mathematical core of an RK4 trajectory-simulation study with quadratic air drag.
+These lessons are built from the paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles* and the public research repositories: [YaoMing](https://github.com/stoicescueric/YaoMing) and [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation).
 
 </Admonition>
-
-The capstone scaffold — [Trajectory Simulation](./trajectory-simulation.mdx) — is in place, ready for
-the research write-up. The flywheel look-up-table, RK4-versus-Euler, and air-drag lessons are planned.

@@ -1,159 +1,149 @@
 ---
-title: Trajectory Simulation
-description: "A capstone research plan for simulating the full autonomous stack: state estimation, motion profiling, geometric path following, feedforward, and on-robot validation."
+title: Simulating Physical Reality
+description: "A three-part interactive case study on RK4 integration, quadratic drag, and real launcher energy transfer for an FTC projectile system."
 sidebar_position: 1
-tags: [research, trajectory, motion-profiling, pure-pursuit, capstone]
+tags: [research, rk4, euler, air-drag, trajectory, projectile, launcher]
 ---
 
-import PurePursuit from '@site/src/components/sims/PurePursuit';
+import PhysicalRealityDashboard from '@site/src/components/sims/PhysicalRealityDashboard';
 
-# Trajectory Simulation
+# Simulating Physical Reality
 
 <Difficulty level="Hard" />
 
 <Abstract>
-Trajectory simulation is the capstone problem because it forces every earlier idea to work together: the robot must estimate where it is, plan where it should go, and follow that reference under real actuator and sensor limits. This page lays out the research architecture for validating that stack against FTC telemetry, turning the curriculum from separate lessons into one measurable autonomous system.
+Accurate projectile control starts before the robot fires: the simulator must predict how the projectile flies and how much energy the launcher actually transfers. This lesson turns the research paper's physics stack into a three-step dashboard: numerical integration, aerodynamic drag, and contact-loss calibration.
 </Abstract>
 
-<Admonition type="note" title="Research status">
+The practical failure is simple: a robot can spin the flywheel to a speed that looks correct, fire from the correct distance, and still miss because the model is too clean. Vacuum parabolas ignore drag. Euler integration accumulates error when the time step gets coarse. A flywheel's surface speed is not the same thing as projectile exit velocity.
 
-This page is intentionally written as a **research plan**, not a finished paper. It defines the model, measurements, experiments, and success criteria that the final capstone should satisfy once on-robot telemetry is available.
+That is why this module begins with a simulator instead of code. You can only compensate a shot in real time if the offline model already knows the important losses.
 
-</Admonition>
+<PhysicalRealityDashboard />
 
-## The question
+## Step 1: Numerical integration is part of the model
 
-Every autonomous routine is a chain of approximations. Odometry approximates the robot pose. A motion profile approximates what the drivetrain can physically execute. A path follower approximates how to correct back to the reference while the robot is already moving. Feedforward approximates the voltage needed before feedback catches up.
-
-The capstone question is:
-
-> How accurately can a simulation predict the tracking error of an FTC autonomous path before the robot runs it?
-
-That question is useful because it is falsifiable. If the simulator predicts a smooth path but telemetry shows large cross-track error, heading lag, or missed timing windows, the difference points to something real: wheel slip, wrong acceleration limits, incorrect feedforward, latency, localization drift, or a follower parameter that only works on a clean plot.
-
-## The pipeline being simulated
-
-The simulation should model the same pipeline the robot uses during autonomous:
-
-1. **State estimation** - advance pose with dead-wheel odometry or drivetrain encoder odometry.
-2. **Reference generation** - choose the path and speed profile the robot is trying to follow.
-3. **Path following** - compute a steering or field-vector command from the estimated pose.
-4. **Actuator command** - convert the desired motion into motor powers or voltages.
-5. **Telemetry comparison** - compare simulated pose, measured pose, command history, and timing.
-
-The key discipline is that the simulator should not use a cleaner controller than the robot. If the robot follows a path with pure pursuit, guided vector fields, or a Pedro-style follower, the simulator should run that same algorithm or a deliberately documented simplification.
-
-<figure className="my-7">
-  <PurePursuit />
-  <figcaption className="mt-2 text-center text-[0.9rem] text-ink-soft">
-    <strong>Figure 1.</strong> A live geometric follower. The capstone version replaces the toy field with
-    measured robot constraints, estimated pose, command logs, and telemetry error plots.
-  </figcaption>
-</figure>
-
-## Minimal model
-
-A useful first simulator does not need perfect physics. It needs the right failure modes.
-
-The state can start as planar pose and velocity:
+Projectile motion with quadratic drag is not a one-line parabola. The acceleration depends on the velocity, and the velocity is changing during the flight:
 
 $$
-\mathbf{x} =
+\dot{\mathbf{p}} = \mathbf{v}
+$$
+
+$$
+\dot{\mathbf{v}} =
 \begin{bmatrix}
-x \\
-y \\
-\theta \\
-v_x \\
-v_y \\
-\omega
+0 \\
+-g
 \end{bmatrix}
+-
+k \|\mathbf{v}\| \mathbf{v}
 $$
 
-where:
+<EquationLegend
+  items={[
+    {symbol: '$\\mathbf{p}$', meaning: 'projectile position vector', unit: 'm'},
+    {symbol: '$\\mathbf{v}$', meaning: 'projectile velocity vector', unit: 'm/s'},
+    {symbol: '$g$', meaning: 'gravitational acceleration', unit: 'm/s^2'},
+    {symbol: '$k$', meaning: 'lumped drag coefficient for the simplified demo model', unit: '1/m'},
+    {symbol: '$\\|\\mathbf{v}\\|$', meaning: 'speed, the magnitude of the velocity vector', unit: 'm/s'},
+  ]}
+/>
 
-- $x$ and $y$ are field position.
-- $\theta$ is robot heading.
-- $v_x$ and $v_y$ are field-relative translational velocity.
-- $\omega$ is angular velocity.
+Euler integration takes one slope and trusts it for the entire step:
 
-A simple discrete update is:
+$$
+\mathbf{x}_{k+1} = \mathbf{x}_k + f(\mathbf{x}_k)\Delta t
+$$
+
+RK4 samples the slope four times inside the same step:
 
 $$
 \mathbf{x}_{k+1}
 =
-\mathbf{x}_k + f(\mathbf{x}_k, \mathbf{u}_k)\,\Delta t
+\mathbf{x}_k
++
+{\Delta t \over 6}
+\left(
+\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 + \mathbf{k}_4
+\right)
 $$
 
-where:
+The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during the time step, so the simulator should not pretend the first slope remains true until the next loop. In the dashboard, increasing $\Delta t$ makes Euler drift away first; RK4 stays usable longer because it samples the curvature of the state update.
 
-- $k$ is the loop index.
-- $\mathbf{u}_k$ is the drive command at that loop.
-- $\Delta t$ is the measured loop period.
-- $f$ is the motion model that converts the current state and command into state rate.
+## Step 2: Drag is not a small correction
 
-This is intentionally the same discretization pattern from [From Math to a Loop](../software-architecture/discretization.mdx). The simulator is not separate from the curriculum; it is the curriculum running end to end.
-
-## What should be measured
-
-The final capstone should report more than a pretty path overlay. At minimum, collect:
-
-| Metric | What it reveals |
-| --- | --- |
-| Cross-track error | Whether the follower stays on the path |
-| Heading error | Whether translation and rotation are tuned together |
-| Loop time distribution | Whether the algorithm fits inside the Control Hub budget |
-| Command saturation | Whether requested motion exceeds what the drivetrain can produce |
-| Battery voltage | Whether feedforward and motor output changed during the run |
-| End-state error | Whether the robot arrives ready for the next mechanism action |
-
-The important plot is not only simulated path versus measured path. It is the residual:
+For a light, blunt game element, drag can be the same order of magnitude as gravity at shooter speeds. The standard quadratic form is:
 
 $$
-\mathbf{r}_k =
-\mathbf{x}_{\text{measured},k}
--
-\mathbf{x}_{\text{simulated},k}
+\mathbf{F}_d = -{1 \over 2}\rho C_d A \|\mathbf{v}\|\mathbf{v}
 $$
 
-where $\mathbf{r}_k$ is the error between measured telemetry and simulation at loop $k$. A good simulator makes that residual small and explainable.
+<EquationLegend
+  items={[
+    {symbol: '$\\mathbf{F}_d$', meaning: 'aerodynamic drag force, opposite the velocity', unit: 'N'},
+    {symbol: '$\\rho$', meaning: 'air density', unit: 'kg/m^3'},
+    {symbol: '$C_d$', meaning: 'drag coefficient; the demo uses 0.47 from the paper prompt', unit: 'unitless'},
+    {symbol: '$A$', meaning: 'projectile frontal area', unit: 'm^2'},
+  ]}
+/>
 
-## Validation experiments
+The dashboard overlays two paths: the dashed vacuum model and the solid drag model. The important number is the range error. If the vacuum model says the shot clears the target but the drag model lands short, the problem is not "tuning." The problem is that the firmware was given the wrong world.
 
-Use experiments that isolate one failure mode at a time:
+<Admonition type="warning" title="Hardware reality: coefficients are not universal">
 
-1. **Straight-line acceleration** - estimates feedforward, acceleration limit, and voltage sag.
-2. **Constant-radius turns** - exposes centripetal correction and lateral slip.
-3. **S-curve path** - stresses heading control and changing curvature.
-4. **Full autonomous segment** - tests interaction with mechanism timing and state-machine transitions.
-
-Each run should export the same telemetry schema: timestamp, pose estimate, target pose or target path parameter, drive command, battery voltage, and loop time.
-
-<Admonition type="warning" title="Hardware reality: simulation is not proof">
-
-A simulator can explain and predict. It cannot certify the robot. Wheel scrub, carpet variation, battery voltage, mechanism impacts, and localization resets all create behavior that a simple model will miss unless telemetry forces the model to account for them.
+The demo uses the coefficient values specified for this research case study. Do not copy them into a different FTC robot unless the projectile, wheel contact, launch height, and calibration procedure match. The method transfers; the constants have to be measured.
 
 </Admonition>
 
-## How this becomes the final capstone
+## Step 3: The launcher is not a perfect energy converter
 
-The finished research page should replace this plan with measured results:
+The firmware may start with a clean assumption:
 
-- the exact robot model and units;
-- the path follower under test;
-- the telemetry format;
-- simulation versus robot plots;
-- residual error statistics;
-- what changed after the model exposed a real robot issue.
+$$
+v_{\text{exit}} = \eta v_{\text{wheel}}
+$$
 
-Until those measurements exist, the honest academic contribution is the architecture: a reproducible method for connecting control theory to robot behavior, not a claim that the simulator is already validated.
+where $\eta$ is the transfer efficiency between the flywheel surface and the projectile. In the research case study, the naive assumption was about $\eta = 0.70$, while the measured transfer was closer to $\eta \approx 0.26$ and changed with launch angle.
 
-<Admonition type="info" title="Sources & references">
+<EquationLegend
+  items={[
+    {symbol: '$v_{\\text{exit}}$', meaning: 'projectile speed as it leaves the launcher', unit: 'm/s'},
+    {symbol: '$v_{\\text{wheel}}$', meaning: 'linear speed of the flywheel surface', unit: 'm/s'},
+    {symbol: '$\\eta$', meaning: 'energy-transfer efficiency from wheel contact to projectile exit speed', unit: 'unitless'},
+  ]}
+/>
 
-- [From Math to a Loop](../software-architecture/discretization.mdx) - measured loop time, units, and discrete updates.
-- [Odometry & Pose](../localization-odometry/odometry.mdx) - pose estimation and why it drifts.
-- [Motion Profiling](../control-theory/motion-profiling.mdx) - velocity and acceleration constraints.
-- [Pure Pursuit](../path-following/pure-pursuit.mdx) and [Guided Vector Fields](../path-following/guided-vector-fields.mdx) - geometric follower options.
-- [Feedforward](../control-theory/feedforward.mdx) and [How a Motor Works](../control-theory/how-a-motor-works.mdx) - actuator modeling.
-- Pedro Pathing and Road Runner documentation - practical FTC path-following references for future measured comparisons.
+That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator can expose the missing energy; calibration tells you how much is missing.
+
+## Implementation sketch
+
+The deployed version should keep physics and calibration separate. Physics predicts a first guess; calibration corrects the mechanism-specific loss.
+
+```java
+/**
+ * Converts a desired projectile exit velocity into a flywheel command.
+ * The transfer model is deliberately injected so it can be replaced after
+ * calibration without rewriting the trajectory solver.
+ */
+public final class LauncherTransferModel {
+    private final DoubleUnaryOperator efficiencyByAngleRadians;
+
+    public LauncherTransferModel(DoubleUnaryOperator efficiencyByAngleRadians) {
+        this.efficiencyByAngleRadians = efficiencyByAngleRadians;
+    }
+
+    public double wheelSurfaceSpeedFor(double exitVelocityMetersPerSecond, double launchAngleRadians) {
+        double eta = efficiencyByAngleRadians.applyAsDouble(launchAngleRadians);
+        if (eta <= 0.0) {
+            throw new IllegalArgumentException("Transfer efficiency must be positive.");
+        }
+        return exitVelocityMetersPerSecond / eta;
+    }
+}
+```
+
+<Admonition type="tip" title="Source trail">
+
+This lesson is based on the paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, plus the public [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
 
 </Admonition>

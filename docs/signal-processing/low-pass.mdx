@@ -18,14 +18,14 @@ that update, makes it correct across a varying loop time, and shows the direct t
 smoothness and lag.
 </Abstract>
 
-The low-pass filter is the highest-leverage line of code in embedded control: it removes most
+The low-pass filter is the most valuable line of code in embedded control: it removes most
 sensor jitter, costs one multiply and one add, and stores a single number. If a reading is too noisy
 to act on, this is the first thing to try.
 
 <Problem title="Fast noise rides on top of a slow signal">
 
 Real signals usually change slowly; noise changes quickly. A raw distance reading or encoder
-velocity carries both, and the fast component is what wrecks downstream logic — most painfully a PID
+velocity carries both, and the fast component is what ruins downstream logic — most painfully a PID
 **derivative** term, which differentiates and therefore *amplifies* high-frequency jitter into motor
 chatter. We need to admit the slow, real component and reject the fast, noisy one — to let **low**
 frequencies **pass**.
