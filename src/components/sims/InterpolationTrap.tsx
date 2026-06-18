@@ -12,109 +12,13 @@
 
 import {useRef, useState} from 'react';
 import {Demo, Readout, Legend, Buttons, Button} from '@site/src/components/kit/Demo';
-
-type Pt = {x: number; y: number};
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+import {clamp, monotoneHermite, naturalCubic, type Pt} from '@site/src/lib/projectile';
 
 // Fixed sample abscissae (strictly increasing, as the LUT requires).
 const XS = [0, 1, 2, 3, 4, 5, 6];
 // Default Y: a rising-then-FLAT-then-rising shape. The three equal middle
 // values are exactly the case that makes a natural spline misbehave.
 const DEFAULT_YS = [10, 35, 72, 72, 72, 88, 96];
-
-/* ---- Natural cubic spline (the one that overshoots) ----
-   Solves for second derivatives M with natural end conditions M₀ = Mₙ₋₁ = 0
-   via the Thomas algorithm, then evaluates the standard cubic piece. */
-function naturalCubic(xs: number[], ys: number[]) {
-  const n = xs.length;
-  const h = (i: number) => xs[i + 1] - xs[i];
-  const M = new Array(n).fill(0);
-  if (n >= 3) {
-    const lower = new Array(n).fill(0);
-    const diag = new Array(n).fill(1);
-    const upper = new Array(n).fill(0);
-    const rhs = new Array(n).fill(0);
-    for (let i = 1; i < n - 1; i++) {
-      lower[i] = h(i - 1);
-      diag[i] = 2 * (h(i - 1) + h(i));
-      upper[i] = h(i);
-      rhs[i] = 6 * ((ys[i + 1] - ys[i]) / h(i) - (ys[i] - ys[i - 1]) / h(i - 1));
-    }
-    // forward sweep
-    for (let i = 2; i < n - 1; i++) {
-      const w = lower[i] / diag[i - 1];
-      diag[i] -= w * upper[i - 1];
-      rhs[i] -= w * rhs[i - 1];
-    }
-    // back substitution (interior rows; M₀ and Mₙ₋₁ stay 0)
-    for (let i = n - 2; i >= 1; i--) {
-      M[i] = (rhs[i] - upper[i] * M[i + 1]) / diag[i];
-    }
-  }
-  return (x: number) => {
-    let i = 0;
-    while (i < n - 2 && x > xs[i + 1]) i++;
-    const hi = h(i);
-    const A = (xs[i + 1] - x) / hi;
-    const B = (x - xs[i]) / hi;
-    return A * ys[i] + B * ys[i + 1] + ((A * A * A - A) * M[i] + (B * B * B - B) * M[i + 1]) * (hi * hi) / 6;
-  };
-}
-
-/* ---- Monotone cubic Hermite, Fritsch–Carlson (the one that behaves) ----
-   Mirrors InterpLUT.createLUT(): secant slopes → averaged tangents → clamp
-   each tangent pair into the radius-3 monotonicity circle (Eq. 11). Returns
-   the evaluator plus per-knot tangents and a flag for which were projected,
-   so the UI can SHOW the algorithm acting. */
-function monotoneHermite(xs: number[], ys: number[]) {
-  const n = xs.length;
-  const delta: number[] = []; // Eq. 9: secant slopes
-  for (let i = 0; i < n - 1; i++) delta.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
-
-  // Eq. 10: interior tangents = average of neighbouring secants; ends one-sided
-  const m = new Array(n).fill(0);
-  m[0] = delta[0];
-  m[n - 1] = delta[n - 2];
-  for (let i = 1; i < n - 1; i++) m[i] = 0.5 * (delta[i - 1] + delta[i]);
-
-  const flag: ('ok' | 'flat' | 'projected')[] = new Array(n).fill('ok');
-
-  // Step 3: enforce monotonicity interval by interval
-  for (let i = 0; i < n - 1; i++) {
-    if (delta[i] === 0) {
-      // flat segment → both tangents forced to zero (no overshoot possible)
-      m[i] = 0;
-      m[i + 1] = 0;
-      flag[i] = flag[i] === 'projected' ? 'projected' : 'flat';
-      flag[i + 1] = 'flat';
-      continue;
-    }
-    const a = m[i] / delta[i];
-    const b = m[i + 1] / delta[i];
-    if (a * a + b * b > 9) {
-      // outside the radius-3 circle → project back onto its boundary
-      const tau = 3 / Math.sqrt(a * a + b * b);
-      m[i] = tau * a * delta[i];
-      m[i + 1] = tau * b * delta[i];
-      if (flag[i] !== 'flat') flag[i] = 'projected';
-      if (flag[i + 1] !== 'flat') flag[i + 1] = 'projected';
-    }
-  }
-
-  const evaluate = (x: number) => {
-    let i = 0;
-    while (i < n - 2 && x > xs[i + 1]) i++;
-    const hk = xs[i + 1] - xs[i];
-    const t = (x - xs[i]) / hk;
-    // Eq. 12: four Hermite basis functions
-    const h00 = (1 + 2 * t) * (1 - t) * (1 - t);
-    const h10 = t * (1 - t) * (1 - t);
-    const h01 = t * t * (3 - 2 * t);
-    const h11 = t * t * (t - 1);
-    return h00 * ys[i] + h10 * hk * m[i] + h01 * ys[i + 1] + h11 * hk * m[i + 1];
-  };
-  return {evaluate, m, flag};
-}
 
 export default function InterpolationTrap() {
   const svgRef = useRef<SVGSVGElement>(null);

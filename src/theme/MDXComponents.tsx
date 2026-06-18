@@ -19,6 +19,7 @@ import {
   DifferentialEquationsIllustration,
   StateSpaceIllustration,
 } from '@site/src/components/kit/MathIllustrations';
+import {LookupTableIllustration} from '@site/src/components/kit/ResearchIllustrations';
 import {Problem, Theory, Deploy} from '@site/src/components/kit/Steps';
 import {Callout, Analogy} from '@site/src/components/kit/Callout';
 import {Formula, Blue, Teal, Amber, Rose, Faint} from '@site/src/components/kit/Formula';
@@ -48,6 +49,7 @@ export default {
   LinearAlgebraIllustration,
   DifferentialEquationsIllustration,
   StateSpaceIllustration,
+  LookupTableIllustration,
   // clean titled lesson sections
   Problem,
   Theory,

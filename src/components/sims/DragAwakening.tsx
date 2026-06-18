@@ -5,99 +5,14 @@
    (Stoicescu, "Real-Time Trajectory Compensation…", §3). This demo draws
    the two trajectories side by side so the gap is impossible to miss.
 
-   Physics (paper §3–4):
-     • Quadratic drag:  F_d = ½ ρ C_D A |v| v        (vector, opposes velocity)
-     • ODE:   v̇x = −(ρ C_D A / 2m) |v| vx
-              v̇z = −g − (ρ C_D A / 2m) |v| vz
-     • Integrated with classical RK4 at dt = 1 ms (paper's choice — its
-       global error O(h⁴) is far below the ±1 in field tolerance).
-   Pure React + SVG, so it is SSR-safe (no canvas ref read during render). */
+   The physics (quadratic drag, RK4 integration, the SI constants from the
+   paper) lives in lib/projectile so every Module 6 sim shares one model; this
+   file is just the SVG view. Pure React + SVG, so it is SSR-safe. */
 
 import {useState} from 'react';
 import {Demo, Controls, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-
-// ---- Physical constants, all SI, taken verbatim from the paper ----
-const g = 9.81; // m/s²
-const RHO = 1.204; // air density at 20 °C, sea level (kg/m³)
-const CD = 0.47; // subcritical sphere drag coefficient (Achenbach)
-const MASS = 0.0748; // projectile mass (kg)
-const AREA = 0.01267; // frontal area π(0.0635)² (m²)
-const H0 = 0.4; // launch height above floor (m), per Fig. 5
-const H_RIM = 0.984; // target aperture rim height (m), per §2.2
-
-// Lumped drag term:  a_drag = −K |v| v   (so K has units 1/m)
-const K = (RHO * CD * AREA) / (2 * MASS);
-
-type Pt = {x: number; y: number};
-
-/* Drag-corrected flight, integrated with RK4 (4 slope evals per step).
-   State y = [x, z, vx, vz]; returns the sampled arc, the ground range
-   (where z returns to 0), and where it crosses the rim height descending. */
-function simulateDrag(v0: number, ang: number) {
-  const deriv = (s: number[]) => {
-    const [, , vx, vz] = s;
-    const sp = Math.hypot(vx, vz); // |v|
-    return [vx, vz, -K * sp * vx, -g - K * sp * vz];
-  };
-  let s = [0, H0, v0 * Math.cos(ang), v0 * Math.sin(ang)];
-  const dt = 0.001; // 1 ms, the paper's integration step
-  const pts: Pt[] = [{x: s[0], y: s[1]}];
-  let groundRange = 0;
-  let rimCross: number | null = null;
-
-  for (let i = 0; i < 20000 && s[0] < 20; i++) {
-    const prev = s;
-    // --- one RK4 step ---
-    const k1 = deriv(s);
-    const k2 = deriv(s.map((v, j) => v + 0.5 * dt * k1[j]));
-    const k3 = deriv(s.map((v, j) => v + 0.5 * dt * k2[j]));
-    const k4 = deriv(s.map((v, j) => v + dt * k3[j]));
-    s = s.map((v, j) => v + (dt / 6) * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]));
-
-    // descending pass through the rim plane (z = H_RIM)
-    if (rimCross === null && s[3] < 0 && prev[1] >= H_RIM && s[1] < H_RIM) {
-      const f = (prev[1] - H_RIM) / (prev[1] - s[1]);
-      rimCross = prev[0] + f * (s[0] - prev[0]);
-    }
-    // ground impact (z = 0): interpolate the exact crossing and stop
-    if (s[1] <= 0) {
-      const f = prev[1] / (prev[1] - s[1]);
-      groundRange = prev[0] + f * (s[0] - prev[0]);
-      pts.push({x: groundRange, y: 0});
-      break;
-    }
-    if (i % 8 === 0) pts.push({x: s[0], y: s[1]}); // thin the polyline
-  }
-  if (groundRange === 0) groundRange = s[0];
-  return {pts, range: groundRange, rimCross};
-}
-
-/* Vacuum flight — the closed form the naive model trusts. */
-function simulateVacuum(v0: number, ang: number) {
-  const vx = v0 * Math.cos(ang);
-  const vz0 = v0 * Math.sin(ang);
-  const tLand = (vz0 + Math.sqrt(vz0 * vz0 + 2 * g * H0)) / g; // z back to 0
-  const range = vx * tLand;
-  const N = 90;
-  const pts: Pt[] = [];
-  let apex = H0;
-  for (let i = 0; i <= N; i++) {
-    const t = (tLand * i) / N;
-    const z = H0 + vz0 * t - 0.5 * g * t * t;
-    apex = Math.max(apex, z);
-    pts.push({x: vx * t, y: z});
-  }
-  // descending crossing of the rim plane: larger root of the quadratic
-  let rimCross: number | null = null;
-  const a = -0.5 * g;
-  const disc = vz0 * vz0 - 4 * a * (H0 - H_RIM);
-  if (disc >= 0) {
-    const t = (-vz0 - Math.sqrt(disc)) / (2 * a); // larger t (a < 0)
-    if (t > 0 && t <= tLand) rimCross = vx * t;
-  }
-  return {pts, range, apex, rimCross};
-}
+import {DRAG_K, G, H0, H_RIM, type Pt, simulateDrag, simulateVacuum} from '@site/src/lib/projectile';
 
 export default function DragAwakening() {
   const [v0, setV0] = useState(8);
@@ -105,7 +20,7 @@ export default function DragAwakening() {
   const ang = (angDeg * Math.PI) / 180;
 
   const vac = simulateVacuum(v0, ang);
-  const drag = simulateDrag(v0, ang);
+  const drag = simulateDrag({v0, angle: ang});
   const errAbs = vac.range - drag.range; // metres shorter than vacuum predicts
   const errPct = (errAbs / vac.range) * 100; // %, the headline number
 
@@ -197,7 +112,7 @@ export default function DragAwakening() {
           ['Vacuum range', `${vac.range.toFixed(2)} m`],
           ['Drag range', `${drag.range.toFixed(2)} m`],
           ['Range error', `−${errAbs.toFixed(2)} m  (${errPct.toFixed(1)}% short)`],
-          ['Drag / weight', `${(K * v0 * v0 * MASS / (MASS * g)).toFixed(2)}·mg @ exit`],
+          ['Drag / weight', `${((DRAG_K * v0 * v0) / G).toFixed(2)}·mg @ exit`],
         ]}
       />
       <Legend
