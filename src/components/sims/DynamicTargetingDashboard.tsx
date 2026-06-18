@@ -3,6 +3,7 @@ import InterpolationTrap from '@site/src/components/sims/InterpolationTrap';
 import ShootOnTheMove from '@site/src/components/sims/ShootOnTheMove';
 import {Button, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {clamp} from '@site/src/lib/projectile';
 
 type TabId = 'flywheel' | 'interpolation' | 'sotm';
 type Sample = {t: number; value: number};
@@ -11,9 +12,15 @@ const TARGET = 2500;
 const READY_BAND = 80;
 const DT = 1 / 120;
 
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
+// A deliberately simple flywheel plant: command voltage spins the wheel up
+// while drag slows it down. accel = TORQUE_K * voltage - DRAG_K * drag(speed).
+const TORQUE_K = 185;
+const DRAG_K = 58;
+const flywheelDrag = (speed: number) => 0.0028 * speed + 0.00000022 * speed * speed;
+// Feedforward that exactly holds the target: the voltage at which the wheel's
+// drag is balanced at TARGET. This is the k_S + k_V * r term, tuned so the
+// recovered trace settles on the setpoint instead of drifting off-chart.
+const FF_VOLTS = (DRAG_K * flywheelDrag(TARGET)) / TORQUE_K;
 
 function FlywheelRecovery() {
   const [feedforward, setFeedforward] = useState(true);
@@ -47,17 +54,14 @@ function FlywheelRecovery() {
         const {feedforward: ffOn, pid: pidOn, bangBang: bbOn, aggression: bbScale} = toggles.current;
         const error = TARGET - m.speed;
 
-        // A deliberately simple flywheel plant:
-        // voltage accelerates the wheel, while drag and shot load slow it down.
-        // The controller choices below are the lesson: baseline voltage holds
-        // steady state, PID trims error, and bang-bang saturates only when the
-        // wheel is below the ready band after a shot.
-        const ff = ffOn ? 6.2 : 0;
+        // The controller choices below are the lesson: feedforward holds the
+        // steady-state setpoint, PID trims residual error, and bang-bang
+        // saturates only when the wheel is below the ready band after a shot.
+        const ff = ffOn ? FF_VOLTS : 0;
         const feedback = pidOn ? 0.006 * error : 0;
         const recoveryKick = bbOn && error > READY_BAND ? 5.2 * bbScale : 0;
         const voltage = clamp(ff + feedback + recoveryKick, 0, 12);
-        const drag = 0.0028 * m.speed + 0.00000022 * m.speed * m.speed;
-        const acceleration = 185 * voltage - 58 * drag;
+        const acceleration = TORQUE_K * voltage - DRAG_K * flywheelDrag(m.speed);
 
         m.speed = clamp(m.speed + acceleration * DT, 0, 3100);
         m.t += DT;
@@ -131,7 +135,7 @@ function FlywheelRecovery() {
           </g>
         ))}
         <path d={path} fill="none" stroke={ready ? '#5ce08a' : '#ff6f9c'} strokeWidth="3.5" strokeLinecap="round" />
-        <circle cx={samples.length ? sx(samples[samples.length - 1].t) : padL} cy={sy(m.speed)} r="5.5" fill={ready ? '#5ce08a' : '#ff6f9c'} />
+        <circle cx={samples.length ? sx(samples[samples.length - 1].t) : padL} cy={sy(clamp(m.speed, yMin, yMax))} r="5.5" fill={ready ? '#5ce08a' : '#ff6f9c'} />
         <text x={W - padR} y={padT + 12} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
           target = {TARGET} ticks/s, ready band = +/- {READY_BAND}
         </text>

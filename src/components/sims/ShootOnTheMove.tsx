@@ -19,51 +19,12 @@
 import {useRef, useState} from 'react';
 import {Controls, Demo, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {clamp, dist, solveSOTM, type Vec2 as V} from '@site/src/lib/projectile';
 
-type V = {x: number; y: number};
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const sub = (a: V, b: V): V => ({x: a.x - b.x, y: a.y - b.y});
-const dist = (a: V, b: V) => Math.hypot(a.x - b.x, a.y - b.y);
-
-// ---- deployed constants (paper §7.5, Table 2) ----
-const G = 0.9; // SOTM_GAIN — accounts for the non-ballistic spin-up phase
-const TD = 0.05; // feeder delay t_d (s)
+// ---- view-only constants (paper §7.5, Table 2) ----
 const FIELD = 144; // 12-ft field, inches
 const V_MAX = 137.8; // 3.5 m/s base-velocity envelope, in in/s
 const ARROW_K = 0.34; // arrow length: field-inches drawn per (in/s) of speed
-
-/* Time-of-flight LUT, linearised from the deployed TOF table
-   (d = 95 in → 0.80 s, 113 in → 0.96 s; paper Table 2). Monotone in d. */
-function tof(dIn: number) {
-  return clamp(-0.044 + 0.00889 * dIn, 0.3, 2.2);
-}
-
-type Iter = {k: number; pv: V; d: number; tf: number; T: number | null; delta: number | null; done: boolean};
-
-/* The fixed-point solver, exactly as Sensors.update() runs it (≤ 5 rounds). */
-function solveSOTM(pshooter: V, pgoal: V, vR: V) {
-  const iters: Iter[] = [];
-  // Iteration 0: aim straight at the real target, read its flight time
-  let pv: V = {...pgoal};
-  let d = dist(pv, pshooter);
-  let tf = tof(d);
-  iters.push({k: 0, pv, d, tf, T: null, delta: null, done: false});
-
-  for (let k = 1; k <= 5; k++) {
-    const T = TD + tf; // total lead time
-    const pvNew: V = {x: pgoal.x + G * vR.x * T, y: pgoal.y + G * vR.y * T}; // shift by robot motion
-    const dNew = dist(pvNew, pshooter);
-    const tfNew = tof(dNew);
-    const delta = Math.abs(tfNew - tf); // convergence test on flight time
-    const done = delta < 0.05;
-    iters.push({k, pv: pvNew, d: dNew, tf: tfNew, T, delta, done});
-    pv = pvNew;
-    d = dNew;
-    tf = tfNew;
-    if (done) break;
-  }
-  return {pv, d, tf, iters};
-}
 
 export default function ShootOnTheMove() {
   const svgRef = useRef<SVGSVGElement>(null);

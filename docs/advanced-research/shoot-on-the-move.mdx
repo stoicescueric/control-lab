@@ -29,12 +29,12 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: '$u$', meaning: 'motor command or voltage request', unit: 'V'},
-    {symbol: '$r$', meaning: 'target flywheel velocity', unit: 'ticks/s or rad/s'},
-    {symbol: '$y$', meaning: 'measured flywheel velocity', unit: 'ticks/s or rad/s'},
-    {symbol: '$k_S$', meaning: 'static friction compensation term', unit: 'V'},
-    {symbol: '$k_V$', meaning: 'velocity feedforward gain', unit: 'V per velocity'},
-    {symbol: '$k_P$', meaning: 'proportional feedback gain', unit: 'V per velocity error'},
+    {symbol: 'u', meaning: 'motor command or voltage request', unit: 'V'},
+    {symbol: 'r', meaning: 'target flywheel velocity', unit: 'ticks/s or rad/s'},
+    {symbol: 'y', meaning: 'measured flywheel velocity', unit: 'ticks/s or rad/s'},
+    {symbol: 'k_S', meaning: 'static friction compensation term', unit: 'V'},
+    {symbol: 'k_V', meaning: 'velocity feedforward gain', unit: 'V per velocity'},
+    {symbol: 'k_P', meaning: 'proportional feedback gain', unit: 'V per velocity error'},
   ]}
 />
 
@@ -42,7 +42,9 @@ The research controller adds an asymmetric recovery mode: if the wheel is below 
 
 ## Step 2: Lookup tables can lie between points
 
-Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the match it needs values between those distances.
+Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the match it needs values between those distances. A lookup table stores the measured shots and *interpolates* to fill the gaps — and the choice of interpolant decides whether those in-between values are safe.
+
+<LookupTableIllustration />
 
 A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf, the spline can overshoot between equal points and command a speed that was never measured. The safer choice for monotone data is a monotone cubic Hermite interpolant, using the Fritsch-Carlson slope constraint:
 
@@ -52,9 +54,9 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: '$\\alpha_k$', meaning: 'left endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
-    {symbol: '$\\beta_k$', meaning: 'right endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
-    {symbol: '$9$', meaning: 'radius-squared boundary for the Fritsch-Carlson monotonicity projection', unit: 'unitless'},
+    {symbol: 'alpha_k', meaning: 'left endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
+    {symbol: 'beta_k', meaning: 'right endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
+    {symbol: '9', meaning: 'radius-squared boundary for the Fritsch-Carlson monotonicity projection', unit: 'unitless'},
   ]}
 />
 
@@ -74,63 +76,40 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: '$\\mathbf{p}_{\\text{virtual}}$', meaning: 'virtual point the turret aims at', unit: 'field position'},
-    {symbol: '$\\mathbf{p}_{\\text{target}}$', meaning: 'fixed real target location', unit: 'field position'},
-    {symbol: '$G$', meaning: 'empirical lead gain from the research controller', unit: 'unitless'},
-    {symbol: '$\\mathbf{v}_R$', meaning: 'robot chassis velocity vector', unit: 'distance/s'},
-    {symbol: '$t_d$', meaning: 'feeder or launch delay before free flight', unit: 's'},
-    {symbol: '$t_f$', meaning: 'projectile flight time from lookup or simulator', unit: 's'},
+    {symbol: 'p_virtual', meaning: 'virtual point the turret aims at', unit: 'field position'},
+    {symbol: 'p_target', meaning: 'fixed real target location', unit: 'field position'},
+    {symbol: 'G', meaning: 'empirical lead gain from the research controller', unit: 'unitless'},
+    {symbol: 'v_R', meaning: 'robot chassis velocity vector', unit: 'distance/s'},
+    {symbol: 't_d', meaning: 'feeder or launch delay before free flight', unit: 's'},
+    {symbol: 't_f', meaning: 'projectile flight time from lookup or simulator', unit: 's'},
   ]}
 />
 
 This is circular: the virtual target changes the distance, the distance changes flight time, and flight time changes the virtual target. Fixed-point iteration breaks the loop. Start with the real target, compute a flight time, shift the target, compute the new flight time, and stop when the time changes by less than the tolerance.
 
-## Implementation sketch
+It converges fast for a concrete reason: the lead distance $G v_R (t_d + t_f)$ is small next to the shot distance, and a small change in distance produces an even smaller change in flight time, so each pass moves the answer less than the last. The map is a contraction, and in the dashboard's solver trace you can watch $\Delta t_f$ shrink below the tolerance in two or three rounds. The iteration cap is there only to bound the real-time loop if a bad lookup table breaks that contraction — not because convergence is in doubt under normal conditions.
 
-The robot code should make the fixed-point solver explicit and bounded. It is a real-time system, so the loop gets a maximum number of iterations even if a bad table or impossible geometry prevents convergence.
+## How the deployed solver is structured
 
-```java
-/**
- * Computes the virtual target used for shoot-on-the-move aiming.
- * The solver is intentionally bounded so autonomous loop timing remains predictable.
- */
-public final class ShootOnMoveSolver {
-    private static final int MAX_ITERATIONS = 5;
-    private static final double CONVERGENCE_SECONDS = 0.05;
+On the robot the fixed-point loop is made explicit and *bounded*. It runs inside the autonomous control loop, so it is given a hard iteration cap: even if a bad table or impossible geometry breaks convergence, the loop must still return in predictable time rather than spin.
 
-    private final FlightTimeLookup flightTimeLookup;
-    private final double feederDelaySeconds;
-    private final double leadGain;
+```text
+solve_virtual_target(shooter, target, robot_velocity):
+    flight_time <- lookup_flight_time( distance(shooter, target) )
 
-    public ShootOnMoveSolver(
-            FlightTimeLookup flightTimeLookup,
-            double feederDelaySeconds,
-            double leadGain
-    ) {
-        this.flightTimeLookup = flightTimeLookup;
-        this.feederDelaySeconds = feederDelaySeconds;
-        this.leadGain = leadGain;
-    }
+    repeat at most MAX_ITERATIONS times:
+        lead_time <- feeder_delay + flight_time
+        virtual   <- target + lead_gain * robot_velocity * lead_time
 
-    public Vector2d solve(Vector2d shooter, Vector2d target, Vector2d robotVelocity) {
-        Vector2d virtualTarget = target;
-        double previousFlightTime = flightTimeLookup.seconds(shooter.distanceTo(virtualTarget));
+        next_time <- lookup_flight_time( distance(shooter, virtual) )
+        if | next_time - flight_time | < tolerance:
+            stop        # flight time stopped moving: converged
+        flight_time <- next_time
 
-        for (int i = 0; i < MAX_ITERATIONS; i++) {
-            double leadTime = feederDelaySeconds + previousFlightTime;
-            virtualTarget = target.plus(robotVelocity.times(leadGain * leadTime));
-
-            double nextFlightTime = flightTimeLookup.seconds(shooter.distanceTo(virtualTarget));
-            if (Math.abs(nextFlightTime - previousFlightTime) < CONVERGENCE_SECONDS) {
-                break;
-            }
-            previousFlightTime = nextFlightTime;
-        }
-
-        return virtualTarget;
-    }
-}
+    return virtual
 ```
+
+Two parameters carry the whole behaviour: the convergence `tolerance` decides when "close enough" is reached, and `MAX_ITERATIONS` guarantees the loop terminates regardless. The flight-time lookup is the calibrated table from Step 2, which is exactly why it must be monotone — a table that overshoots between points could break the contraction this loop relies on.
 
 <Admonition type="warning" title="Hardware reality: ready is a band, not one number">
 

@@ -1,66 +1,19 @@
 import {useMemo, useState} from 'react';
 import DragAwakening from '@site/src/components/sims/DragAwakening';
-import {Button, Buttons, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
+import {Button, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {ASSUMED_ETA, type Pt as Point, measuredEta, simulateDrag} from '@site/src/lib/projectile';
 
-type Point = {x: number; y: number};
-type Trajectory = {points: Point[]; range: number; peak: number};
 type TabId = 'integrator' | 'drag' | 'transfer';
 
-const G = 9.81;
-const LAUNCH_HEIGHT = 0.4;
-const DRAG_K = 0.38;
+// The integrator panel fires the same projectile the drag panel does, so both
+// tabs of this lesson share lib/projectile's model and constants.
+const LAUNCH_V0 = 8; // m/s
+const LAUNCH_ANGLE = (54 * Math.PI) / 180;
 
-function clamp(v: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, v));
-}
-
-function derivative(state: number[]) {
-  const [, , vx, vy] = state;
-  const speed = Math.hypot(vx, vy);
-  return [vx, vy, -DRAG_K * speed * vx, -G - DRAG_K * speed * vy];
-}
-
-function addScaled(a: number[], b: number[], scale: number) {
-  return a.map((v, i) => v + b[i] * scale);
-}
-
-function eulerStep(state: number[], dt: number) {
-  return addScaled(state, derivative(state), dt);
-}
-
-function rk4Step(state: number[], dt: number) {
-  const k1 = derivative(state);
-  const k2 = derivative(addScaled(state, k1, dt / 2));
-  const k3 = derivative(addScaled(state, k2, dt / 2));
-  const k4 = derivative(addScaled(state, k3, dt));
-  return state.map((v, i) => v + (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]));
-}
-
-function simulate(method: 'euler' | 'rk4', dt: number): Trajectory {
-  let state = [0, LAUNCH_HEIGHT, 8 * Math.cos((54 * Math.PI) / 180), 8 * Math.sin((54 * Math.PI) / 180)];
-  const step = method === 'euler' ? eulerStep : rk4Step;
-  const points: Point[] = [{x: state[0], y: state[1]}];
-  let peak = state[1];
-  let range = 0;
-
-  for (let i = 0; i < 1000 && state[0] < 12; i++) {
-    const previous = state;
-    state = step(state, dt);
-    peak = Math.max(peak, state[1]);
-
-    if (state[1] <= 0) {
-      const f = previous[1] / (previous[1] - state[1]);
-      range = previous[0] + f * (state[0] - previous[0]);
-      points.push({x: range, y: 0});
-      break;
-    }
-
-    points.push({x: state[0], y: state[1]});
-  }
-
-  if (range === 0) range = state[0];
-  return {points, range, peak};
+function simulate(method: 'euler' | 'rk4', dt: number) {
+  // thin=1 keeps every step so the coarse-dt polyline shows its true shape.
+  return simulateDrag({v0: LAUNCH_V0, angle: LAUNCH_ANGLE, dt, method, thin: 1, maxX: 12});
 }
 
 function pathFrom(points: Point[], sx: (x: number) => number, sy: (y: number) => number) {
@@ -102,9 +55,9 @@ function IntegratorBattle() {
             </text>
           </g>
         ))}
-        <path d={pathFrom(truth.points, sx, sy)} fill="none" stroke="#8294b8" strokeWidth="2" strokeDasharray="4 6" />
-        <path d={pathFrom(euler.points, sx, sy)} fill="none" stroke="#ff6f9c" strokeWidth="3" strokeLinecap="round" />
-        <path d={pathFrom(rk4.points, sx, sy)} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" />
+        <path d={pathFrom(truth.pts, sx, sy)} fill="none" stroke="#8294b8" strokeWidth="2" strokeDasharray="4 6" />
+        <path d={pathFrom(euler.pts, sx, sy)} fill="none" stroke="#ff6f9c" strokeWidth="3" strokeLinecap="round" />
+        <path d={pathFrom(rk4.pts, sx, sy)} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" />
         <circle cx={sx(truth.range)} cy={sy(0)} r="6" fill="#ffc24d" />
         <text x={sx(truth.range) + 10} y={sy(0) - 10} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffc24d">
           high-resolution target
@@ -158,17 +111,16 @@ function TransferRealityCheck() {
   const sx = (x: number) => padL + (x / xMax) * (W - padL - padR);
   const sy = (y: number) => padT + (1 - y / yMax) * (H - padT - padB);
 
-  const assumedEta = 0.7;
-  const droop = clamp(1 - Math.max(0, angle - 30) * 0.006, 0.72, 1);
-  const measuredEta = 0.26 * droop;
+  const assumedEta = ASSUMED_ETA;
+  const measEta = measuredEta(angle);
   const xs = [6, 10, 14, 18, 22, 26, 30, 34];
   const experimental = xs.map((x, i) => {
     const ripple = [0.15, -0.05, 0.08, -0.12, 0.06, -0.08, 0.04, -0.1][i];
-    return {x, y: x * measuredEta + ripple};
+    return {x, y: x * measEta + ripple};
   });
   const targetWheel = 28;
   const assumedExit = targetWheel * assumedEta;
-  const realExit = targetWheel * measuredEta;
+  const realExit = targetWheel * measEta;
 
   const line = (eta: number) => `M ${sx(0)} ${sy(0)} L ${sx(xMax)} ${sy(xMax * eta)}`;
 
@@ -197,7 +149,7 @@ function TransferRealityCheck() {
           </g>
         ))}
         <path d={line(assumedEta)} fill="none" stroke="#8294b8" strokeWidth="2.5" strokeDasharray="8 6" />
-        <path d={line(measuredEta)} fill="none" stroke="#6f8bff" strokeWidth="3.5" />
+        <path d={line(measEta)} fill="none" stroke="#6f8bff" strokeWidth="3.5" />
         {experimental.map((p, i) => (
           <circle key={i} cx={sx(p.x)} cy={sy(p.y)} r="5.5" fill="#e8eefc" stroke="#0b1120" strokeWidth="2" />
         ))}
@@ -217,7 +169,7 @@ function TransferRealityCheck() {
       <Readout
         items={[
           ['Firmware assumption eta', assumedEta.toFixed(2)],
-          ['Measured eta at this angle', measuredEta.toFixed(2)],
+          ['Measured eta at this angle', measEta.toFixed(2)],
           ['Predicted exit at 28 m/s wheel', `${assumedExit.toFixed(1)} m/s`],
           ['Reality estimate', `${realExit.toFixed(1)} m/s`],
         ]}
@@ -257,12 +209,6 @@ export default function PhysicalRealityDashboard() {
       {active === 'integrator' && <IntegratorBattle />}
       {active === 'drag' && <DragAwakening />}
       {active === 'transfer' && <TransferRealityCheck />}
-
-      <Buttons className="border-t border-white/10 pt-4">
-        <Button onClick={() => setActive('integrator')}>Integrator</Button>
-        <Button onClick={() => setActive('drag')}>Drag model</Button>
-        <Button onClick={() => setActive('transfer')}>Energy transfer</Button>
-      </Buttons>
     </Demo>
   );
 }

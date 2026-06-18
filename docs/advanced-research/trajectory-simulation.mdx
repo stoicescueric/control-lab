@@ -41,11 +41,11 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: '$\\mathbf{p}$', meaning: 'projectile position vector', unit: 'm'},
-    {symbol: '$\\mathbf{v}$', meaning: 'projectile velocity vector', unit: 'm/s'},
-    {symbol: '$g$', meaning: 'gravitational acceleration', unit: 'm/s^2'},
-    {symbol: '$k$', meaning: 'lumped drag coefficient for the simplified demo model', unit: '1/m'},
-    {symbol: '$\\|\\mathbf{v}\\|$', meaning: 'speed, the magnitude of the velocity vector', unit: 'm/s'},
+    {symbol: 'p', meaning: 'projectile position vector', unit: 'm'},
+    {symbol: 'v', meaning: 'projectile velocity vector', unit: 'm/s'},
+    {symbol: 'g', meaning: 'gravitational acceleration', unit: 'm/s^2'},
+    {symbol: 'k', meaning: 'lumped drag coefficient for the simplified demo model', unit: '1/m'},
+    {symbol: '|v|', meaning: 'speed, the magnitude of the velocity vector', unit: 'm/s'},
   ]}
 />
 
@@ -68,7 +68,9 @@ $$
 \right)
 $$
 
-The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during the time step, so the simulator should not pretend the first slope remains true until the next loop. In the dashboard, increasing $\Delta t$ makes Euler drift away first; RK4 stays usable longer because it samples the curvature of the state update.
+The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during the time step, so the simulator should not pretend the first slope remains true until the next loop. Euler commits to the start-of-step velocity for the whole step, so under constant gravity alone it already lands long — it never feels the velocity it picks up *during* the step. RK4 is exact for motion whose state is polynomial in time up to fourth order, which is why it captures the gravity term essentially for free and only pays a small error for the velocity-dependent drag.
+
+In the dashboard, slide $\Delta t$ up: Euler's range error grows roughly linearly with the step, passing a quarter-metre well before RK4 has moved a centimetre. That gap is not a tuning artifact — it is the discretization choice deciding whether the offline model is trustworthy before any robot code exists.
 
 ## Step 2: Drag is not a small correction
 
@@ -80,14 +82,14 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: '$\\mathbf{F}_d$', meaning: 'aerodynamic drag force, opposite the velocity', unit: 'N'},
-    {symbol: '$\\rho$', meaning: 'air density', unit: 'kg/m^3'},
-    {symbol: '$C_d$', meaning: 'drag coefficient; the demo uses 0.47 from the paper prompt', unit: 'unitless'},
-    {symbol: '$A$', meaning: 'projectile frontal area', unit: 'm^2'},
+    {symbol: 'F_d', meaning: 'aerodynamic drag force, opposite the velocity', unit: 'N'},
+    {symbol: 'rho', meaning: 'air density', unit: 'kg/m^3'},
+    {symbol: 'C_d', meaning: 'drag coefficient; the demo uses 0.47 from the paper prompt', unit: 'unitless'},
+    {symbol: 'A', meaning: 'projectile frontal area', unit: 'm^2'},
   ]}
 />
 
-The dashboard overlays two paths: the dashed vacuum model and the solid drag model. The important number is the range error. If the vacuum model says the shot clears the target but the drag model lands short, the problem is not "tuning." The problem is that the firmware was given the wrong world.
+The dashboard overlays two paths: the dashed vacuum model and the solid drag model, and reports the drag force as a multiple of the projectile's weight at exit. For this light game element that ratio is a meaningful fraction of $mg$ at shooter speeds — drag is not a rounding error you can sweep into a fudge factor, it is a force of the same order as gravity. The important number is the range error. If the vacuum model says the shot clears the target but the drag model lands short, the problem is not "tuning." The problem is that the firmware was given the wrong world.
 
 <Admonition type="warning" title="Hardware reality: coefficients are not universal">
 
@@ -107,40 +109,26 @@ where $\eta$ is the transfer efficiency between the flywheel surface and the pro
 
 <EquationLegend
   items={[
-    {symbol: '$v_{\\text{exit}}$', meaning: 'projectile speed as it leaves the launcher', unit: 'm/s'},
-    {symbol: '$v_{\\text{wheel}}$', meaning: 'linear speed of the flywheel surface', unit: 'm/s'},
-    {symbol: '$\\eta$', meaning: 'energy-transfer efficiency from wheel contact to projectile exit speed', unit: 'unitless'},
+    {symbol: 'v_exit', meaning: 'projectile speed as it leaves the launcher', unit: 'm/s'},
+    {symbol: 'v_wheel', meaning: 'linear speed of the flywheel surface', unit: 'm/s'},
+    {symbol: 'eta', meaning: 'energy-transfer efficiency from wheel contact to projectile exit speed', unit: 'unitless'},
   ]}
 />
 
 That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator can expose the missing energy; calibration tells you how much is missing.
 
-## Implementation sketch
+## How the deployed version is structured
 
-The deployed version should keep physics and calibration separate. Physics predicts a first guess; calibration corrects the mechanism-specific loss.
+The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using an efficiency that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
 
-```java
-/**
- * Converts a desired projectile exit velocity into a flywheel command.
- * The transfer model is deliberately injected so it can be replaced after
- * calibration without rewriting the trajectory solver.
- */
-public final class LauncherTransferModel {
-    private final DoubleUnaryOperator efficiencyByAngleRadians;
-
-    public LauncherTransferModel(DoubleUnaryOperator efficiencyByAngleRadians) {
-        this.efficiencyByAngleRadians = efficiencyByAngleRadians;
-    }
-
-    public double wheelSurfaceSpeedFor(double exitVelocityMetersPerSecond, double launchAngleRadians) {
-        double eta = efficiencyByAngleRadians.applyAsDouble(launchAngleRadians);
-        if (eta <= 0.0) {
-            throw new IllegalArgumentException("Transfer efficiency must be positive.");
-        }
-        return exitVelocityMetersPerSecond / eta;
-    }
-}
+```text
+desired exit speed  ->  wheel command
+    eta   <- measured efficiency at this launch angle   (from calibration, not theory)
+    guard:  eta must be positive, or the conversion is meaningless
+    wheel command <- desired exit speed / eta
 ```
+
+The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one efficiency lookup.
 
 <Admonition type="tip" title="Source trail">
 
