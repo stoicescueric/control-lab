@@ -67,7 +67,7 @@ When the robot is on the path ($e = 0$) the field is pure tangent — it flows a
 second term turns the arrows back toward the path, harder the farther off it is. The gain $k_N$ (units of
 $1/\text{length}$) sets how aggressively the field reels the robot in: too small and it converges lazily; too
 large and the field points nearly straight at the path, so the robot overshoots and zig-zags across it.
-That trade-off is the one knob worth tuning — slide $k_N$ in the demo and watch the flow line go from a long
+That trade-off is the one setting worth tuning — slide $k_N$ in the demo and watch the flow line go from a long
 graceful merge to a tight, slightly overshooting snap.
 
 ### Provable convergence (in brief)
@@ -181,7 +181,7 @@ Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); 
 
 The whole method rests on the projection. Finding the closest point on a spline every loop is a small
 optimization — **seed it from last loop's parameter** and take a few Newton-Raphson steps locally, or the
-cost adds up and (worse) it can jump to a far branch of a self-approaching path. A naive field can also have
+cost adds up and (worse) it can jump to a far branch of a self-approaching path. A simple field can also have
 **local minima or stall points** where the converge and flow terms cancel; clamp the cross-track term and
 keep a **minimum along-track speed** so the robot never freezes. And don't let $k_N$ run away: a huge gain
 makes the field point almost straight at the path, so the robot overshoots and zig-zags — the same

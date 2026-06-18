@@ -31,7 +31,7 @@ The driver gives you three numbers from two thumbsticks: how much to go **forwar
 turn those three numbers into four wheel powers — and get the signs right, or the robot strafes when you
 meant to spin.
 
-There are also two traps the naïve "just add the sticks together" code falls into: it drives relative to
+There are also two traps the obvious "just add the sticks together" code falls into: it drives relative to
 the *robot*, so a turned-around driver fights the controls; and when you push two sticks at once it asks a
 wheel for more than 100% power, which the motor silently clips — bending your straight line into a curve.
 We'll fix both.

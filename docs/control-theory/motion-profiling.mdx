@@ -26,7 +26,7 @@ position and hoping, you command a moving target that respects the mechanism's r
 <Problem title="A step command asks for infinite acceleration">
 
 Tell a lift "go to the top" and your controller sees the full error immediately. A proportional term
-slams full power, the lift lurches, the current spikes, and feedforward — which is fed the *target*
+applies full power all at once, the lift jerks, the current spikes, and feedforward — which is fed the *target*
 velocity — has no idea how fast you actually intend to move, so it can't help. The mechanism either
 overshoots (if the gain is high) or crawls (if it's low). The setpoint asked for a jump no motor can
 deliver: an instantaneous change in position means infinite velocity, an instantaneous change in velocity

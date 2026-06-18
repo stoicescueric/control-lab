@@ -25,7 +25,7 @@ speed planning, centripetal feedforward) is covered in [Pure Pursuit](./pure-pur
 
 PID-to-point and predictive deceleration drive to *one* target. Real autonomous routines thread through
 many waypoints, and the path *between* them has to be drivable — smooth not just in position but in how
-sharply it bends. That bending is curvature, and curvature is where naive paths quietly fail.
+sharply it bends. That bending is curvature, and curvature is where simple paths quietly fail.
 
 <Problem title="The robot jerks at every waypoint">
 
@@ -77,7 +77,7 @@ polygon. Scrub $t$ in the demo to watch it, and drag the handles to feel how $P_
 
 <BezierExplorer />
 
-The catch shows up when you chain Béziers. Matching the tangent across a join (C¹) forces the next
+The problem shows up when you chain Béziers. Matching the tangent across a join (C¹) forces the next
 segment's first handle to mirror the previous one, $Q_1 - Q_0 = P_3 - P_2$; demanding C² pins the second
 handle too ($Q_2 = P_1 - 4P_2 + 4P_3$). So in a Bézier *chain*, continuity steals exactly the handles
 that made Béziers convenient — you no longer get to place them freely.
@@ -153,7 +153,7 @@ The trade against quintic Hermite: a natural cubic is **already C²** — curvat
 interior knot — with the *fewest* degrees of freedom and no slope input required. What you give up is
 control of the ends: the natural boundary *pins* the endpoint curvature to zero rather than letting you
 choose it. A quintic's two extra coefficients per segment let you **prescribe** velocity and acceleration
-(hence curvature) at every waypoint. Both are C²; the quintic just hands you the boundary knobs. (And since
+(hence curvature) at every waypoint. Both are C²; the quintic just gives you the boundary controls. (And since
 $S(x)$ needs $x$ monotonic, a path that doubles back is fit as **two** splines $x(t), y(t)$ — see the
 derivation page.)
 
@@ -169,7 +169,7 @@ $$
 <Callout type="idea" title="Which one should you use?">
 **Bézier** when a human authors the path by eye — the handles are a great editor, and the Road Runner /
 Pedro Pathing-style tools expose them. **Quintic Hermite** when you have exact poses to hit (Road
-Runner's `splineTo` is quintic under the hood) and want C² for free. **Natural cubic** when you have only
+Runner's `splineTo` is quintic internally) and want C² for free. **Natural cubic** when you have only
 points (no slopes) and want the cheapest C² interpolation — one tridiagonal solve, at the cost of pinned
 (zero) end curvature. Bézier and Hermite are convertible: a cubic Bézier *is* a cubic Hermite with
 $m_0 = 3(P_1-P_0)$, $m_1 = 3(P_3-P_2)$ — so editors can show handles while the math runs on Hermite

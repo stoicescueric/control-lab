@@ -26,16 +26,18 @@ and what it does with that voltage. We'll build it up from the parts, not down f
 
 <Problem title="The mechanism that's fast empty and useless under load">
 
-A team gears a lift for blistering speed. Unloaded on the bench it screams to the top. Hang a game
-element on it and it bogs to a crawl, gets too hot to touch, and two matches later browns out the whole
-robot mid-climb. Nothing is broken — the motor is doing exactly what physics requires. The team designed
-against a model that doesn't exist: **"voltage sets speed, full stop."** In reality a motor trades speed
-for torque, pulls more current the harder you load it, and dumps the shortfall as heat. You can't pick a
-gear ratio, choose a controller, or read a current spike correctly until you know *why*.
+A team gears a lift for very high speed. With no load on the bench, it races to the top. Hang a game
+element on it and it slows to a near stop, gets too hot to touch, and two matches later browns out (a
+sudden voltage drop that resets the robot) mid-climb. Nothing is broken — the motor is doing exactly what physics requires.
+
+The team designed against a model that doesn't exist: **"voltage sets speed, full stop."** In reality a
+motor trades speed for torque, pulls more current the harder you load it, and dumps the shortfall as
+heat. You can't pick a gear ratio, choose a controller, or read a current spike correctly until you
+know *why*.
 
 <Analogy>
-<strong>Bicycle gears on a hill.</strong> In your highest gear you fly on the flat but grind to a stop
-the instant the road tilts up — and your legs burn doing it. Drop to a low gear and you climb easily,
+<strong>Bicycle gears on a hill.</strong> In your highest gear you fly along on flat ground but slow to a stop
+the moment the road tilts up — and your legs burn doing it. Drop to a low gear and you climb easily,
 just slowly. The pedals (the motor) didn't change; the <em>load</em> did. There is no gear that is fast
 <em>and</em> strong at once.
 </Analogy>
@@ -72,7 +74,7 @@ same way → the shaft spins. That's the whole machine.
 
 ### Brushed vs. brushless
 
-The brushes-and-commutator trick is clever but mechanical: carbon scraping copper wears out, sparks, and
+The brushes-and-commutator design is clever but mechanical: carbon scraping copper wears out, sparks, and
 adds friction. **Brushless** motors do the same job — current in a field makes torque — but turn the
 motor inside-out and switch the current *electronically*.
 
@@ -184,8 +186,10 @@ Read off the two ends — the only points most datasheets list:
 Two facts fall straight out of the algebra. **Voltage slides the line, it doesn't tilt it:** stall torque
 and free speed both scale with $V$, but the slope $-k_t k_e/R$ has no $V$ in it. When your code sets power
 to `0.5`, it applies ~half the voltage, sliding the motor onto a lower, *parallel* line (the faint line in
-the demo is full 12 V). **Maximum power is at half speed:** output power $P_\text{out}=\tau\omega$ is zero
-at both ends, so it peaks in the middle — for this motor, **29 W at ~2950 RPM**, exactly half of 5900.
+the demo is full 12 V).
+
+**Maximum power is at half speed:** output power $P_\text{out}=\tau\omega$ is zero at both ends, so it
+peaks in the middle — for this motor, **29 W at ~2950 RPM**, exactly half of 5900.
 
 <Formula>
   out <Teal>P = τ·ω</Teal> &nbsp;·&nbsp; in <Blue>P = V·I</Blue> &nbsp;·&nbsp; heat <Rose>P = I²·R</Rose>
@@ -251,14 +255,17 @@ $$
    target current, and send it. Be precise about what this is: it is **open-loop, model-based** current
    control — a current *feedforward*. It trusts the constants $k_e, k_t, R$ and never measures the actual
    current, so any error in the model (a warm motor's higher $R$, a sagging battery) shows up directly as
-   current error. **True closed-loop current control** measures the current each loop (`getCurrent()`) and
-   runs a feedback controller on the error — what a dedicated motor controller or FOC drive does
-   internally. FTC's hub exposes no fast current loop to command, so the model-based version above is the
-   practical one, optionally backstopped by the *measured*-current limiter in the Deploy section below.
-   **Current-limiting** this way is how good drives stop wheel slip (cap the
-   torque the tires can use), avoid cooking motors, and survive defense: in a pushing match the wheels are
-   stalled ($\omega = 0$), so a raw full-power command pulls ~$V/R$ — tens of amps — and pops a fuse,
-   whereas a current limit drops the applied voltage to whatever delivers the safe current.
+   current error.
+
+   **True closed-loop current control** instead measures the current each loop (`getCurrent()`) and runs
+   a feedback controller on the error — what a dedicated motor controller or FOC drive does internally.
+   FTC's hub exposes no fast current loop to command, so the model-based version above is the practical
+   one, optionally backstopped by the *measured*-current limiter in the Deploy section below.
+
+   **Current-limiting** this way is how good drives stop wheel slip (cap the torque the tires can use),
+   avoid overheating motors, and survive defense. In a pushing match the wheels are stalled ($\omega = 0$),
+   so a raw full-power command pulls ~$V/R$ — tens of amps — and trips the breaker; a current limit instead
+   drops the applied voltage to whatever delivers the safe current.
 
 <Callout type="idea" title="This is the whole module in one equation.">
 $V = k_e\omega + IR$ is the seed of everything ahead. <strong>Feedforward</strong> is this equation solved
@@ -292,7 +299,7 @@ public record MotorSpec(
     }
 }`}</JavaCode>
 
-At runtime, a motor near stall is the fastest way to cook a mechanism and brown out the robot. The hub can
+At runtime, a motor near stall is the fastest way to overheat a mechanism and brown out the robot. The hub can
 read current, so guard it — or, better, command current directly using the model.
 
 <JavaCode league="FTC" label="Feedforward (model-based) current control, and a measured-current limiter">{`/** FEEDFORWARD / model-based (OPEN-LOOP) current control: command the voltage the

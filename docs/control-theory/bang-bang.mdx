@@ -12,7 +12,7 @@ import BangBang from '@site/src/components/sims/BangBang';
 <Difficulty level="Medium" />
 
 <Abstract>
-Bang-bang is the most primitive feedback law: if you are below the target, give full power; if above, give
+Bang-bang is the simplest feedback law: if you are below the target, give full power; if above, give
 none. For a high-inertia flywheel it is shockingly effective and impossible to make unstable, but it
 chatters and never truly settles. That last flaw is what motivates its one-line upgrade,
 <a href="../advanced-topics/takeback-half">take-back-half</a>, in the Advanced Topics section.
@@ -27,8 +27,8 @@ get back to speed fast after each shot. For that, the simplest possible controll
 A flywheel's inertia is a blessing and a curse. It coasts through small disturbances, but it also means
 you cannot brake it — you can only stop pushing and let drag slow it. After firing a game element, the
 speed dips, and you need to recover *now* before the next shot. A gentle PID crawls back; you want
-something that slams full power on the instant the speed drops and gets out of the way the instant it
-recovers. That is literally bang-bang. The catch is what it does once it gets there.
+something that puts full power on the moment the speed drops and stops pushing the moment it
+recovers. That is literally bang-bang. The problem is what it does once it gets there.
 
 </Problem>
 
@@ -46,8 +46,8 @@ $$
 
 It cannot overshoot in *voltage* (it never commands more than full power) and cannot go unstable — there
 are no gains to mistune. On a high-inertia flywheel the speed recovers almost as fast as physically
-possible. The price: it never *holds* a speed. The motor is always either flooring it or coasting, so the
-flywheel hunts up and down across the setpoint forever in a small **limit cycle** — the chatter you see in
+possible. The price: it never *holds* a speed. The motor is always either at full power or coasting, so the
+flywheel swings up and down across the setpoint forever in a small **limit cycle** — the chatter you see in
 red below.
 
 <Callout type="warning" title="Bang-bang only behaves on a slow plant.">

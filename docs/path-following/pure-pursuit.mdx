@@ -26,7 +26,7 @@ and FRC robots for years.
 
 <Problem title="Waypoint-to-waypoint driving is slow and discontinuous">
 
-The naïve approach drives straight to waypoint 1, stops, rotates, drives to waypoint 2, and so on.
+The obvious approach drives straight to waypoint 1, stops, rotates, drives to waypoint 2, and so on.
 It is slow, jerky, and stresses the drivetrain at every stop. Competition autonomous needs to follow
 a *continuous* curve at speed, correcting smoothly for the inevitable pose error rather than halting
 to re-aim. The controller must answer, every loop: given my current pose and this path, what
@@ -148,7 +148,7 @@ $$
 L_d = \operatorname{clamp}\big(k_v\, v,\ L_\text{min},\ L_\text{max}\big)
 $$
 
-Dynamic lookahead is strictly more capable but adds knobs to tune, and a lookahead that changes too
+Dynamic lookahead is strictly more capable but adds more settings to tune, and a lookahead that changes too
 abruptly can itself induce steering jitter — rate-limit it. If you find yourself fighting a fixed
 lookahead on a path with both fast and tight sections, that is the signal to make it dynamic, or to
 switch to a [guided vector field](./guided-vector-fields.mdx) that drops the lookahead idea entirely.
@@ -216,7 +216,7 @@ acceleration.
 
 Here is the whole plan, live. Drag the waypoints into a tight hairpin and watch the path turn red there
 as the **curvature cap** (blue, right) pulls the speed down; the **backward pass** (orange) then bends
-the profile down to zero at the end so the robot can always stop. The sliders are the three knobs from
+the profile down to zero at the end so the robot can always stop. The sliders are the three settings from
 the equations above.
 
 <VelocityProfile />

@@ -196,7 +196,7 @@ the robot moves.
 <Callout type="warn" title="The approximation has limits.">
 Linearisation is only valid if the model is gently curved near the estimate. If the nonlinearity is
 severe or the estimate is far off, the tangent misleads the filter — which is why the Unscented
-Kalman Filter and particle filters exist. For typical robot localisation, the EKF is the workhorse.
+Kalman Filter and particle filters exist. For typical robot localisation, the EKF is the standard choice.
 The FTC paper reports the same limitation from another angle: when the loop interval $\Delta t$
 gets large, Jacobian approximations and odometry accuracy both degrade.
 </Callout>

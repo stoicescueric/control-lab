@@ -1,5 +1,14 @@
 /* Pure-pursuit path follower. The robot chases a "carrot" a fixed lookahead
-   distance ahead on the path; drag the white waypoints to reshape it. */
+   distance ahead on the path; drag the white waypoints to reshape it.
+
+   Everything below runs in a FIXED world coordinate space (WX x WY world units,
+   where 100 units = 1 m so the metric read-outs stay honest). The world is only
+   mapped to the <canvas> at draw time with a single uniform `scale` + centering
+   offset, exactly like the Kalman/EKF sims. That keeps the geometry AND the
+   tuned parameters (lookahead, speed, thresholds) resolution-independent, so the
+   robot follows the same-shaped path and wobbles the same way on a phone as on a
+   desktop — previously they lived in raw canvas pixels and the behaviour drifted
+   with the screen's width/aspect ratio. */
 
 import {useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/canvas';
@@ -7,6 +16,11 @@ import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 
 const dt = 1 / 60;
+
+// Fixed world the simulation lives in (world units; 100 units = 1 m).
+const WX = 640;
+const WY = 380;
+const PAD = 12; // canvas padding (px) kept around the world when it's letterboxed
 
 interface Pose {
   x: number;
@@ -44,14 +58,24 @@ export default function PurePursuit() {
   });
   const acc = useRef(0);
 
-  function defaultPath() {
+  // World -> canvas mapping: a single uniform scale plus a centering offset, so
+  // the field keeps its shape (letterboxed) on any canvas size. Recomputed from
+  // the live canvas size; shared by both draw() and the pointer handlers.
+  function view() {
     const {w, h} = size.current;
+    const scale = Math.min((w - 2 * PAD) / WX, (h - 2 * PAD) / WY);
+    const ox = (w - WX * scale) / 2;
+    const oy = (h - WY * scale) / 2;
+    return {scale, ox, oy};
+  }
+
+  function defaultPath() {
     st.current.waypoints = [
-      [w * 0.1, h * 0.78],
-      [w * 0.3, h * 0.3],
-      [w * 0.52, h * 0.7],
-      [w * 0.74, h * 0.28],
-      [w * 0.92, h * 0.62],
+      [WX * 0.1, WY * 0.78],
+      [WX * 0.3, WY * 0.3],
+      [WX * 0.52, WY * 0.7],
+      [WX * 0.74, WY * 0.28],
+      [WX * 0.92, WY * 0.62],
     ];
   }
 
@@ -155,20 +179,24 @@ export default function PurePursuit() {
     const s = st.current;
     if (!s.pose) return;
     const Ld = ldRef.current;
+    const {scale, ox, oy} = view();
+    const PX = (x: number) => ox + x * scale;
+    const PY = (y: number) => oy + y * scale;
     cx.fillStyle = '#0b1120';
     cx.fillRect(0, 0, w, h);
+    // grid drawn in world space so the squares track the field, not the screen
     cx.strokeStyle = 'rgba(255,255,255,0.06)';
     cx.lineWidth = 1;
-    for (let x = 0; x <= w; x += 40) {
+    for (let x = 0; x <= WX; x += 40) {
       cx.beginPath();
-      cx.moveTo(x, 0);
-      cx.lineTo(x, h);
+      cx.moveTo(PX(x), PY(0));
+      cx.lineTo(PX(x), PY(WY));
       cx.stroke();
     }
-    for (let y = 0; y <= h; y += 40) {
+    for (let y = 0; y <= WY; y += 40) {
       cx.beginPath();
-      cx.moveTo(0, y);
-      cx.lineTo(w, y);
+      cx.moveTo(PX(0), PY(y));
+      cx.lineTo(PX(WX), PY(y));
       cx.stroke();
     }
     const path = s.path;
@@ -176,8 +204,8 @@ export default function PurePursuit() {
     cx.lineWidth = 3;
     cx.globalAlpha = 0.85;
     cx.beginPath();
-    cx.moveTo(path[0][0], path[0][1]);
-    for (let i = 1; i < path.length; i++) cx.lineTo(path[i][0], path[i][1]);
+    cx.moveTo(PX(path[0][0]), PY(path[0][1]));
+    for (let i = 1; i < path.length; i++) cx.lineTo(PX(path[i][0]), PY(path[i][1]));
     cx.stroke();
     cx.globalAlpha = 1;
     s.waypoints.forEach((p) => {
@@ -185,7 +213,7 @@ export default function PurePursuit() {
       cx.strokeStyle = '#6f8bff';
       cx.lineWidth = 2;
       cx.beginPath();
-      cx.arc(p[0], p[1], 7, 0, 7);
+      cx.arc(PX(p[0]), PY(p[1]), 7, 0, 7);
       cx.fill();
       cx.stroke();
     });
@@ -194,8 +222,8 @@ export default function PurePursuit() {
       cx.lineWidth = 2;
       cx.globalAlpha = 0.8;
       cx.beginPath();
-      cx.moveTo(s.trail[0][0], s.trail[0][1]);
-      for (let i = 1; i < s.trail.length; i++) cx.lineTo(s.trail[i][0], s.trail[i][1]);
+      cx.moveTo(PX(s.trail[0][0]), PY(s.trail[0][1]));
+      for (let i = 1; i < s.trail.length; i++) cx.lineTo(PX(s.trail[i][0]), PY(s.trail[i][1]));
       cx.stroke();
       cx.globalAlpha = 1;
     }
@@ -204,23 +232,24 @@ export default function PurePursuit() {
       cx.lineWidth = 1.5;
       cx.setLineDash([4, 4]);
       cx.beginPath();
-      cx.arc(s.pose.x, s.pose.y, Ld, 0, 7);
+      cx.arc(PX(s.pose.x), PY(s.pose.y), Ld * scale, 0, 7);
       cx.stroke();
       cx.setLineDash([]);
       cx.strokeStyle = '#ffc24d';
       cx.lineWidth = 1.5;
       cx.beginPath();
-      cx.moveTo(s.pose.x, s.pose.y);
-      cx.lineTo(s.carrot[0], s.carrot[1]);
+      cx.moveTo(PX(s.pose.x), PY(s.pose.y));
+      cx.lineTo(PX(s.carrot[0]), PY(s.carrot[1]));
       cx.stroke();
       cx.fillStyle = '#ffc24d';
       cx.beginPath();
-      cx.arc(s.carrot[0], s.carrot[1], 6, 0, 7);
+      cx.arc(PX(s.carrot[0]), PY(s.carrot[1]), 6, 0, 7);
       cx.fill();
     }
     cx.save();
-    cx.translate(s.pose.x, s.pose.y);
+    cx.translate(PX(s.pose.x), PY(s.pose.y));
     cx.rotate(s.pose.th);
+    cx.scale(scale, scale);
     cx.fillStyle = '#5ce08a';
     cx.beginPath();
     cx.moveTo(15, 0);
@@ -246,7 +275,8 @@ export default function PurePursuit() {
     draw();
   }, canvas);
 
-  // drag waypoints
+  // drag waypoints — pointer is read in canvas px, then projected back into world
+  // coords so dragging lands in the same place regardless of the canvas size.
   function evtPos(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>): [number, number] {
     const r = canvas.current!.getBoundingClientRect();
     const cxp = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
@@ -255,9 +285,11 @@ export default function PurePursuit() {
   }
   function onDown(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
     const [mx, my] = evtPos(ev);
+    const {scale, ox, oy} = view();
     const wp = st.current.waypoints;
     for (let i = 0; i < wp.length; i++) {
-      if (Math.hypot(wp[i][0] - mx, wp[i][1] - my) < 14) {
+      // hit-test in screen px so the grab radius feels the same on every device
+      if (Math.hypot(ox + wp[i][0] * scale - mx, oy + wp[i][1] * scale - my) < 16) {
         st.current.drag = i;
         break;
       }
@@ -267,8 +299,10 @@ export default function PurePursuit() {
     const s = st.current;
     if (s.drag < 0) return;
     const [mx, my] = evtPos(ev);
-    const {w, h} = size.current;
-    s.waypoints[s.drag] = [Math.max(8, Math.min(w - 8, mx)), Math.max(8, Math.min(h - 8, my))];
+    const {scale, ox, oy} = view();
+    const wx = (mx - ox) / scale;
+    const wy = (my - oy) / scale;
+    s.waypoints[s.drag] = [Math.max(8, Math.min(WX - 8, wx)), Math.max(8, Math.min(WY - 8, wy))];
     buildPath();
     if (ev.cancelable) ev.preventDefault();
   }

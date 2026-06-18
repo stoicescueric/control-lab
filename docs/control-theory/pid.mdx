@@ -12,7 +12,7 @@ import Drone from '@site/src/components/sims/Drone';
 <Difficulty level="Medium" />
 
 <Abstract>
-PID is the workhorse feedback controller: it sums three reactions to the error — proportional to its
+PID is the most widely used feedback controller: it sums three reactions to the error — proportional to its
 present value, its accumulated past, and its rate of change — into a single command. This lesson builds
 each term from intuition — including *why* the derivative term lands you on the target with zero velocity —
 then upgrades the loop to the FTC "PDFL" controller: a constant feedforward and a static-friction floor
@@ -21,7 +21,7 @@ that replace the integral entirely, plus a low-pass-filtered derivative.
 
 PID is the controller you will deploy most often: arm position, flywheel velocity, drivetrain
 heading, lift height. It is three reactions to a single error signal, summed into one command. The
-name is intimidating; the mechanism is not.
+name sounds scary; the idea behind it is simple.
 
 <Problem title="Proportional-only control leaves a standing error">
 
@@ -56,7 +56,7 @@ you are. A spring on its own overshoots and oscillates forever.</li>
 <li><strong>D is the shock absorber.</strong> It opposes <em>motion</em>. Because the well-behaved version
 differentiates the measurement, $u_D = -K_d\,\dot m$ is literally <strong>velocity feedback</strong>: the
 faster you're moving, the harder it brakes. So D does more than "reduce overshoot" — it makes the system
-<strong>arrive at the target with ≈ zero velocity</strong> instead of barrelling through it. P + D
+<strong>arrive at the target with ≈ zero velocity</strong> instead of racing past it. P + D
 together is a critically-damped mass-spring-damper: a clean settle with no overshoot.</li>
 <li><strong>I shifts the rest position.</strong> It slowly builds whatever constant push the job needs
 (holding an arm against gravity) so the spring no longer has to hold a standing error to make that
@@ -65,7 +65,7 @@ force.</li>
 </Callout>
 
 The gains $K_p, K_i, K_d$ are the tunable parameters. The drone below must hover at the dashed
-target while gravity pulls it down — the canonical "standing error" problem. Drag the target, tune
+target while gravity pulls it down — the classic "standing error" problem. Drag the target, tune
 the gains, and read the live contribution of each term.
 
 <Drone />
@@ -139,7 +139,7 @@ public class ArmController {
 
 <Callout type="tip" title="Filters and controllers are a team.">
 The derivative term amplifies sensor noise. Production controllers run the measurement through a
-low-pass filter first — a noisy encoder or distance sensor will wreck a D term. Clean the signal,
+low-pass filter first — a noisy encoder or distance sensor will ruin a D term. Clean the signal,
 then control it.
 </Callout>
 
@@ -152,7 +152,7 @@ an **L**ower-limit (static-friction) term, with **no integral at all**:
 
 - **P** — proportional to the error, exactly as before.
 - **D** — the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
-  wreck it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
+  ruin it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
   It is still the velocity feedback that brings you in at zero velocity.
 - **F** — a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
   It does the integral's old job instantly, with nothing to wind up.
@@ -167,8 +167,8 @@ u = \underbrace{k_P\,e}_{P} + \underbrace{k_D\,\dot e_\text{filtered}}_{D}
 $$
 
 <Callout type="idea" title="How to actually find F and L.">
-$k_F$ is the term you'd like to tune first, but it is hard to read off directly. The trick: ease the
-command up by hand until you find the power <strong>just as the mechanism starts to move up</strong>
+$k_F$ is the term you'd like to tune first, but it is hard to read off directly. The method: slowly raise the
+command by hand until you find the power <strong>just as the mechanism starts to move up</strong>
 ($u_\text{up}$), then the power <strong>just as it starts to move down</strong> ($u_\text{down}$). Going
 up you fight gravity <em>and</em> friction ($u_\text{up} = k_F + k_L$); going down gravity helps while
 friction still resists ($u_\text{down} = k_F - k_L$). Solve the pair:
