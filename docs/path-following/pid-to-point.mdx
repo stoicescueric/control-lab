@@ -6,6 +6,7 @@ tags: [pid-to-point, go-to-pose, predictive-deceleration, braking, autonomous, c
 ---
 
 import {PidToPointIllustration, BrakingProfileIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
+import PredictiveBraking from '@site/src/components/sims/PredictiveBraking';
 
 # PID-to-Point
 
@@ -161,6 +162,8 @@ the target. Going too fast, the predicted pose overshoots the goal, the error fl
 controller brakes — automatically, with no separate cap. This is how Cyliis's `Odo` computes its
 `predictedX/Y` (from low-pass-filtered velocity) and how FTCclueless feeds an `expected` pose into a
 "predictive PID."
+
+<PredictiveBraking />
 
 ### Chaining points: follow a list without stopping
 
