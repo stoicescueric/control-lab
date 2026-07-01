@@ -35,7 +35,11 @@ function PfArrowDefs() {
 function Figure({title, caption, children}: {title: string; caption: string; children: ReactNode}) {
   return (
     <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-      <div className="bg-panel px-4 py-5 text-panel-ink">{children}</div>
+      <div className="bg-panel px-4 py-5 text-panel-ink">
+        <div className="overflow-x-auto">
+          <div className="min-w-[520px]">{children}</div>
+        </div>
+      </div>
       <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-[0.95rem] leading-relaxed text-ink-soft">
         <strong className="text-ink">{title}</strong> — {caption}
       </figcaption>

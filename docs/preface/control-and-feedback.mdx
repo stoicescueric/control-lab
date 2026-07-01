@@ -188,6 +188,8 @@ reaction to changing error, but the core feedback idea is already here.
 
 <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
   <div className="bg-panel px-4 py-5">
+    <div className="overflow-x-auto">
+    <div className="min-w-[520px]">
     <svg viewBox="0 0 760 210" className="h-auto w-full" role="img" aria-label="Closed-loop feedback block diagram">
       <defs>
         <marker id="feedbackArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -215,6 +217,8 @@ reaction to changing error, but the core feedback idea is already here.
       <text x="409" y="169" fill="#e8eefc" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="14">sensor</text>
       <text x="204" y="184" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12">measurement returns to the comparison point</text>
     </svg>
+    </div>
+    </div>
   </div>
   <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-ink-soft">
     <strong className="text-ink">Closed-loop control.</strong> The sensor turns the output back into information, and that information changes the next command.

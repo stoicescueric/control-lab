@@ -1,106 +1,219 @@
-import {useState} from 'react';
-import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+/* Voltage (battery) compensation, live. A raw power command delivers
+   power × Vbattery volts, so the same command quietly does less as the pack
+   sags; compensation divides by the measured voltage and holds the target flat
+   until the battery physically can't reach it. Drag the battery marker along
+   the curve, or press play and watch a whole match of sag + load spikes ride
+   both curves. */
+
+import {useRef, useState} from 'react';
+import {usePlot, useRaf} from '@site/src/lib/canvas';
+import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 
-/* Voltage (battery) compensation. A raw power command delivers power × Vbattery
-   volts, so the same command does less as the pack sags. Compensation divides the
-   command by the measured voltage, delivering a constant target voltage until the
-   battery can no longer supply it. Plotted as delivered volts vs. battery voltage.
-   Deterministic, SSR-safe. */
-
-const W = 640;
-const H = 360;
-const X0 = 56;
-const X1 = W - 20;
-const Y0 = H - 42;
-const YTOP = 26;
 const VB_MIN = 10.5;
 const VB_MAX = 13.5;
-const V_AXIS = 13.5;
+const MATCH_T = 24; // seconds of simulated match
 
-const px = (vb: number) => X0 + ((vb - VB_MIN) / (VB_MAX - VB_MIN)) * (X1 - X0);
-const py = (v: number) => Y0 - (v / V_AXIS) * (Y0 - YTOP);
+export default function VoltageComp() {
+  const [targetV, setTargetV] = useState(8);
+  const [battery, setBattery] = useState(13.2);
+  const [playing, setPlaying] = useState(true);
+  const ctrl = useRef({targetV, battery, playing});
+  ctrl.current = {targetV, battery, playing};
 
-export function VoltageComp() {
-  const [targetV, setTargetV] = useState(8); // volts we actually want at the motor
-  const [battery, setBattery] = useState(12.0);
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const plotRef = usePlot(canvas, {
+    height: 320,
+    xmin: VB_MIN,
+    xmax: VB_MAX,
+    ymin: 0,
+    ymax: 13.5,
+    yLabel: 'delivered volts',
+    xLabel: 'battery voltage (sagging is leftward)',
+  });
 
-  // command chosen so that AT 12 V nominal the raw command delivers targetV
-  const command = targetV / 12.0; // a fixed power setting the code picks
+  const roRaw = useRef<HTMLElement | null>(null);
+  const roComp = useRef<HTMLElement | null>(null);
+  const roDrift = useRef<HTMLElement | null>(null);
+  const roClock = useRef<HTMLElement | null>(null);
 
-  const deliveredRaw = (vb: number) => command * vb; // no comp: power × battery
-  const deliveredComp = (vb: number) => Math.min(targetV, vb); // comp: hold target until battery can't
+  const st = useRef({t: 0, vb: 13.2, dragging: false});
+  const throttle = useRef(0);
 
-  const N = 60;
-  const rawPath = Array.from({length: N + 1}, (_, i) => {
-    const vb = VB_MIN + (i / N) * (VB_MAX - VB_MIN);
-    return `${i === 0 ? 'M' : 'L'} ${px(vb).toFixed(1)} ${py(deliveredRaw(vb)).toFixed(1)}`;
-  }).join(' ');
-  const compPath = Array.from({length: N + 1}, (_, i) => {
-    const vb = VB_MIN + (i / N) * (VB_MAX - VB_MIN);
-    return `${i === 0 ? 'M' : 'L'} ${px(vb).toFixed(1)} ${py(deliveredComp(vb)).toFixed(1)}`;
-  }).join(' ');
+  // battery over a match: a steady drain plus load spikes when the robot sprints
+  function matchVb(t: number) {
+    const base = 13.4 - (2.1 * t) / MATCH_T;
+    const load = Math.max(0, Math.sin(t * 1.1) + Math.sin(t * 2.3) - 0.7);
+    return Math.max(VB_MIN + 0.05, base - 0.55 * load);
+  }
 
-  const rawNow = deliveredRaw(battery);
-  const compNow = deliveredComp(battery);
+  function draw(frameDt: number) {
+    const p = plotRef.current;
+    if (!p) return;
+    const s = st.current;
+    const {targetV, playing} = ctrl.current;
+
+    if (playing && !s.dragging) {
+      s.t = (s.t + frameDt) % MATCH_T;
+      s.vb = matchVb(s.t);
+      // keep the slider display roughly in sync without re-rendering every frame
+      throttle.current += frameDt;
+      if (throttle.current > 0.15) {
+        throttle.current = 0;
+        setBattery(Math.round(s.vb * 10) / 10);
+      }
+    }
+
+    const command = targetV / 12; // "tuned at 12 V" fixed power setting
+    const raw = (vb: number) => command * vb;
+    const comp = (vb: number) => Math.min(targetV, vb);
+    const rawNow = raw(s.vb);
+    const compNow = comp(s.vb);
+
+    p.clear();
+    p.grid();
+    p.clip(() => {
+      // region where even compensation can't reach the target
+      if (targetV > VB_MIN) {
+        const xSat = Math.min(targetV, VB_MAX);
+        p.band(
+          [
+            [VB_MIN, 0, 13.5],
+            [xSat, 0, 13.5],
+          ],
+          'rgba(255,111,156,0.07)',
+        );
+      }
+      p.hline(targetV, {color: '#8294b8', width: 1.2, dash: [2, 8]});
+      p.line(
+        [
+          [VB_MIN, raw(VB_MIN)],
+          [VB_MAX, raw(VB_MAX)],
+        ],
+        {color: '#ff6f9c', width: 3},
+      );
+      p.line(
+        [
+          [VB_MIN, comp(VB_MIN)],
+          [VB_MAX, comp(VB_MAX)],
+        ],
+        {color: '#5ce08a', width: 3.5},
+      );
+      // battery marker + the two delivered operating points
+      p.vline(s.vb, {color: '#ffc24d', width: 1.5, dash: [4, 4]});
+      p.dot(s.vb, rawNow, {color: '#ff6f9c', r: 5, ring: '#0b1120', ringW: 2});
+      p.dot(s.vb, compNow, {color: '#5ce08a', r: 5, ring: '#0b1120', ringW: 2});
+      // drag handle on the axis
+      p.dot(s.vb, 0, {color: '#ffc24d', r: 7, ring: '#0b1120', ringW: 2});
+    });
+    p.text(s.vb, 0.55, s.dragging ? 'battery' : 'battery ⟵ drag me', {
+      color: '#ffc24d',
+      align: s.vb > 12.6 ? 'right' : 'left',
+      font: '11px ui-monospace, monospace',
+    });
+    p.text(VB_MAX - 0.05, targetV + 0.45, `target ${targetV.toFixed(1)} V`, {
+      color: '#8294b8',
+      align: 'right',
+      font: '11px ui-monospace, monospace',
+    });
+
+    if (roRaw.current) roRaw.current.textContent = rawNow.toFixed(2) + ' V';
+    if (roComp.current) {
+      roComp.current.textContent = compNow.toFixed(2) + ' V';
+      roComp.current.style.color = compNow < targetV - 0.01 ? '#ffc24d' : '#5ce08a';
+    }
+    if (roDrift.current) {
+      const d = rawNow - targetV;
+      roDrift.current.textContent = (d >= 0 ? '+' : '') + d.toFixed(2) + ' V';
+      roDrift.current.style.color = Math.abs(d) > 0.4 ? '#ff6f9c' : '#fff';
+    }
+    if (roClock.current) {
+      roClock.current.textContent = ctrl.current.playing ? s.t.toFixed(0) + ' s' : 'paused';
+    }
+  }
+
+  useRaf((frameDt: number) => draw(Math.min(frameDt, 0.1)), canvas);
+
+  function pointToVb(ev: React.PointerEvent<HTMLCanvasElement>) {
+    const p = plotRef.current;
+    const el = canvas.current;
+    if (!p || !el) return;
+    const rect = el.getBoundingClientRect();
+    const vb = p.ix(ev.clientX - rect.left);
+    st.current.vb = Math.max(VB_MIN, Math.min(VB_MAX, vb));
+    setBattery(Math.round(st.current.vb * 10) / 10);
+  }
 
   return (
-    <Demo title="Voltage compensation: holding output constant as the battery sags">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Delivered motor voltage versus battery voltage, compensated versus raw">
-        <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke="#31405f" strokeWidth="1.5" />
-        <line x1={X0} y1={Y0} x2={X0} y2={YTOP} stroke="#31405f" strokeWidth="1.5" />
-        {/* target line */}
-        <line x1={X0} y1={py(targetV)} x2={X1} y2={py(targetV)} stroke="#8294b8" strokeWidth="1.2" strokeDasharray="2 8" />
-        <text x={X1} y={py(targetV) - 6} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
-          target {targetV.toFixed(1)} V
-        </text>
-        {/* curves */}
-        <path d={rawPath} fill="none" stroke="#ff6f9c" strokeWidth="3" />
-        <path d={compPath} fill="none" stroke="#5ce08a" strokeWidth="3.5" />
-        {/* current battery marker */}
-        <line x1={px(battery)} y1={YTOP} x2={px(battery)} y2={Y0} stroke="#ffc24d" strokeWidth="1.5" strokeDasharray="4 4" />
-        <circle cx={px(battery)} cy={py(rawNow)} r="5" fill="#ff6f9c" />
-        <circle cx={px(battery)} cy={py(compNow)} r="5" fill="#5ce08a" />
-        <text x={px(battery)} y={Y0 + 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#ffc24d">
-          battery
-        </text>
-        <text x={X0 + 4} y={YTOP + 12} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
-          delivered V
-        </text>
-        <text x={(X0 + X1) / 2} y={H - 12} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
-          battery voltage (full ⟶ sagging is leftward) →
-        </text>
-      </svg>
-
-      <Controls>
-        <Slider label="Target motor voltage" min={3} max={12} step={0.5} value={targetV} onChange={setTargetV} format={(v) => `${v.toFixed(1)} V`} />
-        <Slider label="Battery voltage now" min={VB_MIN} max={VB_MAX} step={0.1} value={battery} onChange={setBattery} format={(v) => `${v.toFixed(1)} V`} />
-      </Controls>
-      <Buttons>
-        <Button
-          onClick={() => {
-            setTargetV(8);
-            setBattery(12.0);
-          }}>
-          Reset
-        </Button>
-      </Buttons>
-      <Readout
-        items={[
-          ['raw (no comp)', `${rawNow.toFixed(2)} V delivered`],
-          ['compensated', `${compNow.toFixed(2)} V delivered`],
-          ['drift vs target', `${(rawNow - targetV >= 0 ? '+' : '') + (rawNow - targetV).toFixed(2)} V`],
-        ]}
+    <Demo title="Voltage compensation — the same command on a sagging battery">
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Delivered motor voltage versus battery voltage; drag the battery marker or play a simulated match."
+        className="block w-full touch-none rounded-xl bg-[#0b1120]"
+        style={{cursor: 'ew-resize'}}
+        onPointerDown={(e) => {
+          st.current.dragging = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          pointToVb(e);
+        }}
+        onPointerMove={(e) => st.current.dragging && pointToVb(e)}
+        onPointerUp={() => (st.current.dragging = false)}
+        onPointerCancel={() => (st.current.dragging = false)}
       />
       <Legend
         items={[
           {color: '#5ce08a', label: 'compensated — flat at target'},
           {color: '#ff6f9c', label: 'raw command — drifts with battery'},
-          {color: '#ffc24d', label: 'current battery voltage'},
+          {color: '#ffc24d', label: 'battery voltage now', dot: true},
         ]}
       />
+
+      <Controls>
+        <Slider label="Target motor voltage" min={3} max={12} step={0.5} value={targetV} onChange={setTargetV} format={(v) => `${v.toFixed(1)} V`} />
+        <Slider
+          label="Battery voltage now"
+          min={VB_MIN}
+          max={VB_MAX}
+          step={0.1}
+          value={battery}
+          onChange={(v) => {
+            setBattery(v);
+            st.current.vb = v;
+            setPlaying(false);
+          }}
+          format={(v) => `${v.toFixed(1)} V`}
+        />
+      </Controls>
+      <Buttons>
+        <Button active={playing} onClick={() => setPlaying((p) => !p)}>
+          {playing ? '❚❚ Pause the match' : '▶ Play a match'}
+        </Button>
+        <Button
+          onClick={() => {
+            st.current.t = 0;
+            st.current.vb = 13.2;
+            setTargetV(8);
+            setBattery(13.2);
+            setPlaying(true);
+          }}>
+          ↺ Reset
+        </Button>
+      </Buttons>
+      <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
+        <span>
+          Raw (no comp): <b ref={roRaw} className="text-white">—</b>
+        </span>
+        <span>
+          Compensated: <b ref={roComp} className="text-white">—</b>
+        </span>
+        <span>
+          Raw drift vs target: <b ref={roDrift} className="text-white">—</b>
+        </span>
+        <span>
+          Match clock: <b ref={roClock} className="text-white">—</b>
+        </span>
+      </div>
     </Demo>
   );
 }
-
-export default VoltageComp;

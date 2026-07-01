@@ -1,115 +1,231 @@
-import {useState} from 'react';
-import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+/* System identification, live. Runs the actual quasistatic ramp test: the
+   commanded voltage climbs slowly, the motor (first-order lag + static friction)
+   follows, and a sample (velocity, volts) is logged every 0.15 s. The ordinary
+   least-squares fit is recomputed as the data arrives, so you watch the kS/kV
+   estimate converge onto the true line. Samples taken before the mechanism
+   breaks static friction are rejected (gray) — they sit on a different regime
+   and would bias the intercept. */
+
+import {useRef, useState} from 'react';
+import {usePlot, useRaf} from '@site/src/lib/canvas';
+import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 
-/* System identification by ordinary least squares. A quasistatic ramp test gives
-   (velocity, voltage) pairs that lie on the line V = kS + kV·v; OLS recovers the
-   intercept (kS) and slope (kV) from the noisy cloud. Deterministic pseudo-noise
-   keeps it SSR-safe (no Math.random in render). */
+const TRUE_KS = 0.9; // volts to break friction
+const TRUE_KV = 0.035; // volts per rpm
+const V_MAX = 12;
+const RAMP_RATE = 1.35; // volts per second
+const V_AXIS_RPM = 340;
+const SAMPLE_DT = 0.15;
+const MOVE_THRESHOLD = 6; // rpm below which a sample is rejected
 
-const W = 640;
-const H = 360;
-const X0 = 60;
-const X1 = W - 24;
-const Y0 = H - 44;
-const YTOP = 26;
-const V_MAX_RPM = 300;
-const V_AXIS = 13; // volts
-const TRUE_KS = 0.9;
-const TRUE_KV = 0.035;
-const N = 26;
+type Sample = [number, number]; // [rpm, volts]
 
-// deterministic hash noise in [-1, 1]
-const noise = (i: number, seed: number) => {
-  const s = Math.sin((i + 1) * 12.9898 + seed * 7.137) * 43758.5453;
-  return (s - Math.floor(s)) * 2 - 1;
-};
+export default function SystemId() {
+  const [noiseAmp, setNoiseAmp] = useState(0.5);
+  const ctrl = useRef({noiseAmp});
+  ctrl.current = {noiseAmp};
 
-const px = (v: number) => X0 + (v / V_MAX_RPM) * (X1 - X0);
-const py = (V: number) => Y0 - (V / V_AXIS) * (Y0 - YTOP);
-
-export function SystemId() {
-  const [noiseAmp, setNoiseAmp] = useState(0.6);
-  const [seed, setSeed] = useState(0);
-
-  // synthetic ramp data
-  const data = Array.from({length: N}, (_, i) => {
-    const v = (i / (N - 1)) * V_MAX_RPM;
-    const V = TRUE_KS + TRUE_KV * v + noise(i, seed) * noiseAmp;
-    return {v, V};
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const plotRef = usePlot(canvas, {
+    height: 330,
+    xmin: 0,
+    xmax: V_AXIS_RPM,
+    ymin: 0,
+    ymax: 13,
+    yLabel: 'applied volts',
+    xLabel: 'velocity (rpm)',
   });
 
-  // ordinary least squares: V = a + b v
-  const n = data.length;
-  const mv = data.reduce((s, d) => s + d.v, 0) / n;
-  const mV = data.reduce((s, d) => s + d.V, 0) / n;
-  let sxy = 0,
-    sxx = 0;
-  for (const d of data) {
-    sxy += (d.v - mv) * (d.V - mV);
-    sxx += (d.v - mv) * (d.v - mv);
+  const roKs = useRef<HTMLElement | null>(null);
+  const roKv = useRef<HTMLElement | null>(null);
+  const roN = useRef<HTMLElement | null>(null);
+  const roPhase = useRef<HTMLElement | null>(null);
+
+  const st = useRef({
+    t: 0,
+    sinceSample: 0,
+    volts: 0,
+    rpm: 0,
+    running: true,
+    kept: [] as Sample[],
+    rejected: [] as Sample[],
+    fit: null as null | {kS: number; kV: number},
+  });
+
+  function restart() {
+    const s = st.current;
+    s.t = 0;
+    s.sinceSample = 0;
+    s.volts = 0;
+    s.rpm = 0;
+    s.running = true;
+    s.kept = [];
+    s.rejected = [];
+    s.fit = null;
   }
-  const kV = sxy / sxx;
-  const kS = mV - kV * mv;
+
+  function refit() {
+    const s = st.current;
+    if (s.kept.length < 3) return;
+    const n = s.kept.length;
+    let mv = 0;
+    let mV = 0;
+    for (const [v, V] of s.kept) {
+      mv += v;
+      mV += V;
+    }
+    mv /= n;
+    mV /= n;
+    let sxy = 0;
+    let sxx = 0;
+    for (const [v, V] of s.kept) {
+      sxy += (v - mv) * (V - mV);
+      sxx += (v - mv) * (v - mv);
+    }
+    if (sxx < 1e-9) return;
+    const kV = sxy / sxx;
+    s.fit = {kV, kS: mV - kV * mv};
+  }
+
+  function step(dt: number) {
+    const s = st.current;
+    if (!s.running) return;
+    s.t += dt;
+    s.volts = Math.min(V_MAX, RAMP_RATE * s.t);
+
+    // motor: below kS it doesn't move; above, first-order lag to (V - kS)/kV
+    const vss = s.volts > TRUE_KS ? (s.volts - TRUE_KS) / TRUE_KV : 0;
+    s.rpm += ((vss - s.rpm) / 0.35) * dt;
+
+    s.sinceSample += dt;
+    if (s.sinceSample >= SAMPLE_DT) {
+      s.sinceSample = 0;
+      const noisyV = s.volts + (Math.random() * 2 - 1) * ctrl.current.noiseAmp;
+      const noisyRpm = Math.max(0, s.rpm + (Math.random() * 2 - 1) * 4);
+      if (noisyRpm < MOVE_THRESHOLD) s.rejected.push([noisyRpm, noisyV]);
+      else s.kept.push([noisyRpm, noisyV]);
+      refit();
+    }
+    if (s.volts >= V_MAX && s.rpm > vss - 2) s.running = false;
+  }
+
+  function draw() {
+    const p = plotRef.current;
+    if (!p) return;
+    const s = st.current;
+
+    p.clear();
+    p.grid();
+    p.clip(() => {
+      // true line, always faintly visible
+      p.line(
+        [
+          [0, TRUE_KS],
+          [V_AXIS_RPM, TRUE_KS + TRUE_KV * V_AXIS_RPM],
+        ],
+        {color: '#8294b8', width: 1.5, dash: [3, 7]},
+      );
+      // rejected (not yet moving) and kept samples
+      p.dots(s.rejected, {color: 'rgba(130,148,184,0.5)', r: 3});
+      p.dots(s.kept, {color: '#6f8bff', r: 3.5});
+      // live least-squares fit
+      if (s.fit) {
+        p.line(
+          [
+            [0, s.fit.kS],
+            [V_AXIS_RPM, s.fit.kS + s.fit.kV * V_AXIS_RPM],
+          ],
+          {color: '#ffc24d', width: 3},
+        );
+        p.dot(0, s.fit.kS, {color: '#5ce08a', r: 6, ring: '#0b1120', ringW: 2});
+      }
+      // the ramp's live operating point
+      if (s.running) {
+        p.dot(s.rpm, s.volts, {color: '#e8eefc', r: 5, ring: '#6f8bff', ringW: 2});
+      }
+    });
+    if (s.fit) {
+      p.text(8, s.fit.kS + 0.55, `kS ≈ ${s.fit.kS.toFixed(2)} V`, {
+        color: '#5ce08a',
+        font: '12px ui-monospace, monospace',
+      });
+    }
+    if (s.running) {
+      p.text(V_AXIS_RPM - 8, 12.4, `ramping… ${s.volts.toFixed(1)} V`, {
+        color: '#8294b8',
+        align: 'right',
+        font: '11px ui-monospace, monospace',
+      });
+    }
+
+    if (roKs.current) {
+      roKs.current.textContent = s.fit ? `${s.fit.kS.toFixed(2)} / ${TRUE_KS.toFixed(2)} V` : '—';
+    }
+    if (roKv.current) {
+      roKv.current.textContent = s.fit ? `${s.fit.kV.toFixed(4)} / ${TRUE_KV.toFixed(4)}` : '—';
+    }
+    if (roN.current) {
+      roN.current.textContent = `${s.kept.length} kept, ${s.rejected.length} rejected`;
+    }
+    if (roPhase.current) {
+      roPhase.current.textContent = s.running ? 'ramp running' : 'test complete';
+      roPhase.current.style.color = s.running ? '#ffc24d' : '#5ce08a';
+    }
+  }
+
+  useRaf((frameDt: number) => {
+    step(Math.min(frameDt, 0.1));
+    draw();
+  }, canvas);
 
   return (
-    <Demo title="System identification: fit kS and kV from ramp data">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Voltage versus velocity scatter with a least-squares fit line">
-        {/* axes */}
-        <line x1={X0} y1={Y0} x2={X1} y2={Y0} stroke="#31405f" strokeWidth="1.5" />
-        <line x1={X0} y1={Y0} x2={X0} y2={YTOP} stroke="#31405f" strokeWidth="1.5" />
-        {/* true line */}
-        <line x1={px(0)} y1={py(TRUE_KS)} x2={px(V_MAX_RPM)} y2={py(TRUE_KS + TRUE_KV * V_MAX_RPM)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="3 7" />
-        {/* fitted line */}
-        <line x1={px(0)} y1={py(kS)} x2={px(V_MAX_RPM)} y2={py(kS + kV * V_MAX_RPM)} stroke="#ffc24d" strokeWidth="3" />
-        {/* data points */}
-        {data.map((d, i) => (
-          <circle key={i} cx={px(d.v)} cy={py(d.V)} r="4" fill="#6f8bff" />
-        ))}
-        {/* intercept marker = kS */}
-        <circle cx={px(0)} cy={py(kS)} r="5" fill="#5ce08a" />
-        <text x={px(0) + 8} y={py(kS) - 6} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#5ce08a">
-          kS = {kS.toFixed(2)} V
-        </text>
-        {/* labels */}
-        <text x={X1} y={Y0 + 16} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
-          velocity (rpm) →
-        </text>
-        <text x={X0 - 6} y={YTOP + 2} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
-          V
-        </text>
-      </svg>
+    <Demo title="System identification — run the ramp, watch the fit converge">
+      <canvas
+        ref={canvas}
+        role="img"
+        aria-label="Animated quasistatic ramp test: voltage-velocity samples appear live and a least-squares line fits them."
+        className="block w-full rounded-xl bg-[#0b1120]"
+      />
+      <Legend
+        items={[
+          {color: '#6f8bff', label: 'ramp samples (v, V)', dot: true},
+          {color: 'rgba(130,148,184,0.6)', label: 'rejected — not yet moving', dot: true},
+          {color: '#ffc24d', label: 'least-squares fit (live)'},
+          {color: '#8294b8', label: 'true line'},
+          {color: '#5ce08a', label: 'intercept = kS', dot: true},
+        ]}
+      />
 
       <Controls>
         <Slider label="Measurement noise" min={0} max={2} step={0.1} value={noiseAmp} onChange={setNoiseAmp} format={(v) => `${v.toFixed(1)} V`} />
       </Controls>
       <Buttons>
-        <Button onClick={() => setSeed((s) => s + 1)}>Run a new test</Button>
+        <Button primary onClick={restart}>
+          ▶ Run a new test
+        </Button>
         <Button
           onClick={() => {
-            setNoiseAmp(0.6);
-            setSeed(0);
+            setNoiseAmp(0.5);
+            restart();
           }}>
-          Reset
+          ↺ Reset
         </Button>
       </Buttons>
-      <Readout
-        items={[
-          ['kS (fit / true)', `${kS.toFixed(2)} / ${TRUE_KS.toFixed(2)} V`],
-          ['kV (fit / true)', `${kV.toFixed(4)} / ${TRUE_KV.toFixed(4)}`],
-          ['more noise ⇒', 'noisier estimate'],
-        ]}
-      />
-      <Legend
-        items={[
-          {color: '#6f8bff', label: 'ramp samples (v, V)'},
-          {color: '#ffc24d', label: 'least-squares fit'},
-          {color: '#8294b8', label: 'true line'},
-          {color: '#5ce08a', label: 'intercept = kS'},
-        ]}
-      />
+      <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
+        <span>
+          kS (fit / true): <b ref={roKs} className="text-white">—</b>
+        </span>
+        <span>
+          kV (fit / true): <b ref={roKv} className="text-white">—</b>
+        </span>
+        <span>
+          Samples: <b ref={roN} className="text-white">—</b>
+        </span>
+        <span>
+          Status: <b ref={roPhase} className="text-white">—</b>
+        </span>
+      </div>
     </Demo>
   );
 }
-
-export default SystemId;

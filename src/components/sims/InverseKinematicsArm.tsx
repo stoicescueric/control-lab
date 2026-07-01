@@ -138,7 +138,7 @@ export default function InverseKinematicsArm() {
         role="img"
         aria-label="Interactive two-link inverse-kinematics arm"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="block w-full rounded-[8px] bg-[#0b1120]"
+        className="block w-full touch-none rounded-[8px] bg-[#0b1120]"
         onPointerDown={startDrag}
         onPointerMove={moveTarget}
         onPointerUp={stopDrag}

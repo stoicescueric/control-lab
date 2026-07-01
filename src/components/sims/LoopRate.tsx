@@ -1,14 +1,15 @@
-/* Loop-rate / sampling demo. A smooth "true" signal vs. what a robot loop
-   actually sees: samples taken every dt seconds and held until the next loop.
-   Crank dt up (slower loop) and watch the staircase get blocky — and, past the
-   Nyquist limit, alias completely. */
+/* Loop-rate / sampling demo, live. A smooth "true" signal vs. what a robot loop
+   actually sees: the sweep cursor takes a sample every dt seconds and holds it
+   until the next loop — you watch the staircase get built in real time. The
+   violet line connects the samples: it is the signal the code believes in, and
+   past the Nyquist limit it turns into a slow ghost wave that isn't there. */
 
 import {useRef, useState} from 'react';
 import {usePlot, useRaf} from '@site/src/lib/canvas';
 import {Demo, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 
-const W = 4; // seconds shown
+const W = 4; // seconds shown per sweep
 
 export default function LoopRate() {
   const [dtMs, setDtMs] = useState(50);
@@ -37,6 +38,7 @@ export default function LoopRate() {
     const {dtMs, freq} = ctrl.current;
     const dts = dtMs / 1000;
     const f = (t: number) => Math.sin(2 * Math.PI * freq * t);
+    const tc = (now / 1000) % W; // the sweeping "now"
 
     p.setX(0, W);
     p.clear();
@@ -47,22 +49,34 @@ export default function LoopRate() {
       for (let t = 0; t <= W + 1e-9; t += 0.01) pts.push([t, f(t)]);
       p.line(pts, {color: '#5ce08a', width: 2, alpha: 0.55});
 
-      // sample-and-hold staircase (what the robot loop actually uses)
+      // samples taken SO FAR this sweep — the staircase builds live at the cursor
       const stair: [number, number][] = [];
       const dots: [number, number][] = [];
-      for (let k = 0; k * dts <= W + 1e-9; k++) {
+      const recon: [number, number][] = [];
+      const kMax = Math.floor(tc / dts);
+      for (let k = 0; k <= kMax; k++) {
         const tk = k * dts;
         const v = f(tk);
         stair.push([tk, v]);
-        stair.push([Math.min((k + 1) * dts, W), v]);
+        stair.push([Math.min((k + 1) * dts, tc), v]);
         dots.push([tk, v]);
+        recon.push([tk, v]);
       }
+      // what the code reconstructs from its samples — the alias lives here
+      p.line(recon, {color: '#b08bff', width: 2, alpha: 0.85});
       p.line(stair, {color: '#ffc24d', width: 2.5});
       p.dots(dots, {color: '#ffc24d', r: 3});
+      // flash the freshest sample
+      if (dots.length > 0) {
+        const [lt, lv] = dots[dots.length - 1];
+        const age = tc - lt;
+        if (age < 0.12) {
+          p.dot(lt, lv, {color: '#fff', r: 4 + (0.12 - age) * 25});
+        }
+      }
 
-      // moving "now" cursor + the value the loop is currently holding
-      const tc = (now / 1000) % W;
-      const held = f(Math.floor(tc / dts) * dts);
+      // the "now" cursor + the value the loop is currently holding
+      const held = f(kMax * dts);
       p.vline(tc, {color: '#6f8bff', dash: [4, 4], width: 1});
       p.dot(tc, held, {color: '#6f8bff', r: 4, ring: '#fff'});
     });
@@ -92,13 +106,14 @@ export default function LoopRate() {
       <canvas
         ref={canvas}
         role="img"
-        aria-label="Animated plot showing how the control loop rate affects what a continuous signal is sampled as."
+        aria-label="Animated plot showing a control loop sampling a continuous signal in real time, and the signal the code reconstructs."
         className="block w-full rounded-xl bg-[#0b1120]"
       />
       <Legend
         items={[
           {color: '#5ce08a', label: 'true (continuous) signal'},
           {color: '#ffc24d', label: 'sampled & held every dt'},
+          {color: '#b08bff', label: 'what the code reconstructs'},
           {color: '#6f8bff', label: 'now', dot: true},
         ]}
       />
