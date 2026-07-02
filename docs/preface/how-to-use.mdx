@@ -1,0 +1,73 @@
+---
+title: How to Use Control Lab
+description: "Sixty seconds on how the lessons are built — the Problem/Theory/Deploy structure, the two kinds of interactive demo, difficulty badges, challenges, and progress tracking — plus suggested paths for FTC teams and university readers."
+sidebar_position: 0.5
+tags: [preface, how-to, orientation]
+---
+
+# How to Use Control Lab
+
+<Abstract>
+Sixty seconds of orientation: how every lesson is structured, what the two kinds of interactive demo
+are for, and how to track your progress — plus a suggested path through the curriculum depending on
+whether you're an FTC/FRC programmer or here for the theory.
+</Abstract>
+
+## The anatomy of a lesson
+
+Every substantive lesson follows the same arc, in order:
+
+1. **A real failure.** Each lesson opens with a *Problem* — a mechanism misbehaving in a way you've
+   probably seen: an arm that sags, an auto that overshoots, a heading controller that spins the long
+   way around.
+2. **See it before you derive it.** A demo or figure builds the intuition *before* the math, and the
+   derivation explains every non-obvious variable next to the equation that uses it.
+3. **Deploy it.** Lessons end with clean FTC Java that fits a real OpMode — measured loop times, real
+   units, non-blocking loops — plus *hardware reality* warnings about where the ideal model bends.
+
+The **difficulty badge** under each title (Easy / Medium / Hard) rates the math, not the value — some
+of the most important lessons are Easy.
+
+## Two kinds of interactive demo
+
+Look at the pill in each panel's corner:
+
+- **Live demo** — a real-time simulation. Physics runs continuously; drag targets, fire disturbances,
+  tune gains, and watch the system respond. If it has sliders, move them — the demos are the lab bench.
+- **Math explorer** — a Desmos-style graph of one equation. Nothing animates on its own; the graph
+  responds instantly to the sliders so you can *feel* how the formula behaves before reading on.
+
+:::tip Make it fullscreen
+Every demo panel has an expand button (⛶) in its corner — useful on phones and when projecting for a
+team. Press <kbd>Esc</kbd> to close.
+:::
+
+Some live demos carry a **🏁 Challenge** — a measurable goal graded by the simulation itself ("recover
+from the wind gust within 3.5 s"). Passed challenges turn gold and stay solved between visits.
+
+## Tracking your progress
+
+At the bottom of every lesson is a **"Mark lesson as complete"** button. Completed lessons get a green
+check in the sidebar, and the homepage shows a *Continue where you left off* card. Progress is stored
+in your browser only — nothing is uploaded, and clearing site data resets it.
+
+## Suggested paths
+
+**Building an FTC/FRC robot this season?** Go in module order, but don't stall in the preface:
+skim [Why Math Matters](./why-math-matters/index.mdx), then live in
+[State Machines](../software-architecture/state-machines.mdx) →
+[PID](../control-theory/pid.mdx) → [Feedforward](../control-theory/feedforward.mdx) →
+[Odometry](../localization-odometry/odometry.mdx) →
+[Mecanum Kinematics](../path-following/mecanum-kinematics.mdx) →
+[PID-to-Point](../path-following/pid-to-point.mdx). Return for the rest when your robot demands it.
+
+**Here for the theory?** Read the preface fully (the math lenses matter), then go straight through
+the modules in order: controllers first, then the pose you control toward, then the
+[Signal Processing](../signal-processing/index.mdx) track — which builds from a noisy sensor to the
+extended Kalman filter, fusing the odometry you just learned — and finish with
+[State-Space Control](../state-space-control/index.mdx), where the modeling threads reunite. The
+[Advanced Topics](../advanced-topics/index.mdx) section holds the proofs and derivations the main
+lessons reference.
+
+**Lost in a symbol?** Every convention and recurring symbol lives on one page:
+[Conventions & Notation](../notation.mdx).

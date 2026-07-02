@@ -1,5 +1,7 @@
-/* Complementary filter: fuse a drifting gyro (high-pass) with a noisy
-   accelerometer (low-pass) into one tilt estimate. */
+/* Complementary filter: fuse a motor encoder (fast, but slips away from the
+   joint over time — high-pass) with an absolute encoder on the joint (never
+   drifts, but noisy and slow to update — low-pass) into one arm-angle
+   estimate. */
 
 import {useRef, useState} from 'react';
 import {Trace} from '@site/src/lib/plot';
@@ -17,8 +19,8 @@ function randn(): number {
 
 export default function Complementary() {
   const [alpha, setAlpha] = useState(0.98);
-  const [bias, setBias] = useState(0.18);
-  const [noise, setNoise] = useState(8);
+  const [bias, setBias] = useState(0.3);
+  const [noise, setNoise] = useState(4);
   const ctrl = useRef({alpha, bias, noise});
   ctrl.current = {alpha, bias, noise};
 
@@ -35,6 +37,8 @@ export default function Complementary() {
     trueA: 0,
     estComp: 0,
     estGyro: 0,
+    absHold: 0, // last absolute-encoder reading (updates slower than the loop)
+    absAge: 1,
     errG: 1,
     errC: 1,
     T_true: new Trace(800),
@@ -55,13 +59,19 @@ export default function Complementary() {
     s.t += dt;
     s.trueA = 30 * Math.sin(s.t * 0.5) + 12 * Math.sin(s.t * 0.17 + 1);
     const trueRate = 30 * 0.5 * Math.cos(s.t * 0.5) + 12 * 0.17 * Math.cos(s.t * 0.17 + 1);
-    const gyroMeas = trueRate + bias + 2 * randn();
-    const accMeas = s.trueA + noise * randn();
-    s.estGyro += gyroMeas * dt;
-    s.estComp = alpha * (s.estComp + gyroMeas * dt) + (1 - alpha) * accMeas;
+    // motor encoder: fresh every loop, but slip/backlash bleeds a bias into the rate
+    const motorRate = trueRate + bias + 2 * randn();
+    // absolute encoder: reads the joint itself (no drift), but noisy and slower
+    s.absAge += dt;
+    if (s.absAge >= 0.1) {
+      s.absHold = s.trueA + noise * randn();
+      s.absAge = 0;
+    }
+    s.estGyro += motorRate * dt;
+    s.estComp = alpha * (s.estComp + motorRate * dt) + (1 - alpha) * s.absHold;
     s.T_true.push(s.t, s.trueA);
     s.T_gyro.push(s.t, s.estGyro);
-    s.T_acc.push(s.t, accMeas);
+    s.T_acc.push(s.t, s.absHold);
     s.T_comp.push(s.t, s.estComp);
     s.errG = 0.97 * s.errG + 0.03 * Math.abs(s.estGyro - s.trueA);
     s.errC = 0.97 * s.errC + 0.03 * Math.abs(s.estComp - s.trueA);
@@ -93,17 +103,17 @@ export default function Complementary() {
       bx.lineWidth = wd;
       bx.lineCap = 'round';
       bx.beginPath();
-      bx.moveTo(-len, 0);
+      bx.moveTo(-len * 0.22, 0);
       bx.lineTo(len, 0);
       bx.stroke();
       bx.restore();
     };
-    drawTilt(s.trueA, '#5ce08a', 10, 0.5);
-    drawTilt(s.estComp, '#6f8bff', 5, 1);
+    drawTilt(-s.trueA, '#5ce08a', 10, 0.5);
+    drawTilt(-s.estComp, '#6f8bff', 5, 1);
     bx.fillStyle = '#8294b8';
     bx.font = '12px ui-monospace,monospace';
     bx.textAlign = 'center';
-    bx.fillText('estimated tilt: ' + s.estComp.toFixed(1) + '°', cx, h - 14);
+    bx.fillText('estimated arm angle: ' + s.estComp.toFixed(1) + '°', cx, h - 14);
   }
 
   function draw() {
@@ -139,18 +149,18 @@ export default function Complementary() {
   }, beamRef);
 
   return (
-    <Demo title="Fusing a gyro & accelerometer">
+    <Demo title="Fusing a motor encoder & an absolute encoder">
       <Stage split>
         <div>
           <canvas
             ref={beamRef}
             role="img"
-            aria-label="Animated tilting beam fusing gyroscope and accelerometer estimates with a complementary filter."
+            aria-label="Animated arm whose angle estimate fuses a drifting motor encoder with a noisy absolute encoder through a complementary filter."
             className="block w-full rounded-xl bg-[#0b1120]"
           />
           <Legend
             items={[
-              {color: '#5ce08a', label: 'True tilt'},
+              {color: '#5ce08a', label: 'True arm angle'},
               {color: '#6f8bff', label: 'Filter estimate'},
             ]}
           />
@@ -159,14 +169,14 @@ export default function Complementary() {
           <canvas
             ref={plotCanvas}
             role="img"
-            aria-label="Live plot of the estimated tilt angle over time from gyro, accelerometer, and the fused estimate."
+            aria-label="Live plot of the arm angle over time from the motor encoder alone, the absolute encoder alone, and the fused estimate."
             className="block w-full rounded-xl bg-[#0b1120]"
           />
           <Legend
             items={[
               {color: '#5ce08a', label: 'True'},
-              {color: '#ff6f9c', label: 'Gyro only'},
-              {color: '#ffc24d', label: 'Accel only'},
+              {color: '#ff6f9c', label: 'Motor encoder only'},
+              {color: '#ffc24d', label: 'Absolute only'},
               {color: '#6f8bff', label: 'Complementary'},
             ]}
           />
@@ -174,21 +184,21 @@ export default function Complementary() {
       </Stage>
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Trust in gyro α" value={alpha} min={0.5} max={0.999} step={0.001} onChange={setAlpha} format={(v) => v.toFixed(3)} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">High = smooth but drifts · Low = jittery but centered</div>
+          <Slider label="Trust in motor encoder α" value={alpha} min={0.5} max={0.999} step={0.001} onChange={setAlpha} format={(v) => v.toFixed(3)} />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">High = smooth but drifts · Low = jittery but anchored</div>
         </div>
         <div>
-          <Slider label="Gyro drift" value={bias} min={0} max={0.6} step={0.01} onChange={setBias} format={(v) => v.toFixed(2) + '°/s'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Real gyros always have a little of this.</div>
+          <Slider label="Slip drift" value={bias} min={0} max={1} step={0.01} onChange={setBias} format={(v) => v.toFixed(2) + '°/s'} />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Belt slip &amp; backlash: the motor is not the joint.</div>
         </div>
-        <Slider label="Accel noise" value={noise} min={0} max={20} step={0.5} onChange={setNoise} format={(v) => v.toFixed(1) + '°'} />
+        <Slider label="Absolute encoder noise" value={noise} min={0} max={12} step={0.5} onChange={setNoise} format={(v) => v.toFixed(1) + '°'} />
       </div>
       <Buttons>
         <Button onClick={reset}>↺ Reset estimates</Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Gyro-only error: <b ref={errGEl} className="text-white">—</b></span>
-        <span>Complementary error: <b ref={errCEl} className="text-white">—</b></span>
+        <span>Motor-encoder-only error: <b ref={errGEl} className="text-white">—</b></span>
+        <span>Fused error: <b ref={errCEl} className="text-white">—</b></span>
       </div>
     </Demo>
   );

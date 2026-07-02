@@ -1,4 +1,5 @@
-import type {CSSProperties, ReactNode, Ref} from 'react';
+import {useEffect, useState, type CSSProperties, type ReactNode, type Ref} from 'react';
+import {createPortal} from 'react-dom';
 
 /* The dark interactive-demo panel and its furniture. Used by the lesson sims
    (and directly in MDX where a sim is assembled inline):
@@ -22,21 +23,65 @@ export function Demo({
   children?: ReactNode;
   className?: string;
 }) {
-  return (
-    <div className={`cl-demo not-prose my-7 rounded-[10px] bg-panel p-[18px] text-panel-ink shadow-card ${className}`}>
-      {(title || pill) && (
-        <div className="mb-3.5 flex flex-wrap items-center gap-2.5 px-1 text-[1.02rem] font-bold text-white">
-          {pill && (
-            <span className="rounded-[5px] bg-white/10 px-2.5 py-[3px] text-[0.68rem] font-bold uppercase tracking-wide text-[#cfe0ff]">
-              {pill}
-            </span>
+  const [expanded, setExpanded] = useState(false);
+
+  // Fullscreen mode: lock page scroll and close on Escape.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false);
+    window.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [expanded]);
+
+  const panel = (
+    <div
+      className={`cl-demo not-prose rounded-[10px] bg-panel p-[18px] text-panel-ink shadow-card ${
+        expanded ? 'h-full overflow-y-auto' : 'my-7'
+      } ${className}`}>
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5 px-1 text-[1.02rem] font-bold text-white">
+        {pill && (
+          <span className="rounded-[5px] bg-white/10 px-2.5 py-[3px] text-[0.68rem] font-bold uppercase tracking-wide text-[#cfe0ff]">
+            {pill}
+          </span>
+        )}
+        {title}
+        <button
+          type="button"
+          aria-label={expanded ? 'Close fullscreen demo' : 'Expand demo to fullscreen'}
+          title={expanded ? 'Close (Esc)' : 'Expand'}
+          onClick={() => setExpanded((e) => !e)}
+          className="ml-auto grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-white/15 bg-white/[0.06] text-[#cfe0ff] transition-colors hover:bg-white/15">
+          {expanded ? (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6" />
+            </svg>
           )}
-          {title}
-        </div>
-      )}
+        </button>
+      </div>
       {children}
     </div>
   );
+
+  if (expanded && typeof document !== 'undefined') {
+    return createPortal(
+      <div
+        className="fixed inset-0 z-[300] bg-black/70 p-2 backdrop-blur-sm sm:p-5"
+        onClick={(e) => e.target === e.currentTarget && setExpanded(false)}>
+        <div className="mx-auto h-full max-w-5xl">{panel}</div>
+      </div>,
+      document.body,
+    );
+  }
+  return panel;
 }
 
 /* Lay canvases side by side on wide screens, stacked on narrow. */

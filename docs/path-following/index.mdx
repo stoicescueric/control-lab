@@ -34,7 +34,7 @@ steps run every loop. The methods differ only in *how* they do steps 2 and 3.
 |---|---|---|
 | 1. **Localize** | read the current pose from odometry / vision | [Module 3](../localization-odometry/odometry.mdx) |
 | 2. **Plan the target** | pick where to go next — a target pose, a lookahead point, or a field vector | this module |
-| 3. **Control** | turn the error into a chassis command $(v_x, v_y, \omega)$ with PID + feedforward | this module + [Module 4](../control-theory/index.mdx) |
+| 3. **Control** | turn the error into a chassis command $(v_x, v_y, \omega)$ with PID + feedforward | this module + [Module 2](../control-theory/index.mdx) |
 | 4. **Mix & correct** | convert the chassis command to wheel powers, desaturate, re-run next loop | [Mecanum kinematics](./mecanum-kinematics.mdx) |
 | 5. **Terminate** | stop when within a pose tolerance *and* slow — or when a timeout fires | every follower |
 

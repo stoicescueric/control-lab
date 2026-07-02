@@ -12,6 +12,7 @@ import {Trace} from '@site/src/lib/plot';
 import {useDprCanvas, usePlot, useRaf} from '@site/src/lib/canvas';
 import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {ChallengeChip, type ChallengeStatus} from '@site/src/components/kit/Challenge';
 
 const TARGET = 6; // metres
 const V_MAX = 2.2; // m/s
@@ -53,11 +54,12 @@ export default function PredictiveBraking() {
   const roGlide = useRef<HTMLElement | null>(null);
   const roClock = useRef<HTMLElement | null>(null);
 
-  const st = useRef({t: 0, done: 0, plain: newBot(), pred: newBot()});
+  const st = useRef({t: 0, done: 0, chalPassed: false, plain: newBot(), pred: newBot()});
   const acc = useRef(0);
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
 
   function restart() {
-    st.current = {t: 0, done: 0, plain: newBot(), pred: newBot()};
+    st.current = {...st.current, t: 0, done: 0, plain: newBot(), pred: newBot()};
   }
 
   function stepBot(b: Bot, predictive: boolean, t: number) {
@@ -85,7 +87,14 @@ export default function PredictiveBraking() {
     stepBot(s.plain, false, s.t);
     stepBot(s.pred, true, s.t);
     const settled = (b: Bot) => b.settleT != null && s.t - b.settleT > 0.5;
-    if ((settled(s.plain) && settled(s.pred)) || s.t > 12) s.done = DT;
+    if ((settled(s.plain) && settled(s.pred)) || s.t > 12) {
+      s.done = DT;
+      // Challenge: at this gain, plain PID blows past by ≥ 40 cm while the
+      // predictive robot stays essentially clean (≤ 3 cm).
+      if (!s.chalPassed && s.plain.overshoot >= 0.4 && s.pred.overshoot <= 0.03) {
+        s.chalPassed = true;
+      }
+    }
   }
 
   function drawRobot(
@@ -254,6 +263,10 @@ export default function PredictiveBraking() {
       roGlide.current.textContent = g.toFixed(2) + ' m';
     }
     if (roClock.current) roClock.current.textContent = s.t.toFixed(1) + ' s';
+
+    const status: ChallengeStatus = s.chalPassed ? 'passed' : s.plain.overshoot > 0.02 ? 'holding' : 'idle';
+    const progress = Math.min(1, s.plain.overshoot / 0.4);
+    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
   }
 
   useRaf((frameDt: number) => {
@@ -301,6 +314,13 @@ export default function PredictiveBraking() {
           ▶ Run again
         </Button>
       </Buttons>
+
+      <ChallengeChip
+        id="predictive-braking-gap"
+        label="Crank the gain until the plain PID overshoots by 40 cm or more while the predictive robot stays within 3 cm — same kP, same decel limit."
+        status={chal.status}
+        progress={chal.progress}
+      />
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
           Plain PID: <b ref={roPlain} className="text-white">—</b>

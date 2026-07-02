@@ -6,7 +6,8 @@ tags: [odometry, pose, dead-wheels, pose-exponential, apriltag]
 ---
 
 import OdometryField from '@site/src/components/sims/OdometryField';
-import {ArcStepIllustration, ArcGeometryIllustration, Atan2Illustration} from '@site/src/components/kit/OdometryIllustrations';
+import {ArcStepIllustration, ArcGeometryIllustration, DeadWheelsIllustration} from '@site/src/components/kit/OdometryIllustrations';
+import {ArcStepExplorer, Atan2Explorer} from '@site/src/components/sims/OdometryMathDemos';
 
 # Odometry & Pose
 
@@ -124,6 +125,18 @@ x       += ds * (sinC * Math.cos(heading) - cosC * Math.sin(heading));
 y       += ds * (sinC * Math.sin(heading) + cosC * Math.cos(heading));
 heading += dth;`}</JavaCode>
 
+<ArcStepExplorer />
+
+This Desmos-style graph is the whole derivation with the numbers exposed. Feed it a loop's raw
+inputs — how far each wheel rolled and the track width — and read the chain: the average becomes
+$ds$, the difference over $T$ becomes $d\theta$, their ratio becomes the arc radius $R$, and the
+`sinC`/`cosC` factors split the move into a forward and a sideways component. Set the wheels **equal**
+and the arc collapses onto the straight-line guess ($\text{sinC} \to 1$, $\text{cosC} \to 0$ — the
+straight-line limit from Step 4, live). Now pull them **apart** and watch the drift number grow: the
+straight guess lands farther from the true endpoint the harder the robot turns in one loop. Narrow
+the track width $T$ with the same wheel readings and $d\theta$ grows — the same rolls mean *more*
+rotation on a narrower robot, which is why $T$ must be measured, not read off the CAD.
+
 #### This is the pose exponential
 
 What we just derived has a name you will meet all over the FTC libraries: the **pose exponential**, the
@@ -152,23 +165,7 @@ only for distance. **Dead wheels:** unpowered omni "odometry pods" on light spri
 ground motion, immune to drive slip — two parallel pods give forward distance and heading, a third
 (perpendicular) captures strafe.
 
-<figure className="my-7 text-center">
-  <svg viewBox="0 0 420 300" className="mx-auto max-w-full" role="img" aria-label="Top-down robot with three dead-wheel pods">
-    <rect x="110" y="50" width="200" height="200" rx="16" fill="rgba(79,108,247,0.12)" stroke="#6f8bff" strokeWidth="2.5" />
-    <text x="210" y="40" fontSize="11" fill="#8a93a8" textAnchor="middle">front</text>
-    <rect x="150" y="120" width="10" height="34" rx="3" fill="#11b5a4" />
-    <rect x="260" y="120" width="10" height="34" rx="3" fill="#11b5a4" />
-    <text x="150" y="172" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">left pod</text>
-    <text x="270" y="172" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">right pod</text>
-    <rect x="193" y="200" width="34" height="10" rx="3" fill="#11b5a4" />
-    <text x="210" y="228" fontSize="12" fontWeight="600" fill="#11b5a4" textAnchor="middle">strafe pod</text>
-    <text x="210" y="272" fontSize="11" fill="#8a93a8" textAnchor="middle">left + right → forward &amp; heading · strafe → sideways</text>
-  </svg>
-  <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
-    Three dead wheels reconstruct a full pose independently of the drive motors — the basis of Road
-    Runner and Pedro Pathing localisation.
-  </figcaption>
-</figure>
+<DeadWheelsIllustration />
 
 #### From displacement back to an angle
 
@@ -181,11 +178,15 @@ $$
 \theta = \operatorname{atan2}(\Delta y, \Delta x)
 $$
 
-<Atan2Illustration />
+<Atan2Explorer />
 
-Plain $\arctan(\Delta y / \Delta x)$ throws away the individual signs of $\Delta x$ and $\Delta y$, so it
-collapses opposite directions onto the same answer and only ever returns a half-circle. `atan2` keeps both
-signs, so it resolves the correct quadrant and returns the full $-\pi$ to $\pi$ range — which is exactly
+This Desmos-style graph is the failure and the fix, side by side. Plain $\arctan(\Delta y / \Delta x)$
+divides first — and the division destroys the evidence: $(-1.4, 0.9)$ and $(1.4, -0.9)$ produce the
+*same* ratio, so $\arctan$ gives both the same answer and can only ever return a half-circle. Slide
+$\Delta x$ negative and watch the rose ghost: $\arctan$ points **directly away** from the target,
+wrong by 180° — command a robot with that heading and it drives backwards. Cross $\Delta x = 0$ and
+$\arctan$ divides by zero outright. `atan2` receives the two legs *separately*, so it still has both
+signs, resolves the correct quadrant, and returns the full $-\pi$ to $\pi$ range — which is exactly
 why every heading calculation in robotics uses it.
 
 <Callout type="warn" title="Headings wrap; differences don't, unless you wrap them.">

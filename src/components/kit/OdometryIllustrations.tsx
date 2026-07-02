@@ -24,11 +24,7 @@ const MONO = 'JetBrains Mono, monospace';
 function Figure({title, caption, children}: {title: string; caption: string; children: ReactNode}) {
   return (
     <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
-      <div className="bg-panel px-4 py-5 text-panel-ink">
-        <div className="overflow-x-auto">
-          <div className="min-w-[520px]">{children}</div>
-        </div>
-      </div>
+      <div className="bg-panel px-4 py-5 text-panel-ink">{children}</div>
       <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-[0.95rem] leading-relaxed text-ink-soft">
         <strong className="text-ink">{title}</strong> — {caption}
       </figcaption>
@@ -52,6 +48,18 @@ function arcPath(cx: number, cy: number, r: number, a0: number, a1: number, n = 
   const pts: [number, number][] = Array.from({length: n}, (_, i) => onCircle(cx, cy, r, a0 + (i / (n - 1)) * (a1 - a0)));
   return polyline(pts);
 }
+
+/** Small top-down robot glyph rotated to its heading (screen degrees, CW). */
+function RobotGlyph({x, y, rot, color, ghost = false}: {x: number; y: number; rot: number; color: string; ghost?: boolean}) {
+  return (
+    <g transform={`translate(${x} ${y}) rotate(${rot})`} opacity={ghost ? 0.55 : 1}>
+      <rect x="-19" y="-13" width="38" height="26" rx="7" fill={ghost ? 'none' : '#16203a'} stroke={color} strokeWidth="2" strokeDasharray={ghost ? '5 4' : undefined} />
+      <path d="M19 -8 L30 0 L19 8 Z" fill={color} />
+    </g>
+  );
+}
+
+const screenDeg = (hx: number, hy: number) => (Math.atan2(hy, hx) * 180) / Math.PI;
 
 /* Fixed-size arrowheads (userSpaceOnUse => independent of stroke width). */
 function ArrowDefs() {
@@ -114,12 +122,13 @@ export function ArcStepIllustration() {
 
         {/* start pose + heading */}
         <line x1={P0[0]} y1={P0[1]} x2={hTip[0]} y2={hTip[1]} stroke={MUTED} strokeWidth="3" markerEnd="url(#odoGray)" />
-        <circle cx={P0[0]} cy={P0[1]} r="8" fill={BLUE} />
-        <text x={P0[0] + 16} y={P0[1] + 8} fill={BLUE} fontFamily={MONO} fontSize="16">start pose</text>
+        <RobotGlyph x={P0[0]} y={P0[1]} rot={screenDeg(hx, hy)} color={BLUE} />
+        <text x={P0[0] + 26} y={P0[1] + 24} fill={BLUE} fontFamily={MONO} fontSize="16">start pose</text>
 
-        {/* end pose */}
-        <circle cx={P1[0]} cy={P1[1]} r="8" fill={GREEN} />
-        <text x={P1[0] - 16} y={P1[1] + 6} fill={GREEN} fontFamily={MONO} fontSize="16" textAnchor="end">true end</text>
+        {/* end pose — the robot also finished ROTATED, not just displaced */}
+        <RobotGlyph x={P1[0]} y={P1[1]} rot={screenDeg(Math.sin(rad(a1)), -Math.cos(rad(a1)))} color={GREEN} />
+        <text x={P1[0] - 26} y={P1[1] + 8} fill={GREEN} fontFamily={MONO} fontSize="16" textAnchor="end">true end</text>
+        <RobotGlyph x={Pn[0]} y={Pn[1]} rot={screenDeg(Math.sin(rad(a1)), -Math.cos(rad(a1)))} color={ROSE} ghost />
       </svg>
     </Figure>
   );
@@ -169,11 +178,11 @@ export function ArcGeometryIllustration() {
         <text x={(O[0] + corner[0]) / 2} y={O[1] + 26} fill={AMBER} fontFamily={MONO} fontSize="16" textAnchor="middle">Δx</text>
         <text x={corner[0] + 12} y={(corner[1] + E[1]) / 2 + 6} fill={GREEN} fontFamily={MONO} fontSize="16">Δy</text>
 
-        {/* start + end poses */}
-        <circle cx={O[0]} cy={O[1]} r="8" fill={BLUE} />
-        <text x={O[0] - 14} y={O[1] + 26} fill={BLUE} fontFamily={MONO} fontSize="16" textAnchor="middle">start</text>
-        <circle cx={E[0]} cy={E[1]} r="8" fill={GREEN} />
-        <text x={E[0] + 14} y={E[1] - 8} fill={GREEN} fontFamily={MONO} fontSize="16">end</text>
+        {/* start + end poses — the end robot has rotated by dθ */}
+        <RobotGlyph x={O[0]} y={O[1]} rot={0} color={BLUE} />
+        <text x={O[0] - 14} y={O[1] + 34} fill={BLUE} fontFamily={MONO} fontSize="16" textAnchor="middle">start</text>
+        <RobotGlyph x={E[0]} y={E[1]} rot={screenDeg(Math.sin(rad(aEnd)), -Math.cos(rad(aEnd)))} color={GREEN} />
+        <text x={E[0] + 26} y={E[1] - 14} fill={GREEN} fontFamily={MONO} fontSize="16">end</text>
 
         {/* side legend: the component equations, off the drawing */}
         <line x1={Lx} y1={150} x2={Lx + 26} y2={150} stroke={AMBER} strokeWidth="5" strokeLinecap="round" />
@@ -188,53 +197,88 @@ export function ArcGeometryIllustration() {
 }
 
 /* ---------------------------------------------------------------------------
-   Figure 3 — recovering an angle from a displacement with atan2.
+   Figure 3 — three dead-wheel pods: what each one measures, and why they beat
+   the drive wheels for localization.
    --------------------------------------------------------------------------- */
-export function Atan2Illustration() {
-  const O: [number, number] = [230, 240]; // robot / origin
-  const T: [number, number] = [560, 110]; // target
-  const dy = T[1] - O[1];
-  const dx = T[0] - O[0];
-  const corner: [number, number] = [T[0], O[1]];
-  const thetaDeg = (Math.atan2(-dy, dx) * 180) / Math.PI; // math-convention angle (y up)
-  const aEnd = -thetaDeg; // screen angle for the annotation arc
-  const arcR = 72;
+export function DeadWheelsIllustration() {
+  const cx = 250;
+  const cy = 180;
+  const hw = 96; // chassis half width
+  const hl = 118; // chassis half length
+  const podLx = cx - 58;
+  const podRx = cx + 58;
+  const podY = cy - 8;
+  const Lx = 470; // legend column
+
+  /* an unpowered omni pod: small wheel with cross-rollers */
+  const pod = (x: number, y: number, vertical: boolean, color: string) => (
+    <g transform={`translate(${x} ${y}) rotate(${vertical ? 0 : 90})`}>
+      <rect x="-9" y="-26" width="18" height="52" rx="7" fill="#101a2e" stroke={color} strokeWidth="2.5" />
+      {[-16, -6, 4, 14].map((yy) => (
+        <line key={yy} x1="-6" y1={yy} x2="6" y2={yy + 4} stroke={color} strokeWidth="2" opacity="0.8" />
+      ))}
+    </g>
+  );
 
   return (
     <Figure
-      title="atan2(Δy, Δx): a displacement becomes a heading"
-      caption="To face a point, you need the angle of the vector to it. atan2 reads the signs of both Δx and Δy to pick the right one of four quadrants and returns the full −π … π range — something atan(Δy/Δx) cannot.">
-      <svg viewBox="0 0 720 320" role="img" aria-label="atan2 recovering a heading angle from delta x and delta y" className="h-auto w-full">
-        <rect width="720" height="320" rx="16" fill="#0b1120" />
+      title="Three dead wheels reconstruct the full pose"
+      caption="Unpowered omni pods on light springs measure true ground motion — they can't slip the way powered drive wheels do. The two parallel pods give forward distance and heading (from their difference over the track width T); the perpendicular pod captures strafe. This is the basis of Road Runner and Pedro Pathing localization.">
+      <svg viewBox="0 0 720 360" role="img" aria-label="Top-down robot with three labelled dead-wheel odometry pods" className="h-auto w-full">
+        <rect width="720" height="360" rx="16" fill="#0b1120" />
         <ArrowDefs />
 
-        {/* axes through the robot */}
-        <line x1="80" y1={O[1]} x2="650" y2={O[1]} stroke={GRID} strokeWidth="2" />
-        <line x1={O[0]} y1="44" x2={O[0]} y2="292" stroke={GRID} strokeWidth="2" />
-        <text x="650" y={O[1] - 12} fill={MUTED} fontFamily={MONO} fontSize="15">+x</text>
-        <text x={O[0] + 12} y="56" fill={MUTED} fontFamily={MONO} fontSize="15">+y</text>
+        {/* chassis */}
+        <rect x={cx - hw} y={cy - hl} width={hw * 2} height={hl * 2} rx="18" fill="rgba(79,108,247,0.10)" stroke="#3b4a6b" strokeWidth="2.5" />
+        <path d={`M ${cx - 13} ${cy - hl} L ${cx + 13} ${cy - hl} L ${cx} ${cy - hl - 15} Z`} fill={BLUE} />
+        <text x={cx} y={cy - hl - 24} fill={MUTED} fontFamily={MONO} fontSize="13" textAnchor="middle">front</text>
 
-        {/* right-triangle legs */}
-        <line x1={O[0]} y1={O[1]} x2={corner[0]} y2={corner[1]} stroke={AMBER} strokeWidth="3" strokeDasharray="9 6" />
-        <line x1={corner[0]} y1={corner[1]} x2={T[0]} y2={T[1]} stroke={GREEN} strokeWidth="3" strokeDasharray="9 6" />
-        <text x={(O[0] + corner[0]) / 2} y={O[1] + 26} fill={AMBER} fontFamily={MONO} fontSize="16" textAnchor="middle">Δx</text>
-        <text x={corner[0] + 14} y={(corner[1] + T[1]) / 2 + 6} fill={GREEN} fontFamily={MONO} fontSize="16">Δy</text>
+        {/* drive wheels: faded, with the slip warning */}
+        {(
+          [
+            [cx - hw + 4, cy - hl + 34],
+            [cx + hw - 4, cy - hl + 34],
+            [cx - hw + 4, cy + hl - 34],
+            [cx + hw - 4, cy + hl - 34],
+          ] as [number, number][]
+        ).map(([wx, wy], i) => (
+          <g key={i} opacity="0.4">
+            <rect x={wx - 8} y={wy - 24} width="16" height="48" rx="6" fill="#31405f" />
+          </g>
+        ))}
+        <text x={cx - hw - 12} y={cy + hl - 30} fill={MUTED} fontFamily={MONO} fontSize="12" textAnchor="end">drive wheels</text>
+        <text x={cx - hw - 12} y={cy + hl - 14} fill={ROSE} fontFamily={MONO} fontSize="12" textAnchor="end">(slip — don't trust)</text>
 
-        {/* displacement vector */}
-        <line x1={O[0]} y1={O[1]} x2={T[0]} y2={T[1]} stroke={BLUE} strokeWidth="5" strokeLinecap="round" markerEnd="url(#odoBlue)" />
+        {/* the two parallel pods + what they read */}
+        {pod(podLx, podY, true, GREEN)}
+        {pod(podRx, podY, true, GREEN)}
+        <line x1={podLx} y1={podY - 40} x2={podLx} y2={podY - 78} stroke={GREEN} strokeWidth="3" markerEnd="url(#odoGreen)" />
+        <line x1={podRx} y1={podY - 40} x2={podRx} y2={podY - 78} stroke={GREEN} strokeWidth="3" markerEnd="url(#odoGreen)" />
+        <text x={podLx - 12} y={podY + 4} fill={GREEN} fontFamily={MONO} fontSize="13" textAnchor="end">dL</text>
+        <text x={podRx + 12} y={podY + 4} fill={GREEN} fontFamily={MONO} fontSize="13">dR</text>
 
-        {/* theta annotation arc */}
-        <path d={arcPath(O[0], O[1], arcR, 0, aEnd, 24)} fill="none" stroke={ROSE} strokeWidth="3.5" />
-        <text x={O[0] + 92} y={O[1] - 20} fill={ROSE} fontFamily={MONO} fontSize="17">θ = atan2(Δy, Δx)</text>
+        {/* track width dimension */}
+        <line x1={podLx} y1={cy + 52} x2={podRx} y2={cy + 52} stroke={AMBER} strokeWidth="2" markerEnd="url(#odoAmber)" markerStart="url(#odoAmber)" />
+        <text x={cx} y={cy + 70} fill={AMBER} fontFamily={MONO} fontSize="13" textAnchor="middle">track width T</text>
 
-        {/* robot + target */}
-        <circle cx={O[0]} cy={O[1]} r="9" fill={BLUE} />
-        <text x={O[0]} y={O[1] + 32} fill={INK} fontFamily={MONO} fontSize="16" textAnchor="middle">robot</text>
-        <circle cx={T[0]} cy={T[1]} r="9" fill={AMBER} />
-        <text x={T[0] + 14} y={T[1] - 2} fill={AMBER} fontFamily={MONO} fontSize="16">target</text>
+        {/* the strafe pod */}
+        {pod(cx, cy + hl - 26, false, ROSE)}
+        <line x1={cx + 40} y1={cy + hl - 26} x2={cx + 82} y2={cy + hl - 26} stroke={ROSE} strokeWidth="3" markerEnd="url(#odoRose)" />
+        <text x={cx + 6} y={cy + hl - 44} fill={ROSE} fontFamily={MONO} fontSize="13">strafe pod</text>
 
-        {/* note */}
-        <text x={O[0]} y="300" fill={MUTED} fontFamily={MONO} fontSize="14">atan2 keeps both signs ⇒ correct quadrant</text>
+        {/* side legend: what the three readings become */}
+        <g fontFamily={MONO}>
+          <text x={Lx} y={92} fill={INK} fontSize="16">what the pods report</text>
+          <line x1={Lx} y1={122} x2={Lx + 26} y2={122} stroke={GREEN} strokeWidth="5" strokeLinecap="round" />
+          <text x={Lx + 36} y={127} fill={INK} fontSize="15">dL, dR — forward roll</text>
+          <text x={Lx + 36} y={150} fill={MUTED} fontSize="14">ds = (dL + dR) / 2</text>
+          <text x={Lx + 36} y={172} fill={MUTED} fontSize="14">dθ = (dR − dL) / T</text>
+          <line x1={Lx} y1={210} x2={Lx + 26} y2={210} stroke={ROSE} strokeWidth="5" strokeLinecap="round" />
+          <text x={Lx + 36} y={215} fill={INK} fontSize="15">strafe pod — sideways</text>
+          <text x={Lx + 36} y={238} fill={MUTED} fontSize="14">d⊥ = lateral slide</text>
+          <text x={Lx} y={286} fill={MUTED} fontSize="14">unpowered + sprung ⇒ they read</text>
+          <text x={Lx} y={306} fill={MUTED} fontSize="14">the ground, not the motor</text>
+        </g>
       </svg>
     </Figure>
   );

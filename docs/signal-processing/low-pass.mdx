@@ -6,6 +6,7 @@ tags: [filter, low-pass, ema, smoothing]
 ---
 
 import LowPass from '@site/src/components/sims/LowPass';
+import {EmaWeightsExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Low-Pass Filter
 
@@ -24,8 +25,8 @@ to act on, this is the first thing to try.
 
 <Problem title="Fast noise rides on top of a slow signal">
 
-Real signals usually change slowly; noise changes quickly. A raw distance reading or encoder
-velocity carries both, and the fast component is what ruins downstream logic — most painfully a PID
+Real signals usually change slowly; noise changes quickly. A raw distance-sensor reading or an
+AprilTag bearing carries both, and the fast component is what ruins downstream logic — most painfully a PID
 **derivative** term, which differentiates and therefore *amplifies* high-frequency jitter into motor
 chatter. We need to admit the slow, real component and reject the fast, noisy one — to let **low**
 frequencies **pass**.
@@ -56,11 +57,32 @@ geometrically, so it remembers everything while storing only one number.
 | near 0 | tiny steps → very smooth, slow, laggy | a heavy flywheel |
 | near 1 | big steps → snappy, barely filters | a twitchy needle |
 
-The smoothing is governed by a time constant $\tau \approx \Delta t / \alpha$ — which is why
-$\alpha$ must be chosen against your loop rate, not in the abstract.
+The name "exponential" is literal. Unroll the update a few steps and the filter turns out to hold a
+weighted average of *every* past reading, with geometrically fading weights:
 
-The demo overlays the true signal, the noisy sensor, and the filtered output. Sweep $\alpha$ from
-heavy smoothing to nearly raw, and use the step test to see the lag you trade for it.
+$$
+\hat{x}_k = \alpha\,z_k + \alpha(1-\alpha)\,z_{k-1} + \alpha(1-\alpha)^2\,z_{k-2} + \cdots
+$$
+
+That fade sets the filter's **time constant** $\tau$ — how long it takes to absorb a change. The
+exact discrete relation is $\alpha = \Delta t / (\tau + \Delta t)$: the same $\alpha$ means a
+completely different $\tau$ at a different loop rate, which is why the deployable code below computes
+$\alpha$ *from* a target $\tau$ and the measured $\Delta t$ instead of hard-coding it.
+
+<EmaWeightsExplorer />
+
+This Desmos-style graph is the whole filter in two pictures. The **left panel is the memory**: the
+weight each past reading still carries, $\alpha(1-\alpha)^k$ — never exactly zero, always fading, and
+storing all of it costs one number. The **right panel is the price**: fed a sudden step, the output
+climbs to 63 % of the change after exactly $\tau$, and ~95 % after $3\tau$. Slide $\alpha$ down and
+watch both at once — the memory stretches deeper into the past (smoother) while the step response
+lags further behind (slower). That is the trade-off, quantified. Then change $\Delta t$ and notice
+$\tau$ move with it at fixed $\alpha$: proof that $\alpha$ only means something *relative to your
+loop rate*.
+
+The demo below runs it on a live signal — the true value, the noisy sensor, and the filtered output.
+Sweep $\alpha$ from heavy smoothing to nearly raw, and use the step test to feel the same 63 % lag
+you just measured.
 
 <LowPass />
 

@@ -11,6 +11,7 @@ import {Trace} from '@site/src/lib/plot';
 import {useDprCanvas, useRaf, usePlot} from '@site/src/lib/canvas';
 import {Demo, Stage, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {ChallengeChip, type ChallengeStatus} from '@site/src/components/kit/Challenge';
 import {track} from '@site/src/lib/analytics';
 
 const g = 10;
@@ -78,9 +79,13 @@ export default function Drone() {
     termI: 0,
     termD: 0,
     u: 0,
+    gustAt: -1, // challenge: when the last wind gust hit
+    chalHold: 0, // seconds spent back inside the band
+    chalPassed: false,
     altT: new Trace(700),
     tgtT: new Trace(700),
   });
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
 
   const acc = useRef(0);
 
@@ -129,6 +134,22 @@ export default function Drone() {
     }
     s.altT.push(s.t, s.y);
     s.tgtT.push(s.t, s.target);
+
+    // Challenge: after a gust, get back inside ±0.10 m and hold for 0.5 s,
+    // all within 3.5 s of the hit. A well-damped tune passes; "Too much Kp"
+    // oscillates through the band and runs out the clock.
+    if (!s.chalPassed && s.gustAt >= 0) {
+      const since = s.t - s.gustAt;
+      s.chalHold = Math.abs(e) < 0.1 ? s.chalHold + dt : 0;
+      if (s.chalHold >= 0.5 && since <= 3.5) {
+        s.chalPassed = true;
+        s.gustAt = -1;
+        track('challenge_passed', {id: 'pid-gust-recovery'});
+      } else if (since > 3.5) {
+        s.gustAt = -1; // out of time — press the gust button to try again
+        s.chalHold = 0;
+      }
+    }
   }
 
   const aToPy = (alt: number, h: number) => {
@@ -247,6 +268,11 @@ export default function Drone() {
     if (roAlt.current) roAlt.current.textContent = s.y.toFixed(2) + ' m';
     if (roTgt.current) roTgt.current.textContent = s.target.toFixed(2) + ' m';
     if (roErr.current) roErr.current.textContent = (s.target - s.y).toFixed(2) + ' m';
+
+    // challenge chip (cheap state update only when something changed)
+    const status: 'idle' | 'holding' | 'passed' = s.chalPassed ? 'passed' : s.gustAt >= 0 ? 'holding' : 'idle';
+    const progress = Math.min(1, s.chalHold / 0.5);
+    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
   }
 
   useRaf((frameDt: number) => {
@@ -364,12 +390,21 @@ export default function Drone() {
         <Button
           onClick={() => {
             st.current.gust -= 22;
+            st.current.gustAt = st.current.t;
+            st.current.chalHold = 0;
             track('wind_gust');
           }}>
           🌬️ Wind gust
         </Button>
         <Button onClick={reset}>↺ Reset</Button>
       </Buttons>
+
+      <ChallengeChip
+        id="pid-gust-recovery"
+        label="Fire a wind gust, then be back within ±0.10 m of the target within 3.5 s (hold it for half a second). Try it with each preset."
+        status={chal.status}
+        progress={chal.progress}
+      />
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>

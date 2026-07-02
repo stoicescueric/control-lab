@@ -1,0 +1,114 @@
+---
+title: Conventions & Notation
+description: "The one page that pins down every convention the curriculum uses: coordinate frames, angle ranges, units, and what each recurring symbol and gain means."
+sidebar_position: 99
+tags: [notation, conventions, coordinate-frames, units, symbols, reference]
+---
+
+# Conventions & Notation
+
+<Abstract>
+Every lesson on this site uses the same coordinate frames, angle conventions, units, and symbol names —
+this page is where they are pinned down once. If a formula's sign or a symbol ever looks surprising,
+check here before assuming a typo.
+</Abstract>
+
+## Coordinate frames
+
+All 2-D geometry in the curriculum uses one right-handed convention:
+
+| Convention | Meaning |
+|---|---|
+| $+x$ | **forward** (robot frame) / toward the far wall (field frame) |
+| $+y$ | **left** |
+| $+\theta$, $+\omega$ | **counter-clockwise**, viewed from above |
+| angles | radians internally; wrapped to $(-\pi, \pi]$ before use in any controller |
+
+Two frames appear constantly:
+
+- **Field frame** — fixed to the field. Poses $(x, y, \theta)$ and paths live here.
+- **Robot frame** — rides on the robot: $+x$ out the front, $+y$ out the left side. Drive commands
+  $(v_x, v_y, \omega)$ live here, because that is what the [mecanum mixer](./path-following/mecanum-kinematics.mdx) consumes.
+
+Converting a field-frame vector into the robot frame is a rotation by $-\theta$:
+
+$$
+\begin{bmatrix} v_x^{robot} \\ v_y^{robot} \end{bmatrix}
+=
+\begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix}
+\begin{bmatrix} v_x^{field} \\ v_y^{field} \end{bmatrix}
+$$
+
+:::warning Sign bugs are convention bugs
+If a wheel fights the others or the robot strafes when told to turn, fix the **convention** (motor
+direction, encoder sign, angle zero), never the math. Half of all "mecanum is broken" bugs are one
+inverted motor. See [angle wrapping](./path-following/angle-wrapping.mdx) for the $\pm\pi$ seam.
+:::
+
+## Units
+
+Formulas are written in SI: metres, seconds, radians, volts, newton-metres. Code converts at the
+boundary, once:
+
+- **Encoder ticks → real units** happens in exactly one constant
+  (`METERS_PER_TICK`) — see [From Math to a Loop](./software-architecture/discretization.mdx).
+- **Loop time** $\Delta t$ is always the *measured* elapsed seconds, never an assumed constant.
+- **Motor commands** are computed in volts, then divided by the measured battery voltage —
+  see [voltage compensation](./control-theory/voltage-compensation.mdx).
+
+## Recurring symbols
+
+### Pose & geometry
+
+| Symbol | Meaning | Unit |
+|---|---|---|
+| $x, y, \theta$ | field-frame pose: position + heading | m, m, rad |
+| $v, \omega$ | linear speed, angular velocity | m/s, rad/s |
+| $ds, d\theta$ | one loop's distance and rotation | m, rad |
+| $\kappa = 1/R$ | path curvature (radius $R$) | 1/m |
+| $T$ | track width — distance between wheel tracks | m |
+| $\boldsymbol{\xi} = (\Delta x_b, \Delta y_b, \Delta\theta)$ | body twist: one loop's motion in the robot frame | m, m, rad |
+
+### Control
+
+| Symbol | Meaning |
+|---|---|
+| $r$ (or setpoint) | the target value |
+| $y$ (or measurement) | what the sensor reports |
+| $e = r - y$ | error — heading errors always wrapped to $(-\pi, \pi]$ |
+| $u$ | the actuator command the controller outputs |
+| $k_P, k_I, k_D$ | PID gains (present, past, trend of the error) |
+| $k_S, k_V, k_A$ | feedforward: static friction, velocity, acceleration |
+| $k_G$ | gravity hold (constant for slides, $k_G\cos\theta$ for arms) |
+| $k_L$ | static-friction floor in the [PDFL controller](./control-theory/pid.mdx) |
+| $v_{max}, a_{max}$ | the mechanism's real speed and acceleration limits |
+
+### Motors
+
+| Symbol | Meaning | Unit |
+|---|---|---|
+| $V, I, R$ | applied voltage, winding current, winding resistance | V, A, Ω |
+| $k_t$ | torque constant: $\tau = k_t I$ | N·m/A |
+| $k_e$ | back-EMF constant: $V_{emf} = k_e \omega$ | V·s/rad |
+| $\tau$ | torque (context makes clear when $\tau$ is a *time constant* instead) | N·m |
+| $J$ | rotational inertia | kg·m² |
+
+### Estimation
+
+| Symbol | Meaning |
+|---|---|
+| $\hat{x}$ | the estimate of the state (the hat always means "estimate") |
+| $z$ | a sensor measurement |
+| $P$ | covariance of the estimate (its uncertainty) |
+| $Q, R$ | process-noise and measurement-noise covariance — the two tuning knobs |
+| $K$ | Kalman gain: how much of the innovation to believe |
+| $H$ | measurement matrix/Jacobian: state space → sensor space |
+| $\alpha$ | a filter blend factor in $(0, 1)$ — low-pass smoothing or complementary trust |
+| $\tau$ | a filter time constant, related by $\alpha = \Delta t/(\tau + \Delta t)$ |
+
+## Naming in code
+
+Java in the lessons mirrors the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time;
+`wrap(angle)` for the $(-\pi,\pi]$ normalization; `Pose2d`/`Vector2d`/`atTarget(...)` from the shared
+[Common Implementation](./path-following/common-implementation.mdx) page. `<JavaCode>` blocks carry an
+**FTC** or **FRC** label showing which SDK the snippet targets.

@@ -6,6 +6,7 @@ tags: [filter, ekf, nonlinear, localization, jacobian, apriltag]
 ---
 
 import {AprilTagProjectionExplorer} from '@site/src/components/sims/FilterMathDemos';
+import EkfLinearization from '@site/src/components/sims/EkfLinearization';
 
 # Extended Kalman Filter
 
@@ -59,6 +60,25 @@ The EKF keeps the Kalman predict-update heartbeat but, at each step, **linearise
 motion and measurement models around the current mean estimate** using their *Jacobians* — matrices
 of partial derivatives that give the local slope. A curve, viewed close to your current estimate, is
 approximately its tangent line; on that local linearisation the ordinary Kalman update applies.
+
+<EkfLinearization />
+
+The demo puts that bet on trial. The gray bump on the depth axis is the filter's uncertainty; every
+green particle is one sample of "the robot might actually be here," drawn from it. Each particle
+passes through the real camera curve — apparent tag size $s = fL/X$, straight from this lesson's own
+model — and lands on the left axis, piling up into the *true* output distribution. The amber outline
+over the pile is what the EKF claims comes out: a Gaussian centered at $h(\hat{x})$ with a spread set
+by the tangent's slope, which *is* the Jacobian.
+
+With the estimate far from the tag, the curve is nearly straight across the whole uncertainty window,
+so the pile and the amber Gaussian agree — the EKF is essentially exact. Now drag $\hat{x}$ close and
+widen $\sigma$. The pile grows a long upper tail the Gaussian refuses to admit, and its center slides
+away from $h(\hat{x})$. Nothing about the filter changed; the curve simply stopped being straight
+where the filter is standing. That gap is exactly the covariance error the warning below describes,
+and the reason the Jacobian is re-evaluated at every step, at the current estimate, rather than
+computed once. The rule of thumb the picture leaves you with: linearisation is safe whenever the
+curve looks straight across your $\pm2\sigma$ window — shrink the uncertainty (more frequent
+corrections, better odometry) and even a harsh curve becomes locally linear.
 
 A derivative is "how fast one output changes when one input moves." A Jacobian is the same idea
 when the input and output are vectors. For a simplified AprilTag camera model, let the robot state

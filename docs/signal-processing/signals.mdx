@@ -6,6 +6,7 @@ tags: [filter, noise, sensors, sampling]
 ---
 
 import SignalNoise from '@site/src/components/sims/SignalNoise';
+import {NoiseAnatomyExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Signals & Noise
 
@@ -38,6 +39,26 @@ Three distinct corruptions, each demanding a different defence:
 - **Jitter** — fast, small, random wobble around the truth. The common case.
 - **Spikes (outliers)** — occasional wild readings: a loose connector, a reflection, a glitch.
 - **Drift / bias** — a slow, systematic lean away from the truth that accumulates.
+
+:::tip Which sensors actually need this?
+Not encoders. A quadrature encoder reports an exact tick count — there is no noise on "the shaft has
+moved 1 407 ticks," so filtering an encoder *position* adds lag and nothing else. (Encoder *velocity*
+is different: differencing positions amplifies the tick quantization into visible noise.) The signals
+genuinely worth filtering are the ones with real, roughly bell-shaped noise: **analog sensors** —
+distance sensors, analog absolute encoders, current sensors — and **vision**, where a tag's reported
+pose jitters from frame to frame. Those are the running examples in this module.
+:::
+
+<NoiseAnatomyExplorer />
+
+This Desmos-style graph gives each corruption its own slider, so you can study its *shape* in
+isolation. **Jitter** scatters the amber readings symmetrically around the center — it carries no
+information, and averaging cancels it. **Drift** scatters nothing: it moves the *center itself* (the
+dashed line walks away from the truth), so no amount of averaging will ever remove it — you need a
+second, absolute reference. A **spike** is neither: one absurd reading that any average will happily
+swallow and be wrong about for a while. Three shapes, three different defences — which is why the
+lessons ahead are a toolbox, not one magic filter: smoothing attacks jitter, sensor fusion attacks
+drift, and outlier rejection handles spikes.
 
 </Problem>
 

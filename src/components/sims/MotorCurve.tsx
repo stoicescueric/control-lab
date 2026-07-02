@@ -11,6 +11,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, usePlot, useRaf} from '@site/src/lib/canvas';
 import {Demo, Stage, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {ChallengeChip, type ChallengeStatus} from '@site/src/components/kit/Challenge';
 
 // Constants fit to the goBILDA 5000-0002-0117 (MATRIX) motor at 12 V:
 //   R  = 12 V / 11 A stall current                      -> 1.0909 Ω
@@ -56,9 +57,10 @@ export default function MotorCurve() {
   const roTemp = useRef<HTMLElement | null>(null);
   const roState = useRef<HTMLElement | null>(null);
 
-  const st = useRef({w: 0, angle: 0, temp: AMBIENT, trail: [] as [number, number][]});
+  const st = useRef({w: 0, angle: 0, temp: AMBIENT, chalHold: 0, chalPassed: false, trail: [] as [number, number][]});
   const acc = useRef(0);
   const DT = 0.01;
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
 
   function step() {
     const s = st.current;
@@ -72,6 +74,16 @@ export default function MotorCurve() {
     s.angle += s.w * DT * 0.06; // scaled for a readable spin
     const heat = current * current * R;
     s.temp += (heat / HEAT_C - (s.temp - AMBIENT) / COOL_TAU) * DT;
+
+    // Challenge: find a load that delivers ≥ 16 W out at ≥ 72 % efficiency,
+    // and hold that operating point for one second.
+    if (!s.chalPassed) {
+      const pOut = tauM * s.w;
+      const pIn = v * current;
+      const eff = pIn > 1e-6 ? pOut / pIn : 0;
+      s.chalHold = pOut >= 16 && eff >= 0.72 ? s.chalHold + DT : 0;
+      if (s.chalHold >= 1) s.chalPassed = true;
+    }
   }
 
   function drawMotor() {
@@ -234,6 +246,10 @@ export default function MotorCurve() {
       roState.current.textContent = stalled ? 'STALLED' : 'running';
       roState.current.style.color = stalled ? '#ff6f9c' : '#5ce08a';
     }
+
+    const status: ChallengeStatus = s.chalPassed ? 'passed' : s.chalHold > 0 ? 'holding' : 'idle';
+    const progress = Math.min(1, s.chalHold / 1);
+    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
   }
 
   useRaf((frameDt: number) => {
@@ -302,6 +318,14 @@ export default function MotorCurve() {
           ↺ Reset
         </Button>
       </Buttons>
+
+      <ChallengeChip
+        id="motor-sweet-spot"
+        label="Find an operating point that delivers ≥ 16 W of output at ≥ 72 % efficiency, and hold it for one second. (Hint: it's a narrow band — nowhere near stall.)"
+        status={chal.status}
+        progress={chal.progress}
+      />
+
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
           Speed: <b ref={roSpeed} className="text-white">—</b>

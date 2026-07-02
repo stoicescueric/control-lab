@@ -1,0 +1,172 @@
+---
+title: LQR — Flywheel Control
+description: "Stop guessing gains. State two tolerances — how much velocity error you can stand, how many volts you have — and the linear-quadratic regulator solves for the gain that balances them. Shipped on a flywheel, in WPILib and in plain FTC Java."
+sidebar_position: 2
+tags: [lqr, optimal-control, flywheel, bryson, wpilib, riccati]
+---
+
+import {LqrExplorer} from '@site/src/components/sims/StateSpaceDemos';
+
+# LQR — Flywheel Control
+
+<Difficulty level="Hard" />
+
+<Abstract>
+The previous lesson ended on a question: state feedback needs a gain matrix $K$, so where does it come
+from? LQR answers by reframing the problem. Instead of picking gains, you price the two things you
+actually care about — error and effort — and the math solves for the $K$ that minimizes the total
+bill. Bryson's rule turns that pricing into two numbers any team can name: the error you can tolerate
+and the volts you have.
+</Abstract>
+
+<Problem title="A gain matrix is worse to hand-tune than three PID knobs">
+
+PID tuning is at least famous. Everyone knows the folklore: raise kP until it oscillates, add kD, add
+a little kI. A gain *matrix* has no folklore. For a two-state elevator, $K$ has two coupled entries,
+and nudging one changes what the other should be. Guessing pole locations is the same problem wearing
+a math costume.
+
+What a team can state confidently is not gains. It is tolerances. "The flywheel needs to stay within
+about 8 rad/s or the shot spreads." "We have 12 volts, and browning out is unacceptable." LQR is the
+tool that converts exactly those two sentences into a gain.
+
+</Problem>
+
+<Theory title="Price the error, price the effort, minimize the bill">
+
+LQR (the **l**inear-**q**uadratic **r**egulator) scores every possible controller by a running cost:
+
+$$
+J = \sum_k \left( \mathbf{x}_k^\top Q\, \mathbf{x}_k + \mathbf{u}_k^\top R\, \mathbf{u}_k \right)
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'x', meaning: 'the state error at each loop (distance from the reference)'},
+    {symbol: 'u', meaning: 'the control effort at each loop, in volts'},
+    {symbol: 'Q', meaning: 'how much you are charged for error, per state'},
+    {symbol: 'R', meaning: 'how much you are charged for effort, per input'},
+    {symbol: 'J', meaning: 'the total bill; LQR finds the K that minimizes it'},
+  ]}
+/>
+
+Squaring does two jobs: big errors cost disproportionately more than small ones, and sign stops
+mattering. The controller that minimizes $J$ over all time turns out to be plain state feedback,
+$u = K(r - x)$, with $K$ computed from $A$, $B$, $Q$, and $R$ by solving the Riccati equation. You
+will never solve it by hand for real systems; WPILib and every controls library does it in one call.
+The design work is choosing $Q$ and $R$.
+
+### Bryson's rule: tolerances in, weights out
+
+Bryson's rule makes the choice concrete. Set each weight to one over the square of the largest value
+you are willing to see:
+
+$$
+Q = \frac{1}{(\text{tolerable error})^2},
+\qquad
+R = \frac{1}{(\text{available volts})^2}
+$$
+
+Now the knobs mean something physical. Tighten the error tolerance and error gets expensive, so the
+optimizer buys a bigger gain. Shrink the voltage budget and effort gets expensive, so it accepts a
+lazier response. Only the *ratio* $Q/R$ matters — double both and the same $K$ falls out.
+
+<LqrExplorer />
+
+This explorer runs the whole pipeline on a one-state flywheel ($k_V = 0.02$, $k_A = 0.005$, so
+$A = -4$, $B = 200$). For one state the Riccati equation collapses to a quadratic and the gain has a
+closed form, computed live as you drag:
+
+$$
+K = \frac{A + \sqrt{A^2 + B^2\,Q/R}}{B}
+$$
+
+A shot steals 60 rad/s at the dashed line; the green trace is the recovery under the LQR gain, and
+the amber trace is what it costs in volts. Drag the error tolerance down and watch the gain grow, the
+recovery sharpen, and the voltage slam into the 12 V ceiling. That ceiling is the honest limit of the
+whole method: LQR assumed the actuator can deliver what it asks for, and while the command is pinned
+at 12 V the controller is no longer optimal, just saturated. If your "optimal" design lives on the
+ceiling, you asked for more than the motor has — relax $Q$ or admit you need a bigger motor.
+
+<Callout type="warn" title="Optimal for the model, not for the robot.">
+LQR minimizes the cost <em>for the A and B you gave it</em>. A sloppy
+<a href="../control-theory/system-identification">system-identification</a> fit produces a gain that is
+precisely optimal for a robot that does not exist. Garbage model in, optimal garbage out.
+</Callout>
+
+</Theory>
+
+<Deploy title="The full loop in WPILib, one line in FTC">
+
+FRC ships the complete stack: the model, the Kalman filter that estimates the state, the LQR that
+computes $K$, and a wrapper that runs predict–correct–control every loop.
+
+<JavaCode league="FRC" label="Flywheel LQR, the standard WPILib pattern">{`// Model straight from characterization (volts per rad/s, volts per rad/s²).
+LinearSystem<N1, N1, N1> plant = LinearSystemId.identifyVelocitySystem(kV, kA);
+
+// Observer: how much to trust the model vs. the encoder.
+KalmanFilter<N1, N1, N1> observer = new KalmanFilter<>(
+    Nat.N1(), Nat.N1(), plant,
+    VecBuilder.fill(3.0),    // model trust: rad/s of state std-dev
+    VecBuilder.fill(0.01),   // encoder noise std-dev
+    0.020);
+
+// LQR: Bryson's rule, stated as tolerances.
+LinearQuadraticRegulator<N1, N1, N1> lqr = new LinearQuadraticRegulator<>(
+    plant,
+    VecBuilder.fill(8.0),    // Q: tolerable velocity error, rad/s
+    VecBuilder.fill(12.0),   // R: available control effort, volts
+    0.020);
+
+LinearSystemLoop<N1, N1, N1> loop =
+    new LinearSystemLoop<>(plant, lqr, observer, 12.0, 0.020);
+
+// Every robot loop:
+loop.setNextR(VecBuilder.fill(targetRadPerSec));   // where we want the state
+loop.correct(VecBuilder.fill(encoder.getRate()));  // fold in the measurement
+loop.predict(0.020);                               // advance model + compute u
+flywheelMotor.setVoltage(loop.getU(0));`}</JavaCode>
+
+On FTC there is no library, and the one-state case does not need one. Compute $K$ offline — the
+explorer above, or WPILib run on a laptop — and the runtime controller is a single line plus the
+[voltage compensation](../control-theory/voltage-compensation.mdx) you always do:
+
+<JavaCode league="FTC" label="The same controller, gains precomputed">{`// K computed offline from your kV/kA and your two tolerances.
+public static double K = 0.15;   // volts per rad/s of velocity error
+
+public void run(double targetVel) {
+    double measured = motor.getVelocity(AngleUnit.RADIANS);
+    double volts = K * (targetVel - measured) + kV * targetVel;  // feedback + hold voltage
+    motor.setPower(volts / battery.getVoltage());
+}`}</JavaCode>
+
+<Callout type="idea" title="So how is this different from the PF controller you already had?">
+Structurally it isn't: gain times error, plus feedforward. What changed is the origin story. The PF
+gain was found by poking the robot; the LQR gain is derived from the measured model and two stated
+tolerances, so it survives design changes. Swap the flywheel mass, re-run system identification,
+recompute — no re-tuning session. And when the mechanism grows a second state, the same recipe hands
+you both gains at once, which hand-tuning genuinely cannot.
+</Callout>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: the loop period is part of the design">
+
+The discretized gain is computed *for a loop period*. WPILib assumes the 20 ms you passed in; an FTC
+loop wanders between 20 and 50 ms. For a slow one-state flywheel the mismatch is tolerable. For fast
+or multi-state systems, measure your real loop time and compute the gain for it — the same discipline
+as [everywhere else on this site](../software-architecture/discretization.mdx).
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- [WPILib: Linear-Quadratic Regulators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-intro.html#the-linear-quadratic-regulator) -
+  the LQR and Bryson's-rule reference, including the flywheel example this Deploy section follows.
+- [WPILib: State-Space Flywheel example](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-flywheel-walkthrough.html) -
+  the full walkthrough with `LinearSystemLoop`.
+- Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) -
+  the Riccati derivation and the discrete-time treatment.
+- Arthur Bryson & Yu-Chi Ho, *Applied Optimal Control* - the origin of the weighting rule.
+
+</Admonition>

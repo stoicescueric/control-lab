@@ -1,0 +1,43 @@
+---
+title: "Module 6 - State-Space Control"
+description: "Modern control for FTC and FRC: write the mechanism's physics as a state-space model, control every state at once with state feedback, and let LQR pick the gains from a cost you choose."
+sidebar_position: 0
+tags: [state-space, lqr, wpilib, modern-control]
+---
+
+# Module 6 · State-Space Control
+
+<Abstract>
+Everything so far tunes a controller against symptoms: raise kP until it oscillates, back off, add kD.
+This module designs the controller from the model instead. You write the mechanism's physics as a small
+matrix equation, feed back every state at once, and let LQR compute the gains from a cost you actually
+care about — how much error you can stand versus how many volts you have. This is how WPILib's
+state-space classes work, and the math ports to FTC in a handful of lines.
+</Abstract>
+
+By this point in the curriculum you already own every ingredient:
+
+- The [state-space preface](../preface/why-math-matters/state-space.mdx) gave you the vocabulary:
+  states, inputs, outputs, and the update equations.
+- [System identification](../control-theory/system-identification.mdx) gave you $k_V$ and $k_A$ — and it
+  turns out those two numbers *are* the state-space model of a velocity mechanism.
+- The [Kalman filter](../signal-processing/kalman.mdx) gave you the observer that estimates states you
+  cannot measure directly.
+
+This module snaps them together:
+
+1. **[State-Space Models & State Feedback](./state-feedback.mdx)** — turn $k_V$/$k_A$ into
+   $\dot{x} = Ax + Bu$, discretize it, and control it with $u = K(r - x)$. Where the gain matrix $K$
+   comes from is left open on purpose.
+2. **[LQR — Flywheel Control](./lqr.mdx)** — the answer. State two tolerances, let the math solve for
+   the gain that balances them, and ship it on a flywheel.
+
+The code examples lean on WPILib because FRC ships these tools as a library. FTC has no equivalent
+library, and does not need one for the systems in this module: the models are one or two states, the
+gains can be computed offline, and the runtime controller is a few lines of arithmetic.
+
+<Admonition type="note" title="Where this pays off">
+For a plain flywheel, a well-tuned PIDF and an LQR land in nearly the same place. The payoff grows with
+the mechanism: two states, coupled states, states you estimate instead of measure. Learn it on the
+flywheel, where you can check every number by hand, and the harder mechanisms stop being special cases.
+</Admonition>

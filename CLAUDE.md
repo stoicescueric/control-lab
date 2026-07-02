@@ -39,7 +39,7 @@ npm run size         # bundle-size report (scripts/bundle-size.mjs)
 - `src/components/kit/` — reusable lesson primitives (layout/prose/demo shell). `Demo.tsx` exports the demo chrome (`Demo`, `Stage`, `Controls`, `Buttons`, `Button`, `Readout`, `Legend`, `DemoCanvas`); use it so every interactive widget shares controls styling.
 - `src/components/sims/` — one standalone `.tsx` per interactive widget (Kalman, EKF, PurePursuit, MecanumDrive, etc.). Keep browser-only APIs (canvas, window) inside `useEffect` or event handlers so SSR build succeeds.
 - `src/lib/` — pure, framework-free helpers shared across sims:
-  - `.ts` files are typed and unit-tested (`controlMath.ts`, `projectile.ts` with `*.test.ts`). **`projectile.ts` is the single source of truth for the Module 6 physics model** — every Module 6 sim draws on it so the demos can't disagree.
+  - `.ts` files are typed and unit-tested (`controlMath.ts`, `projectile.ts` with `*.test.ts`). **`projectile.ts` is the single source of truth for the Module 7 physics model** — every Module 7 sim draws on it so the demos can't disagree.
   - `.js` files (`plot.js`, `canvas.js`, `linalg.js`) are ported-from-legacy imperative helpers with `.d.ts` shims. `canvas.js` provides the `useDprCanvas`/`usePlot` hooks (HiDPI sizing + `requestAnimationFrame` loop + self-resizing `Plot`) that sims build on.
 
 ### Styling
