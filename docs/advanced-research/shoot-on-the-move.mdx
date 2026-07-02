@@ -89,6 +89,81 @@ This is circular: the virtual target changes the distance, the distance changes 
 
 It converges fast for a concrete reason: the lead distance $G v_R (t_d + t_f)$ is small next to the shot distance, and a small change in distance produces an even smaller change in flight time, so each pass moves the answer less than the last. The map is a contraction, and in the dashboard's solver trace you can watch $\Delta t_f$ shrink below the tolerance in two or three rounds. The iteration cap is there only to bound the real-time loop if a bad lookup table breaks that contraction — not because convergence is in doubt under normal conditions.
 
+## Step 4: The robot is braking while the shot happens
+
+The virtual-target math above quietly assumes the robot holds a constant velocity through the feeder
+delay and the flight. It usually doesn't. A driver who decides to shoot tends to release the sticks,
+and the robot coasts down under back-EMF braking and viscous drag. Feed the solver the velocity from
+the moment of the trigger pull and it leads the target too far.
+
+The fix starts with a measurement, not a model. Drive the robot up to a speed, cut power, and record
+how far it rolls. On real drivetrains the stopping distance fits a quadratic with a linear term:
+
+$$
+D(v) = a v^2 + b v
+$$
+
+The same fit shows up in path following — Pedro Pathing brakes with it, and the
+[Pedro deep-dive](../advanced-topics/how-pedro-pathing-works.mdx) covers that side. Here we need more
+than the stopping distance. We need the whole coast: where is the robot, and how fast is it going,
+half a second from now?
+
+The fit already contains the answer. A braking-distance curve $D(v)$ implies a deceleration at every
+speed — differentiate the relation between distance and speed and you get:
+
+$$
+\dot{v} = -\frac{v}{2av + b}
+$$
+
+Separate the variables and the messy right side turns into something integrable:
+
+$$
+2a\,v + b\ln v = 2a\,v_0 + b\ln v_0 - t
+$$
+
+The left side decreases linearly in time. Solving that for $v$ needs the **Lambert W function** (the
+inverse of $u e^u$ — the standard tool whenever a variable appears both bare and inside a logarithm):
+
+$$
+v(t) = \frac{b}{2a}\,W\!\left(\frac{2a v_0}{b}\,
+\exp\!\left(\frac{2a v_0 - t}{b}\right)\right)
+$$
+
+and the distance covered comes for free, no second integral needed. The robot's remaining stopping
+distance is always $D$ of its current speed, so the ground it has covered is the difference:
+
+$$
+x(t) = D(v_0) - D(v(t))
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'a, b', meaning: 'the fitted braking coefficients; b absorbs back-EMF and viscous drag', unit: 's²/m, s'},
+    {symbol: 'v_0', meaning: 'robot speed at the moment power is cut', unit: 'm/s'},
+    {symbol: 'W', meaning: 'the Lambert W function, the inverse of u·eᵘ', unit: 'unitless'},
+    {symbol: 'v(t), x(t)', meaning: 'closed-form speed and distance covered t seconds into the coast', unit: 'm/s, m'},
+  ]}
+/>
+
+With $v(t)$ and $x(t)$ in closed form, the deployed controller projects the robot's pose and velocity
+about half a second into the future — scalar coast applied along the current velocity direction — and
+hands that *projected* state to the fixed-point solver from Step 3. That one projection buys three
+things at once:
+
+1. **The deceleration is priced in.** The virtual target is computed from where the robot will be,
+   not where it was when the trigger was pulled.
+2. **The turret gets its command early.** A servo turret lags its command; aiming at the projected
+   state means the turret arrives on time instead of chasing.
+3. **Voltage compensation costs one multiply.** The coefficients were regressed at some battery
+   voltage $V_0$. At a different voltage, scale the speed profile: $v(t)_{\text{new}} = v(t) \cdot V_{\text{new}} / V_0$.
+   The behavior stays consistent from a fresh pack to a tired one.
+
+:::warning Fit the coast you actually use
+These coefficients are for a zero-power coast — hands off the sticks. A follower that brakes actively
+(Pedro applies about $-0.2$ power) stops much shorter. The $D(v) = av^2 + bv$ form holds for both;
+the numbers do not transfer. Fit each behavior separately.
+:::
+
 ## How the deployed solver is structured
 
 On the robot the fixed-point loop is made explicit and *bounded*. It runs inside the autonomous control loop, so it is given a hard iteration cap: even if a bad table or impossible geometry breaks convergence, the loop must still return in predictable time rather than spin.
@@ -119,6 +194,6 @@ Do not wait for an encoder reading to equal the target exactly. A match robot sh
 
 <Admonition type="info" title="Source trail">
 
-This lesson references the research paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator.
+This lesson references the research paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator. The coasting model in Step 4 — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick — is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance data behind the fit was collected by Jacob Ophoven.
 
 </Admonition>

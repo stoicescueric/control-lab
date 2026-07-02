@@ -597,3 +597,16 @@ pre code {
     --ifm-h2-font-size: 1.34rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Lesson progress (src/lib/progress.ts): completed lessons get a trailing
+   green check in the sidebar via the DocSidebarItem/Link wrapper.
+   --------------------------------------------------------------------------- */
+.menu__list-item.cl-done > .menu__link::after {
+  content: '✓';
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--color-green);
+  font-weight: 700;
+  font-size: 0.85em;
+}

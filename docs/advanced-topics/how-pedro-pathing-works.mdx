@@ -49,7 +49,7 @@ The picture below is the first-order idea. Each arrow says where a robot would l
 
 <GuidedVectorField />
 
-The second-order Pedro paper takes this idea one level deeper. Instead of treating the field as only a desired velocity direction, it builds a field over pose plus velocity. In FTC language: the follower cares not only where the robot is, but also how fast it is already moving and whether it must brake, curve, or correct heading.
+The second-order Pedro paper takes this idea one level deeper. Instead of treating the field as only a desired velocity direction, it builds a field over pose plus velocity. In FTC language: the follower cares about more than where the robot is. It also tracks how fast the robot is already moving, and whether it must brake, curve, or correct heading.
 
 ## Step 1: represent the path as a parameterized curve
 
@@ -214,19 +214,48 @@ where:
 - $\psi(\mathbf{p})$ is the robot's current projected path parameter.
 - $\|\phi'(s)\|$ converts parameter change into physical distance.
 
-If the robot can decelerate at magnitude $a$, a basic kinematic estimate gives
+The paper writes the speed limit as $v_{\text{desired}} = \sqrt{2ad}$ — constant-deceleration
+kinematics. That form is deliberate: the algorithm is meant to work in any number of dimensions, so
+the paper does not commit to one drivetrain's physics. The shipped follower does something better. It
+**measures** how the robot actually stops.
+
+A real drivetrain braking is not a constant-deceleration object. The motors brake through back-EMF,
+which fades as the robot slows, and the drivetrain drags on itself through viscous friction. Fit
+braking distance against entry speed on a real robot and you get a quadratic with a linear term:
 
 $$
-v_{\text{desired}} = \sqrt{2ad}
+D(v) = a v^2 + b v
 $$
 
 where:
 
-- $v_{\text{desired}}$ is the desired tangential speed.
-- $a$ is available deceleration magnitude.
-- $d$ is remaining distance.
+- $D(v)$ is how far the robot travels before stopping, entering at speed $v$.
+- $a$ captures the inertia-versus-braking-torque part (this is what constant-deceleration kinematics
+  approximates as $1/2a_{\text{decel}}$).
+- $b$ captures the speed-proportional losses: back-EMF braking and viscous drag. On Pedro's test data
+  it lands in the hundredths. Small, but load-bearing — leave it out and the model misses short stops.
 
-This is the same intuition as stopping a car before a wall: far away, drive quickly; close to the endpoint, reduce the target speed so the robot can arrive without overshooting.
+The braking-distance regression data behind this comes from Pedro Pathing, collected by Jacob Ophoven.
+
+Two ways to use the fit, and Pedro has shipped both:
+
+- **Pedro 2** ran a position controller and simply subtracted the braking distance from the error:
+  $e = \lVert \mathbf{x}_{\text{target}} - \mathbf{x} \rVert - D(v)$. When the remaining distance
+  equals the stopping distance, the error reads zero and the controller stops pushing.
+- **Pedro 3** inverts the fit instead. Given remaining distance $d$, solve $a v^2 + b v = d$ with the
+  quadratic formula and keep the larger root:
+
+$$
+v_{\text{desired}} = \frac{-b + \sqrt{b^2 + 4ad}}{2a}
+$$
+
+  then track that speed with a velocity PID. Same fit, used as a speed plan instead of an error offset.
+
+:::warning The coefficients depend on how you brake
+Pedro brakes actively, at roughly $-0.2$ motor power. A driver who lets go of the sticks brakes at
+zero power and coasts farther. The $D(v) = av^2 + bv$ model holds either way, but the fitted $a$ and
+$b$ do not transfer between braking styles. Refit for the behavior you actually use.
+:::
 
 <Admonition type="tip" title="Why this feels different from fixed motion profiles">
 
@@ -349,7 +378,7 @@ The snippet shows the decomposition, not the exact Pedro Pathing implementation.
 
 ## What completion really means
 
-A path is not "done" just because $t$ reaches one. A robust follower checks several kinds of completion:
+A path is not "done" just because $t$ reaches one. A reliable follower checks several kinds of completion:
 
 - path progress is at or near the end;
 - position error is small enough;
@@ -394,6 +423,9 @@ That is the core idea Pedro exposes to teams: a path follower that is reactive l
 - Pedro Pathing documentation, [Introduction](https://pedropathing.com/docs/pathing): Bezier curves, PIDF control, centripetal force correction, localization prerequisites, and tuning overview.
 - Pedro Pathing documentation, [PedroPathing vs Road Runner](https://pedropathing.com/docs/pathing/pedro-v-roadrunner): speed, disturbance correction, centripetal force correction, and command-base options.
 - Pedro Pathing documentation, [Constraints](https://pedropathing.com/docs/pathing/reference/constraints): completion criteria used by `follower.isBusy()`.
+- The $D(v) = av^2 + bv$ braking model, the Pedro 2 vs Pedro 3 braking implementations, and the
+  active-braking caveat are from correspondence with Havish Sripada (Pedro Pathing); the
+  braking-distance regression data was collected by Jacob Ophoven (Pedro Pathing).
 - This lesson extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx), [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx), and [GVF Convergence Theory](./gvf-convergence.mdx).
 
 </Admonition>

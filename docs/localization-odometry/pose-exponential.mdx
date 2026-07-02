@@ -6,6 +6,7 @@ tags: [pose-exponential, se2, lie-group, twist, odometry, integration]
 ---
 
 import PoseExponential from '@site/src/components/sims/PoseExponential';
+import {TwistExplorer} from '@site/src/components/sims/OdometryMathDemos';
 
 # Pose Exponential
 
@@ -123,6 +124,19 @@ Those $\frac{\sin\Delta\theta}{\Delta\theta}$ and $\frac{1-\cos\Delta\theta}{\De
 *exactly* the arc terms from the [odometry](./odometry.mdx) derivation — the pose exponential is the same
 constant-curvature arc, now written so a nonzero $\Delta y_b$ (strafe) rides through the very same
 $\mathbf{V}$. The forward-only scalar formula cannot represent that; this can.
+
+<TwistExplorer />
+
+This Desmos-style graph dissects **one single loop**. Dial in a body twist — forward, strafe, turn —
+and the green path is what a robot holding that twist actually traces: `exp(ξ∧)`, the exact integral,
+with the $\mathbf{V}(\Delta\theta)$ factors shown live in the readout. The rose ghost is Euler's
+answer: apply the body motion as a straight step, then rotate. With no turn the two coincide exactly.
+Add turn and they split — the chord cuts inside the arc, and the gap readout is the error committed
+*every loop*. Now push the **strafe** slider: the whole curve shears sideways yet both components
+still ride through the same $\mathbf{V}$ — this is the mecanum case the scalar arc formula from the
+odometry lesson simply cannot express, visible. Note what the gap depends on: it grows with the *turn
+per step*, not with speed — which is exactly why the demo below, which repeats the step many times,
+blows up at coarse loop rates and converges at fine ones.
 
 ### The small-angle limit recovers Euler
 

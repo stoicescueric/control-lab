@@ -6,7 +6,7 @@
    the two trajectories side by side so the gap is impossible to miss.
 
    The physics (quadratic drag, RK4 integration, the SI constants from the
-   paper) lives in lib/projectile so every Module 6 sim shares one model; this
+   paper) lives in lib/projectile so every Module 7 sim shares one model; this
    file is just the SVG view. Pure React + SVG, so it is SSR-safe. */
 
 import {useState} from 'react';

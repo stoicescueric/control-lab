@@ -148,6 +148,14 @@ $\sqrt{2 a d}$ cap is the same physics evaluated on demand from the current dist
 and enough for point-to-point moves.
 </Callout>
 
+:::note The constant-deceleration model is an idealization
+$v = \sqrt{2ad}$ assumes the robot brakes at one fixed rate. Measure a real drivetrain and its
+stopping distance fits $D(v) = av^2 + bv$ instead — back-EMF braking fades as the robot slows, and
+viscous drag adds the linear term. The idealization is the right way to *learn* the technique. When
+you want the production version, [the Pedro Pathing deep-dive](../advanced-topics/how-pedro-pathing-works.mdx)
+shows how Pedro fits the real curve and inverts it with the quadratic formula.
+:::
+
 **The slicker version: predict where you'll glide to.** The same physics solves for *distance* instead of
 speed: a robot moving at speed $v$ needs $d_\text{glide} = v^2/2a$ to coast to a stop. So don't cap the
 speed at all — add that glide vector to the current pose to get a **predicted stopping pose**, and run the

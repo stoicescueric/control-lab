@@ -6,6 +6,7 @@ tags: [filter, moving-average, smoothing, ring-buffer]
 ---
 
 import MovingAverage from '@site/src/components/sims/MovingAverage';
+import {WindowVsFadeExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Moving Average
 
@@ -45,8 +46,6 @@ $$
 $$
 
 <figure className="my-7 text-center">
-  <div className="overflow-x-auto">
-  <div className="min-w-[480px]">
   <svg viewBox="0 0 640 130" className="mx-auto h-auto w-full" role="img" aria-label="A sliding window over a row of readings">
     <defs>
       <marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -67,8 +66,6 @@ $$
     <rect x="472" y="36" width="64" height="40" rx="10" fill="#4f6cf7" />
     <text x="504" y="61" fontSize="13" fontWeight="600" fill="#fff" textAnchor="middle">output</text>
   </svg>
-  </div>
-  </div>
   <figcaption className="mt-2 text-[0.9rem] text-ink-soft">
     The window holds the most recent N readings; their mean is the output. Next loop the window slides
     one step forward.
@@ -84,8 +81,22 @@ It is a close cousin of the low-pass filter, with a different memory model:
 | Setting | window size N | smoothing α |
 | Best at | killing steady jitter | cheap real-time smoothing |
 
-The demo overlays truth, sensor, and the windowed average. Grow N for smoothness, then run the step
-test to feel the lag a large window costs.
+The cleanest way to *see* that difference in memory is to feed both filters one wild outlier and
+watch what the output does afterwards:
+
+<WindowVsFadeExplorer />
+
+This Desmos-style graph is each filter's **impulse response** — which is nothing more than its weight
+function, replayed in time. The moving average gives the spike a weight of exactly $1/N$ for exactly
+$N$ samples, then drops it entirely: full poison, then total amnesia, with the hard edge at $k = N$.
+The EMA takes a *bigger* first hit ($\alpha > 1/N$ for typical settings) but fades it geometrically —
+a long, soft tail instead of a cliff. Grow $N$ and the moving average's contamination gets shallower
+but *longer*; there is no setting that makes it short *and* shallow. That fixed $N$-sample dwell is
+the "single outlier contaminates the output for the full window" failure from the introduction, now
+quantified.
+
+The demo below runs the window on a live signal — truth, sensor, and the windowed average. Grow N for
+smoothness, then run the step test to feel the lag a large window costs.
 
 <MovingAverage />
 
@@ -116,8 +127,9 @@ double update(double reading) {
     return sum / count;        // average of the current window
 }`}</JavaCode>
 
-Both filters here assume a *single* noisy sensor. The next two lessons fuse *multiple* imperfect
-sensors into one estimate that beats any of them alone — starting with the complementary filter.
+Both filters here assume a *single* noisy sensor, and both share its hard limit: they cannot fix
+drift. The rest of the module switches to *fusion* — combining two imperfect sensors into one
+estimate that beats either alone — starting with the complementary filter.
 
 </Deploy>
 

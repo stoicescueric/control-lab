@@ -1,89 +1,118 @@
 ---
 title: Complementary Filter
-description: Two flawed sensors that fail in opposite ways — a drifting gyro and a noisy accelerometer — blended into one reliable angle estimate.
+description: Your first sensor fusion — blend a fast sensor that drifts with a slow sensor that doesn't. Built here from a real FTC pairing, a motor encoder and an absolute encoder on the same joint.
 sidebar_position: 4
-tags: [filter, sensor-fusion, complementary, imu]
+tags: [filter, sensor-fusion, complementary, encoders]
 ---
 
 import Complementary from '@site/src/components/sims/Complementary';
+import {ComplementarySplitExplorer} from '@site/src/components/sims/FilterMathDemos';
 
 # Complementary Filter
 
 <Difficulty level="Medium" />
 
 <Abstract>
-A complementary filter fuses two sensors that fail in opposite ways — a gyro that is smooth but drifts
-and an accelerometer that is stable but noisy — into one trustworthy angle estimate. This lesson shows
-how a single blending constant hands each sensor the frequency band it is actually good at.
+This is where the module switches from filtering to fusion. A filter cleans one sensor; fusion
+combines two sensors whose failures point in opposite directions. The complementary filter is the
+simplest fusion there is — one blending constant — shown here on a real FTC pairing: a motor encoder
+that is fast but slips away from the truth, and an absolute encoder that stays honest forever but is
+noisy and slow.
 </Abstract>
 
-The previous filters cleaned a *single* sensor. Often the better move is to combine *two* imperfect
-sensors whose weaknesses are complementary. The classic case — used in every IMU-stabilised
-mechanism — is estimating an angle from a gyroscope and an accelerometer.
+The previous filters cleaned a *single* sensor, and they all paid the same price: smoothing fights
+jitter but does nothing about drift. No amount of averaging fixes a sensor whose *center* is walking
+away from the truth. For drift you need a second sensor — one that never walks — and a rule for
+combining the two.
 
-<Problem title="The gyro drifts; the accelerometer is noisy">
+<Problem title="The motor encoder is fast but lies slowly; the absolute encoder is honest but rough">
 
-To hold a heading or a tilt, a robot has two sensors, each untrustworthy in an opposite way:
+Put an arm on a robot and you usually have two ways to measure its angle:
 
-- **Gyroscope** — measures *angular rate*. Integrating it gives a smooth, responsive angle, but the
-  integration accumulates a small bias into unbounded **drift**. Excellent short-term, useless
-  long-term.
-- **Accelerometer** — senses gravity, so it knows the true tilt *on average*, but every bump and
-  vibration corrupts it with **noise**. Honest long-term, jittery short-term.
+- **Motor encoder** — counts ticks at the motor, fresh every loop, fine resolution. But it measures
+  *the motor*, not the joint. Every bit of belt slip, chain skip, and gear backlash between the two
+  accumulates, so the angle you compute from ticks drifts away from the true arm angle over a match.
+  Excellent short-term, wrong in the long run.
+- **Absolute encoder on the joint** — reads the joint angle itself, so it *cannot* drift. But the
+  reading is noisy, and it often updates slower than your loop runs. True in the long run, rough
+  right now.
 
-Used alone, one drifts away and the other shakes. We want an estimate that is both smooth *and*
-drift-free.
+Run on the motor encoder alone and the arm slowly forgets where it is. Run on the absolute encoder
+alone and your control loop chews on noise. The two failures are opposites — *complementary* — which
+is the whole trick.
 
 </Problem>
 
-<Theory title="High-pass the gyro, low-pass the accelerometer, add them">
+<Theory title="High-pass the fast sensor, low-pass the honest one, add them">
 
-Pass the gyro through a *high-pass* (keep its fast, accurate component) and the accelerometer
-through a *low-pass* (keep its slow, honest component). Their frequency responses are complements
-that sum to one, so the combination covers the whole band. In practice this collapses into a single
-recursive line:
+Pass the motor encoder through a *high-pass* (keep its fast, accurate motion, block its slow drift)
+and the absolute encoder through a *low-pass* (keep its slow, honest average, reject its jitter).
+The two frequency responses are complements that sum to one, so nothing of the true signal is lost.
+In code, all of that collapses into a single recursive line:
 
 $$
-\hat{\theta}_k = \alpha\,(\hat{\theta}_{k-1} + \omega_{\text{gyro}}\,\Delta t) + (1 - \alpha)\,\theta_{\text{accel}}
+\hat{\theta}_k = \alpha\,(\hat{\theta}_{k-1} + \Delta\theta_{\text{motor}}) + (1 - \alpha)\,\theta_{\text{abs}}
 $$
 
 <Formula>
-  angle = <Amber>α</Amber>·(angle + <Teal>gyro</Teal>·dt) + (1 − <Amber>α</Amber>)·<Rose>accelAngle</Rose>
+  angle = <Amber>α</Amber>·(angle + <Teal>Δmotor</Teal>) + (1 − <Amber>α</Amber>)·<Rose>absolute</Rose>
 </Formula>
 
-The first term coasts the angle forward on the smooth gyro; the second gently pulls it back toward
-the accelerometer's honest reading, cancelling drift. $\alpha$ sits close to 1 (≈ 0.98): mostly trust
-the gyro, sip just enough accelerometer to stay anchored.
+The first term advances the estimate by however far the motor encoder moved this loop — smooth and
+immediate. The second term gently pulls the estimate toward the absolute reading, bleeding off
+whatever drift has crept in. $\alpha$ sits close to 1 (≈ 0.98): mostly ride the motor encoder, sip
+just enough of the absolute sensor to stay anchored.
 
-The demo runs a gyro-only estimate (smooth but drifting), an accel-only estimate (centred but
-noisy), and the fusion. Increase the gyro drift to see why neither raw sensor is acceptable.
+<ComplementarySplitExplorer />
+
+This Desmos-style graph is the "complements" claim, drawn. The rose curve is the absolute encoder's
+**low-pass** — it passes the slow, honest angle and rejects the fast noise. The teal curve is the
+motor encoder's **high-pass** — it passes fast motion and blocks the slow drift. They cross at the
+cutoff $f_c = 1/(2\pi\tau)$, where $\tau$ comes directly from $\alpha$ and the loop time, and at
+*every* frequency the two responses **sum to exactly one** (the dashed line): nothing of the true
+signal is lost, it is only reassigned to whichever sensor reports that band honestly. Push $\alpha$
+toward 1 and the crossover slides left — you trust the motor encoder deeper into the slow band and
+sip even less of the absolute sensor; the cost is that slip takes longer to cancel.
+
+The demo below runs the filter on a moving arm: a motor-encoder-only estimate (smooth but sliding off
+the truth), an absolute-only estimate (anchored but noisy and stepped — it updates slower than the
+loop), and the fusion. Crank the slip drift to see why neither raw sensor is acceptable.
 
 <Complementary />
 
 <Callout type="tip" title="Two wrongs make a right.">
-Let it run: the gyro-only line slides off the truth while the accel-only line is fuzzy — yet the
-fusion stays smooth <em>and</em> locked on. The compute cost is one multiply-add per axis.
+Let it run: the motor-encoder line slides off the truth while the absolute line is fuzzy — yet the
+fusion stays smooth <em>and</em> locked on. The compute cost is one multiply-add per loop.
 </Callout>
 
 </Theory>
 
-<Deploy title="One line per loop on the IMU">
+<Deploy title="One line per loop">
 
-On FTC the BNO055/BHI260 IMU often fuses internally, but the complementary filter is the right tool
-whenever you combine a rate source with an absolute one (e.g. heading from a gyro corrected by a
-vision bearing). It needs the measured $\Delta t$ — the same discipline as every time-based term.
+The fast source enters as a *delta* (ticks moved since last loop), the honest source as an *absolute*
+reading. Seed the estimate from the absolute sensor so the filter starts true:
 
-<JavaCode league="FTC" label="Complementary heading estimate">{`double angle = 0;                 // persists across loops
-final double ALPHA = 0.98;        // gyro trust
+<JavaCode league="FTC" label="Fuse a motor encoder with an absolute encoder">{`double angle = absEncoder.getAngleDeg();      // seed from the honest sensor
+final double ALPHA = 0.98;                    // motor-encoder trust
+int lastTicks = motor.getCurrentPosition();
 
 while (opModeIsActive()) {
-    double dt = timer.seconds(); timer.reset();
+    int ticks = motor.getCurrentPosition();
+    double deltaDeg = (ticks - lastTicks) * DEG_PER_TICK;
+    lastTicks = ticks;
 
-    double gyroRate  = imu.getAngularVelocity().zRotationRate;   // deg/s
-    double accelAngle = Math.toDegrees(Math.atan2(ay, ax));      // absolute, noisy
+    double absDeg = absEncoder.getAngleDeg();  // honest but noisy
 
-    angle = ALPHA * (angle + gyroRate * dt) + (1 - ALPHA) * accelAngle;
+    angle = ALPHA * (angle + deltaDeg) + (1 - ALPHA) * absDeg;
 }`}</JavaCode>
+
+:::note The drone-textbook version
+Most textbooks teach this filter on a gyro + accelerometer pair: integrate the gyro's rate (fast,
+drifts), anchor with the accelerometer's gravity direction (honest, shaky). Same math, different
+sensors — and on FTC your IMU already does that fusion internally. The pattern is worth recognizing
+in general: *any* fast-relative source plus *any* slow-absolute source fits, like a gyro heading
+anchored by an occasional vision bearing.
+:::
 
 The complementary filter hand-picks a fixed blend $\alpha$. The Kalman filter computes the
 *optimal* blend automatically, every step, from the actual uncertainties — the subject of the next

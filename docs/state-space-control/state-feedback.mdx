@@ -1,0 +1,175 @@
+---
+title: State-Space Models & State Feedback
+description: "Your kV and kA already are a state-space model. Write the mechanism as dx/dt = Ax + Bu, discretize it for the robot loop, and control every state at once with u = K(r − x)."
+sidebar_position: 1
+tags: [state-space, state-feedback, pole-placement, wpilib, modeling]
+---
+
+# State-Space Models & State Feedback
+
+<Difficulty level="Hard" />
+
+<Abstract>
+A state-space controller feeds back every state of the mechanism at once: $u = K(r - x)$. For a
+two-state elevator that means one gain on position error and one on velocity error, working together
+by design instead of by cascaded tuning. The model comes cheap — the $k_V$ and $k_A$ you measured in
+system identification are the matrix entries. The open question this lesson leaves behind is how to
+choose $K$, and the next lesson answers it.
+</Abstract>
+
+<Admonition type="note" title="Prerequisites">
+
+Read the [state-space preface](../preface/why-math-matters/state-space.mdx) for the vocabulary and
+[system identification](../control-theory/system-identification.mdx) for where $k_V$ and $k_A$ come
+from. The [Kalman filter](../signal-processing/kalman.mdx) shows up at the end.
+
+</Admonition>
+
+<Problem title="One error signal can't see two states">
+
+An elevator has a position and a velocity, and both matter. Feed a PID only the position error and it
+is blind to how fast the carriage is moving until the error starts changing — the D term is a crude,
+noisy estimate of a state you actually know. Teams patch this with cascaded loops (a position PID
+commanding a velocity PID) and it works, but now there are two loops fighting through each other, six
+gains, and no principled way to trade them off.
+
+The state-space view removes the patchwork. The mechanism *is* a vector of states. Measure or estimate
+all of them, feed all of them back, and design the response once.
+
+</Problem>
+
+<Theory title="The model you already measured">
+
+### From kV, kA to a differential equation
+
+The [feedforward model](../control-theory/feedforward.mdx) says the voltage a velocity mechanism needs
+is $V = k_V v + k_A \dot{v}$. Solve that for the acceleration and you have a state equation:
+
+$$
+\dot{v} = -\frac{k_V}{k_A}\,v + \frac{1}{k_A}\,V
+$$
+
+That is $\dot{x} = Ax + Bu$ with one state. For a flywheel:
+
+$$
+A = -\frac{k_V}{k_A}, \qquad B = \frac{1}{k_A}
+$$
+
+$A$ says how the system moves on its own (back-EMF and friction bleed speed off, hence the minus
+sign). $B$ says how hard the input pushes on the state. Both numbers came out of the
+[system-identification](../control-theory/system-identification.mdx) fit — the model costs nothing new.
+
+An elevator needs two states, position and velocity, so $A$ and $B$ grow into matrices:
+
+$$
+\mathbf{x} = \begin{bmatrix} p \\ v \end{bmatrix},
+\qquad
+A = \begin{bmatrix} 0 & 1 \\ 0 & -k_V/k_A \end{bmatrix},
+\qquad
+B = \begin{bmatrix} 0 \\ 1/k_A \end{bmatrix}
+$$
+
+Read the rows: the first says $\dot{p} = v$ (position changes at the velocity — pure bookkeeping), and
+the second is the same motor equation as the flywheel. Most FTC mechanisms fit in one or two states.
+
+### Discretize for the loop
+
+The robot runs a loop, not a differential equation, so the model gets converted once into a
+step-ahead form (the same move as everywhere in
+[From Math to a Loop](../software-architecture/discretization.mdx)):
+
+$$
+\mathbf{x}_{k+1} = A_d\,\mathbf{x}_k + B_d\,\mathbf{u}_k
+$$
+
+WPILib does this conversion internally from your loop period. If you do it by hand for a one-state
+system, $A_d = e^{A\Delta t}$ and $B_d = (A_d - 1)B/A$ — two constants you compute once.
+
+### State feedback: u = K(r − x)
+
+The control law is one line:
+
+$$
+\mathbf{u} = K(\mathbf{r} - \mathbf{x}) + u_{ff}
+$$
+
+$K$ has one entry per state. For the elevator that is a gain on position error and a gain on velocity
+error. If that smells like PD control, good — it is, structurally. The difference is what happens
+next: substitute the law into the model and the closed-loop system becomes
+
+$$
+\dot{\mathbf{x}} = (A - BK)\,\mathbf{x}
+$$
+
+Choosing $K$ literally chooses the physics of the closed-loop system — how fast it converges, whether
+it overshoots. Control theory calls the eigenvalues of $A - BK$ the *poles*, and picking $K$ to put
+them somewhere deliberate is *pole placement*. Which raises the obvious question: where should they
+go? Faster costs voltage; slower wastes match time. Guessing pole locations is no better than
+guessing PID gains. The [next lesson](./lqr.mdx) replaces the guess with a cost function.
+
+The $u_{ff}$ term is the plant-inversion feedforward you already know: the voltage that holds the
+reference by itself ($k_V r$ for a flywheel, $k_G$ for the elevator), so the feedback only works on
+the error.
+
+### When you can't measure a state
+
+The elevator encoder gives position. Velocity has to be estimated, and differentiating the encoder
+amplifies noise — the same problem the [filter module](../signal-processing/index.mdx) solved. The
+clean answer is an observer: run the model forward as a prediction, correct it with the measurement,
+weighted by trust. That is exactly a [Kalman filter](../signal-processing/kalman.mdx), now estimating
+the states the controller needs. The full pattern is a loop within a loop: **predict** the state,
+**correct** with the sensor, **control** with $K$.
+
+</Theory>
+
+<Deploy title="Matrices in WPILib, arithmetic in FTC">
+
+FRC ships the whole stack. You hand WPILib the identified constants and it builds the model:
+
+<JavaCode league="FRC" label="The model from kV/kA — WPILib builds the matrices">{`// Flywheel: one state (velocity). Units: volts per (rad/s), volts per (rad/s²).
+LinearSystem<N1, N1, N1> flywheel =
+    LinearSystemId.identifyVelocitySystem(kV, kA);
+
+// Elevator: two states (position, velocity), from the same characterization.
+LinearSystem<N2, N1, N1> elevator =
+    LinearSystemId.identifyPositionSystem(kV, kA);`}</JavaCode>
+
+FTC has no such library, and for one or two states you do not need it. Compute the gains offline (next
+lesson), then the runtime controller is plain arithmetic:
+
+<JavaCode league="FTC" label="Two-state elevator feedback, gains precomputed offline">{`// K = {kPos, kVel} computed offline. velocity comes from your localizer or a
+// filtered encoder derivative — see the signal-processing module.
+public double update(double targetPos, double pos, double vel) {
+    double volts = K_POS * (targetPos - pos)
+                 + K_VEL * (0.0 - vel)          // reference velocity at hold is zero
+                 + kG;                           // gravity feedforward, as always
+    return volts / battery.getVoltage();         // volts -> [-1, 1]
+}`}</JavaCode>
+
+<Callout type="idea" title="You have been doing scalar state feedback all along.">
+A P controller on velocity with a kV feedforward is state feedback on a one-state system. The
+state-space framing did not change the code; it changed where the numbers come from and how far the
+same recipe stretches when the mechanism gets more states.
+</Callout>
+
+</Deploy>
+
+<Admonition type="warning" title="Hardware reality: the model is the contract">
+
+State feedback trusts the model with more authority than PID ever did. A wrong ticks-per-unit
+conversion, a $k_A$ fitted from noisy data, or an unmodeled game element in the intake all corrupt the
+gain design silently. Re-run [system identification](../control-theory/system-identification.mdx) when
+the mechanism changes, and keep the feedback term doing cleanup work, never the bulk of the effort.
+
+</Admonition>
+
+<Admonition type="info" title="Sources & references">
+
+- [WPILib: State-Space Control introduction](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-intro.html) -
+  the library reference this lesson mirrors, including `LinearSystemId` and discretization.
+- Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) -
+  full derivations of state-space modeling, pole placement, and observers for competition robots.
+- [System Identification](../control-theory/system-identification.mdx) and the
+  [Kalman filter](../signal-processing/kalman.mdx) - the Control Lab lessons this module builds on.
+
+</Admonition>

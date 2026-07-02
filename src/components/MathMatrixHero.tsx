@@ -111,7 +111,7 @@ export function MathMatrixHero() {
   return (
     <header
       ref={rootRef}
-      className="relative flex min-h-[78vh] w-full items-center justify-center overflow-hidden border-b border-line bg-[#0a0f1e]">
+      className="relative flex min-h-[86vh] w-full items-center justify-center overflow-hidden border-b border-line bg-[#0a0f1e]">
       {/* glyph grid (built client-side) */}
       <div ref={gridRef} id="cl-tiles" aria-hidden="true" />
 
@@ -159,45 +159,48 @@ export function MathMatrixHero() {
       `}</style>
 
       {/* overlay copy */}
-      <div className="relative z-10 mx-auto max-w-3xl px-6 text-center">
+      <div className="relative z-10 mx-auto max-w-4xl px-6 text-center">
         <motion.div
           {...rise(0)}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.06] px-3.5 py-1.5 font-mono text-xs font-medium uppercase tracking-wide text-[#cfe0ff] backdrop-blur-sm">
+          className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-1.5 text-[0.78rem] font-medium tracking-wide text-[#cfe0ff] backdrop-blur-md">
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-brand" />
           Interactive control-theory curriculum
         </motion.div>
 
         <motion.h1
           {...rise(0.06)}
-          className="m-0 text-balance text-[2.4rem] font-extrabold leading-[1.06] tracking-tight text-white sm:text-[3.1rem]">
-          Control theory you can see, derive, and deploy.
+          className="m-0 text-balance text-[2.7rem] font-semibold leading-[1.04] tracking-[-0.025em] text-white sm:text-[3.9rem] lg:text-[4.5rem]">
+          Control theory you can{' '}
+          <span className="bg-gradient-to-r from-[#93a7ff] via-[#6f8bff] to-[#5fd3c4] bg-clip-text text-transparent">
+            see, derive, and deploy.
+          </span>
         </motion.h1>
 
         <motion.p
           {...rise(0.12)}
-          className="mx-auto mt-6 max-w-xl text-lg leading-relaxed text-[#aab6d0]">
-          A rigorous, interactive curriculum for competitive robotics programmers who want to
-          understand the math and architecture beneath the libraries they use in competition.
+          className="mx-auto mt-7 max-w-2xl text-balance text-lg leading-relaxed text-[#a8b4d0] sm:text-xl">
+          A rigorous, interactive curriculum for competitive robotics programmers — the math and
+          architecture beneath the libraries you compete with.
         </motion.p>
 
-        <motion.div {...rise(0.18)} className="mt-9 flex flex-wrap items-center justify-center gap-3">
+        <motion.div {...rise(0.18)} className="mt-10 flex flex-wrap items-center justify-center gap-3.5">
           <Link
             to="/docs/preface/why-math-matters"
-            className="inline-flex items-center gap-2 rounded-[10px] bg-brand px-6 py-3 text-[0.95rem] font-semibold text-white no-underline shadow-[0_8px_24px_rgba(79,108,247,0.32)] transition-colors hover:bg-brand-dk">
-            Start with the Preface
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 text-[0.98rem] font-semibold text-white no-underline shadow-[0_10px_32px_rgba(79,108,247,0.38)] transition-all hover:bg-brand-dk hover:shadow-[0_12px_40px_rgba(79,108,247,0.5)]">
+            Start learning
             <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 6l6 6-6 6" />
             </svg>
           </Link>
           <Link
             to="/docs/control-theory"
-            className="inline-flex items-center rounded-[10px] border border-white/20 bg-white/[0.04] px-6 py-3 text-[0.95rem] font-semibold text-[#eaf0ff] no-underline transition-colors hover:bg-white/10">
-            Jump to Control Theory
+            className="inline-flex items-center rounded-full border border-white/15 bg-white/[0.06] px-7 py-3.5 text-[0.98rem] font-semibold text-[#eaf0ff] no-underline backdrop-blur-md transition-colors hover:bg-white/[0.12]">
+            Explore the curriculum
           </Link>
         </motion.div>
 
-        <motion.p {...rise(0.24)} className="mt-7 font-mono text-xs text-[#7e8cac]">
-          Open source / MIT licensed / Built for FTC and FRC programmers
+        <motion.p {...rise(0.24)} className="mt-9 text-[0.78rem] font-medium tracking-wide text-[#7e8cac]">
+          Open source · MIT licensed · Built for FTC and FRC programmers
         </motion.p>
       </div>
     </header>
