@@ -40,7 +40,7 @@ Three distinct corruptions, each demanding a different defence:
 - **Spikes (outliers)** — occasional wild readings: a loose connector, a reflection, a glitch.
 - **Drift / bias** — a slow, systematic lean away from the truth that accumulates.
 
-:::tip Which sensors actually need this?
+:::tip[Which sensors actually need this?]
 Not encoders. A quadrature encoder reports an exact tick count — there is no noise on "the shaft has
 moved 1 407 ticks," so filtering an encoder *position* adds lag and nothing else. (Encoder *velocity*
 is different: differencing positions amplifies the tick quantization into visible noise.) The signals

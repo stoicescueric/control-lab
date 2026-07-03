@@ -106,7 +106,7 @@ while (opModeIsActive()) {
     angle = ALPHA * (angle + deltaDeg) + (1 - ALPHA) * absDeg;
 }`}</JavaCode>
 
-:::note The drone-textbook version
+:::note[The drone-textbook version]
 Most textbooks teach this filter on a gyro + accelerometer pair: integrate the gyro's rate (fast,
 drifts), anchor with the accelerometer's gravity direction (honest, shaky). Same math, different
 sensors — and on FTC your IMU already does that fusion internally. The pattern is worth recognizing

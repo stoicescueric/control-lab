@@ -5,8 +5,8 @@ sidebar_position: 6
 tags: [filter, ekf, nonlinear, localization, jacobian, apriltag]
 ---
 
-import {AprilTagProjectionExplorer} from '@site/src/components/sims/FilterMathDemos';
 import EkfLinearization from '@site/src/components/sims/EkfLinearization';
+import TagPoseUncertainty from '@site/src/components/sims/TagPoseUncertainty';
 
 # Extended Kalman Filter
 
@@ -46,13 +46,23 @@ field-position error near the tag, but a much larger error when the tag is far a
 
 </Problem>
 
-<AprilTagProjectionExplorer />
+<TagPoseUncertainty />
 
-This Desmos-style graph shows what the Jacobian is measuring for an AprilTag camera update. The
-left side is the robot's field pose relative to a fixed tag. The right side is the camera image: the
-tag's horizontal pixel offset changes when the robot strafes or turns, and the tag's apparent size
-changes when the robot moves closer or farther away. The EKF needs these local slopes because the
-same one-pixel error can mean very different field-position errors depending on depth and heading.
+This demo asks the filter's real question, in reverse: *the tag detection jitters by a pixel or so —
+where could the robot be?* The robot is squared to the wall with its heading held by the IMU, so the
+tag's horizontal offset $u$ and apparent size $s$ pin down its field position. Every frame, the
+detection jitters (the amber square in the camera view), gets inverted back into a field position,
+and lands as a green dot. The dot cloud is the truth about what pixel noise does to your pose. The
+amber ellipse drawn over it is the EKF's answer: the pixel covariance $R$ converted into field
+coordinates through the Jacobian.
+
+Drag the robot around and two things stand out. Near the tag, the cloud is centimeters tight; far
+away it balloons — and it balloons *along the line of sight*. The bearing to the tag (from $u$) stays
+precise, while the range (from apparent size) degrades with the square of the distance; the readout
+under the demo prices it in cm per pixel. One pixel is worth millimeters in one direction and
+centimeters in the other, and that exchange rate — different at every pose, different in every
+direction — is exactly what the Jacobian carries into the filter. It is why an EKF automatically
+trusts a distant tag's bearing more than its range, with no special case written anywhere.
 
 <Theory title="Linearise about the current mean with a Jacobian">
 
@@ -149,7 +159,9 @@ $$
 The first row says how the tag's image center moves when the robot pose changes. The second row
 says how the tag's apparent size changes when the robot pose changes. This matters because
 covariance lives in robot-state space, while camera noise lives in image-measurement space; the
-Jacobian is the local converter between them.
+Jacobian is the local converter between them. The demo above is this same matrix with the heading
+column pinned by the IMU — a 2×2 slice you can invert exactly, which is how each jittered detection
+became one green dot on the field.
 
 The paper replaces the linear Kalman model with two nonlinear functions:
 
@@ -203,8 +215,11 @@ $H$ for the covariance:
 
 $$
 H = \frac{\partial h}{\partial x}\bigg|_{\hat{x}}, \qquad
-\hat{x} = \hat{x}^- + K\,\big(z - h(\hat{x}^-)\big), \qquad
 K = P^- H^\top (H P^- H^\top + R)^{-1}
+$$
+
+$$
+\hat{x} = \hat{x}^- + K\,\big(z - h(\hat{x}^-)\big)
 $$
 
 In that equation, $H$ is the measurement Jacobian, $\hat{x}^-$ is the predicted state before the

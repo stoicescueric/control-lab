@@ -51,10 +51,6 @@ const config: Config = {
       tagName: 'link',
       attributes: {rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous'},
     },
-    {
-      tagName: 'link',
-      attributes: {rel: 'preconnect', href: 'https://cdn.jsdelivr.net', crossorigin: 'anonymous'},
-    },
     // Note: manifest / theme-color / apple-touch-icon are injected by the PWA
     // plugin's `pwaHead` (see the plugins array) so they aren't duplicated here.
   ],
@@ -191,8 +187,6 @@ const config: Config = {
       },
     ],
   ],
-
-  clientModules: [require.resolve('./src/clientModules/fitMath.ts')],
 
   plugins: [
     tailwindPlugin,

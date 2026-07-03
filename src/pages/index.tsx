@@ -1,9 +1,8 @@
-import {useEffect, useState, type ReactNode} from 'react';
+import {useEffect, useRef, useState, type ComponentType, type ReactNode} from 'react';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import {motion, useReducedMotion} from 'framer-motion';
-import PurePursuit from '@site/src/components/sims/PurePursuit';
 import MathMatrixHero from '@site/src/components/MathMatrixHero';
 import {completedCount, getLast, subscribe, type LastVisited} from '@site/src/lib/progress';
 
@@ -181,6 +180,43 @@ function Features() {
   );
 }
 
+/* The showcase sim loads lazily: it sits below the fold, so its code splits
+   into an async chunk fetched when the visitor scrolls near — the landing
+   page's initial JS stays lean. The placeholder reserves the height so
+   nothing shifts when it arrives. */
+function LazyPurePursuit() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [Sim, setSim] = useState<ComponentType | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          io.disconnect();
+          import('@site/src/components/sims/PurePursuit').then((m) => setSim(() => m.default));
+        }
+      },
+      {rootMargin: '600px'},
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="min-h-[420px]">
+      {Sim ? (
+        <Sim />
+      ) : (
+        <div className="grid min-h-[420px] place-items-center rounded-2xl bg-panel font-mono text-sm text-panel-ink/40">
+          loading the follower…
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* The product shot: a real follower, framed like hardware. */
 function Showcase() {
   return (
@@ -202,7 +238,7 @@ function Showcase() {
 
         <Reveal delay={0.08} className="mt-14">
           <div className="mx-auto max-w-4xl rounded-[28px] border border-line bg-surface p-2.5 shadow-pop sm:p-3">
-            <PurePursuit />
+            <LazyPurePursuit />
           </div>
         </Reveal>
 

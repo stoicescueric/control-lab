@@ -158,10 +158,76 @@ things at once:
    voltage $V_0$. At a different voltage, scale the speed profile: $v(t)_{\text{new}} = v(t) \cdot V_{\text{new}} / V_0$.
    The behavior stays consistent from a fresh pack to a tired one.
 
-:::warning Fit the coast you actually use
+:::warning[Fit the coast you actually use]
 These coefficients are for a zero-power coast — hands off the sticks. A follower that brakes actively
 (Pedro applies about $-0.2$ power) stops much shorter. The $D(v) = av^2 + bv$ form holds for both;
 the numbers do not transfer. Fit each behavior separately.
+:::
+
+## Step 5: The turret has to arrive with the right velocity
+
+Everything so far computes *where* to aim. But while the robot moves, that answer keeps changing:
+the virtual target sweeps across the field, so the turret angle that hits it is a moving reference
+$\theta^*(t)$, not a setpoint. Tracking a moving reference is the one job a position-only controller
+cannot do cleanly. A P controller chasing a reference that ramps at $\omega^* = d\theta^*/dt$ settles
+into a permanent lag:
+
+$$
+e_{ss} = \frac{\omega^*}{k_P}
+$$
+
+The turret points where the aim point *was*. Raising $k_P$ shrinks the lag and buys oscillation
+instead; it never removes it, because a position controller only produces output once an error
+already exists.
+
+The clean fix is the full-state reference from
+[state-space control](../state-space-control/state-feedback.mdx). The turret is a two-state
+mechanism, $\mathbf{x} = [\theta, \omega]$, and the solver should hand it *both* states:
+
+$$
+\mathbf{u} = K(\mathbf{r} - \mathbf{x}) + k_V\,\omega^*,
+\qquad
+\mathbf{r} = \begin{bmatrix} \theta^* \\ \omega^* \end{bmatrix}
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'theta*', meaning: 'aim angle from the fixed-point solver, evaluated at the projected pose', unit: 'rad'},
+    {symbol: 'omega*', meaning: 'how fast the aim angle is sweeping — the reference velocity', unit: 'rad/s'},
+    {symbol: 'K', meaning: 'state-feedback gain, one entry per state (from LQR or pole placement)', unit: 'V per error'},
+    {symbol: 'k_V omega*', meaning: 'plant-inversion feedforward: the voltage that rides the moving reference by itself', unit: 'V'},
+  ]}
+/>
+
+The feedforward does the actual tracking work; the feedback only cleans up disturbances. And when
+$\mathbf{x} = \mathbf{r}$, the turret is not just pointing at the aim point — it is *moving with
+it*, so it stays correct through the whole release window instead of being right for one instant.
+That is the physical meaning of a full-state reference, and it is exactly what WPILib's
+`loop.setNextR(thetaStar, omegaStar)` exists to accept.
+
+The best part: $\omega^*$ is already lying around. Step 4 projects the robot's pose forward in
+closed form, so run the Step 3 solver at two nearby times and difference the aim angles:
+
+<JavaCode league="FTC" label="Turret tracking with a full-state reference">{`// Aim angles now and DT ahead, both from the Step 4 coast projection.
+double thetaNow  = aimAngle(solveVirtual(poseAt(0.0)),  poseAt(0.0));
+double thetaNext = aimAngle(solveVirtual(poseAt(DT)),   poseAt(DT));
+double omegaStar = (thetaNext - thetaNow) / DT;        // reference velocity
+
+double volts = K_POS * (thetaNow  - turretAngle)
+             + K_VEL * (omegaStar - turretVel)
+             + kV * omegaStar;                          // feedforward does the tracking
+turret.setPower(volts / battery.getVoltage());`}</JavaCode>
+
+This also reframes the turret-lead trick from Step 4. A servo turret has a position-only interface —
+there is nowhere to put $\omega^*$ — so aiming it at the *projected* pose is the poor man's velocity
+reference. A motor-driven turret under state feedback consumes $[\theta^*, \omega^*]$ directly and
+needs no lead to cover its own lag; the projection's remaining job is the flight time.
+
+:::warning[A spinning turret changes the shot]
+While tracking, the turret adds a tangential component to the exit velocity — roughly
+$\omega^* \cdot r_{\text{exit}}$, the sweep rate times the distance from the turret axis to the
+release point. Keep the release radius small by design, or fold the term into the Step 3 solve as
+extra launcher velocity. Measure it before deciding it is negligible.
 :::
 
 ## How the deployed solver is structured
