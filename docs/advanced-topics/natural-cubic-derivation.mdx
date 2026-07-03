@@ -42,17 +42,22 @@ Writing the unknowns as the second derivatives ("moments") $M_i = S''(x_i)$ coll
 single **tridiagonal** system. With knot spacing $h_i = x_{i+1} - x_i$:
 
 $$
-h_{i-1} M_{i-1} + 2(h_{i-1} + h_i)\,M_i + h_i M_{i+1}
-  = 6\!\left(\frac{y_{i+1} - y_i}{h_i} - \frac{y_i - y_{i-1}}{h_{i-1}}\right),
-\qquad M_0 = M_n = 0
+\begin{gathered}
+h_{i-1} M_{i-1} + 2(h_{i-1} + h_i)\,M_i + h_i M_{i+1} \\[2pt]
+= 6\!\left(\frac{y_{i+1} - y_i}{h_i} - \frac{y_i - y_{i-1}}{h_{i-1}}\right),
+\\[4pt]
+M_0 = M_n = 0
+\end{gathered}
 $$
 
 Each row touches only three unknowns. With the moments in hand, the piece on $[x_i, x_{i+1}]$ is
 
 $$
-S_i(x) = \frac{M_i (x_{i+1}-x)^3 + M_{i+1}(x - x_i)^3}{6 h_i}
-  + \left(\frac{y_i}{h_i} - \frac{M_i h_i}{6}\right)(x_{i+1}-x)
-  + \left(\frac{y_{i+1}}{h_i} - \frac{M_{i+1} h_i}{6}\right)(x - x_i)
+\begin{aligned}
+S_i(x) ={}& \frac{M_i (x_{i+1}-x)^3 + M_{i+1}(x - x_i)^3}{6 h_i} \\[3pt]
+&+ \left(\frac{y_i}{h_i} - \frac{M_i h_i}{6}\right)(x_{i+1}-x)
+ + \left(\frac{y_{i+1}}{h_i} - \frac{M_{i+1} h_i}{6}\right)(x - x_i)
+\end{aligned}
 $$
 
 Drag the waypoints below: the spline always threads through every point, the curvature comb stays smooth

@@ -251,7 +251,7 @@ $$
 
   then track that speed with a velocity PID. Same fit, used as a speed plan instead of an error offset.
 
-:::warning The coefficients depend on how you brake
+:::warning[The coefficients depend on how you brake]
 Pedro brakes actively, at roughly $-0.2$ motor power. A driver who lets go of the sticks brakes at
 zero power and coasts farther. The $D(v) = av^2 + bv$ model holds either way, but the fitted $a$ and
 $b$ do not transfer between braking styles. Refit for the behavior you actually use.
@@ -407,12 +407,14 @@ where the tuple is the commanded time-derivative of the state $x = (\mathbf{p}, 
 For an FTC mecanum robot, the friendly version is:
 
 $$
+\begin{gathered}
 \text{next command}
 =
 \text{drive along}
-+ \text{pull back}
++ \text{pull back} \\[2pt]
 + \text{curve feedforward}
 + \text{turn to heading}
+\end{gathered}
 $$
 
 That is the core idea Pedro exposes to teams: a path follower that is reactive like a field, but practical enough to tune on real FTC hardware.

@@ -561,9 +561,18 @@ pre code {
     padding: 8px 2px 12px;
   }
 
-  /* Code: a hair smaller so more of each line is visible before scrolling. */
+  /* Code: a hair smaller, and WRAP long lines instead of scrolling sideways —
+     nothing on a phone should need dragging to be read. Each source line is
+     its own .token-line div, so a wrapped line continues under itself and the
+     next line still starts at its real indentation. */
   pre code {
     font-size: 0.8rem;
+  }
+  .theme-code-block pre,
+  .theme-code-block pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Interactive demo panels: trim the chrome so the figure gets the width. */

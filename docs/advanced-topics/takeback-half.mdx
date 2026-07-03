@@ -34,10 +34,11 @@ integrated too far, so "take back half": set the drive to the average of its cur
 at the *previous* crossing. Successive crossings bracket the true holding drive and converge onto it.
 
 $$
-\text{drive} \mathrel{+}= g\,e\,\Delta t;
-\qquad
+\begin{gathered}
+\text{drive} \mathrel{+}= g\,e\,\Delta t \\[3pt]
 \text{on a sign change of } e:\quad
 \text{drive} \leftarrow \tfrac12\big(\text{drive} + \text{drive}_\text{last-cross}\big)
+\end{gathered}
 $$
 
 The result (green below) recovers nearly as fast as bang-bang on the first approach, then quickly stops
