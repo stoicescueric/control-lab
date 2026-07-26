@@ -5,7 +5,7 @@ sidebar_position: 1
 tags: [motor, dc-motor, brushed, brushless, back-emf, commutator, torque-current, torque-speed]
 ---
 
-import MotorCurve from '@site/src/components/sims/MotorCurve';
+import MotorCurve from '@site/src/components/simulations/control-theory/MotorCurve';
 import {MotorExploded, BrushedVsBrushless} from '@site/src/components/kit/MotorIllustrations';
 
 # How a Motor Works
@@ -345,9 +345,9 @@ to design with. Measuring the *real* constants for your specific motor is its ow
 
 <Admonition type="info" title="Sources & references">
 
-- **Motor data** — goBILDA 5000-0002-0117 (MATRIX) 12 V curve and the FTC motor table, from
+- **Motor data**: goBILDA 5000-0002-0117 (MATRIX) 12 V curve and the FTC motor table, from
   [gm0 · Motor Power](https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html).
-- **Torque / current control** — Vikramaditya Nishant, *Introducing Torque-Current Control for FTC*
+- **Torque / current control**: Vikramaditya Nishant, *Introducing Torque-Current Control for FTC*
   ([Medium](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)),
   for the $V = k_e\omega + IR$ current-command and the current-limiting-during-defense argument.
 

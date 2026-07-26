@@ -18,13 +18,11 @@ interface Contributor {
 
 type Status = 'loading' | 'ready' | 'error';
 
-const MEDALS = ['🥇', '🥈', '🥉'];
-
 function ContributorCard({c, rank}: {c: Contributor; rank: number}) {
   return (
     <Link
       to={c.html_url}
-      className="group flex h-full flex-col items-center border border-line bg-surface p-6 text-center no-underline shadow-card hover:border-brand/50">
+      className="group flex h-full flex-col items-center rounded-[8px] border border-line bg-surface p-6 text-center no-underline hover:border-brand/50">
       <div className="relative">
         <img
           src={c.avatar_url}
@@ -37,10 +35,10 @@ function ContributorCard({c, rank}: {c: Contributor; rank: number}) {
         />
         {rank < 3 && (
           <span
-            className="absolute -right-1 -top-1 text-2xl"
+            className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-[4px] border border-line bg-surface font-mono text-xs font-semibold text-ink"
             aria-label={`Rank ${rank + 1}`}
             title={`Rank ${rank + 1}`}>
-            {MEDALS[rank]}
+            {rank + 1}
           </span>
         )}
       </div>
@@ -87,11 +85,11 @@ function Contributors(): ReactNode {
   return (
     <section className="mx-auto max-w-6xl px-6 py-14 lg:py-16">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="m-0 mb-3 font-mono text-xs font-semibold text-brand uppercase">Thank you</p>
-        <h1 className="m-0 text-3xl font-extrabold text-ink lg:text-4xl">Top contributors</h1>
+        <p className="m-0 mb-3 font-mono text-xs font-semibold text-brand uppercase">Open source</p>
+        <h1 className="m-0 text-3xl font-extrabold text-ink lg:text-4xl">Contributors</h1>
         <p className="mt-4 text-ink-soft">
-          Control Lab is open source. These are the people whose commits built and shaped it,
-          ranked by contribution. Want to join them? See the{' '}
+          This list is loaded from the repository&apos;s public GitHub contribution data. To propose
+          a lesson, correction, or implementation change, read the{' '}
           <Link to={`${repoUrl}/blob/main/CONTRIBUTING.md`}>contributing guide</Link>.
         </p>
       </div>

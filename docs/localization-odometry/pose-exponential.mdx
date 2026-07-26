@@ -5,8 +5,8 @@ sidebar_position: 2
 tags: [pose-exponential, se2, lie-group, twist, odometry, integration]
 ---
 
-import PoseExponential from '@site/src/components/sims/PoseExponential';
-import {TwistExplorer} from '@site/src/components/sims/OdometryMathDemos';
+import PoseExponential from '@site/src/components/simulations/localization/PoseExponential';
+import {TwistExplorer} from '@site/src/components/simulations/localization/OdometryMathDemos';
 
 # Pose Exponential
 
@@ -223,7 +223,7 @@ to turn a pose error into a body-frame command for a follower.
 
 If your loop runs fast (small $\Delta\theta$ per step), Euler and the exponential agree to within encoder
 noise, and the simpler code is fine. The pose exponential earns its keep at **low loop rates, high turn
-rates, and over long autonomous paths** — exactly where corner-cutting compounds into real error.
+rates, and over long autonomous paths**: exactly where corner-cutting compounds into real error.
 
 </Admonition>
 
@@ -237,9 +237,9 @@ encoders only for $\Delta x_b, \Delta y_b$. Exact integration of a wrong twist i
 
 <Admonition type="info" title="Sources & references">
 
-- **The library functions this mirrors** — WPILib's `Pose2d.exp(Twist2d)` / `Pose2d.log()` and Road
+- **The library functions this mirrors**: WPILib's `Pose2d.exp(Twist2d)` / `Pose2d.log()` and Road
   Runner's `Pose2d.exp(...)`, both the $SE(2)$ exponential map.
-- **Background** — the standard Lie-group treatment of $SE(2)/SE(3)$ (e.g. Eade, *Lie Groups for 2D and
+- **Background**: the standard Lie-group treatment of $SE(2)/SE(3)$ (e.g. Eade, *Lie Groups for 2D and
   3D Transformations*) for the hat/vee operators and the left-Jacobian.
 
 </Admonition>

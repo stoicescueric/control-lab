@@ -2,108 +2,121 @@ import {useEffect, useRef, useState, type ComponentType, type ReactNode} from 'r
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
-import {motion, useReducedMotion} from 'framer-motion';
-import MathMatrixHero from '@site/src/components/MathMatrixHero';
-import {completedCount, getLast, subscribe, type LastVisited} from '@site/src/lib/progress';
+import ControlResponseHero from '@site/src/components/home/ControlResponseHero';
+import {completedCount, getLast, subscribe, type LastVisited} from '@site/src/lib/platform/progress';
 
-type FeatureIcon = 'signal' | 'sum' | 'deploy';
-
-const FEATURES: {icon: FeatureIcon; title: string; body: string}[] = [
-  {
-    icon: 'signal',
-    title: 'Intuition before equations',
-    body: 'Every concept opens with a working model. Change the input, watch the robot behavior, then read the derivation that explains what happened.',
-  },
-  {
-    icon: 'sum',
-    title: 'Rigor without theater',
-    body: 'Calculus, linear algebra, and state-space are used as engineering tools: compact language for motion, sensors, uncertainty, and control.',
-  },
-  {
-    icon: 'deploy',
-    title: 'FTC-first implementation',
-    body: 'Lessons end in clean Java patterns that fit real OpModes: explicit units, telemetry, non-blocking loops, and hardware-aware limits.',
-  },
-];
-
-const MODULES = [
-  {n: '01', title: 'Software Architecture & Loop Optimization', blurb: 'State machines, commands, loop time, units, and tuning infrastructure.', to: '/docs/software-architecture'},
-  {n: '02', title: 'Motor Dynamics & Control Theory', blurb: 'The DC-motor model, feedforward, and competition-grade feedback.', to: '/docs/control-theory'},
-  {n: '03', title: 'Localization & Odometry', blurb: 'Pose exponentials, dead wheels, and why estimates drift.', to: '/docs/localization-odometry'},
-  {n: '04', title: 'Signal Processing', blurb: 'Low-pass, moving-average, complementary, and Kalman filters.', to: '/docs/signal-processing'},
-  {n: '05', title: 'Path Following & Kinematics', blurb: 'Mecanum kinematics, pure pursuit, splines, and vector fields.', to: '/docs/path-following'},
-  {n: '06', title: 'State-Space Control', blurb: 'Model the mechanism as matrices, then let LQR pick the gains.', to: '/docs/state-space-control'},
-  {n: '07', title: 'Advanced Research', blurb: 'RK4, air drag, and a full trajectory-simulation capstone.', to: '/docs/advanced-research'},
-];
-
-const EASE = [0.22, 1, 0.36, 1] as const;
-
-function Reveal({
-  children,
-  className,
-  delay = 0,
-}: {
-  children: ReactNode;
-  className?: string;
-  delay?: number;
-}) {
-  const reduce = useReducedMotion();
-  return (
-    <motion.div
-      className={className}
-      initial={reduce ? false : {opacity: 0, y: 18}}
-      whileInView={{opacity: 1, y: 0}}
-      viewport={{once: true, margin: '-90px'}}
-      transition={{duration: 0.5, delay, ease: EASE}}>
-      {children}
-    </motion.div>
-  );
+interface Practice {
+  label: string;
+  title: string;
+  body: string;
 }
 
-function Kicker({children}: {children: ReactNode}) {
+interface Module {
+  number: string;
+  title: string;
+  description: string;
+  to: string;
+}
+
+interface AudienceSignal {
+  number: string;
+  title: string;
+  body: string;
+}
+
+const PRACTICES: Practice[] = [
+  {
+    label: '01',
+    title: 'See the behavior',
+    body: 'Change a gain, load, noise level, or path geometry and inspect the response before the notation appears.',
+  },
+  {
+    label: '02',
+    title: 'Derive the model',
+    body: 'Follow the derivation with non-obvious variables defined beside the equation and assumptions stated explicitly.',
+  },
+  {
+    label: '03',
+    title: 'Ship the controller',
+    body: 'Translate the model into maintainable FTC Java, then account for loop timing, voltage, sensor noise, and actuator limits.',
+  },
+];
+
+const MODULES: Module[] = [
+  {
+    number: '01',
+    title: 'Software Architecture & Loop Optimization',
+    description: 'State machines, command scheduling, loop time, units, and tuning infrastructure.',
+    to: '/docs/software-architecture',
+  },
+  {
+    number: '02',
+    title: 'Motor Dynamics & Control Theory',
+    description: 'DC motor physics, feedforward, feedback, saturation, and motion profiles.',
+    to: '/docs/control-theory',
+  },
+  {
+    number: '03',
+    title: 'Localization & Odometry',
+    description: 'Pose updates, dead-wheel geometry, pose exponentials, and accumulated error.',
+    to: '/docs/localization-odometry',
+  },
+  {
+    number: '04',
+    title: 'Signal Processing',
+    description: 'Low-pass, moving-average, complementary, Kalman, and extended Kalman filters.',
+    to: '/docs/signal-processing',
+  },
+  {
+    number: '05',
+    title: 'Path Following & Kinematics',
+    description: 'Mecanum kinematics, point control, pure pursuit, splines, and vector fields.',
+    to: '/docs/path-following',
+  },
+  {
+    number: '06',
+    title: 'State-Space Control',
+    description: 'System models, state feedback, observers, and linear-quadratic regulation.',
+    to: '/docs/state-space-control',
+  },
+  {
+    number: '07',
+    title: 'Advanced Research',
+    description: 'Numerical integration, aerodynamic drag, flywheel control, and dynamic targeting.',
+    to: '/docs/advanced-research',
+  },
+];
+
+const AUDIENCE_SIGNALS: AudienceSignal[] = [
+  {
+    number: '01',
+    title: 'You have coded a robot',
+    body: 'You can configure motors and sensors, write an OpMode, and work through ordinary hardware and software problems.',
+  },
+  {
+    number: '02',
+    title: 'You know the Java basics',
+    body: 'Variables, methods, classes, loops, conditionals, and objects are familiar enough that the code does not hide the engineering idea.',
+  },
+  {
+    number: '03',
+    title: 'You want the reasoning, not only the recipe',
+    body: 'You want to understand why controllers, filters, localization, and path followers work, when they fail, and how to adapt them.',
+  },
+];
+
+function SectionLabel({children, inverse = false}: {children: ReactNode; inverse?: boolean}) {
   return (
-    <p className="m-0 mb-4 text-[0.82rem] font-semibold uppercase tracking-[0.14em] text-brand">
+    <p
+      className={`m-0 text-sm font-bold uppercase ${
+        inverse ? 'text-[#aebaff]' : 'text-brand'
+      }`}>
       {children}
     </p>
   );
 }
 
-function Icon({type}: {type: FeatureIcon}) {
-  const common = {
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    strokeWidth: 1.8,
-  };
-
-  if (type === 'signal') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
-        <path {...common} d="M4 16.5h2.5l2-9 3 12 2.2-7H20" />
-      </svg>
-    );
-  }
-
-  if (type === 'sum') {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
-        <path {...common} d="M18 5H7l6 7-6 7h11" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6">
-      <path {...common} d="M5 12h14M12 5v14" />
-      <path {...common} d="M7.5 7.5h9v9h-9z" />
-    </svg>
-  );
-}
-
-/* "Continue where you left off" — reads the local progress store, so it only
-   appears for returning readers (and never renders during SSR). */
-function ContinueCard() {
+function ContinueLesson() {
   const [state, setState] = useState<{last?: LastVisited; count: number} | null>(null);
 
   useEffect(() => {
@@ -115,281 +128,341 @@ function ContinueCard() {
   if (!state?.last) return null;
 
   return (
-    <Reveal className="mt-10">
-      <Link
-        to={state.last.path}
-        className="group mx-auto flex max-w-2xl items-center justify-between gap-4 rounded-full border border-line bg-surface py-3 pl-6 pr-3 no-underline shadow-card transition-colors hover:border-brand/40">
-        <span className="min-w-0 truncate text-[0.95rem] text-ink-soft">
-          <span className="font-semibold text-ink">Continue where you left off</span>
-          <span className="mx-2 text-ink-faint">·</span>
-          {state.last.title}
-        </span>
-        <span className="flex shrink-0 items-center gap-3">
-          {state.count > 0 && (
-            <span className="hidden text-[0.82rem] font-medium text-ink-faint sm:inline">
-              {state.count} lesson{state.count === 1 ? '' : 's'} completed
-            </span>
-          )}
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-brand text-white transition-transform duration-300 group-hover:translate-x-0.5">
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </span>
-        </span>
-      </Link>
-    </Reveal>
+    <Link
+      to={state.last.path}
+      className="mt-10 grid gap-3 border border-line bg-surface px-5 py-4 no-underline hover:border-brand sm:grid-cols-[1fr_auto] sm:items-center">
+        <span className="min-w-0">
+        <span className="block text-sm font-bold text-ink">Continue reading</span>
+        <span className="mt-1 block truncate text-sm text-ink-soft">{state.last.title}</span>
+      </span>
+      <span className="text-sm font-medium text-brand">
+        {state.count} completed {state.count === 1 ? 'lesson' : 'lessons'}
+      </span>
+    </Link>
   );
 }
 
-/* The big centered statement that opens the page body — Apple-style intro. */
-function Statement() {
-  return (
-    <section className="mx-auto max-w-4xl px-6 py-24 text-center lg:py-32">
-      <Reveal>
-        <h2 className="m-0 text-balance text-3xl font-semibold leading-[1.15] tracking-[-0.02em] text-ink sm:text-[2.6rem]">
-          Every controller, filter, and follower — written as{' '}
-          <span className="text-brand">intuition</span>,{' '}
-          <span className="text-teal">derivation</span>, and{' '}
-          <span className="text-ink">deployable Java</span>.
-        </h2>
-        <p className="mx-auto mt-6 max-w-2xl text-balance text-lg leading-relaxed text-ink-soft">
-          The result is not magic. It is engineering you can inspect, tune, and trust on the field.
-        </p>
-      </Reveal>
-    </section>
-  );
-}
+const MARQUEE_TOPICS: string[] = [
+  'PID Control',
+  'Kalman Filtering',
+  'Pure Pursuit',
+  'State-Space Control',
+  'Motion Profiling',
+  'Feedforward',
+  'Odometry',
+  'Guided Vector Fields',
+  'Quintic Splines',
+  'System Identification',
+];
 
-function Features() {
+function TopicMarquee() {
+  const items = [...MARQUEE_TOPICS, ...MARQUEE_TOPICS];
+
   return (
-    <section className="mx-auto max-w-6xl px-6 pb-24 lg:pb-32">
-      <div className="grid gap-5 md:grid-cols-3">
-        {FEATURES.map((f, i) => (
-          <Reveal key={f.title} delay={i * 0.06}>
-            <div className="h-full rounded-3xl border border-line bg-surface p-8 shadow-card transition-shadow duration-300 hover:shadow-pop">
-              <div className="mb-6 grid h-12 w-12 place-items-center rounded-2xl bg-brand/10 text-brand" aria-hidden="true">
-                <Icon type={f.icon} />
-              </div>
-              <h3 className="m-0 text-xl font-semibold tracking-tight text-ink">{f.title}</h3>
-              <p className="mt-3 mb-0 text-[0.98rem] leading-relaxed text-ink-soft">{f.body}</p>
-            </div>
-          </Reveal>
+    <div className="cl-marquee border-b border-panel-ink/10 bg-panel py-4" aria-hidden="true">
+      <div className="cl-marquee__track">
+        {[0, 1].map((copy) => (
+          <div key={copy} className="flex shrink-0 items-center">
+            {items.map((topic, index) => (
+              <span
+                key={`${copy}-${topic}-${index}`}
+                className="flex items-center gap-8 px-4 font-mono text-sm font-semibold uppercase tracking-wide text-panel-ink/70">
+                {topic}
+                <span className="h-1.5 w-1.5 rounded-full bg-teal" />
+              </span>
+            ))}
+          </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function Audience() {
+  return (
+    <section
+      aria-labelledby="audience-heading"
+      className="border-b border-[#2b354b] bg-panel text-panel-ink">
+      <div className="mx-auto max-w-6xl px-6 pb-16 pt-8 sm:py-16">
+        <div className="grid gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
+          <div>
+            <SectionLabel inverse>Who this guide is for</SectionLabel>
+            <div className="cl-scroll-reveal">
+              <h2
+                id="audience-heading"
+                className="m-0 mt-5 max-w-xl text-4xl font-black leading-[1.03] text-panel-ink sm:text-5xl">
+                You already made the robot move. Now understand why it behaves that way.
+              </h2>
+              <p className="m-0 mt-6 max-w-xl text-lg leading-relaxed text-panel-ink/75">
+                Control Lab begins after the first successful robot program. It is written for FTC
+                programmers who want to move beyond copied gains and black-box libraries into the
+                models behind reliable autonomous behavior.
+              </p>
+            </div>
+          </div>
+
+          <ol className="m-0 list-none border-t border-panel-ink/20 p-0">
+            {AUDIENCE_SIGNALS.map((signal) => (
+              <li
+                key={signal.number}
+                className="cl-scroll-reveal grid gap-3 border-b border-panel-ink/20 py-6 sm:grid-cols-[3rem_1fr] sm:gap-5">
+                <span className="font-mono text-sm font-semibold text-[#aebaff]">
+                  {signal.number}
+                </span>
+                <span>
+                  <span className="block text-xl font-bold leading-snug text-panel-ink">
+                    {signal.title}
+                  </span>
+                  <span className="mt-2 block text-base leading-relaxed text-panel-ink/70">
+                    {signal.body}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="cl-scroll-reveal mt-12 grid gap-6 border-t border-panel-ink/20 pt-7 md:grid-cols-[1fr_auto] md:items-center">
+          <p className="m-0 max-w-3xl text-base leading-relaxed text-panel-ink/75">
+            <strong className="text-panel-ink">Advanced mathematics is not a prerequisite.</strong>{' '}
+            The preface builds calculus, linear algebra, differential equations, and state-space
+            ideas from robotics examples before later lessons use them.
+          </p>
+          <Link
+            to="/docs/preface/how-to-use"
+            className="cl-home-action inline-flex min-h-11 items-center justify-center rounded-[6px] bg-panel-ink px-5 py-2.5 font-bold text-panel no-underline hover:bg-white">
+            See how to use the guide
+          </Link>
+        </div>
       </div>
     </section>
   );
 }
 
-/* The showcase sim loads lazily: it sits below the fold, so its code splits
-   into an async chunk fetched when the visitor scrolls near — the landing
-   page's initial JS stays lean. The placeholder reserves the height so
-   nothing shifts when it arrives. */
+function LearningMethod() {
+  return (
+    <section className="border-b border-line bg-surface">
+      <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.8fr_1.4fr] lg:gap-20 lg:py-20">
+        <div>
+          <SectionLabel>Lesson method</SectionLabel>
+          <h2 className="m-0 mt-4 text-3xl font-bold leading-tight text-ink">
+            See it. Derive it. Ship it.
+          </h2>
+          <p className="m-0 mt-5 leading-relaxed text-ink-soft">
+            The simulations are not decoration. Each one exposes a parameter or failure mode that
+            the corresponding derivation and implementation must explain.
+          </p>
+        </div>
+        <ol className="m-0 list-none border-t border-line p-0">
+          {PRACTICES.map((practice) => (
+            <li
+              key={practice.label}
+              className="cl-scroll-reveal grid gap-3 border-b border-line py-6 sm:grid-cols-[3rem_12rem_1fr] sm:gap-5">
+              <span className="font-mono text-sm text-brand">{practice.label}</span>
+              <h3 className="m-0 text-base font-bold leading-snug text-ink">{practice.title}</h3>
+              <p className="m-0 text-[0.96rem] leading-relaxed text-ink-soft">{practice.body}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
 function LazyPurePursuit() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [Sim, setSim] = useState<ComponentType | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [Simulator, setSimulator] = useState<ComponentType | null>(null);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
+    const root = rootRef.current;
+    if (!root) return;
+
+    const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          io.disconnect();
-          import('@site/src/components/sims/PurePursuit').then((m) => setSim(() => m.default));
-        }
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        import('@site/src/components/simulations/path-following/PurePursuit').then((module) => {
+          setSimulator(() => module.default);
+        });
       },
-      {rootMargin: '600px'},
+      {rootMargin: '500px'},
     );
-    io.observe(el);
-    return () => io.disconnect();
+
+    observer.observe(root);
+    return () => observer.disconnect();
   }, []);
 
   return (
-    <div ref={ref} className="min-h-[420px]">
-      {Sim ? (
-        <Sim />
+    <div ref={rootRef} className="min-h-[420px]">
+      {Simulator ? (
+        <Simulator />
       ) : (
-        <div className="grid min-h-[420px] place-items-center rounded-2xl bg-panel font-mono text-sm text-panel-ink/40">
-          loading the follower…
+        <div className="grid min-h-[420px] place-items-center bg-panel font-mono text-sm text-panel-ink/60">
+          Loading the path follower
         </div>
       )}
     </div>
   );
 }
 
-/* The product shot: a real follower, framed like hardware. */
-function Showcase() {
+function InteractiveExample() {
   return (
-    <section className="border-y border-line bg-surface-2">
-      <div className="mx-auto max-w-6xl px-6 py-24 lg:py-32">
-        <Reveal className="mx-auto max-w-3xl text-center">
-          <Kicker>Learn by doing</Kicker>
-          <h2 className="m-0 text-balance text-3xl font-semibold leading-[1.12] tracking-[-0.02em] text-ink sm:text-[2.8rem]">
-            Don&apos;t just read the algorithm.
-            <br />
-            Manipulate it.
-          </h2>
-          <p className="mx-auto mt-6 max-w-2xl text-balance text-lg leading-relaxed text-ink-soft">
-            This is a real pure-pursuit path follower — the geometry that steers FTC and FRC robots.
-            Drag the waypoints, sweep the lookahead distance, and watch why tight tracking and smooth
-            motion fight each other.
-          </p>
-        </Reveal>
-
-        <Reveal delay={0.08} className="mt-14">
-          <div className="mx-auto max-w-4xl rounded-[28px] border border-line bg-surface p-2.5 shadow-pop sm:p-3">
-            <LazyPurePursuit />
+    <section className="cl-example-gradient relative border-b border-line bg-surface-2">
+      <div className="relative mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.5fr] lg:items-end">
+          <div>
+            <SectionLabel>Working example</SectionLabel>
+            <h2 className="m-0 mt-4 text-3xl font-bold leading-tight text-ink">
+              Geometry you can manipulate
+            </h2>
           </div>
-        </Reveal>
+          <p className="m-0 max-w-2xl text-lg leading-relaxed text-ink-soft">
+            Drag the waypoints and change the lookahead distance. The visualizer shows where the
+            follower selects its target and why a larger lookahead trades tracking accuracy for a
+            smoother command.
+          </p>
+        </div>
 
-        <Reveal delay={0.12} className="mt-10 text-center">
+        <div className="mt-10 overflow-hidden rounded-[8px] border border-line bg-surface p-2">
+          <LazyPurePursuit />
+        </div>
+
+        <div className="mt-6">
           <Link
             to="/docs/path-following/pure-pursuit"
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 text-[0.95rem] font-semibold text-white no-underline shadow-[0_8px_26px_rgba(79,108,247,0.3)] transition-colors hover:bg-brand-dk">
+            className="inline-flex min-h-11 items-center rounded-[6px] border border-line bg-surface px-5 py-2.5 font-semibold text-ink no-underline hover:border-brand hover:text-brand">
             Read the Pure Pursuit lesson
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
           </Link>
-        </Reveal>
+        </div>
       </div>
     </section>
+  );
+}
+
+function ModuleRow({module}: {module: Module}) {
+  return (
+    <Link
+      to={module.to}
+      className="cl-scroll-reveal grid gap-3 border-t border-line py-6 no-underline hover:border-brand sm:grid-cols-[3.5rem_1fr]">
+      <span className="font-mono text-sm text-brand">{module.number}</span>
+      <span>
+        <span className="block text-lg font-bold leading-snug text-ink">{module.title}</span>
+        <span className="mt-2 block text-[0.95rem] leading-relaxed text-ink-soft">
+          {module.description}
+        </span>
+      </span>
+    </Link>
   );
 }
 
 function Curriculum() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-24 lg:py-32">
-      <Reveal className="mx-auto max-w-2xl text-center">
-        <Kicker>The curriculum</Kicker>
-        <h2 className="m-0 text-balance text-3xl font-semibold leading-[1.12] tracking-[-0.02em] text-ink sm:text-[2.8rem]">
-          From feedback loops to original research.
-        </h2>
-        <p className="mx-auto mt-6 text-balance text-lg leading-relaxed text-ink-soft">
-          Seven modules build from robot software architecture through motors, localization,
-          filters, and path following to state-space control and trajectory simulation. Start
-          anywhere; the cross-links keep the map intact.
-        </p>
-      </Reveal>
-
-      <ContinueCard />
-
-      <Reveal delay={0.04} className="mt-14">
-        <Link
-          to="/docs/preface/why-math-matters"
-          className="group flex flex-col items-start justify-between gap-5 rounded-3xl border border-brand/25 bg-gradient-to-br from-brand/[0.07] to-teal/[0.05] p-8 no-underline transition-colors hover:border-brand/50 sm:flex-row sm:items-center sm:p-9">
+    <section className="bg-bg">
+      <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.4fr] lg:gap-20">
           <div>
-            <span className="text-[0.78rem] font-semibold uppercase tracking-[0.14em] text-brand">
-              Start here · Preface
-            </span>
-            <h3 className="m-0 mt-2 text-2xl font-semibold tracking-tight text-ink">Why the math matters</h3>
-            <p className="m-0 mt-2 max-w-xl text-[0.98rem] leading-relaxed text-ink-soft">
-              The case for understanding the equations under the libraries you deploy.
+            <SectionLabel>Curriculum</SectionLabel>
+            <h2 className="m-0 mt-4 text-3xl font-bold leading-tight text-ink">
+              Learn in the order the robot depends on it
+            </h2>
+            <p className="m-0 mt-5 leading-relaxed text-ink-soft">
+              The preface supplies the mathematical vocabulary. Later modules reuse that vocabulary
+              for motors, estimation, localization, path following, and the research case study.
             </p>
+            <p className="m-0 mt-5 font-mono text-sm text-ink-faint">
+              {MODULES.length} core modules · 1 math preface · advanced topics beyond the core path
+            </p>
+            <ContinueLesson />
           </div>
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand text-white transition-transform duration-300 group-hover:translate-x-1">
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </span>
-        </Link>
-      </Reveal>
 
-      <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {MODULES.map((m, i) => (
-          <Reveal key={m.n} delay={(i % 3) * 0.05}>
+          <div>
             <Link
-              to={m.to}
-              className="group relative flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-surface p-7 no-underline shadow-card transition-all duration-300 hover:border-brand/40 hover:shadow-pop">
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-2 -top-5 select-none text-[5.4rem] font-bold leading-none tracking-tight text-ink-faint/[0.13] transition-colors duration-300 group-hover:text-brand/[0.14]">
-                {m.n}
-              </span>
-              <h3 className="relative m-0 mt-1 max-w-[15rem] text-[1.08rem] font-semibold leading-snug tracking-tight text-ink">
-                {m.title}
-              </h3>
-              <p className="relative m-0 mt-3 flex-1 text-[0.92rem] leading-relaxed text-ink-soft">{m.blurb}</p>
-              <span className="relative mt-5 inline-flex items-center gap-1.5 text-[0.88rem] font-semibold text-brand opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                Explore
-                <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M13 6l6 6-6 6" />
-                </svg>
+              to="/docs/preface/why-math-matters"
+              className="cl-scroll-reveal grid gap-3 border-y border-brand py-6 no-underline sm:grid-cols-[3.5rem_1fr]">
+              <span className="font-mono text-sm font-bold text-brand">00</span>
+              <span>
+                <span className="block text-lg font-bold text-ink">Why Math Matters</span>
+                <span className="mt-2 block text-[0.95rem] leading-relaxed text-ink-soft">
+                  Calculus, linear algebra, differential equations, and state-space models through
+                  concrete robotics examples.
+                </span>
               </span>
             </Link>
-          </Reveal>
-        ))}
-      </div>
 
-      <Reveal delay={0.08} className="mt-6">
-        <Link
-          to="/docs/advanced-topics"
-          className="group flex flex-col items-start justify-between gap-4 rounded-3xl border border-line bg-surface p-7 no-underline shadow-card transition-all duration-300 hover:border-brand/40 hover:shadow-pop sm:flex-row sm:items-center">
-          <div>
-            <span className="text-[0.78rem] font-semibold uppercase tracking-[0.14em] text-teal">
-              Beyond the modules
-            </span>
-            <h3 className="m-0 mt-2 text-[1.08rem] font-semibold tracking-tight text-ink">
-              Advanced Topics &amp; Misc
-            </h3>
-            <p className="m-0 mt-2 max-w-2xl text-[0.92rem] leading-relaxed text-ink-soft">
-              How Pedro Pathing works under the hood, guided-vector-field convergence proofs,
-              take-back-half, Jacobian IK solvers, and the natural-cubic-spline derivation.
-            </p>
+            <div className="grid lg:grid-cols-2 lg:gap-x-10">
+              {MODULES.map((module) => (
+                <ModuleRow key={module.number} module={module} />
+              ))}
+            </div>
+
+            <Link
+              to="/docs/advanced-topics"
+              className="cl-scroll-reveal grid gap-3 border-y border-teal/50 py-6 no-underline hover:border-teal sm:grid-cols-[3.5rem_1fr]">
+              <span className="font-mono text-sm font-bold text-teal">A+</span>
+              <span>
+                <span className="block text-lg font-bold text-ink">
+                  Advanced Topics &amp; Misc
+                </span>
+                <span className="mt-2 block text-[0.95rem] leading-relaxed text-ink-soft">
+                  Pedro Pathing internals, Jacobian inverse kinematics, guided vector fields,
+                  interpolation, and additional derivations.
+                </span>
+              </span>
+            </Link>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-[0.88rem] font-semibold text-brand">
-            Explore
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </span>
-        </Link>
-      </Reveal>
+        </div>
+      </div>
     </section>
   );
 }
 
-function ClosingCTA() {
+function Closing() {
+  const [last, setLast] = useState<LastVisited | undefined>(undefined);
+
+  useEffect(() => {
+    const load = () => setLast(getLast());
+    load();
+    return subscribe(load);
+  }, []);
+
   return (
-    <section className="border-t border-line bg-surface-2">
-      <Reveal className="mx-auto max-w-3xl px-6 py-24 text-center lg:py-32">
-        <h2 className="m-0 text-balance text-4xl font-semibold leading-[1.08] tracking-[-0.025em] text-ink sm:text-[3.2rem]">
-          Open the black box.
-        </h2>
-        <p className="mx-auto mt-6 max-w-xl text-balance text-lg leading-relaxed text-ink-soft">
-          Start with one lesson. Drag one slider. Watch one controller settle — and know exactly why
-          it did.
-        </p>
-        <div className="mt-10 flex flex-wrap justify-center gap-3.5">
-          <Link
-            to="/docs/preface/why-math-matters"
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-7 py-3.5 text-[0.98rem] font-semibold text-white no-underline shadow-[0_8px_26px_rgba(79,108,247,0.3)] transition-colors hover:bg-brand-dk">
-            Start with the Preface
-          </Link>
-          <Link
-            to="/docs/signal-processing"
-            className="inline-flex items-center rounded-full border border-line bg-surface px-7 py-3.5 text-[0.98rem] font-semibold text-ink no-underline transition-colors hover:border-brand/40 hover:text-brand">
-            Explore Signal Processing
-          </Link>
+    <section className="border-t border-line bg-surface">
+      <div className="mx-auto grid max-w-6xl gap-8 px-6 py-14 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div>
+          <h2 className="m-0 text-2xl font-bold text-ink">
+            {last ? 'Pick up where you left off.' : 'Start with the system on your bench.'}
+          </h2>
+          <p className="m-0 mt-3 max-w-2xl leading-relaxed text-ink-soft">
+            {last
+              ? `Continue from "${last.title}", or jump to the module that matches the mechanism currently on your workbench.`
+              : 'Use the curriculum in order, or open the module that matches the mechanism currently on your workbench.'}
+          </p>
         </div>
-      </Reveal>
+        <Link
+          to={last ? last.path : '/docs/preface/why-math-matters'}
+          className="inline-flex min-h-11 items-center justify-center rounded-[6px] bg-brand px-5 py-2.5 font-semibold text-white no-underline hover:bg-brand-dk">
+          {last ? 'Continue reading' : 'Open the preface'}
+        </Link>
+      </div>
     </section>
   );
 }
 
 export default function Home(): ReactNode {
   const {siteConfig} = useDocusaurusContext();
+
   return (
     <Layout
       title={siteConfig.title}
-      description="Control theory, state estimation, and FTC robotics: an interactive, mathematically rigorous learning platform for competitive robotics programmers.">
-      <MathMatrixHero />
+      description="Interactive lessons in control theory, state estimation, and FTC robotics, with derivations, simulations, and Java implementations.">
+      <ControlResponseHero />
+      <TopicMarquee />
       <main>
-        <Statement />
-        <Features />
-        <Showcase />
+        <Audience />
+        <LearningMethod />
+        <InteractiveExample />
         <Curriculum />
-        <ClosingCTA />
+        <Closing />
       </main>
     </Layout>
   );

@@ -13,7 +13,7 @@ interface EquationLegendProps {
 
 export function EquationLegend({title = 'Symbols in this equation', items}: EquationLegendProps) {
   return (
-    <aside className="not-prose my-5 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+    <aside className="not-prose my-5 overflow-hidden rounded-[8px] border border-line bg-surface shadow-card">
       <div className="border-b border-line bg-surface-2 px-4 py-2.5 text-[0.78rem] font-bold uppercase tracking-wide text-ink-soft">
         {title}
       </div>

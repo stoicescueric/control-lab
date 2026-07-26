@@ -1,0 +1,63 @@
+name: Lesson or simulation proposal
+description: Propose a curriculum addition with a defined teaching objective and evidence.
+title: "[Proposal] "
+labels:
+  - content
+body:
+  - type: input
+    id: concept
+    attributes:
+      label: Concept
+      description: Name the mathematical, control, or robotics concept.
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Curriculum area
+      options:
+        - Foundations
+        - Software architecture
+        - Signal processing
+        - Localization and odometry
+        - Motor dynamics and control theory
+        - Path following and kinematics
+        - State-space control
+        - Advanced research
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Learning objective
+      description: State what a reader should be able to explain, calculate, or implement after the lesson.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Engineering context
+      description: Describe the FTC or broader engineering use case that makes the concept necessary.
+    validations:
+      required: true
+  - type: textarea
+    id: visual
+    attributes:
+      label: Visual or interactive model
+      description: Identify the parameter a reader should manipulate and the behavior it should reveal.
+    validations:
+      required: true
+  - type: textarea
+    id: rigor
+    attributes:
+      label: Mathematical scope
+      description: List prerequisites, equations to derive, and non-obvious variables that need explanation.
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Primary sources
+      description: Provide papers, official documentation, or authoritative hardware references.
+    validations:
+      required: true

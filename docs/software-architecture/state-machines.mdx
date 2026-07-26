@@ -5,7 +5,7 @@ sidebar_position: 1
 tags: [architecture, state-machine, fsm, non-blocking, opmode]
 ---
 
-import StateMachine from '@site/src/components/sims/StateMachine';
+import StateMachine from '@site/src/components/simulations/software-architecture/StateMachine';
 import adaptiveAutoDiagram from '@site/static/img/wolfpackmachina-power-play-state-machine.png';
 
 # State Machines
@@ -123,7 +123,7 @@ recoverable robot mode, and every arrow represents a condition that can be check
   </figcaption>
 </figure>
 
-## Enterprise implementation
+## Engineering implementation
 
 The deployable FTC pattern is an `enum`, a `switch`, and a timer, but a real autonomous machine
 needs more than a pretty transition table. It needs **entry actions**, **timed exits**,

@@ -49,7 +49,7 @@ export function Demo({
       }
       onClick={expanded ? (e) => e.target === e.currentTarget && setExpanded(false) : undefined}>
       <div
-        className={`cl-demo not-prose rounded-[10px] bg-panel p-[18px] text-panel-ink shadow-card ${
+        className={`cl-demo not-prose rounded-[8px] bg-panel p-[18px] text-panel-ink shadow-card ${
           expanded ? 'max-h-full w-full max-w-5xl overflow-y-auto' : 'my-7'
         } ${className}`}>
         <div className="mb-3.5 flex flex-wrap items-center gap-2.5 px-1 text-[1.02rem] font-bold text-white">
