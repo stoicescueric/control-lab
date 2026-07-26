@@ -5,8 +5,8 @@ sidebar_position: 4
 tags: [filter, sensor-fusion, complementary, encoders]
 ---
 
-import Complementary from '@site/src/components/sims/Complementary';
-import {ComplementarySplitExplorer} from '@site/src/components/sims/FilterMathDemos';
+import Complementary from '@site/src/components/simulations/signal-processing/Complementary';
+import {ComplementarySplitExplorer} from '@site/src/components/simulations/signal-processing/FilterMathDemos';
 
 # Complementary Filter
 
@@ -29,11 +29,11 @@ combining the two.
 
 Put an arm on a robot and you usually have two ways to measure its angle:
 
-- **Motor encoder** — counts ticks at the motor, fresh every loop, fine resolution. But it measures
+- **Motor encoder**: counts ticks at the motor, fresh every loop, fine resolution. But it measures
   *the motor*, not the joint. Every bit of belt slip, chain skip, and gear backlash between the two
   accumulates, so the angle you compute from ticks drifts away from the true arm angle over a match.
   Excellent short-term, wrong in the long run.
-- **Absolute encoder on the joint** — reads the joint angle itself, so it *cannot* drift. But the
+- **Absolute encoder on the joint**: reads the joint angle itself, so it *cannot* drift. But the
   reading is noisy, and it often updates slower than your loop runs. True in the long run, rough
   right now.
 
@@ -66,8 +66,8 @@ just enough of the absolute sensor to stay anchored.
 <ComplementarySplitExplorer />
 
 This Desmos-style graph is the "complements" claim, drawn. The rose curve is the absolute encoder's
-**low-pass** — it passes the slow, honest angle and rejects the fast noise. The teal curve is the
-motor encoder's **high-pass** — it passes fast motion and blocks the slow drift. They cross at the
+**low-pass**: it passes the slow, honest angle and rejects the fast noise. The teal curve is the
+motor encoder's **high-pass**: it passes fast motion and blocks the slow drift. They cross at the
 cutoff $f_c = 1/(2\pi\tau)$, where $\tau$ comes directly from $\alpha$ and the loop time, and at
 *every* frequency the two responses **sum to exactly one** (the dashed line): nothing of the true
 signal is lost, it is only reassigned to whichever sensor reports that band honestly. Push $\alpha$

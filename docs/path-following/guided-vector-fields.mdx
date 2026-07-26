@@ -6,7 +6,7 @@ tags: [guided-vector-field, gvf, path-following, convergence, advanced]
 ---
 
 import {GuidedVectorFieldIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
-import {GuidedVectorField} from '@site/src/components/sims/GuidedVectorField';
+import {GuidedVectorField} from '@site/src/components/simulations/path-following/GuidedVectorField';
 
 # Guided Vector Fields
 
@@ -48,7 +48,7 @@ description of the behavior).
 
 At the robot's current position $\mathbf{p}$, find the **closest point** $\mathbf{c}$ on the path. That
 gives two local facts: the path's unit **tangent** $\hat{\mathbf{t}}$ (the along-track direction) and the
-signed **cross-track error** — how far, and which side, the robot is off the path — measured along the unit
+signed **cross-track error**: how far, and which side, the robot is off the path — measured along the unit
 **normal** $\hat{\mathbf{n}}$ (the tangent rotated 90°):
 
 $$
@@ -201,10 +201,10 @@ trait. The difference between a routine that scores and one that clips the struc
 <Admonition type="info" title="Sources & references">
 
 - **Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao, *A Guiding Vector Field Algorithm for Path Following
-  Control* ([arXiv:1610.04391](https://arxiv.org/abs/1610.04391))** — *the rigorous theory.* The
+  Control* ([arXiv:1610.04391](https://arxiv.org/abs/1610.04391))**: *the rigorous theory.* The
   implicit/level-set field $\boldsymbol{\chi}=E\nabla\varphi - k\varphi\nabla\varphi$ and its Lyapunov
   convergence proof come from here.
-- **[FTC-9974-THOR/GuidedVectorField](https://github.com/FTC-9974-THOR/GuidedVectorField)** — *a reference
+- **[FTC-9974-THOR/GuidedVectorField](https://github.com/FTC-9974-THOR/GuidedVectorField)**: *a reference
   FTC GVF library.* Bézier-path guidance and the disturbance-rejection framing ("kick the robot and it
   comes back") this lesson quotes.
 - **[KookyBotz/CenterStage `GVFCommand`](https://github.com/KookyBotz/CenterStage/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/common/commandbase/drivecommand/GVFCommand.java)**

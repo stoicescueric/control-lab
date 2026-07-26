@@ -15,11 +15,11 @@ before you control it*, and it comes in two distinct halves.
 
 A filter takes a single noisy stream and smooths it, trading a little lag for a lot of calm:
 
-- **[Signals & Noise](./signals.mdx)** — what sensor noise actually looks like, which sensors carry
+- **[Signals & Noise](./signals.mdx)**: what sensor noise actually looks like, which sensors carry
   it (and which, like encoders, don't), and how to measure it before filtering anything.
-- **[Low-pass filtering](./low-pass.mdx)** — the exponential moving average, the one-line filter you
+- **[Low-pass filtering](./low-pass.mdx)**: the exponential moving average, the one-line filter you
   will reach for most.
-- **[Moving average](./moving-average.mdx)** — the windowed alternative, and when its latency is
+- **[Moving average](./moving-average.mdx)**: the windowed alternative, and when its latency is
   worth its smoothness.
 
 Filtering has a hard limit: it fights *jitter*, not *drift*. If a sensor's center is walking away
@@ -29,11 +29,11 @@ from the truth, no amount of smoothing brings it back — you need a second opin
 
 Fusion combines two imperfect sensors whose failures point in opposite directions:
 
-- **[Complementary filter](./complementary.mdx)** — the simplest fusion: a fast-but-drifting motor
+- **[Complementary filter](./complementary.mdx)**: the simplest fusion: a fast-but-drifting motor
   encoder anchored by a slow-but-honest absolute encoder, blended with one constant.
-- **[1-D Kalman filter](./kalman.mdx)** — the same blend, except the weight is computed optimally
+- **[1-D Kalman filter](./kalman.mdx)**: the same blend, except the weight is computed optimally
   every step from how uncertain each source actually is.
-- **[Extended Kalman Filter (EKF)](./ekf.mdx)** — the same machinery on the nonlinear measurements
+- **[Extended Kalman Filter (EKF)](./ekf.mdx)**: the same machinery on the nonlinear measurements
   real localisation is made of, like AprilTag vision.
 
 <Admonition type="tip" title="Filters and controllers are a team">

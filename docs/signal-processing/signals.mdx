@@ -5,8 +5,8 @@ sidebar_position: 1
 tags: [filter, noise, sensors, sampling]
 ---
 
-import SignalNoise from '@site/src/components/sims/SignalNoise';
-import {NoiseAnatomyExplorer} from '@site/src/components/sims/FilterMathDemos';
+import SignalNoise from '@site/src/components/simulations/signal-processing/SignalNoise';
+import {NoiseAnatomyExplorer} from '@site/src/components/simulations/signal-processing/FilterMathDemos';
 
 # Signals & Noise
 
@@ -36,9 +36,9 @@ transition, a slow bias steers odometry off the field.
 
 Three distinct corruptions, each demanding a different defence:
 
-- **Jitter** — fast, small, random wobble around the truth. The common case.
-- **Spikes (outliers)** — occasional wild readings: a loose connector, a reflection, a glitch.
-- **Drift / bias** — a slow, systematic lean away from the truth that accumulates.
+- **Jitter**: fast, small, random wobble around the truth. The common case.
+- **Spikes (outliers)**: occasional wild readings: a loose connector, a reflection, a glitch.
+- **Drift / bias**: a slow, systematic lean away from the truth that accumulates.
 
 :::tip[Which sensors actually need this?]
 Not encoders. A quadrature encoder reports an exact tick count — there is no noise on "the shaft has

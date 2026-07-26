@@ -9,7 +9,21 @@ function tailwindPlugin() {
     name: 'control-lab-tailwind',
     configurePostCss(postcssOptions: {plugins: unknown[]}) {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      postcssOptions.plugins.push(require('@tailwindcss/postcss'));
+      postcssOptions.plugins.push(
+        {
+          postcssPlugin: 'control-lab-katex-woff2-only',
+          Declaration(declaration: {prop: string; value: string}) {
+            if (declaration.prop !== 'src' || !declaration.value.includes('KaTeX_')) return;
+            const woff2Source = declaration.value.match(
+              /url\(([^)]*KaTeX_[^)]*\.woff2)\)\s*format\((["']?)woff2\2\)/,
+            );
+            if (woff2Source) {
+              declaration.value = woff2Source[0];
+            }
+          },
+        },
+        require('@tailwindcss/postcss'),
+      );
       return postcssOptions;
     },
   };
@@ -17,6 +31,8 @@ function tailwindPlugin() {
 
 const ORG = 'stoicescueric';
 const REPO = 'control-lab';
+const IS_PRODUCTION_BUILD =
+  process.env.NODE_ENV === 'production' || process.argv.some((argument) => argument === 'build');
 
 const config: Config = {
   title: 'Control Lab',
@@ -43,32 +59,28 @@ const config: Config = {
   },
 
   headTags: [
-    {
-      tagName: 'link',
-      attributes: {rel: 'preconnect', href: 'https://fonts.googleapis.com'},
-    },
-    {
-      tagName: 'link',
-      attributes: {rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous'},
-    },
-    {
-      tagName: 'link',
-      attributes: {rel: 'preconnect', href: 'https://cdn.jsdelivr.net', crossorigin: 'anonymous'},
-    },
+    ...(IS_PRODUCTION_BUILD
+      ? [
+          {
+            tagName: 'meta',
+            attributes: {
+              'http-equiv': 'Content-Security-Policy',
+              content: [
+                "default-src 'self'",
+                "base-uri 'self'",
+                "object-src 'none'",
+                "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+                "style-src 'self' 'unsafe-inline'",
+                "img-src 'self' data:",
+                "connect-src 'self' https://*.google-analytics.com",
+                'frame-src https://www.youtube-nocookie.com',
+              ].join(';'),
+            },
+          },
+        ]
+      : []),
     // Note: manifest / theme-color / apple-touch-icon are injected by the PWA
     // plugin's `pwaHead` (see the plugins array) so they aren't duplicated here.
-  ],
-
-  stylesheets: [
-    {
-      href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
-      type: 'text/css',
-    },
-    {
-      href: 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css',
-      type: 'text/css',
-      crossorigin: 'anonymous',
-    },
   ],
 
   markdown: {
@@ -86,17 +98,22 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs',
           remarkPlugins: [remarkMath],
-          rehypePlugins: [rehypeKatex],
+          rehypePlugins: [
+            [
+              rehypeKatex,
+              {
+                trust: false,
+                strict: 'warn',
+                maxExpand: 1000,
+              },
+            ],
+          ],
           editUrl: `https://github.com/${ORG}/${REPO}/tree/main/`,
           showLastUpdateTime: true,
         },
         blog: false,
         theme: {
           customCss: './src/css/custom.css',
-        },
-        gtag: {
-          trackingID: 'G-DP9QJ8EJWH',
-          anonymizeIP: true,
         },
       } satisfies Preset.Options,
     ],
@@ -163,6 +180,7 @@ const config: Config = {
           title: 'More',
           items: [
             {label: 'Contributors', to: '/contributors'},
+            {label: 'Privacy & Cookies', to: '/privacy'},
             {label: 'GitHub', href: `https://github.com/${ORG}/${REPO}`},
           ],
         },

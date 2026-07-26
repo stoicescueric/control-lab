@@ -5,8 +5,8 @@ sidebar_position: 3
 tags: [filter, moving-average, smoothing, ring-buffer]
 ---
 
-import MovingAverage from '@site/src/components/sims/MovingAverage';
-import {WindowVsFadeExplorer} from '@site/src/components/sims/FilterMathDemos';
+import MovingAverage from '@site/src/components/simulations/signal-processing/MovingAverage';
+import {WindowVsFadeExplorer} from '@site/src/components/simulations/signal-processing/FilterMathDemos';
 
 # Moving Average
 
@@ -86,7 +86,7 @@ watch what the output does afterwards:
 
 <WindowVsFadeExplorer />
 
-This Desmos-style graph is each filter's **impulse response** — which is nothing more than its weight
+This Desmos-style graph is each filter's **impulse response**: which is nothing more than its weight
 function, replayed in time. The moving average gives the spike a weight of exactly $1/N$ for exactly
 $N$ samples, then drops it entirely: full poison, then total amnesia, with the hard edge at $k = N$.
 The EMA takes a *bigger* first hit ($\alpha > 1/N$ for typical settings) but fades it geometrically —

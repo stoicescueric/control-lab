@@ -15,9 +15,9 @@ capabilities.
 
 This module *composes* the two before it, so have them in hand first:
 
-- **[Localization & Odometry](../localization-odometry/odometry.mdx)** — every follower here assumes a
+- **[Localization & Odometry](../localization-odometry/odometry.mdx)**: every follower here assumes a
   trustworthy pose $(x, y, \theta)$ updated each loop.
-- **[Control Theory](../control-theory/index.mdx)** — the [PID](../control-theory/pid.mdx) and
+- **[Control Theory](../control-theory/index.mdx)**: the [PID](../control-theory/pid.mdx) and
   [feedforward](../control-theory/feedforward.mdx) loops that turn an error into a motor command.
 
 If a follower misbehaves, the bug is usually in the *pose estimate* or the *underlying controller*, not

@@ -1,0 +1,45 @@
+---
+title: Privacy & Cookies
+description: How Control Lab stores preferences, measures lesson use, and handles third-party video embeds.
+---
+
+import {PrivacyControls} from '@site/src/components/privacy/PrivacyControls';
+
+# Privacy & Cookies
+
+Control Lab is a static educational website. It does not provide accounts, accept payments, or run an
+application backend.
+
+## Essential storage
+
+The site stores your analytics preference in the first-party
+`control_lab_analytics_consent` cookie for up to 180 days. Lesson completion and interface preferences
+may also be stored locally in your browser. This storage is not used for advertising.
+
+The optional offline mode can cache public site files on your device through a service worker. You can
+remove those files through your browser's site-data settings.
+
+## Optional analytics
+
+If you select **Allow analytics**, the site loads Google Analytics 4 using measurement ID
+`G-DP9QJ8EJWH`. It records page views and selected interactions with educational demos so the
+curriculum can be improved. Advertising storage, ad personalization, and Google Signals are disabled.
+
+No Google Analytics script or request is made before consent. Selecting **Essential only** prevents it
+from loading. Changing from allowed to essential-only stops future tracking and removes accessible
+Google Analytics cookies from this site; it cannot retract events already sent.
+
+Google processes analytics data under its own terms and privacy policy. Browser extensions or network
+controls may block it independently of this setting.
+
+## Embedded videos
+
+YouTube videos use privacy-enhanced `youtube-nocookie.com` embeds and are click-to-load. Opening a
+lesson does not contact YouTube; YouTube receives a request only after you choose to load a video.
+
+## Your choice
+
+<PrivacyControls />
+
+For a security vulnerability, use the private reporting process described in the
+[security policy](https://github.com/stoicescueric/control-lab/security/policy).

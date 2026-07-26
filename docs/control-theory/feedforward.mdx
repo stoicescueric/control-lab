@@ -5,8 +5,8 @@ sidebar_position: 3
 tags: [feedforward, ks, kv, ka, kg, motor-model, arms, slides, characterisation]
 ---
 
-import Flywheel from '@site/src/components/sims/Flywheel';
-import MechanismFeedforward from '@site/src/components/sims/MechanismFeedforward';
+import Flywheel from '@site/src/components/simulations/control-theory/Flywheel';
+import MechanismFeedforward from '@site/src/components/simulations/control-theory/MechanismFeedforward';
 
 # Feedforward (kS, kV, kA, kG)
 
@@ -61,9 +61,9 @@ inertia, $\tau = J\alpha$ (that is $k_A a$).
 
 | Term | Counteracts | Meaning |
 |---|---|---|
-| **kS** — static | friction / stiction | the minimum voltage to start motion |
-| **kV** — velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
-| **kA** — acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
+| **kS**: static | friction / stiction | the minimum voltage to start motion |
+| **kV**: velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
+| **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
 
 ## Mechanism feedforward: add gravity
 
