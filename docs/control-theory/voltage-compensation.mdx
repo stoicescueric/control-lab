@@ -5,7 +5,7 @@ sidebar_position: 2
 tags: [voltage-compensation, battery, feedforward, brownout, control]
 ---
 
-import VoltageComp from '@site/src/components/sims/VoltageComp';
+import VoltageComp from '@site/src/components/simulations/control-theory/VoltageComp';
 
 # Voltage Compensation
 
@@ -30,7 +30,7 @@ to read right now. A freshly charged pack sits near 13.5 V; after a few sprints 
 11 V under load. So `0.6` is $0.6 \times 13.5 = 8.1$ V early in the match and $0.6 \times 11 = 6.6$ V
 late — nearly a 20% drop in effort for the identical command. Your auto that was tuned on a full battery
 now undershoots; your flywheel that was on speed now falls short. Worse, your carefully *measured*
-feedforward gains are in **volts** — and they're being applied to a command that no longer maps to volts.
+feedforward gains are in **volts**: and they're being applied to a command that no longer maps to volts.
 
 </Problem>
 

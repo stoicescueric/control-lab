@@ -34,7 +34,7 @@ export function JavaCode({children, code, language = 'java', league, label}: Jav
       {(league || label) && (
         <div className="not-prose mb-1.5 flex items-center gap-2 text-[0.74rem] font-bold uppercase tracking-wide text-ink-faint">
           {league && (
-            <span className={`rounded-full px-2 py-0.5 text-[0.68rem] ${BADGE[league] ?? ''}`}>
+            <span className={`rounded-[4px] px-2 py-0.5 text-[0.68rem] ${BADGE[league] ?? ''}`}>
               {league}
             </span>
           )}

@@ -1,12 +1,12 @@
 /* Wraps sidebar doc links to tag completed lessons with a `cl-done` class
    (styled in custom.css as a trailing green check). Progress lives in
-   src/lib/progress; this re-renders when it changes. */
+   src/lib/platform/progress; this re-renders when it changes. */
 
 import {useEffect, useState} from 'react';
 import Link from '@theme-original/DocSidebarItem/Link';
 import type LinkType from '@theme/DocSidebarItem/Link';
 import type {WrapperProps} from '@docusaurus/types';
-import {isComplete, subscribe} from '@site/src/lib/progress';
+import {isComplete, subscribe} from '@site/src/lib/platform/progress';
 
 type Props = WrapperProps<typeof LinkType>;
 

@@ -2,7 +2,7 @@ import type {ReactNode} from 'react';
 
 function MathFigure({title, caption, children}: {title: string; caption: string; children: ReactNode}) {
   return (
-    <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+    <figure className="not-prose my-7 overflow-hidden rounded-[8px] border border-line bg-surface shadow-card">
       <div className="bg-panel px-4 py-4 text-panel-ink">{children}</div>
       <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-ink-soft">
         <strong className="text-ink">{title}</strong> - {caption}

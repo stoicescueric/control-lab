@@ -80,7 +80,7 @@ function ArrowDefs() {
     </defs>
   );
 }
-
+ 
 /* ---------------------------------------------------------------------------
    Figure 1 — the big picture: a turning robot follows an arc, so integrating
    it as a straight step "cuts the corner" and leaves drift every loop.
@@ -157,7 +157,7 @@ export function ArcGeometryIllustration() {
       <svg viewBox="0 0 720 340" role="img" aria-label="Forward and lateral components of one constant-curvature arc step" className="h-auto w-full">
         <rect width="720" height="340" rx="16" fill="#0b1120" />
         <ArrowDefs />
-
+ 
         {/* radii to the turn centre */}
         <line x1={C[0]} y1={C[1]} x2={O[0]} y2={O[1]} stroke={GRID} strokeWidth="2" strokeDasharray="7 6" />
         <line x1={C[0]} y1={C[1]} x2={E[0]} y2={E[1]} stroke={GRID} strokeWidth="2" strokeDasharray="7 6" />

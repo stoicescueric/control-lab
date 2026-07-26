@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    groups:
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
+      testing:
+        dependency-type: development
+        patterns:
+          - "vitest"
+          - "typescript"
+          - "@types/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:30"
+      timezone: Europe/Bucharest
+    open-pull-requests-limit: 5

@@ -5,9 +5,9 @@ sidebar_position: 5
 tags: [pure-pursuit, path-following, lookahead, curvature, autonomous]
 ---
 
-import PurePursuit from '@site/src/components/sims/PurePursuit';
-import CurvatureCircle from '@site/src/components/sims/CurvatureCircle';
-import VelocityProfile from '@site/src/components/sims/VelocityProfile';
+import PurePursuit from '@site/src/components/simulations/path-following/PurePursuit';
+import CurvatureCircle from '@site/src/components/simulations/path-following/CurvatureCircle';
+import VelocityProfile from '@site/src/components/simulations/path-following/VelocityProfile';
 
 # Path Following (Pure Pursuit)
 
@@ -44,11 +44,11 @@ continuously curve to follow it. That moving target is the <strong>lookahead poi
 
 The algorithm is three steps, run every loop:
 
-1. **Find the lookahead point** — walk along the path until you are a fixed lookahead distance $L_d$
+1. **Find the lookahead point**: walk along the path until you are a fixed lookahead distance $L_d$
    away. That point is the carrot.
 2. **Transform it into the robot frame**, where $+x$ is forward and $+y$ is left. Call the lateral
    offset $y$.
-3. **Compute the arc** — exactly one circular arc starts at the robot (tangent to its heading) and
+3. **Compute the arc**: exactly one circular arc starts at the robot (tangent to its heading) and
    passes through the carrot. Its curvature, and the resulting turn rate at speed $v$, are:
 
 $$
@@ -141,8 +141,8 @@ The table above is the case *against* a single fixed lookahead: the value that s
 is the same value that cuts a tight corner. A **fixed** lookahead picks one compromise for the whole
 path. A **dynamic** lookahead changes $L_d$ as the robot drives, escaping the trade-off:
 
-- **Speed-scaled** — make lookahead grow with speed, $L_d = \operatorname{clamp}(k\,v,\ L_\text{min},\ L_\text{max})$. Long and smooth on fast straights, short and tight as the robot slows for a corner. This mirrors how a driver looks farther down the road the faster they go.
-- **Curvature-scaled** — shrink lookahead where the upcoming path bends sharply (large $|\kappa|$ from the [spline](./quintic-splines.mdx)) and grow it on gentle sections, so tight features are tracked and straights stay calm.
+- **Speed-scaled**: make lookahead grow with speed, $L_d = \operatorname{clamp}(k\,v,\ L_\text{min},\ L_\text{max})$. Long and smooth on fast straights, short and tight as the robot slows for a corner. This mirrors how a driver looks farther down the road the faster they go.
+- **Curvature-scaled**: shrink lookahead where the upcoming path bends sharply (large $|\kappa|$ from the [spline](./quintic-splines.mdx)) and grow it on gentle sections, so tight features are tracked and straights stay calm.
 
 $$
 L_d = \operatorname{clamp}\big(k_v\, v,\ L_\text{min},\ L_\text{max}\big)
@@ -410,18 +410,18 @@ The techniques on this page are adapted, with attribution, from these references
 repositories:
 
 - **Adaptive pure pursuit — curvature velocity profile, inject-and-smooth path generation, signed
-  curvature, differential-drive wheel split** — Team 1712 (DAWGMA), *Implementation of the Adaptive
+  curvature, differential-drive wheel split**: Team 1712 (DAWGMA), *Implementation of the Adaptive
   Pure Pursuit Controller*
   ([whitepaper on Chief Delphi](https://www.chiefdelphi.com/t/paper-implementation-of-the-adaptive-pure-pursuit-controller/166552)).
-- **The original pure-pursuit derivation** — R. C. Coulter, *Implementation of the Pure Pursuit Path
+- **The original pure-pursuit derivation**: R. C. Coulter, *Implementation of the Pure Pursuit Path
   Tracking Algorithm*, CMU Robotics Institute, 1992
   ([PDF](https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf)).
 - **Interactive reference implementation** —
   [xiaoxiae/PurePursuitAlgorithm](https://github.com/xiaoxiae/PurePursuitAlgorithm) (an adaptive
   pure-pursuit visualiser).
-- **The path-smoothing pass** — [KHEngineering/SmoothPathPlanner](https://github.com/KHEngineering/SmoothPathPlanner)
+- **The path-smoothing pass**: [KHEngineering/SmoothPathPlanner](https://github.com/KHEngineering/SmoothPathPlanner)
   (the gradient-descent smoother the DAWGMA paper borrows from Team 2168).
-- **Line–circle intersection lookahead** — [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
+- **Line–circle intersection lookahead**: [FTCclueless/Centerstage](https://github.com/FTCclueless/Centerstage)
   (`subsystems/drive/Drivetrain.java`, `lineCircleIntersection`).
 - **Spline following with curvature speed scaling and centripetal feedforward** (resample to points
   carrying $R = 1/\kappa$, cap speed by $\sqrt{a_\text{lat} R}$, add a $k_c v^2/R$ strafe term) —

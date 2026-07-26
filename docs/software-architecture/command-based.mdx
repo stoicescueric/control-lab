@@ -5,7 +5,7 @@ sidebar_position: 2
 tags: [architecture, command-based, scheduler, composition, ftclib, solverslib, mercurial, ivy]
 ---
 
-import CommandScheduler from '@site/src/components/sims/CommandScheduler';
+import CommandScheduler from '@site/src/components/simulations/software-architecture/CommandScheduler';
 
 # Command-Based Programming
 
@@ -118,7 +118,7 @@ The powerful part is that command groups share the same lifecycle as ordinary co
 Because groups are commands, groups can contain groups. That is how a full autonomous routine becomes
 readable without becoming one huge class.
 
-## Enterprise implementation
+## Engineering implementation
 
 A minimal command interface is small. The complexity belongs in the scheduler and the reusable command
 objects, not in a giant OpMode.

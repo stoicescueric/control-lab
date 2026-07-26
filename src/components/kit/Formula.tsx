@@ -7,7 +7,7 @@ import type {ReactNode} from 'react';
 export function Formula({children, className = ''}: {children?: ReactNode; className?: string}) {
   return (
     <div
-      className={`cl-formula my-[18px] overflow-x-auto rounded-xl border border-white/10 bg-panel-2 px-5 py-4 font-mono text-[1rem] text-[#eaf0ff] ${className}`}>
+      className={`cl-formula my-[18px] overflow-x-auto rounded-[8px] border border-white/10 bg-panel-2 px-5 py-4 font-mono text-[1rem] text-[#eaf0ff] ${className}`}>
       {children}
     </div>
   );

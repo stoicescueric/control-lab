@@ -5,7 +5,7 @@ sidebar_position: 4
 tags: [natural-cubic-spline, tridiagonal, thomas-algorithm, moments, splines, advanced]
 ---
 
-import NaturalCubicSpline from '@site/src/components/sims/NaturalCubicSpline';
+import NaturalCubicSpline from '@site/src/components/simulations/path-following/NaturalCubicSpline';
 
 # Natural Cubic Splines — The Derivation
 
@@ -31,8 +31,8 @@ $S''(x_0) = S''(x_n) = 0$.
 
 Lay a cubic $S_i(x)$ on each interval $[x_i, x_{i+1}]$ and impose:
 
-- **C⁰** — each piece hits its endpoints, $S_i(x_i) = y_i$ and $S_i(x_{i+1}) = y_{i+1}$;
-- **C¹ and C²** — neighbouring pieces share first *and* second derivative at every interior knot.
+- **C⁰**: each piece hits its endpoints, $S_i(x_i) = y_i$ and $S_i(x_{i+1}) = y_{i+1}$;
+- **C¹ and C²**: neighbouring pieces share first *and* second derivative at every interior knot.
 
 That is two conditions short of a unique solution. The **natural** boundary closes the gap by setting
 curvature to zero at the two ends, $S''(x_0) = S''(x_n) = 0$ — the spline leaves the path straight, like a
@@ -69,7 +69,7 @@ $M_0 = M_n = 0$ in action.
 ## Solving it in O(n): the Thomas algorithm
 
 Because each row touches only three unknowns, you never form or invert a general matrix. The **Thomas
-algorithm** — Gaussian elimination specialised to a tridiagonal system — does a forward sweep that
+algorithm**: Gaussian elimination specialised to a tridiagonal system — does a forward sweep that
 eliminates the sub-diagonal, then a back substitution, both linear in the number of points:
 
 <JavaCode league="FTC" label="Natural cubic spline: solve the tridiagonal moment system">{`/** Second derivatives (moments) for a natural cubic spline through (x[i], y[i]). */

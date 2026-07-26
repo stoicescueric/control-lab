@@ -1,6 +1,6 @@
 ---
 title: How to Use Control Lab
-description: "Sixty seconds on how the lessons are built — the Problem/Theory/Deploy structure, the two kinds of interactive demo, difficulty badges, challenges, and progress tracking — plus suggested paths for FTC teams and university readers."
+description: "A concise guide to lesson structure, interactive demos, difficulty labels, challenges, progress tracking, and suggested paths through Control Lab."
 sidebar_position: 0.5
 tags: [preface, how-to, orientation]
 ---
@@ -8,33 +8,41 @@ tags: [preface, how-to, orientation]
 # How to Use Control Lab
 
 <Abstract>
-Sixty seconds of orientation: how every lesson is structured, what the two kinds of interactive demo
-are for, and how to track your progress — plus a suggested path through the curriculum depending on
+This page explains how every lesson is structured, what the two kinds of interactive demo
+are for, and how to track your progress. It also suggests a path through the curriculum depending on
 whether you're an FTC/FRC programmer or here for the theory.
 </Abstract>
 
 ## The anatomy of a lesson
 
-Every substantive lesson follows the same arc, in order:
+Every substantive lesson follows the same learning sequence:
 
-1. **A real failure.** Each lesson opens with a *Problem* — a mechanism misbehaving in a way you've
-   probably seen: an arm that sags, an auto that overshoots, a heading controller that spins the long
-   way around.
-2. **See it before you derive it.** A demo or figure builds the intuition *before* the math, and the
-   derivation explains every non-obvious variable next to the equation that uses it.
-3. **Deploy it.** Lessons end with clean FTC Java that fits a real OpMode — measured loop times, real
-   units, non-blocking loops — plus *hardware reality* warnings about where the ideal model bends.
+1. **Metadata and abstract.** The title, description, tags, and two-sentence abstract define the
+   lesson's scope before the reader commits to it.
+2. **Engineering context.** A concrete FTC mechanism, sensor, or autonomous failure gives the model a
+   reason to exist.
+3. **Visual intuition.** A diagram or interactive demo exposes the important behavior before formal
+   notation is introduced.
+4. **Theoretical explanation.** The lesson develops the equation from basic ideas, states its
+   assumptions, and defines every non-obvious variable near its first use.
+5. **Engineering implementation.** Focused Java shows how the model fits a non-blocking OpMode loop,
+   with explicit units and useful telemetry.
+6. **Hardware reality.** Tips and warnings identify the physical effects that the ideal model omits,
+   such as voltage sag, backlash, latency, saturation, or wheel slip.
+
+Section titles follow the subject being taught. Lessons are not forced into generic
+"Problem / Theory / Deploy" acts.
 
 The **difficulty badge** under each title (Easy / Medium / Hard) rates the math, not the value — some
 of the most important lessons are Easy.
 
 ## Two kinds of interactive demo
 
-Look at the pill in each panel's corner:
+Look at the label in each panel's corner:
 
-- **Live demo** — a real-time simulation. Physics runs continuously; drag targets, fire disturbances,
+- **Live demo**: a real-time simulation. Physics runs continuously; drag targets, fire disturbances,
   tune gains, and watch the system respond. If it has sliders, move them — the demos are the lab bench.
-- **Math explorer** — a Desmos-style graph of one equation. Nothing animates on its own; the graph
+- **Math explorer**: a Desmos-style graph of one equation. Nothing animates on its own; the graph
   responds instantly to the sliders so you can *feel* how the formula behaves before reading on.
 
 :::tip[Make it fullscreen]
@@ -42,7 +50,7 @@ Every demo panel has an expand button (⛶) in its corner — useful on phones a
 team. Press <kbd>Esc</kbd> to close.
 :::
 
-Some live demos carry a **🏁 Challenge** — a measurable goal graded by the simulation itself ("recover
+Some live demos carry a **Challenge**: a measurable goal graded by the simulation itself ("recover
 from the wind gust within 3.5 s"). Passed challenges turn gold and stay solved between visits.
 
 ## Tracking your progress

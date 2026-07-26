@@ -6,7 +6,7 @@ tags: [pid-to-point, go-to-pose, predictive-deceleration, braking, autonomous, c
 ---
 
 import {PidToPointIllustration, BrakingProfileIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
-import PredictiveBraking from '@site/src/components/sims/PredictiveBraking';
+import PredictiveBraking from '@site/src/components/simulations/path-following/PredictiveBraking';
 
 # PID-to-Point
 
@@ -39,7 +39,7 @@ far, ease in when close, and hold the final heading without spinning the long wa
 
 <Theory title="Feedback on the error, in the robot's frame">
 
-Start with the **field-frame error** — how far the target is from the robot right now:
+Start with the **field-frame error**: how far the target is from the robot right now:
 
 $$
 e_x = x^* - x, \qquad e_y = y^* - y, \qquad e_\theta = \operatorname{wrap}(\theta^* - \theta)
@@ -86,7 +86,7 @@ short of the target.
 
 There is a cleaner fix for that "stranded just short" problem than an integral term. Near the goal the
 error is tiny, so the $k_p\,e$ command shrinks below the voltage needed to overcome **static friction**
-and the robot simply stops moving while still a centimetre off. A **static feedforward** — a constant
+and the robot simply stops moving while still a centimetre off. A **static feedforward**: a constant
 push in the *direction* of the error — defeats it directly:
 
 $$
@@ -196,7 +196,7 @@ list of points — into something PID-to-point can follow.
 
 kStatic and predictive deceleration fix how PID-to-point *arrives*; the remaining limit is that it always
 aims straight at one distant target. To thread many waypoints along a smooth, drivable curve, you move on
-to **[splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)** — following a path
+to **[splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)**: following a path
 instead of chasing a point.
 
 </Theory>

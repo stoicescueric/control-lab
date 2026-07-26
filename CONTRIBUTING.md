@@ -9,7 +9,7 @@ This guide explains the standards for lesson writing, interactive demos, Java ex
 Set up the project:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm start
 ```
 
@@ -22,10 +22,14 @@ http://localhost:3000/control-lab/
 Before opening a pull request, run:
 
 ```bash
-npm run build
+npm run verify
 ```
 
-`npm run typecheck` is encouraged, but the repository still has some known older typing debt around shared plotting helpers. If your change introduces TypeScript, keep your new code typed cleanly even if existing files still produce errors.
+These are the same verification gates used by CI and deployment.
+
+Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a new component or shared
+library. It explains the dependency direction and includes recipes for lessons,
+simulations, mathematical models, and browser integrations.
 
 ## Contribution Priorities
 
@@ -48,7 +52,7 @@ Every substantive `.mdx` lesson should follow this teaching sequence:
 2. Real FTC or engineering context.
 3. Visual intuition before math.
 4. Theoretical rigor.
-5. Enterprise implementation.
+5. Engineering implementation.
 6. Hardware reality.
 
 ### 1. Metadata and Abstract
@@ -116,7 +120,11 @@ Explain every non-obvious variable immediately near the equation. For example:
 
 Do not leave readers to infer symbols from context when the equation introduces a new model.
 
-### 5. Enterprise Implementation
+Use punctuation deliberately. In lists and references, write `**Term:** explanation` rather than
+using an em dash as a default separator. Reserve em dashes for genuine interruptions in a sentence;
+the content check enforces a generous upper bound so one punctuation habit cannot dominate the prose.
+
+### 5. Engineering Implementation
 
 Java examples should look like code a strong FTC team would actually maintain:
 
@@ -173,7 +181,7 @@ Do not invent exact hardware facts. If you do not know a device-specific value, 
 Put reusable demos in:
 
 ```text
-src/components/sims/
+src/components/simulations/<domain>/
 ```
 
 Use `.tsx` and keep the component standalone.
@@ -196,6 +204,28 @@ Rules:
   - `Legend`
 
 Do not add a visual if it does not teach a specific model, parameter, or failure mode.
+
+Reusable equations and physical models belong in `src/lib/domain/`, with tests
+next to the model. Canvas and plotting infrastructure belongs in
+`src/lib/visualization/`; browser storage, analytics, and consent belong in
+`src/lib/platform/`.
+
+## Security and Privacy
+
+MDX can import and execute React code, so lesson pull requests require the same review standard as
+application code.
+
+- Never commit credentials, private keys, `.env` files, private telemetry, or student data.
+- Keep package changes intentional and commit the regenerated `package-lock.json`.
+- Do not add install scripts or dependencies for small utilities without a clear justification.
+- Use click-to-load, sandboxed components for third-party media instead of raw iframes.
+- Require HTTPS for external resources and use `rel="noopener noreferrer"` with raw
+  `target="_blank"` links.
+- Keep browser storage limited to non-sensitive preferences and lesson progress.
+- Do not enable trusted KaTeX commands or introduce HTML parser sinks.
+
+Report suspected vulnerabilities privately through the process in [SECURITY.md](SECURITY.md), not in
+a public issue.
 
 ## Design Rules
 
@@ -246,7 +276,7 @@ docs/<module>/_category_.json
 Interactive demos:
 
 ```text
-src/components/sims/<DemoName>.tsx
+src/components/simulations/<domain>/<DemoName>.tsx
 ```
 
 Reusable lesson UI:
@@ -261,6 +291,23 @@ Static images:
 static/img/
 ```
 
+Shared code:
+
+```text
+src/lib/domain/          pure mathematics and physical models
+src/lib/visualization/   canvas and plotting infrastructure
+src/lib/platform/        browser and site integration
+```
+
+Import a simulation directly from its subject area:
+
+```mdx
+import PurePursuit from '@site/src/components/simulations/path-following/PurePursuit';
+```
+
+Do not create a single simulation barrel. Direct imports keep ownership clear
+and avoid coupling unrelated page bundles.
+
 Use relative `.mdx` links inside docs when linking between lessons:
 
 ```mdx
@@ -273,7 +320,8 @@ This keeps Docusaurus broken-link checking useful.
 
 Before submitting:
 
-- The site builds with `npm run build`.
+- Typechecking, tests, the production build, security checks, and the size budget pass.
+- Architecture and content checks pass.
 - New lessons have frontmatter, tags, and an abstract.
 - New formulas define their variables.
 - Java snippets are formatted and include Javadoc where useful.
@@ -283,10 +331,11 @@ Before submitting:
 - The page works in dark mode.
 - Mobile layout does not overflow.
 - Sources are cited for nontrivial claims.
+- Tool-assisted work states what was generated and what the contributor verified.
 
 ## Commit Style
 
-Use clear, specific commit messages:
+Keep each commit focused on one coherent change and use a message that describes the result:
 
 ```text
 Add motor model lesson and torque-speed demo
@@ -301,6 +350,11 @@ update
 fix stuff
 changes
 ```
+
+Tool-assisted changes are welcome, but they still require engineering review. In the pull request,
+state which parts were assisted or generated, which sources were checked, and which commands or manual
+tests you used to validate the result. Do not mix bulk generated content with unrelated formatting or
+configuration changes.
 
 ## What Not To Contribute
 

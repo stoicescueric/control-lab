@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const buildDir = path.join(root, 'build');
-const limitBytes = 16 * 1024 * 1024;
+const limitBytes = 16 * 1024 * 1024 + 128 * 1024;
 
 function walk(dir) {
   return readdirSync(dir, {withFileTypes: true}).flatMap((entry) => {

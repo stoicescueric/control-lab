@@ -5,7 +5,7 @@ sidebar_position: 5
 tags: [bang-bang, flywheel, control, hysteresis, limit-cycle]
 ---
 
-import BangBang from '@site/src/components/sims/BangBang';
+import BangBang from '@site/src/components/simulations/control-theory/BangBang';
 
 # Bang-Bang Control
 
@@ -47,7 +47,7 @@ $$
 It cannot overshoot in *voltage* (it never commands more than full power) and cannot go unstable — there
 are no gains to mistune. On a high-inertia flywheel the speed recovers almost as fast as physically
 possible. The price: it never *holds* a speed. The motor is always either at full power or coasting, so the
-flywheel swings up and down across the setpoint forever in a small **limit cycle** — the chatter you see in
+flywheel swings up and down across the setpoint forever in a small **limit cycle**: the chatter you see in
 red below.
 
 <Callout type="warning" title="Bang-bang only behaves on a slow plant.">

@@ -1,0 +1,9 @@
+# Default ownership for all source and curriculum changes.
+* @stoicescueric
+
+# Security-sensitive configuration requires explicit owner review.
+/.github/ @stoicescueric
+/docusaurus.config.ts @stoicescueric
+/package.json @stoicescueric
+/package-lock.json @stoicescueric
+/src/theme/ @stoicescueric
