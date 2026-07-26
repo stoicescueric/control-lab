@@ -5,7 +5,7 @@ sidebar_position: 3
 tags: [takeback-half, tbh, bang-bang, flywheel, control, advanced]
 ---
 
-import BangBang from '@site/src/components/sims/BangBang';
+import BangBang from '@site/src/components/simulations/control-theory/BangBang';
 
 # Take-Back-Half
 
@@ -29,7 +29,7 @@ setpoint.
 <Theory title="Settle without giving up recovery">
 
 Take-back-half keeps an accumulating drive like an integrator, but adds one trick. Each loop, integrate the
-error into the drive. When the error **crosses zero** — the moment you pass the setpoint — you have
+error into the drive. When the error **crosses zero**: the moment you pass the setpoint — you have
 integrated too far, so "take back half": set the drive to the average of its current value and its value
 at the *previous* crossing. Successive crossings bracket the true holding drive and converge onto it.
 
@@ -90,7 +90,7 @@ you need both tight holding *and* controlled acceleration, or the mechanism isn'
 
 <Admonition type="info" title="Sources & references">
 
-- **Take-back-half** — the algorithm popularized in the VEX/FRC community for flywheel speed control
+- **Take-back-half**: the algorithm popularized in the VEX/FRC community for flywheel speed control
   (originally described by Tim Lindquist / "BLRS"); this lesson is an independent reimplementation.
 
 </Admonition>

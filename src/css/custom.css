@@ -13,6 +13,82 @@
    class), so our Tailwind `dark:` variant and token overrides target that.
    ============================================================================= */
 
+/* Bundle typography and math locally: opening a lesson should not contact a
+   font CDN, and the KaTeX stylesheet must match the installed renderer. */
+@import 'katex/dist/katex.min.css';
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('@fontsource-variable/source-sans-3/files/source-sans-3-latin-ext-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Source Sans 3 Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 900;
+  src: url('@fontsource-variable/source-sans-3/files/source-sans-3-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-400-normal.woff2')
+    format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2')
+    format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-600-normal.woff2')
+    format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2')
+    format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
 /* Order the cascade layers up front; Tailwind slots its output into these. */
 @layer theme, base, components, utilities;
 
@@ -34,19 +110,20 @@
    @theme turns each into a utility too (e.g. bg-surface, text-ink, text-brand).
    --------------------------------------------------------------------------- */
 @theme {
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --font-sans: 'Source Sans 3 Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* surfaces & ink */
-  --color-bg: #f3f6fc;
-  --color-bg-soft: #e9eefa;
+  --color-bg: #f5f7f8;
+  --color-bg-soft: #edf0f2;
   --color-surface: #ffffff;
-  --color-surface-2: #f7f9ff;
-  --color-ink: #1c2333;
-  --color-ink-soft: #56617a;
-  --color-ink-faint: #8a93a8;
-  --color-line: #e3e8f2;
-  --color-line-soft: #eef1f8;
+  --color-surface-2: #f7f8fa;
+  --color-ink: #1d2228;
+  --color-ink-soft: #59636f;
+  --color-ink-faint: #89929d;
+  --color-line: #dfe3e7;
+  --color-line-soft: #edf0f2;
 
   /* brand + accents */
   --color-brand: #4f6cf7;
@@ -55,7 +132,6 @@
   --color-amber: #f59e0b;
   --color-rose: #ef4476;
   --color-green: #22c55e;
-  --color-violet: #8b5cf6;
 
   /* dark panels used inside the interactive demos (dark in BOTH themes) */
   --color-panel: #0f1626;
@@ -63,8 +139,8 @@
   --color-panel-ink: #e8edf7;
 
   --radius-card: 8px;
-  --shadow-card: 0 1px 2px rgba(28, 40, 79, 0.06);
-  --shadow-pop: 0 10px 28px rgba(28, 40, 79, 0.1);
+  --shadow-card: 0 1px 2px rgba(29, 34, 40, 0.06);
+  --shadow-pop: 0 10px 28px rgba(29, 34, 40, 0.1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -148,15 +224,15 @@
      utilities (text-ink, bg-surface, border-line, …) resolve to these CSS
      variables, overriding them here flips the whole component palette. The
      demo PANEL tokens stay dark in both themes by design. */
-  --color-bg: #0a0f1e;
-  --color-bg-soft: #121a30;
-  --color-surface: #111a2c;
-  --color-surface-2: #0f1730;
-  --color-ink: #e7ecf7;
-  --color-ink-soft: #aab6d0;
-  --color-ink-faint: #7e8cac;
-  --color-line: #243049;
-  --color-line-soft: #1a2440;
+  --color-bg: #111315;
+  --color-bg-soft: #1a1e22;
+  --color-surface: #181b1f;
+  --color-surface-2: #14171a;
+  --color-ink: #f0f2f4;
+  --color-ink-soft: #b2bac4;
+  --color-ink-faint: #7e8792;
+  --color-line: #30353c;
+  --color-line-soft: #23282d;
   --color-brand-dk: #93a7ff;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
   --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.32);
@@ -175,7 +251,7 @@
   --ifm-hr-background-color: var(--color-line);
   --ifm-blockquote-border-color: var(--color-line);
   --ifm-code-background: rgba(147, 167, 255, 0.13);
-  --ifm-navbar-background-color: #0a0f1e;
+  --ifm-navbar-background-color: #111315;
   --ifm-menu-color: var(--color-ink-soft);
   --ifm-menu-color-active: #c5d0ff;
   --ifm-menu-color-background-active: rgba(147, 167, 255, 0.14);
@@ -266,9 +342,8 @@ html {
   text-rendering: optimizeLegibility;
 }
 
-/* Inter's stylistic sets: straight-leg lowercase, single-storey a, etc. */
 body {
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  font-feature-settings: 'kern';
 }
 
 .theme-doc-markdown {
@@ -281,7 +356,7 @@ body {
 }
 
 .cl-demo {
-  border-radius: 10px !important;
+  border-radius: 8px !important;
   box-shadow: var(--shadow-card) !important;
 }
 
@@ -435,7 +510,7 @@ pre code {
 
 /* Pagination + buttons: a touch more rounded with a subtle lift. */
 .pagination-nav__link {
-  border-radius: 12px;
+  border-radius: 8px;
   transition:
     border-color 150ms ease,
     background-color 150ms ease;
@@ -475,6 +550,233 @@ pre code {
 }
 ::selection {
   background: rgba(79, 108, 247, 0.22);
+}
+
+/* Homepage motion is restrained and progressive: the live control model remains
+   the primary visual, while the surrounding hierarchy enters with short,
+   one-time transitions. Scroll-linked reveals are enabled only in browsers that
+   support view timelines. */
+@keyframes cl-home-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cl-home-scroll-reveal {
+  from {
+    opacity: 0.35;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cl-spectrum-enter {
+  from {
+    opacity: 0;
+    transform: scaleX(0.25);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes cl-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.78);
+  }
+}
+
+.cl-home-enter {
+  animation: cl-home-enter 680ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.cl-home-enter--model {
+  animation-delay: 130ms;
+}
+
+.cl-home-plot {
+  box-shadow: 0 18px 50px rgba(29, 34, 40, 0.08);
+}
+
+[data-theme='dark'] .cl-home-plot {
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+}
+
+.cl-spectrum-line {
+  width: 100%;
+  height: 4px;
+  transform-origin: left center;
+  background: linear-gradient(
+    90deg,
+    #4f6cf7 0%,
+    #4f6cf7 28%,
+    #11b5a4 48%,
+    #f59e0b 70%,
+    #ef4476 100%
+  );
+  animation: cl-spectrum-enter 900ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+/* ---------------------------------------------------------------------------
+   Homepage hero background wash: a soft, layered gradient that gives the hero
+   its own identity without competing with the live plot or the type. Built
+   from radial washes in the brand/teal/amber hues already used by the
+   spectrum line, so it reads as one system rather than a bolt-on effect.
+   --------------------------------------------------------------------------- */
+.cl-hero-gradient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* The diagonal wash uses stops outside 0–100% (a technique borrowed from
+     Nibiru's marketing site): the ramp's actual color transitions happen
+     off-canvas, so only a soft, muted slice is ever visible on screen rather
+     than a crisp banded diagonal. Layered under the two radial glows, which
+     stay put as the focal highlights. */
+  background-image:
+    linear-gradient(
+      152deg,
+      rgba(245, 158, 11, 0.05) -30%,
+      rgba(79, 108, 247, 0.07) 35%,
+      rgba(17, 181, 164, 0.05) 90%,
+      rgba(239, 68, 118, 0.04) 140%
+    ),
+    radial-gradient(ellipse 60% 50% at 12% -10%, rgba(79, 108, 247, 0.16), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 100% 0%, rgba(17, 181, 164, 0.12), transparent 60%),
+    radial-gradient(ellipse 45% 40% at 78% 100%, rgba(245, 158, 11, 0.08), transparent 65%);
+}
+
+[data-theme='dark'] .cl-hero-gradient {
+  background-image:
+    linear-gradient(
+      152deg,
+      rgba(245, 158, 11, 0.08) -30%,
+      rgba(93, 124, 255, 0.12) 35%,
+      rgba(17, 181, 164, 0.09) 90%,
+      rgba(239, 68, 118, 0.07) 140%
+    ),
+    radial-gradient(ellipse 60% 50% at 12% -10%, rgba(93, 124, 255, 0.22), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 100% 0%, rgba(17, 181, 164, 0.16), transparent 60%),
+    radial-gradient(ellipse 45% 40% at 78% 100%, rgba(245, 158, 11, 0.1), transparent 65%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cl-hero-gradient {
+    animation: cl-hero-gradient-drift 22s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes cl-hero-gradient-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(0, 1.5%, 0) scale(1.04);
+  }
+}
+
+/* A quieter, single-wash variant for the "Working example" section — enough to
+   break the flat white/off-white rhythm between sections without competing
+   with the hero. */
+.cl-example-gradient {
+  background-image: radial-gradient(
+    ellipse 70% 60% at 85% 0%,
+    rgba(79, 108, 247, 0.07),
+    transparent 65%
+  );
+}
+
+[data-theme='dark'] .cl-example-gradient {
+  background-image: radial-gradient(
+    ellipse 70% 60% at 85% 0%,
+    rgba(93, 124, 255, 0.24),
+    transparent 65%
+  );
+}
+
+/* Topic marquee: a full-bleed dark ticker band directly under the hero, used
+   as a transition device between the hero and the first content section
+   (rather than a hard cut). Content is duplicated in the track and scrolled
+   exactly -50%, so the loop is seamless regardless of viewport width. */
+.cl-marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent,
+    #000 6%,
+    #000 94%,
+    transparent
+  );
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+.cl-marquee__track {
+  display: flex;
+  width: max-content;
+  animation: cl-marquee-scroll 38s linear infinite;
+}
+
+@keyframes cl-marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-marquee__track {
+    animation: none;
+  }
+}
+
+.cl-live-marker {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--color-teal);
+  animation: cl-live-pulse 2.2s ease-in-out infinite;
+}
+
+.cl-home-action {
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cl-home-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(29, 34, 40, 0.12);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .cl-scroll-reveal {
+    animation: cl-home-scroll-reveal linear both;
+    animation-range: entry 5% entry 65%;
+    animation-timeline: view();
+  }
 }
 
 /* Honour reduced-motion preferences across the whole site. */

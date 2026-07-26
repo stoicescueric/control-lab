@@ -1,5 +1,9 @@
-# --- Claude Code / local tooling ---
+# --- Local AI/tooling state (not part of the public project) ---
 .claude/
+.agents/
+skills-lock.json
+AGENTS.md
+.cursorrules
 
 # --- Verification & screenshot scaffolding (temporary, never ship) ---
 _*.js
@@ -14,7 +18,22 @@ desktop.ini
 .vscode/
 *.swp
 
-# --- Node / Vite build ---
+# --- Local configuration and credentials ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+service-account*.json
+
+# --- Node build output ---
 node_modules/
 dist/
 .vite/

@@ -1,0 +1,52 @@
+name: Bug report
+description: Report incorrect content, broken behavior, or a visual/accessibility defect.
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Lesson content or mathematics
+        - Interactive simulation
+        - Navigation or search
+        - Accessibility or responsive layout
+        - Build, test, or deployment
+        - Privacy or analytics
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Page or file
+      description: Provide the lesson URL or repository path.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Explain what is wrong and include the relevant equation, control, or error output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Explain the correct result and cite a source when reporting a technical error.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: List the steps, parameter values, browser, and viewport needed to reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: Add screenshots, logs, calculations, or stable source links.

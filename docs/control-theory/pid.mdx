@@ -5,7 +5,7 @@ sidebar_position: 4
 tags: [pid, pidf, pdfl, feedforward, derivative-filter, anti-windup, feedback, control]
 ---
 
-import Drone from '@site/src/components/sims/Drone';
+import Drone from '@site/src/components/simulations/control-theory/Drone';
 
 # PID Control
 
@@ -150,13 +150,13 @@ Notice the arm problem never actually needed an *integral*. The steady push grav
 behind the **PDFL** controller used widely in FTC — **P**roportional, **D**erivative, **F**eedforward, and
 an **L**ower-limit (static-friction) term, with **no integral at all**:
 
-- **P** — proportional to the error, exactly as before.
-- **D** — the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
+- **P**: proportional to the error, exactly as before.
+- **D**: the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
   ruin it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
   It is still the velocity feedback that brings you in at zero velocity.
-- **F** — a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
+- **F**: a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
   It does the integral's old job instantly, with nothing to wind up.
-- **L** — a **static-friction floor**: a fixed $k_L\,\operatorname{sign}(e)$ that shoves *just hard enough*
+- **L**: a **static-friction floor**: a fixed $k_L\,\operatorname{sign}(e)$ that shoves *just hard enough*
   to break stiction in the direction you need to move. It is applied only **outside a small dead zone**
   around the target — inside it the sign of the error flips every loop, so dropping L there stops the
   mechanism from buzzing.

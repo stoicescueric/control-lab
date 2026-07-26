@@ -6,9 +6,9 @@ tags: [splines, bezier, quintic, natural-cubic, curvature, c2-continuity, trajec
 ---
 
 import {SplineContinuityIllustration} from '@site/src/components/kit/PathFollowingIllustrations';
-import BezierExplorer from '@site/src/components/sims/BezierExplorer';
-import SplineCompare from '@site/src/components/sims/SplineCompare';
-import NaturalCubicSpline from '@site/src/components/sims/NaturalCubicSpline';
+import BezierExplorer from '@site/src/components/simulations/path-following/BezierExplorer';
+import SplineCompare from '@site/src/components/simulations/path-following/SplineCompare';
+import NaturalCubicSpline from '@site/src/components/simulations/path-following/NaturalCubicSpline';
 
 # Splines
 
@@ -85,7 +85,7 @@ that made Béziers convenient — you no longer get to place them freely.
 ### Quintic Hermite — pin waypoints and derivatives (interpolation)
 
 The other philosophy: instead of points that pull the curve, specify the curve's own state at each
-**waypoint** — position, velocity, and acceleration — and let one polynomial satisfy all of it. Because
+**waypoint**: position, velocity, and acceleration — and let one polynomial satisfy all of it. Because
 you pin the values, the curve passes *through* every waypoint. This is the difference in one picture —
 the same four points, used as Bézier control points versus Hermite waypoints:
 
@@ -95,7 +95,7 @@ The green curve hits all four points; the blue one only the ends. A drivetrain r
 green behavior: "go through these poses," not "go near them."
 
 How many degrees of freedom does it take? Matching position, velocity, and acceleration at *both* ends of
-a segment is six conditions, so you need a degree-5 — **quintic** — polynomial per coordinate:
+a segment is six conditions, so you need a degree-5 — **quintic**: polynomial per coordinate:
 
 $$
 x(t) = c_5 t^5 + c_4 t^4 + c_3 t^3 + c_2 t^2 + c_1 t + c_0
@@ -149,7 +149,7 @@ action.
 
 <NaturalCubicSpline />
 
-The trade against quintic Hermite: a natural cubic is **already C²** — curvature is continuous across every
+The trade against quintic Hermite: a natural cubic is **already C²**: curvature is continuous across every
 interior knot — with the *fewest* degrees of freedom and no slope input required. What you give up is
 control of the ends: the natural boundary *pins* the endpoint curvature to zero rather than letting you
 choose it. A quintic's two extra coefficients per segment let you **prescribe** velocity and acceleration

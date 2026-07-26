@@ -26,8 +26,8 @@ All 2-D geometry in the curriculum uses one right-handed convention:
 
 Two frames appear constantly:
 
-- **Field frame** — fixed to the field. Poses $(x, y, \theta)$ and paths live here.
-- **Robot frame** — rides on the robot: $+x$ out the front, $+y$ out the left side. Drive commands
+- **Field frame**: fixed to the field. Poses $(x, y, \theta)$ and paths live here.
+- **Robot frame**: rides on the robot: $+x$ out the front, $+y$ out the left side. Drive commands
   $(v_x, v_y, \omega)$ live here, because that is what the [mecanum mixer](./path-following/mecanum-kinematics.mdx) consumes.
 
 Converting a field-frame vector into the robot frame is a rotation by $-\theta$:
