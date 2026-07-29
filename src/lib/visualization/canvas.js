@@ -46,6 +46,12 @@ export function useDprCanvas(ref, height) {
  * Pass `targetRef` (a ref to any element inside the demo, usually the canvas) to
  * gate the loop on visibility: the physics/draw loop only runs while that element
  * is on (or near) screen, so off-screen sims cost zero CPU. Omit it to always run.
+ *
+ * Honours the OS-level `prefers-reduced-motion: reduce` setting: while it's
+ * active, the rAF loop still runs (so visibility gating and cleanup behave
+ * identically) but the callback is skipped, freezing the demo on its current
+ * frame instead of continuing to animate. A `matchMedia` change listener keeps
+ * this in sync if the user flips the setting while the page is open.
  */
 export function useRaf(callback, targetRef) {
   const cb = useRef(callback);
@@ -53,10 +59,16 @@ export function useRaf(callback, targetRef) {
   useEffect(() => {
     let raf = null;
     let last = performance.now();
+    let reduceMotion = false;
+    let mq;
+    if (typeof window !== "undefined" && window.matchMedia) {
+      mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+      reduceMotion = mq.matches;
+    }
     const loop = (now) => {
       const dt = (now - last) / 1000;
       last = now;
-      cb.current(dt, now);
+      if (!reduceMotion) cb.current(dt, now);
       raf = requestAnimationFrame(loop);
     };
     const start = () => {
@@ -71,6 +83,17 @@ export function useRaf(callback, targetRef) {
         raf = null;
       }
     };
+    const onMotionChange = (e) => {
+      reduceMotion = e.matches;
+    };
+    if (mq) {
+      if (typeof mq.addEventListener === "function") {
+        mq.addEventListener("change", onMotionChange);
+      } else if (typeof mq.addListener === "function") {
+        // Safari < 14 fallback.
+        mq.addListener(onMotionChange);
+      }
+    }
     const el = targetRef?.current;
     let io;
     if (el && typeof IntersectionObserver !== "undefined") {
@@ -85,6 +108,13 @@ export function useRaf(callback, targetRef) {
     return () => {
       stop();
       if (io) io.disconnect();
+      if (mq) {
+        if (typeof mq.removeEventListener === "function") {
+          mq.removeEventListener("change", onMotionChange);
+        } else if (typeof mq.removeListener === "function") {
+          mq.removeListener(onMotionChange);
+        }
+      }
     };
   }, [targetRef]);
 }

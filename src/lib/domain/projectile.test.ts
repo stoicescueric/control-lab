@@ -1,6 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   DRAG_K,
+  FEEDER_DELAY,
   G,
   H0,
   monotoneHermite,
@@ -9,6 +10,7 @@ import {
   simulateDrag,
   simulateVacuum,
   solveSOTM,
+  SOTM_GAIN,
   tof,
   type State,
 } from './projectile';
@@ -62,13 +64,23 @@ describe('shoot-on-the-move solver', () => {
     expect(sol.pv.y).toBeCloseTo(goal.y, 6);
   });
 
-  it('leads in the direction of robot motion and converges', () => {
+  it('offsets opposite robot motion to cancel inherited velocity and converges', () => {
     const shooter = {x: 50, y: 28};
     const goal = {x: 100, y: 120};
     const sol = solveSOTM(shooter, goal, {x: 26, y: 10});
-    expect(sol.pv.x).toBeGreaterThan(goal.x); // lead +x
-    expect(sol.pv.y).toBeGreaterThan(goal.y); // lead +y
+    expect(sol.pv.x).toBeLessThan(goal.x); // robot moves +x, so aim shifts -x
+    expect(sol.pv.y).toBeLessThan(goal.y); // robot moves +y, so aim shifts -y
     expect(sol.iters[sol.iters.length - 1].done).toBe(true);
+  });
+
+  it('applies the documented virtual-target equation exactly for fixed flight time', () => {
+    const goal = {x: 100, y: 120};
+    const velocity = {x: 26, y: 10};
+    const fixedFlightTime = 0.8;
+    const sol = solveSOTM({x: 50, y: 28}, goal, velocity, () => fixedFlightTime);
+    const compensationTime = FEEDER_DELAY + fixedFlightTime;
+    expect(sol.pv.x).toBeCloseTo(goal.x - SOTM_GAIN * velocity.x * compensationTime, 12);
+    expect(sol.pv.y).toBeCloseTo(goal.y - SOTM_GAIN * velocity.y * compensationTime, 12);
   });
 
   it('keeps the time-of-flight LUT monotone in distance', () => {
@@ -110,5 +122,25 @@ describe('calibration-table interpolation', () => {
     expect(mono.m[3]).toBe(0);
     expect(mono.m[4]).toBe(0);
     expect(mono.flag.filter((f) => f === 'flat').length).toBeGreaterThan(0);
+  });
+
+  it('does not reverse inside intervals around a local extremum', () => {
+    const localPeak = [0, 3, 2, 2.5];
+    const mono = monotoneHermite([0, 1, 2, 3], localPeak);
+    for (let interval = 0; interval < localPeak.length - 1; interval++) {
+      const lo = Math.min(localPeak[interval], localPeak[interval + 1]);
+      const hi = Math.max(localPeak[interval], localPeak[interval + 1]);
+      for (let step = 0; step <= 20; step++) {
+        const y = mono.evaluate(interval + step / 20);
+        expect(y).toBeGreaterThanOrEqual(lo - 1e-9);
+        expect(y).toBeLessThanOrEqual(hi + 1e-9);
+      }
+    }
+  });
+
+  it('rejects malformed knot tables', () => {
+    expect(() => naturalCubic([0], [1])).toThrow();
+    expect(() => monotoneHermite([0, 0], [1, 2])).toThrow();
+    expect(() => monotoneHermite([0, 1], [1, Number.NaN])).toThrow();
   });
 });

@@ -56,8 +56,10 @@ you are. A spring on its own overshoots and oscillates forever.</li>
 <li><strong>D is the shock absorber.</strong> It opposes <em>motion</em>. Because the well-behaved version
 differentiates the measurement, $u_D = -K_d\,\dot m$ is literally <strong>velocity feedback</strong>: the
 faster you're moving, the harder it brakes. So D does more than "reduce overshoot" — it makes the system
-<strong>arrive at the target with ≈ zero velocity</strong> instead of racing past it. P + D
-together is a critically-damped mass-spring-damper: a clean settle with no overshoot.</li>
+<strong>arrive at the target with ≈ zero velocity</strong> instead of racing past it. P + D forms a
+mass-spring-damper, but it is critically damped only for a particular gain-to-plant relationship. For an
+ideal mass $m$, that boundary is $K_d = 2\sqrt{mK_p}$; less damping overshoots and more damping settles
+without overshoot but more slowly.</li>
 <li><strong>I shifts the rest position.</strong> It slowly builds whatever constant push the job needs
 (holding an arm against gravity) so the spring no longer has to hold a standing error to make that
 force.</li>
@@ -190,22 +192,27 @@ public class PDFL {                       // Proportional · Derivative · Feedf
     public static double deadzone = 5;    // inside this band (ticks), drop the L term
 
     private double filteredD = 0;
-    private final double alpha = 0.1;     // low-pass smoothing on the derivative
-    private double lastError = 0, lastTime = 0;
+    public static double derivativeTau = 0.05; // derivative-filter time constant, seconds
+    private double lastMeasurement = 0, lastTime = 0;
+    private boolean firstLoop = true;
     private final ElapsedTime timer = new ElapsedTime();
 
-    /** One loop. error = target - measurement. Returns motor power. */
-    public double run(double error) {
+    /** One loop. Returns motor power. */
+    public double run(double target, double measurement) {
         double t  = timer.seconds();
         double dt = Math.max(1e-3, t - lastTime);
-        double dError = error - lastError;
-        lastError = error;  lastTime = t;
+        double error = target - measurement;
 
         double p = kP * error;
 
-        double rawD = dError / dt;                          // (use -measurementRate to also kill kick)
-        filteredD = alpha * rawD + (1 - alpha) * filteredD; // EMA low-pass on the derivative
+        // Derivative on measurement: damps motion without a kick when target steps.
+        double rawD = firstLoop ? 0.0 : -(measurement - lastMeasurement) / dt;
+        double alpha = 1.0 - Math.exp(-dt / Math.max(1e-3, derivativeTau));
+        filteredD += alpha * (rawD - filteredD);
         double d = kD * filteredD;
+        firstLoop = false;
+        lastMeasurement = measurement;
+        lastTime = t;
 
         double f = kF;                                      // constant: holds against gravity
         double l = kL * Math.signum(error);                 // static-friction floor

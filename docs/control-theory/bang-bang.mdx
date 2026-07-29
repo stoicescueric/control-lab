@@ -1,6 +1,6 @@
 ---
 title: Bang-Bang Control
-description: The simplest controller that works — full power below the setpoint, off above it. For a high-inertia flywheel it is fast and impossible to destabilize; its one flaw is that it chatters and never truly settles.
+description: The simplest controller that works — full power below the setpoint, off above it. For a high-inertia flywheel it recovers quickly; its main flaw is a persistent switching limit cycle.
 sidebar_position: 5
 tags: [bang-bang, flywheel, control, hysteresis, limit-cycle]
 ---
@@ -13,8 +13,9 @@ import BangBang from '@site/src/components/simulations/control-theory/BangBang';
 
 <Abstract>
 Bang-bang is the simplest feedback law: if you are below the target, give full power; if above, give
-none. For a high-inertia flywheel it is shockingly effective and impossible to make unstable, but it
-chatters and never truly settles. That last flaw is what motivates its one-line upgrade,
+none. For a high-inertia flywheel it is shockingly effective, but it chatters and never truly settles.
+Sampling delay, noisy measurements, and a fast plant can make that limit cycle large even though there
+are no gains to tune. That flaw motivates its one-line upgrade,
 <a href="../advanced-topics/takeback-half">take-back-half</a>, in the Advanced Topics section.
 </Abstract>
 
@@ -44,9 +45,10 @@ u_\text{max} & \text{if } v < v_\text{target} \\
 \end{cases}
 $$
 
-It cannot overshoot in *voltage* (it never commands more than full power) and cannot go unstable — there
-are no gains to mistune. On a high-inertia flywheel the speed recovers almost as fast as physically
-possible. The price: it never *holds* a speed. The motor is always either at full power or coasting, so the
+Its command is bounded between zero and full power, but the flywheel speed can still overshoot because
+the wheel stores momentum and the control loop has delay. With no continuous gains there is less to tune,
+not a blanket stability guarantee. On a high-inertia flywheel the speed recovers almost as fast as
+physically possible. The price: it never *holds* a speed. The motor is always either at full power or coasting, so the
 flywheel swings up and down across the setpoint forever in a small **limit cycle**: the chatter you see in
 red below.
 

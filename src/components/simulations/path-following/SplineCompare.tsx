@@ -1,5 +1,6 @@
 import {useRef, useState} from 'react';
 import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+import {bezierPoint as bez, catmullRomPath as hermitePath, type Point as Pt} from '@site/src/lib/domain/bezier';
 
 /* Interpolation vs. approximation, on the SAME four draggable points:
    - a cubic Bézier treats them as CONTROL points (approximates — only the ends
@@ -12,46 +13,8 @@ import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/D
 const W = 640;
 const H = 360;
 
-type Pt = {x: number; y: number};
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-function bez(p: Pt[], t: number): Pt {
-  const u = 1 - t;
-  return {
-    x: u * u * u * p[0].x + 3 * u * u * t * p[1].x + 3 * u * t * t * p[2].x + t * t * t * p[3].x,
-    y: u * u * u * p[0].y + 3 * u * u * t * p[1].y + 3 * u * t * t * p[2].y + t * t * t * p[3].y,
-  };
-}
-
-// Catmull-Rom (cubic Hermite) through all four points, with one-sided end tangents.
-function hermitePath(p: Pt[]): Pt[] {
-  const m = [
-    {x: p[1].x - p[0].x, y: p[1].y - p[0].y},
-    {x: (p[2].x - p[0].x) / 2, y: (p[2].y - p[0].y) / 2},
-    {x: (p[3].x - p[1].x) / 2, y: (p[3].y - p[1].y) / 2},
-    {x: p[3].x - p[2].x, y: p[3].y - p[2].y},
-  ];
-  const out: Pt[] = [];
-  for (let seg = 0; seg < 3; seg++) {
-    const p0 = p[seg];
-    const p1 = p[seg + 1];
-    const m0 = m[seg];
-    const m1 = m[seg + 1];
-    const steps = 30;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const h00 = 2 * t ** 3 - 3 * t ** 2 + 1;
-      const h10 = t ** 3 - 2 * t ** 2 + t;
-      const h01 = -2 * t ** 3 + 3 * t ** 2;
-      const h11 = t ** 3 - t ** 2;
-      out.push({
-        x: h00 * p0.x + h10 * m0.x + h01 * p1.x + h11 * m1.x,
-        y: h00 * p0.y + h10 * m0.y + h01 * p1.y + h11 * m1.y,
-      });
-    }
-  }
-  return out;
-}
+const NUDGE = 6;
 
 const toPath = (pts: Pt[]) => `M ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')}`;
 
@@ -77,6 +40,20 @@ export function SplineCompare() {
     const i = drag.current;
     setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
   };
+  const onPointKeyDown = (i: number) => (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? NUDGE * 4 : NUDGE;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = -step;
+    else if (e.key === 'ArrowDown') dy = step;
+    else return;
+    e.preventDefault();
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+    );
+  };
 
   const bezierPts = Array.from({length: 90}, (_, i) => bez(pts, i / 89));
 
@@ -86,7 +63,6 @@ export function SplineCompare() {
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
-        role="img"
         aria-label="Bézier approximation versus Hermite interpolation through the same points"
         onPointerMove={onMove}
         onPointerUp={() => (drag.current = null)}
@@ -109,10 +85,15 @@ export function SplineCompare() {
                 stroke={onBezier ? '#9db0ff' : '#ffc24d'}
                 strokeWidth="3"
                 style={{cursor: 'grab'}}
+                tabIndex={0}
+                role="slider"
+                aria-label={`${onBezier ? 'End' : 'Mid'} point ${i}`}
+                aria-valuetext={`x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}`}
                 onPointerDown={(e) => {
                   drag.current = i;
                   (e.target as Element).setPointerCapture(e.pointerId);
                 }}
+                onKeyDown={onPointKeyDown(i)}
               />
               <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8">
                 {i === 0 || i === 3 ? `end` : `mid`}

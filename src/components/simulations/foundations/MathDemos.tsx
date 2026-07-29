@@ -196,6 +196,12 @@ export function StateSpaceLiveDemo() {
   const predictedX = position + velocity * dt + 0.5 * input * dt * dt;
   const predictedV = velocity + input * dt;
   const measurement = position - 0.35;
+  // Intentionally simplified: this demo blends prediction and measurement with
+  // a fixed "trust" slider rather than a computed Kalman gain, since it does
+  // not track/evolve a variance state. Structurally this is a Kalman update
+  // with trust standing in for `gain`, but there is no predicted/measurement
+  // variance here for `kalmanGain`/`scalarKalmanUpdate` (src/lib/domain/controlMath.ts)
+  // to operate on, so those functions don't fit this widget.
   const correctedX = predictedX + trust * (measurement - predictedX);
   const px = (v: number) => P.l + ((clamp(v, -1.5, 1.8) + 1.5) / 3.3) * PW;
   const y = H / 2;

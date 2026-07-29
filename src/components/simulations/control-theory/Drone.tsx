@@ -95,6 +95,10 @@ export default function Drone() {
     s.vy = 0;
     s.I = 0;
     s.t = 0;
+    s.target = 6;
+    s.gustAt = -1;
+    s.chalHold = 0;
+    s.chalPassed = false;
     s.altT.clear();
     s.tgtT.clear();
   }
@@ -268,6 +272,10 @@ export default function Drone() {
     if (roAlt.current) roAlt.current.textContent = s.y.toFixed(2) + ' m';
     if (roTgt.current) roTgt.current.textContent = s.target.toFixed(2) + ' m';
     if (roErr.current) roErr.current.textContent = (s.target - s.y).toFixed(2) + ' m';
+    if (droneRef.current) {
+      droneRef.current.setAttribute('aria-valuenow', s.target.toFixed(1));
+      droneRef.current.setAttribute('aria-valuetext', s.target.toFixed(1) + ' meters');
+    }
 
     // challenge chip (cheap state update only when something changed)
     const status: 'idle' | 'holding' | 'passed' = s.chalPassed ? 'passed' : s.gustAt >= 0 ? 'holding' : 'idle';
@@ -303,15 +311,35 @@ export default function Drone() {
   }
   const dragging = useRef(false);
 
+  const TARGET_STEP = 0.5; // meters — a coarse-but-comfortable nudge given the [0.5, 9.5] m clamp
+
+  function nudgeTarget(delta: number) {
+    const s = st.current;
+    s.target = Math.max(0.5, Math.min(9.5, s.target + delta));
+  }
+
+  function onTargetKeyDown(e: React.KeyboardEvent<HTMLCanvasElement>) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      nudgeTarget(TARGET_STEP);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      nudgeTarget(-TARGET_STEP);
+    }
+  }
+
   return (
     <Demo title="PID altitude hold — drag the target!">
       <Stage split>
         <div>
           <canvas
             ref={droneRef}
-            role="img"
-            aria-label="Animated PID altitude-hold simulation; drag vertically to move the target altitude."
-            className="block w-full touch-none rounded-xl bg-[#0b1120]"
+            tabIndex={0}
+            role="slider"
+            aria-label="Target altitude setpoint. Drag vertically, or use the up and down arrow keys, to move the target altitude."
+            aria-valuemin={0.5}
+            aria-valuemax={9.5}
+            className="block w-full touch-none rounded-xl bg-[#0b1120] outline-none focus:ring-2 focus:ring-[#6f8bff]"
             onMouseDown={(e) => {
               dragging.current = true;
               pointToTarget(e);
@@ -330,9 +358,10 @@ export default function Drone() {
               }
             }}
             onTouchEnd={() => (dragging.current = false)}
+            onKeyDown={onTargetKeyDown}
           />
           <div className="mt-1.5 text-[0.82rem] text-[#8294b8]">
-            Drag inside this box to move the target altitude.
+            Drag inside this box, or focus it and use the up/down arrow keys, to move the target altitude.
           </div>
         </div>
         <div>

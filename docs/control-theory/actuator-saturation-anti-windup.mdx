@@ -203,7 +203,8 @@ public final class SaturatingPidController {
         double dt = Math.max(1e-3, dtSeconds);
         double error = setpoint - measurement;
 
-        if (Math.abs(error) > iZone) {
+        boolean insideIZone = Math.abs(error) <= iZone;
+        if (!insideIZone) {
             integral = 0.0;
         }
 
@@ -211,7 +212,10 @@ public final class SaturatingPidController {
         firstLoop = false;
         previousMeasurement = measurement;
 
-        double candidateIntegral = integral + error * dt;
+        double candidateIntegral = integral;
+        if (insideIZone) {
+            candidateIntegral += error * dt;
+        }
         double candidateIntegralVolts = clamp(
             kI * candidateIntegral,
             minIntegralVolts,
@@ -228,7 +232,7 @@ public final class SaturatingPidController {
         boolean pushesFurtherHigh = saturatedHigh && error > 0.0;
         boolean pushesFurtherLow = saturatedLow && error < 0.0;
 
-        if (!pushesFurtherHigh && !pushesFurtherLow) {
+        if (insideIZone && !pushesFurtherHigh && !pushesFurtherLow) {
             integral = candidateIntegral;
         }
 

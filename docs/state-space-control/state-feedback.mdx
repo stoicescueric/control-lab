@@ -98,10 +98,17 @@ error. If that smells like PD control, good — it is, structurally. The differe
 next: substitute the law into the model and the closed-loop system becomes
 
 $$
-\dot{\mathbf{x}} = (A - BK)\,\mathbf{x}
+\dot{\mathbf{x}}
+=
+(A - BK)\,\mathbf{x}
++ BK\,\mathbf{r}
++ B\,u_{ff}
 $$
 
-Choosing $K$ literally chooses the physics of the closed-loop system — how fast it converges, whether
+The reference and feedforward terms do not disappear from the raw state equation. For a constant
+reference, define $\mathbf e=\mathbf x-\mathbf r$ and choose the equilibrium feedforward so
+$A\mathbf r+B u_{ff}=0$. Then the error dynamics reduce to
+$\dot{\mathbf e}=(A-BK)\mathbf e$. Choosing $K$ literally chooses those error dynamics — how fast they converge, whether
 it overshoots. Control theory calls the eigenvalues of $A - BK$ the *poles*, and picking $K$ to put
 them somewhere deliberate is *pole placement*. Which raises the obvious question: where should they
 go? Faster costs voltage; slower wastes match time. Guessing pole locations is no better than

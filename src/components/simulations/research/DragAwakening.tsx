@@ -2,7 +2,7 @@
    ------------------------------------------------------------------
    Vacuum kinematics overpredict the range of a light 127 mm projectile
    because aerodynamic drag is 0.3–0.7x gravity over the 3–12 m/s band
-   (Stoicescu, "Real-Time Trajectory Compensation…", §3). This demo draws
+   (Stoicescu, "Drag-Aware Trajectory Planning…", §3). This demo draws
    the two trajectories side by side so the gap is impossible to miss.
 
    The physics (quadratic drag, RK4 integration, the SI constants from the
@@ -10,7 +10,7 @@
    file is just the SVG view. Pure React + SVG, so it is SSR-safe. */
 
 import {useState} from 'react';
-import {Demo, Controls, Readout, Legend} from '@site/src/components/kit/Demo';
+import {Controls, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {DRAG_K, G, H0, H_RIM, type Pt, simulateDrag, simulateVacuum} from '@site/src/lib/domain/projectile';
 
@@ -44,7 +44,7 @@ export default function DragAwakening() {
   const xTicks = Array.from({length: Math.floor(xMax) + 1}, (_, i) => i);
 
   return (
-    <Demo title="The Drag Awakening — vacuum math vs. the real ball">
+    <>
       <svg
         viewBox={`0 0 ${W} ${Hsvg}`}
         className="block h-auto w-full rounded-xl bg-[#0b1120]"
@@ -123,6 +123,6 @@ export default function DragAwakening() {
           {color: '#ff6f9c', label: 'how far the real ball falls short'},
         ]}
       />
-    </Demo>
+    </>
   );
 }

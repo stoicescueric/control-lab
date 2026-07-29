@@ -58,18 +58,22 @@ converges geometrically. It is the cheapest possible way to find the steady comm
 <Deploy title="Take-back-half on the Control Hub">
 
 <JavaCode league="FTC" label="Takeback-half velocity controller">{`public class TakeBackHalf {
-    public static double gain = 0.0009;   // @Config-tunable
-    private double drive = 0, driveAtZero = 0, lastError = 0;
+    public static double gain = 0.0009;   // power / (RPM·s), @Config-tunable
+    private double drive = 0, driveAtZero = 0;
+    private double lastNonzeroError = Double.NaN;
 
-    public double update(double measuredRpm, double targetRpm) {
+    public double update(double measuredRpm, double targetRpm, double dtSeconds) {
         double error = targetRpm - measuredRpm;
-        drive += gain * error;                       // integrate the error
+        drive += gain * error * Math.max(0.0, dtSeconds); // integrate error over time
         drive = Math.max(0, Math.min(1, drive));     // clamp to valid power
-        if (Math.signum(error) != Math.signum(lastError)) {
-            drive = 0.5 * (drive + driveAtZero);     // take back half
-            driveAtZero = drive;                     // remember this crossing
+        if (Math.signum(error) != 0.0) {
+            if (!Double.isNaN(lastNonzeroError)
+                    && Math.signum(error) != Math.signum(lastNonzeroError)) {
+                drive = 0.5 * (drive + driveAtZero); // take back half
+                driveAtZero = drive;                 // remember this crossing
+            }
+            lastNonzeroError = error;                // zero cannot cause a double crossing
         }
-        lastError = error;
         return drive;
     }
 }`}</JavaCode>
@@ -90,7 +94,14 @@ you need both tight holding *and* controlled acceleration, or the mechanism isn'
 
 <Admonition type="info" title="Sources & references">
 
-- **Take-back-half**: the algorithm popularized in the VEX/FRC community for flywheel speed control
-  (originally described by Tim Lindquist / "BLRS"); this lesson is an independent reimplementation.
+- [Purdue SIGBots (BLRS) wiki - Take-Back-Half (TBH) controller](https://wiki.purduesigbots.com/software/control-algorithms/take-back-half-tbh-controller) -
+  description source for this lesson; credits Pearman, J. (2015), "Flywheel velocity control," VexForum,
+  and Harper, C. S. (2011), master's thesis, Mississippi State University, for the algorithm as applied to
+  FRC/VEX flywheel control.
+- Woodward, S. (2005), "Take-back-half technique tempers temperature-control-loop overshoot," EDN
+  ("Design Ideas") - the original bisection technique, developed for temperature control and later adapted
+  by the FRC/VEX community for flywheel speed control.
+
+This lesson is an independent reimplementation.
 
 </Admonition>

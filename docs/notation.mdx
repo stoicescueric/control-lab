@@ -22,7 +22,7 @@ All 2-D geometry in the curriculum uses one right-handed convention:
 | $+x$ | **forward** (robot frame) / toward the far wall (field frame) |
 | $+y$ | **left** |
 | $+\theta$, $+\omega$ | **counter-clockwise**, viewed from above |
-| angles | radians internally; wrapped to $(-\pi, \pi]$ before use in any controller |
+| angles | radians internally; wrapped to $[-\pi, \pi)$ before use in any controller |
 
 Two frames appear constantly:
 
@@ -75,7 +75,7 @@ boundary, once:
 |---|---|
 | $r$ (or setpoint) | the target value |
 | $y$ (or measurement) | what the sensor reports |
-| $e = r - y$ | error — heading errors always wrapped to $(-\pi, \pi]$ |
+| $e = r - y$ | error — heading errors always wrapped to $[-\pi, \pi)$ |
 | $u$ | the actuator command the controller outputs |
 | $k_P, k_I, k_D$ | PID gains (present, past, trend of the error) |
 | $k_S, k_V, k_A$ | feedforward: static friction, velocity, acceleration |
@@ -104,11 +104,11 @@ boundary, once:
 | $K$ | Kalman gain: how much of the innovation to believe |
 | $H$ | measurement matrix/Jacobian: state space → sensor space |
 | $\alpha$ | a filter blend factor in $(0, 1)$ — low-pass smoothing or complementary trust |
-| $\tau$ | a filter time constant, related by $\alpha = \Delta t/(\tau + \Delta t)$ |
+| $\tau$ | a filter time constant; exact EMA relation $\alpha = 1-e^{-\Delta t/\tau}$ |
 
 ## Naming in code
 
 Java in the lessons mirrors the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time;
-`wrap(angle)` for the $(-\pi,\pi]$ normalization; `Pose2d`/`Vector2d`/`atTarget(...)` from the shared
+`wrap(angle)` for the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`atTarget(...)` from the shared
 [Common Implementation](./path-following/common-implementation.mdx) page. `<JavaCode>` blocks carry an
 **FTC** or **FRC** label showing which SDK the snippet targets.

@@ -1,12 +1,13 @@
 import {useState} from 'react';
 import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {poseExponential} from '@site/src/lib/domain/controlMath';
 
 /* Euler vs. exact (pose-exponential) integration of a CONSTANT body twist.
    The robot holds the same forward speed and turn rate every loop, so the true
    path is a perfect circle. The pose exponential lands exactly on that circle;
-   naive Euler ("step straight, then rotate") cuts every chord and spirals
-   outward. Coarser steps (bigger dθ) make the gap explode. Pure React + SVG,
+   naive Euler ("step straight, then rotate") replaces the arcs with a polygon
+   on a different effective circle. Coarser steps (bigger dθ) enlarge the gap. Pure React + SVG,
    SSR-safe — the view auto-fits both trajectories. */
 
 const W = 640;
@@ -23,11 +24,8 @@ function integrate(dth: number, n: number, exact: boolean): P[] {
   const out: P[] = [{x, y}];
   for (let i = 0; i < n; i++) {
     if (exact) {
-      const sinc = Math.abs(dth) < 1e-9 ? 1 : Math.sin(dth) / dth;
-      const cosc = Math.abs(dth) < 1e-9 ? 0 : (1 - Math.cos(dth)) / dth;
-      const lx = v * sinc;
-      const ly = v * cosc;
-      x += lx * Math.cos(th) - ly * Math.sin(th);
+      const {x: lx, y: ly} = poseExponential(v, 0, dth); // body-frame arc step (forward-only twist)
+      x += lx * Math.cos(th) - ly * Math.sin(th); // rotate the body-frame step into world frame
       y += lx * Math.sin(th) + ly * Math.cos(th);
     } else {
       x += v * Math.cos(th); // step straight along current heading...
@@ -71,7 +69,7 @@ export function PoseExponential() {
 
   return (
     <Demo title="Euler vs. pose exponential: integrating one constant twist">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Euler straight-step integration spiraling off the true circle traced by the pose exponential">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Euler straight-step integration tracing a polygon beside the true circle traced by the pose exponential">
         {/* true circle (the exact integral of a constant twist) */}
         <path d={path(fine)} fill="none" stroke="#6f8bff" strokeWidth="3" opacity="0.55" />
 

@@ -14,6 +14,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {lookaheadPoint, pursuitCurvature, toRobotFrame} from '@site/src/lib/domain/purePursuit';
 
 const dt = 1 / 60;
 
@@ -21,6 +22,8 @@ const dt = 1 / 60;
 const WX = 640;
 const WY = 380;
 const PAD = 12; // canvas padding (px) kept around the world when it's letterboxed
+const WP_NUDGE = 8; // arrow-key step for a focused waypoint, in world units (8 units = 8 cm)
+const WAYPOINT_COUNT = 5; // matches defaultPath() below; fixed so the keyboard overlay can render before init() runs
 
 interface Pose {
   x: number;
@@ -41,6 +44,7 @@ export default function PurePursuit() {
 
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const size = useDprCanvas(canvas, 400);
+  const wpRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const roCte = useRef<HTMLElement | null>(null);
   const roProg = useRef<HTMLElement | null>(null);
@@ -48,12 +52,12 @@ export default function PurePursuit() {
   const st = useRef({
     inited: false,
     waypoints: [] as number[][],
-    path: [] as number[][],
+    path: [] as {x: number; y: number}[],
     pose: null as Pose | null,
     pi: 0,
     trail: [] as number[][],
     cte: 0,
-    carrot: null as number[] | null,
+    carrot: null as {x: number; y: number} | null,
     drag: -1,
   });
   const acc = useRef(0);
@@ -82,7 +86,7 @@ export default function PurePursuit() {
   function buildPath() {
     const s = st.current;
     const wp = s.waypoints;
-    const path: number[][] = [];
+    const path: {x: number; y: number}[] = [];
     for (let k = 0; k < wp.length - 1; k++) {
       const a = wp[k];
       const b = wp[k + 1];
@@ -90,10 +94,11 @@ export default function PurePursuit() {
       const n = Math.max(2, Math.round(d / 5));
       for (let i = 0; i < n; i++) {
         const t = i / n;
-        path.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        path.push({x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t});
       }
     }
-    path.push(wp[wp.length - 1].slice());
+    const last = wp[wp.length - 1];
+    path.push({x: last[0], y: last[1]});
     s.path = path;
   }
 
@@ -101,7 +106,7 @@ export default function PurePursuit() {
     const s = st.current;
     const a = s.path[0];
     const b = s.path[Math.min(8, s.path.length - 1)];
-    s.pose = {x: a[0], y: a[1], th: Math.atan2(b[1] - a[1], b[0] - a[0])};
+    s.pose = {x: a.x, y: a.y, th: Math.atan2(b.y - a.y, b.x - a.x)};
     s.pi = 0;
     s.trail = [];
   }
@@ -119,7 +124,7 @@ export default function PurePursuit() {
     let best = s.pi;
     let bd = 1e9;
     for (let i = s.pi; i < Math.min(s.path.length, s.pi + 80); i++) {
-      const d = Math.hypot(s.path[i][0] - pose.x, s.path[i][1] - pose.y);
+      const d = Math.hypot(s.path[i].x - pose.x, s.path[i].y - pose.y);
       if (d < bd) {
         bd = d;
         best = i;
@@ -129,16 +134,6 @@ export default function PurePursuit() {
     return bd;
   }
 
-  function lookaheadPt() {
-    const s = st.current;
-    const pose = s.pose!;
-    const Ld = ldRef.current;
-    for (let i = s.pi; i < s.path.length; i++) {
-      if (Math.hypot(s.path[i][0] - pose.x, s.path[i][1] - pose.y) >= Ld) return s.path[i];
-    }
-    return s.path[s.path.length - 1];
-  }
-
   function step() {
     if (!playingRef.current) return;
     const s = st.current;
@@ -146,19 +141,14 @@ export default function PurePursuit() {
     const v = spdRef.current;
     s.cte = nearestAhead();
     const last = s.path[s.path.length - 1];
-    if (s.pi >= s.path.length - 2 && Math.hypot(s.pose.x - last[0], s.pose.y - last[1]) < 12) {
+    if (s.pi >= s.path.length - 2 && Math.hypot(s.pose.x - last.x, s.pose.y - last.y) < 12) {
       restart();
       return;
     }
-    s.carrot = lookaheadPt();
-    const dx = s.carrot[0] - s.pose.x;
-    const dy = s.carrot[1] - s.pose.y;
-    const c = Math.cos(-s.pose.th);
-    const sn = Math.sin(-s.pose.th);
-    const xr = dx * c - dy * sn;
-    const yr = dx * sn + dy * c;
-    const L = Math.hypot(xr, yr) || ldRef.current;
-    const curv = (2 * yr) / (L * L);
+    s.carrot = lookaheadPoint(s.path, s.pose, ldRef.current, s.pi);
+    const rf = toRobotFrame(s.carrot, s.pose);
+    const L = Math.hypot(rf.x, rf.y) || ldRef.current;
+    const curv = pursuitCurvature(rf, L);
     const w = curv * v;
     s.pose.x += v * Math.cos(s.pose.th) * dt;
     s.pose.y += v * Math.sin(s.pose.th) * dt;
@@ -204,11 +194,11 @@ export default function PurePursuit() {
     cx.lineWidth = 3;
     cx.globalAlpha = 0.85;
     cx.beginPath();
-    cx.moveTo(PX(path[0][0]), PY(path[0][1]));
-    for (let i = 1; i < path.length; i++) cx.lineTo(PX(path[i][0]), PY(path[i][1]));
+    cx.moveTo(PX(path[0].x), PY(path[0].y));
+    for (let i = 1; i < path.length; i++) cx.lineTo(PX(path[i].x), PY(path[i].y));
     cx.stroke();
     cx.globalAlpha = 1;
-    s.waypoints.forEach((p) => {
+    s.waypoints.forEach((p, i) => {
       cx.fillStyle = '#e8eefc';
       cx.strokeStyle = '#6f8bff';
       cx.lineWidth = 2;
@@ -216,6 +206,14 @@ export default function PurePursuit() {
       cx.arc(PX(p[0]), PY(p[1]), 7, 0, 7);
       cx.fill();
       cx.stroke();
+      // Keep the invisible, keyboard-focusable overlay button for this waypoint
+      // lined up with the dot just drawn, so tabbing + arrow keys track the canvas.
+      const btn = wpRefs.current[i];
+      if (btn) {
+        btn.style.left = `${PX(p[0])}px`;
+        btn.style.top = `${PY(p[1])}px`;
+        btn.setAttribute('aria-valuetext', `x ${(p[0] / 100).toFixed(2)} m, y ${(p[1] / 100).toFixed(2)} m`);
+      }
     });
     if (s.trail.length > 1) {
       cx.strokeStyle = '#5ce08a';
@@ -239,11 +237,11 @@ export default function PurePursuit() {
       cx.lineWidth = 1.5;
       cx.beginPath();
       cx.moveTo(PX(s.pose.x), PY(s.pose.y));
-      cx.lineTo(PX(s.carrot[0]), PY(s.carrot[1]));
+      cx.lineTo(PX(s.carrot.x), PY(s.carrot.y));
       cx.stroke();
       cx.fillStyle = '#ffc24d';
       cx.beginPath();
-      cx.arc(PX(s.carrot[0]), PY(s.carrot[1]), 6, 0, 7);
+      cx.arc(PX(s.carrot.x), PY(s.carrot.y), 6, 0, 7);
       cx.fill();
     }
     cx.save();
@@ -310,21 +308,58 @@ export default function PurePursuit() {
     st.current.drag = -1;
   }
 
+  // Keyboard equivalent of dragging: focus a waypoint (tab to it) and nudge it
+  // with the arrow keys, same clamping as the pointer drag above.
+  function onWaypointKeyDown(i: number) {
+    return (ev: React.KeyboardEvent<HTMLButtonElement>) => {
+      const step = ev.shiftKey ? WP_NUDGE * 4 : WP_NUDGE;
+      let dx = 0;
+      let dy = 0;
+      if (ev.key === 'ArrowLeft') dx = -step;
+      else if (ev.key === 'ArrowRight') dx = step;
+      else if (ev.key === 'ArrowUp') dy = -step;
+      else if (ev.key === 'ArrowDown') dy = step;
+      else return;
+      ev.preventDefault();
+      const wp = st.current.waypoints[i];
+      st.current.waypoints[i] = [Math.max(8, Math.min(WX - 8, wp[0] + dx)), Math.max(8, Math.min(WY - 8, wp[1] + dy))];
+      buildPath();
+    };
+  }
+
   return (
     <Demo title="Pure pursuit path follower">
-      <canvas
-        ref={canvas}
-        role="img"
-        aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path the robot chases."
-        className="block w-full touch-none rounded-xl bg-[#0b1120]"
-        onMouseDown={onDown}
-        onMouseMove={onMove}
-        onMouseUp={onUp}
-        onMouseLeave={onUp}
-        onTouchStart={onDown}
-        onTouchMove={onMove}
-        onTouchEnd={onUp}
-      />
+      <div className="relative">
+        <canvas
+          ref={canvas}
+          role="img"
+          aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path the robot chases."
+          className="block w-full touch-none rounded-xl bg-[#0b1120]"
+          onMouseDown={onDown}
+          onMouseMove={onMove}
+          onMouseUp={onUp}
+          onMouseLeave={onUp}
+          onTouchStart={onDown}
+          onTouchMove={onMove}
+          onTouchEnd={onUp}
+        />
+        {Array.from({length: WAYPOINT_COUNT}, (_, i) => (
+          <button
+            key={i}
+            ref={(el) => {
+              wpRefs.current[i] = el;
+            }}
+            type="button"
+            tabIndex={0}
+            role="slider"
+            aria-label={`Waypoint ${i + 1}`}
+            aria-valuemin={0}
+            aria-valuemax={Math.max(WX, WY)}
+            className="absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
+            onKeyDown={onWaypointKeyDown(i)}
+          />
+        ))}
+      </div>
       <Legend
         items={[
           {color: '#6f8bff', label: 'planned path'},

@@ -1,5 +1,6 @@
 import {useRef, useState} from 'react';
 import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+import {evalSpline, moments} from '@site/src/lib/domain/naturalCubicSpline';
 
 /* Natural cubic spline interpolation. Drag the waypoints; the demo parametrizes
    them by index t, solves the tridiagonal moment system for x(t) and y(t) (the
@@ -9,48 +10,10 @@ import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/D
 
 const W = 640;
 const H = 360;
+const KEY_STEP = 8; // px per arrow-key nudge, in SVG viewBox units
 
 type Pt = {x: number; y: number};
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-// Second derivatives (moments) for a natural cubic spline; knot spacing h = 1.
-function moments(y: number[]): number[] {
-  const n = y.length;
-  if (n < 3) return new Array(n).fill(0);
-  const diag = new Array(n).fill(0);
-  const sup = new Array(n).fill(0);
-  const sub = new Array(n).fill(0);
-  const rhs = new Array(n).fill(0);
-  diag[0] = diag[n - 1] = 1; // natural boundary: M0 = M(n-1) = 0
-  for (let i = 1; i < n - 1; i++) {
-    sub[i] = 1;
-    diag[i] = 4;
-    sup[i] = 1;
-    rhs[i] = 6 * (y[i + 1] - 2 * y[i] + y[i - 1]);
-  }
-  for (let i = 1; i < n; i++) {
-    const m = sub[i] / diag[i - 1];
-    diag[i] -= m * sup[i - 1];
-    rhs[i] -= m * rhs[i - 1];
-  }
-  const M = new Array(n).fill(0);
-  M[n - 1] = rhs[n - 1] / diag[n - 1];
-  for (let i = n - 2; i >= 0; i--) M[i] = (rhs[i] - sup[i] * M[i + 1]) / diag[i];
-  return M;
-}
-
-// value, first and second derivative of one coordinate's spline at global t.
-function evalSpline(Y: number[], M: number[], t: number): {v: number; d: number; dd: number} {
-  const n = Y.length;
-  const i = clamp(Math.floor(t), 0, n - 2);
-  const u = t - i;
-  const A = 1 - u;
-  const B = u;
-  const v = (M[i] * A ** 3 + M[i + 1] * B ** 3) / 6 + (Y[i] - M[i] / 6) * A + (Y[i + 1] - M[i + 1] / 6) * B;
-  const d = (-M[i] * A * A + M[i + 1] * B * B) / 2 + (Y[i + 1] - Y[i]) - (M[i + 1] - M[i]) / 6;
-  const dd = M[i] * A + M[i + 1] * B;
-  return {v, d, dd};
-}
 
 const INIT: Pt[] = [
   {x: 70, y: 250},
@@ -75,6 +38,30 @@ export function NaturalCubicSpline() {
     const p = toSvg(e);
     const i = drag.current;
     setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+  };
+  const nudge = (i: number, dx: number, dy: number) => {
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+    );
+  };
+  const onKeyDown = (i: number) => (e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case 'ArrowLeft':
+        nudge(i, -KEY_STEP, 0);
+        break;
+      case 'ArrowRight':
+        nudge(i, KEY_STEP, 0);
+        break;
+      case 'ArrowUp':
+        nudge(i, 0, -KEY_STEP);
+        break;
+      case 'ArrowDown':
+        nudge(i, 0, KEY_STEP);
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
   };
 
   const n = pts.length;
@@ -137,10 +124,15 @@ export function NaturalCubicSpline() {
                 stroke={isEnd ? '#ffc24d' : '#9db0ff'}
                 strokeWidth="3"
                 style={{cursor: 'grab'}}
+                tabIndex={0}
+                role="slider"
+                aria-label={`Waypoint ${i + 1} of ${n}${isEnd ? ' (curvature pinned to 0)' : ''}`}
+                aria-valuetext={`x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}`}
                 onPointerDown={(e) => {
                   drag.current = i;
                   (e.target as Element).setPointerCapture(e.pointerId);
                 }}
+                onKeyDown={onKeyDown(i)}
               />
               {isEnd && (
                 <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffd98a">

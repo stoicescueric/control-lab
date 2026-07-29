@@ -242,9 +242,13 @@ open-source repositories:
   `CubicBezierPath`) and [SimplicityFTC-Quickstart](https://github.com/SimplicityFTC/SimplicityFTC-Quickstart)
   (`path/BezierPath`).
 - **Natural cubic spline interpolation** (continuity conditions, natural boundary, the tridiagonal moment
-  system) — Timo Denk, *Cubic Spline Interpolation*
-  ([blog.timodenk.com](https://blog.timodenk.com/cubic-spline-interpolation/)). The full derivation and
-  solver are on the [Advanced Topics derivation page](../advanced-topics/natural-cubic-derivation.mdx).
+  system) — Richard L. Burden, J. Douglas Faires, and Annette M. Burden, *Numerical Analysis* (Cengage
+  Learning), the "Natural Cubic Spline" algorithm (§3.5), which builds this same tridiagonal system in the
+  second derivatives and solves it by elimination specialised to a tridiagonal matrix (equivalent to the
+  Thomas algorithm); see also John D. Cook, *Tridiagonal systems, determinants & natural cubic splines*
+  ([johndcook.com](https://www.johndcook.com/blog/2018/04/30/tridiagonal-systems/)) for a freely available
+  worked derivation of the same moment system. The full derivation and solver are on the
+  [Advanced Topics derivation page](../advanced-topics/natural-cubic-derivation.mdx).
 
 The code here is an independent reimplementation of these ideas, not a copy of any one source.
 

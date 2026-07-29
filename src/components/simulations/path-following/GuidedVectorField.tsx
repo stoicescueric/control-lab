@@ -1,6 +1,8 @@
 import {useRef, useState} from 'react';
 import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {bezierPoint} from '@site/src/lib/domain/bezier';
+import {guidedVectorField, type Point as Pt} from '@site/src/lib/domain/guidedVectorField';
 
 /* The guiding vector field made visible. A cubic Bezier path (drag its four
    control points) induces a field of arrows: at every point the field is the
@@ -8,54 +10,22 @@ import {Slider} from '@site/src/components/kit/Slider';
    cross-track error -- chi = t_hat - kN * e * n_hat, normalized. Drag the robot
    anywhere and its flow line (integrate the field forward) curves onto the path
    and rides it to the end, from any start and any side. That is the convergence
-   guarantee, drawn. Pure React + SVG, SSR-safe (pointers read only in handlers). */
+   guarantee, drawn. The field math lives in src/lib/domain/guidedVectorField.ts;
+   this component only handles layout, dragging, and drawing. SSR-safe (pointers
+   read only in handlers). */
 
 const W = 640;
 const H = 380;
 const FIELD = 144; // canvas width = 12 ft (144 in) field
 const SCALE = FIELD / W; // inches per pixel
+const NUDGE = 6; // px per keyboard arrow-key nudge
 
-type Pt = {x: number; y: number};
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-// cubic Bezier position / derivative at parameter t in [0,1]
-function bez(P: Pt[], t: number): Pt {
-  const u = 1 - t;
-  const a = u * u * u,
-    b = 3 * u * u * t,
-    c = 3 * u * t * t,
-    d = t * t * t;
-  return {x: a * P[0].x + b * P[1].x + c * P[2].x + d * P[3].x, y: a * P[0].y + b * P[1].y + c * P[2].y + d * P[3].y};
-}
-// closest point on the path to q (dense sample), returns point + unit tangent + signed cross-track error (inches)
-function project(samples: Pt[], tans: Pt[], q: Pt) {
-  let bi = 0;
-  let bd = Infinity;
-  for (let i = 0; i < samples.length; i++) {
-    const dx = samples[i].x - q.x;
-    const dy = samples[i].y - q.y;
-    const d = dx * dx + dy * dy;
-    if (d < bd) {
-      bd = d;
-      bi = i;
-    }
-  }
-  const c = samples[bi];
-  const t = tans[bi];
-  // normal = tangent rotated +90deg
-  const nx = -t.y;
-  const ny = t.x;
-  const e = ((q.x - c.x) * nx + (q.y - c.y) * ny) * SCALE; // inches, signed
-  return {c, tx: t.x, ty: t.y, nx, ny, e, i: bi};
-}
-
-// guiding-vector-field direction (unit) at q
-function field(samples: Pt[], tans: Pt[], q: Pt, kN: number) {
-  const {tx, ty, nx, ny, e} = project(samples, tans, q);
-  let vx = tx - kN * e * nx;
-  let vy = ty - kN * e * ny;
-  const m = Math.hypot(vx, vy) || 1;
-  return {x: vx / m, y: vy / m, e};
+// guiding-vector-field direction (unit) at q, plus the signed cross-track error in inches
+function field(P: Pt[], q: Pt, kN: number) {
+  const result = guidedVectorField(q, P, kN);
+  return {x: result.direction.x, y: result.direction.y, e: result.signedError * SCALE};
 }
 
 const INIT: Pt[] = [
@@ -87,21 +57,29 @@ export function GuidedVectorField() {
     }
   };
 
-  // dense path samples + unit tangents (recomputed per render)
-  const N = 200;
-  const samples: Pt[] = [];
-  const tans: Pt[] = [];
-  for (let k = 0; k <= N; k++) {
-    const t = k / N;
-    samples.push(bez(P, t));
-    // numeric tangent (robust for any control polygon)
-    const a = bez(P, Math.max(0, t - 0.004));
-    const b = bez(P, Math.min(1, t + 0.004));
-    const dx = b.x - a.x,
-      dy = b.y - a.y;
-    const m = Math.hypot(dx, dy) || 1;
-    tans.push({x: dx / m, y: dy / m});
-  }
+  const nudgeRobot = (dx: number, dy: number) => {
+    setRobot((prev) => ({x: clamp(prev.x + dx, 8, W - 8), y: clamp(prev.y + dy, 8, H - 8)}));
+  };
+  const nudgeControlPoint = (index: number, dx: number, dy: number) => {
+    setP((prev) =>
+      prev.map((q, j) => (j === index ? {x: clamp(q.x + dx, 8, W - 8), y: clamp(q.y + dy, 8, H - 8)} : q)),
+    );
+  };
+  const onRobotKeyDown = (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? NUDGE * 4 : NUDGE;
+    if (e.key === 'ArrowLeft') { nudgeRobot(-step, 0); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { nudgeRobot(step, 0); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { nudgeRobot(0, -step); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { nudgeRobot(0, step); e.preventDefault(); }
+  };
+  const onControlPointKeyDown = (index: number) => (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? NUDGE * 4 : NUDGE;
+    if (e.key === 'ArrowLeft') { nudgeControlPoint(index, -step, 0); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { nudgeControlPoint(index, step, 0); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); e.preventDefault(); }
+  };
+
   const pathStr = `M ${P[0].x} ${P[0].y} C ${P[1].x} ${P[1].y}, ${P[2].x} ${P[2].y}, ${P[3].x} ${P[3].y}`;
 
   // grid of field arrows
@@ -110,7 +88,7 @@ export function GuidedVectorField() {
     const step = 46;
     for (let gx = step / 2; gx < W; gx += step) {
       for (let gy = step / 2; gy < H; gy += step) {
-        const f = field(samples, tans, {x: gx, y: gy}, kN);
+        const f = field(P, {x: gx, y: gy}, kN);
         arrows.push({x: gx, y: gy, dx: f.x, dy: f.y, e: f.e});
       }
     }
@@ -119,9 +97,9 @@ export function GuidedVectorField() {
   // robot flow line: integrate the field forward until we reach the path end
   const flow: Pt[] = [robot];
   let cur = robot;
-  const end = samples[N];
+  const end = bezierPoint(P, 1);
   for (let s = 0; s < 360; s++) {
-    const f = field(samples, tans, cur, kN);
+    const f = field(P, cur, kN);
     cur = {x: cur.x + f.x * 4, y: cur.y + f.y * 4};
     flow.push(cur);
     if (Math.hypot(cur.x - end.x, cur.y - end.y) < 10) break;
@@ -129,7 +107,7 @@ export function GuidedVectorField() {
   }
   const flowStr = flow.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
 
-  const here = field(samples, tans, robot, kN);
+  const here = field(P, robot, kN);
   const arrowColor = (e: number) => {
     const m = clamp(Math.abs(e) / 50, 0, 1); // 0 in -> teal (190), far -> blue (230)
     return `hsl(${190 + m * 40}, ${60 - m * 5}%, ${62 - m * 8}%)`;
@@ -183,6 +161,11 @@ export function GuidedVectorField() {
             stroke="#6f8bff"
             strokeWidth="2.5"
             style={{cursor: 'grab'}}
+            tabIndex={0}
+            role="slider"
+            aria-label={`Bézier control point ${i + 1}, position (${Math.round(p.x)}, ${Math.round(p.y)}). Use arrow keys to move.`}
+            aria-valuetext={`x ${Math.round(p.x)}, y ${Math.round(p.y)}`}
+            onKeyDown={onControlPointKeyDown(i)}
             onPointerDown={(e) => {
               drag.current = String(i);
               (e.target as Element).setPointerCapture(e.pointerId);
@@ -199,6 +182,11 @@ export function GuidedVectorField() {
           stroke="#fff"
           strokeWidth="2.5"
           style={{cursor: 'grab'}}
+          tabIndex={0}
+          role="slider"
+          aria-label={`Robot position (${Math.round(robot.x)}, ${Math.round(robot.y)}). Use arrow keys to move; hold Shift to move faster.`}
+          aria-valuetext={`x ${Math.round(robot.x)}, y ${Math.round(robot.y)}`}
+          onKeyDown={onRobotKeyDown}
           onPointerDown={(e) => {
             drag.current = 'robot';
             (e.target as Element).setPointerCapture(e.pointerId);
