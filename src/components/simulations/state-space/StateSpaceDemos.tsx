@@ -1,6 +1,7 @@
 import {useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {scalarLqrGain} from '@site/src/lib/domain/lqr';
 
 /* Desmos-style math explorer for the state-space module. Pure function of the
    sliders (no animation loop, SSR-safe), same frame as the other explorers. */
@@ -67,7 +68,7 @@ export function LqrExplorer() {
 
   const Q = 1 / (qTol * qTol);
   const R = 1 / (rMax * rMax);
-  const K = (a + Math.sqrt(a * a + (b * b * Q) / R)) / b; // volts per rad/s of error
+  const K = scalarLqrGain(a, b, Q, R); // volts per rad/s of error
 
   const SHOT_AT = 0.1; // a shot steals 60 rad/s here
   const SHOT_DIP = 60;

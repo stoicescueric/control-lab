@@ -11,7 +11,7 @@
    blue monotone curve refuses to. Pure React + SVG (SSR-safe). */
 
 import {useRef, useState} from 'react';
-import {Demo, Readout, Legend, Buttons, Button} from '@site/src/components/kit/Demo';
+import {Readout, Legend, Buttons, Button} from '@site/src/components/kit/Demo';
 import {clamp, monotoneHermite, naturalCubic, type Pt} from '@site/src/lib/domain/projectile';
 
 // Fixed sample abscissae (strictly increasing, as the LUT requires).
@@ -72,6 +72,19 @@ export default function InterpolationTrap() {
     setYs((prev) => prev.map((v, j) => (j === i ? toY(py) : v)));
   };
 
+  // keyboard handling — arrow keys nudge the focused knot's y-value,
+  // mirroring the pointer drag (x stays fixed). Step is 1 unit (2 with
+  // Shift) on a 0-110 scale, matching the granularity of a pointer nudge.
+  const KEY_STEP = 1;
+  const onKnotKeyDown = (i: number) => (e: React.KeyboardEvent<SVGCircleElement>) => {
+    let delta = 0;
+    if (e.key === 'ArrowUp') delta = e.shiftKey ? KEY_STEP * 2 : KEY_STEP;
+    else if (e.key === 'ArrowDown') delta = e.shiftKey ? -KEY_STEP * 2 : -KEY_STEP;
+    else return;
+    e.preventDefault();
+    setYs((prev) => prev.map((v, j) => (j === i ? clamp(v + delta, 0, Y_MAX) : v)));
+  };
+
   // tangent ticks: draw the monotone tangent at each knot (data-space slope)
   const tick = (i: number) => {
     const dx = 0.4;
@@ -82,7 +95,7 @@ export default function InterpolationTrap() {
   const tickColor = (f: string) => (f === 'flat' ? '#5ce08a' : f === 'projected' ? '#ff6f9c' : '#8294b8');
 
   return (
-    <Demo title="The Interpolation Trap — monotone Hermite vs. natural spline">
+    <>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -126,10 +139,18 @@ export default function InterpolationTrap() {
             stroke="#0b1120"
             strokeWidth="2"
             style={{cursor: 'ns-resize'}}
+            tabIndex={0}
+            role="slider"
+            aria-label={`Calibration point at distance ${x}, use up/down arrow keys to adjust speed`}
+            aria-valuemin={0}
+            aria-valuemax={Y_MAX}
+            aria-valuenow={Math.round(ys[i])}
+            aria-valuetext={`${ys[i].toFixed(0)} units`}
             onPointerDown={(e) => {
               drag.current = i;
               (e.target as Element).setPointerCapture(e.pointerId);
             }}
+            onKeyDown={onKnotKeyDown(i)}
           />
         ))}
       </svg>
@@ -156,6 +177,6 @@ export default function InterpolationTrap() {
           {color: '#ff6f9c', label: 'tangent projected to radius-3 circle'},
         ]}
       />
-    </Demo>
+    </>
   );
 }

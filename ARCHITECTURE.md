@@ -34,11 +34,15 @@ lessons, pages, or theme overrides.
 
 | Path | Responsibility |
 | --- | --- |
+| `AGENTS.md` | Canonical, tool-neutral repository instructions for AI-assisted work. |
+| `AI_WORKFLOW.md` | Reusable prompts and human verification stages for AI-assisted contributions. |
+| `GOVERNANCE.md` | Maintainer authority, proposal decisions, and merge policy. |
 | `.github/` | CI, deployment, dependency updates, ownership, and contributor templates. |
 | `docs/` | The curriculum. Every lesson is an MDX document organized by module. |
 | `scripts/` | Repository checks run locally and in GitHub Actions. |
 | `src/` | React components, reusable logic, pages, styles, and Docusaurus integration. |
 | `static/` | Files copied directly into the production site, such as diagrams and icons. |
+| `templates/` | Copyable source templates that are not built as curriculum pages. |
 | `docusaurus.config.ts` | Site URL, plugins, math rendering, navigation, privacy policy, PWA, and theme configuration. |
 | `sidebars.ts` | Filesystem-generated curriculum navigation. |
 | `package.json` | Runtime dependencies and the supported development commands. |
@@ -144,6 +148,7 @@ or Docusaurus helpers. Do not place source TypeScript in `static/`.
 | --- | --- |
 | `npm run check:architecture` | Directory boundaries and import direction. |
 | `npm run check:content` | Lesson metadata, public-language rules, placeholders, and unsafe embeds. |
+| `npm run check:contributor` | AI guidance, governance, ownership, and contribution-template integrity. |
 | `npm run typecheck` | TypeScript contracts. |
 | `npm test` | Mathematical and platform behavior. |
 | `npm run build` | SSR, MDX compilation, links, KaTeX, and production bundling. |

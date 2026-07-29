@@ -19,8 +19,8 @@ export function CalculusIllustration() {
       <svg viewBox="0 0 760 330" role="img" aria-label="Position curve with tangent line and shaded area" className="h-auto w-full">
         <defs>
           <linearGradient id="calcArea" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#4f6cf7" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#4f6cf7" stopOpacity="0.04" />
+            <stop offset="0%" stopColor="#2f52e0" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#2f52e0" stopOpacity="0.04" />
           </linearGradient>
           <marker id="calcArrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4" viewBox="0 0 8 8">
             <path d="M0 0 L8 4 L0 8 Z" fill="#ffc24d" />

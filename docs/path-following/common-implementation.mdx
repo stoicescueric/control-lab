@@ -42,17 +42,21 @@ public record Vector2d(double x, double y) {
     }
 }
 
-/** Position + heading. velocity is the field-frame chassis velocity from the localizer. */
-public record Pose2d(double x, double y, double heading) {
+/** Position + heading + field-frame chassis velocity from the localizer. */
+public record Pose2d(double x, double y, double heading, Vector2d velocity) {
+    /** Convenient target-pose constructor: a target is stationary unless specified otherwise. */
+    public Pose2d(double x, double y, double heading) {
+        this(x, y, heading, new Vector2d(0.0, 0.0));
+    }
     public Vector2d vec() { return new Vector2d(x, y); }
 }`}</JavaCode>
 
 ## Angle wrapping
 
-Heading errors must be wrapped to $[-\pi, \pi]$ so the robot always turns the short way. This is the whole
+Heading errors must be wrapped to $[-\pi, \pi)$ so the robot always turns the short way. This is the whole
 point of the [angle-wrapping lesson](./angle-wrapping.mdx); the standard one-liner:
 
-<JavaCode league="FTC" label="wrap(angle) -> [-pi, pi]">{`/** Smallest signed angle equivalent to a (radians), in [-pi, pi]. */
+<JavaCode league="FTC" label="wrap(angle) -> [-pi, pi)">{`/** Smallest signed angle equivalent to a (radians), in [-pi, pi). */
 public static double wrap(double a) {
     a = (a + Math.PI) % (2 * Math.PI);
     if (a < 0) a += 2 * Math.PI;

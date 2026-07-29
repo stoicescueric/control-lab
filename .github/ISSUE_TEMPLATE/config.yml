@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Contribution guide
+    url: https://github.com/stoicescueric/control-lab/blob/main/CONTRIBUTING.md
+    about: Read the proposal, lesson, and pull request workflow before starting.
+  - name: AI-assisted lesson workflow
+    url: https://github.com/stoicescueric/control-lab/blob/main/AI_WORKFLOW.md
+    about: Use the repository-aware prompts with any AI assistant.
   - name: Security report
     url: https://github.com/stoicescueric/control-lab/security/advisories/new
     about: Report vulnerabilities privately instead of opening a public issue.

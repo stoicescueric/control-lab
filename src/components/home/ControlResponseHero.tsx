@@ -1,6 +1,7 @@
 import {useRef, useState, type PointerEvent as ReactPointerEvent} from 'react';
 import Link from '@docusaurus/Link';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
+import {FlylineSweep} from '@site/src/components/home/Flyline';
 
 interface Sample {
   time: number;
@@ -61,17 +62,15 @@ function responsePalette() {
   const dark = document.documentElement.dataset.theme === 'dark';
   return dark
     ? {
-        background: '#111a2c',
-        grid: '#243049',
-        text: '#aab6d0',
-        output: '#93a7ff',
+        grid: '#2c2c33',
+        text: '#a9a9b2',
+        output: '#8fa5ff',
         target: '#f5b942',
       }
     : {
-        background: '#ffffff',
-        grid: '#e3e8f2',
-        text: '#56617a',
-        output: '#3456d1',
+        grid: '#e8e8ee',
+        text: '#55555e',
+        output: '#2543c2',
         target: '#b87200',
       };
 }
@@ -139,8 +138,8 @@ function ClosedLoopResponse() {
     const x = (time: number) => left + ((time - oldestTime) / WINDOW_SECONDS) * plotWidth;
     const y = (value: number) => top + (1 - Math.max(0, Math.min(1, value))) * plotHeight;
 
-    context.fillStyle = colors.background;
-    context.fillRect(0, 0, w, h);
+    // Transparent canvas: the frosted-glass figure behind it provides the fill.
+    context.clearRect(0, 0, w, h);
 
     context.lineWidth = 1;
     context.strokeStyle = colors.grid;
@@ -223,8 +222,8 @@ function ClosedLoopResponse() {
   }
 
   return (
-    <figure className="cl-home-plot m-0 mt-8 overflow-hidden rounded-[8px] border border-line bg-surface">
-      <div className="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <figure className="cl-home-plot m-0 mt-10 overflow-hidden rounded-[20px] border border-white/60 bg-surface/70 backdrop-blur-xl dark:border-white/10 dark:bg-surface/55">
+      <div className="flex flex-col gap-3 border-b border-line/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <span className="cl-live-marker" aria-hidden="true" />
           <div>
@@ -247,7 +246,7 @@ function ClosedLoopResponse() {
         aria-label="Interactive closed-loop step-response plot. A solid output trace follows a dashed target line. Click or tap vertically to change the target."
         className="block w-full cursor-crosshair touch-none"
       />
-      <figcaption className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line px-4 py-3 text-xs text-ink-soft">
+      <figcaption className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line/60 px-4 py-3 text-xs text-ink-soft">
         <span className="inline-flex items-center gap-2">
           <span className="h-0.5 w-5 bg-brand" aria-hidden="true" />
           simulated mechanism output
@@ -264,12 +263,13 @@ function ClosedLoopResponse() {
 
 export default function ControlResponseHero() {
   return (
-    <header className="cl-home-hero relative overflow-hidden border-b border-line bg-bg">
+    <header className="cl-home-hero relative overflow-hidden bg-bg">
       <div className="cl-hero-gradient" aria-hidden="true" />
+      <FlylineSweep />
       <div className="relative mx-auto max-w-6xl px-6 pb-6 pt-10 sm:pb-8 sm:pt-14 lg:pb-10 lg:pt-16">
         <div className="cl-home-enter cl-home-enter--copy">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="m-0 flex items-center gap-3 text-sm font-bold uppercase text-brand dark:text-[#aebaff]">
+            <p className="m-0 flex items-center gap-3 text-[0.8rem] font-semibold uppercase tracking-[0.18em] text-brand dark:text-brand-soft">
               <span className="h-px w-8 bg-current" aria-hidden="true" />
               FTC control theory / open source
             </p>
@@ -284,12 +284,12 @@ export default function ControlResponseHero() {
               View on GitHub
             </a>
           </div>
-          <h1 className="m-0 mt-4 max-w-5xl text-[3.35rem] font-black leading-[0.9] text-ink sm:mt-5 sm:text-[5.7rem] lg:text-[7.35rem]">
-            Control <span className="text-brand dark:text-[#aebaff]">Lab</span>
+          <h1 className="m-0 mt-4 max-w-5xl text-[3.35rem] font-extrabold leading-[0.92] tracking-[-0.035em] text-ink sm:mt-5 sm:text-[5.7rem] lg:text-[7.35rem]">
+            Control <span className="text-brand dark:text-brand-soft">Lab</span>
           </h1>
 
           <div className="mt-5 grid gap-4 sm:mt-7 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-            <p className="m-0 max-w-2xl text-xl font-bold leading-snug text-ink sm:text-2xl lg:text-[1.8rem]">
+            <p className="m-0 max-w-2xl text-xl font-semibold leading-snug tracking-[-0.015em] text-ink/90 sm:text-2xl lg:text-[1.8rem]">
               Understand what makes the robot move, estimate, and correct itself.
             </p>
             <div>
@@ -301,12 +301,12 @@ export default function ControlResponseHero() {
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
                   to="/docs/preface/why-math-matters"
-                  className="cl-home-action inline-flex min-h-11 items-center rounded-[6px] bg-brand px-5 py-2.5 font-bold text-white no-underline hover:bg-brand-dk">
+                  className="cl-home-action inline-flex min-h-11 items-center rounded-full bg-brand px-7 py-3 font-semibold text-white no-underline hover:bg-brand-dk">
                   Start the preface
                 </Link>
                 <Link
                   to="/docs/control-theory"
-                  className="cl-home-action inline-flex min-h-11 items-center rounded-[6px] border border-line bg-surface px-5 py-2.5 font-bold text-ink no-underline hover:border-brand hover:text-brand">
+                  className="cl-home-action inline-flex min-h-11 items-center rounded-full border border-line bg-surface/70 px-7 py-3 font-semibold text-ink no-underline backdrop-blur-md hover:border-brand hover:text-brand">
                   Browse modules
                 </Link>
               </div>
@@ -317,7 +317,6 @@ export default function ControlResponseHero() {
           <ClosedLoopResponse />
         </div>
       </div>
-      <div className="cl-spectrum-line relative" aria-hidden="true" />
     </header>
   );
 }

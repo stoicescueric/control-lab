@@ -1,10 +1,12 @@
 import {useRef, useState} from 'react';
 import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+import {closestPointOnPath} from '@site/src/lib/domain/guidedVectorField';
 
 const W = 640;
 const H = 360;
 const FIELD_WIDTH_IN = 144;
 const IN_PER_PX = FIELD_WIDTH_IN / W;
+const NUDGE = 6; // px per keyboard arrow-key nudge
 
 type Point = {x: number; y: number};
 type Projection = {
@@ -25,74 +27,17 @@ const INITIAL_POINTS: Point[] = [
   {x: 580, y: 95},
 ];
 
-function bezier(points: Point[], t: number): Point {
-  const u = 1 - t;
-  const a = u * u * u;
-  const b = 3 * u * u * t;
-  const c = 3 * u * t * t;
-  const d = t * t * t;
-  return {
-    x: a * points[0].x + b * points[1].x + c * points[2].x + d * points[3].x,
-    y: a * points[0].y + b * points[1].y + c * points[2].y + d * points[3].y,
-  };
-}
-
-function unitTangent(points: Point[], t: number): Point {
-  const a = bezier(points, clamp(t - 0.004, 0, 1));
-  const b = bezier(points, clamp(t + 0.004, 0, 1));
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const mag = Math.hypot(dx, dy) || 1;
-  return {x: dx / mag, y: dy / mag};
-}
-
+// Thin wrapper: converts the shared domain projection (unscaled) to the
+// pixels-per-inch units this widget displays.
 function project(points: Point[], robot: Point): Projection {
-  let bestT = 0;
-  let bestPoint = bezier(points, 0);
-  let bestDistance = Infinity;
-
-  const d2 = (t: number): number => {
-    const p = bezier(points, t);
-    return (p.x - robot.x) ** 2 + (p.y - robot.y) ** 2;
-  };
-
-  for (let i = 0; i <= 260; i++) {
-    const t = i / 260;
-    const distance = d2(t);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestT = t;
-    }
-  }
-
-  // Local ternary refinement around the coarse minimum (distance is locally
-  // unimodal), so the projected parameter and the perpendicularity it implies
-  // are accurate to far better than the 1/260 sampling grid.
-  let lo = Math.max(0, bestT - 1 / 260);
-  let hi = Math.min(1, bestT + 1 / 260);
-  for (let k = 0; k < 40; k++) {
-    const m1 = lo + (hi - lo) / 3;
-    const m2 = hi - (hi - lo) / 3;
-    if (d2(m1) < d2(m2)) hi = m2;
-    else lo = m1;
-  }
-  bestT = (lo + hi) / 2;
-  bestPoint = bezier(points, bestT);
-  bestDistance = d2(bestT);
-
-  const tangent = unitTangent(points, bestT);
-  const normal = {x: -tangent.y, y: tangent.x};
-  const rx = robot.x - bestPoint.x;
-  const ry = robot.y - bestPoint.y;
-  const signedErrorIn = (rx * normal.x + ry * normal.y) * IN_PER_PX;
-
+  const p = closestPointOnPath(robot, points);
   return {
-    point: bestPoint,
-    tangent,
-    normal,
-    t: bestT,
-    distanceIn: Math.sqrt(bestDistance) * IN_PER_PX,
-    signedErrorIn,
+    point: p.point,
+    tangent: p.tangent,
+    normal: p.normal,
+    t: p.t,
+    distanceIn: p.distance * IN_PER_PX,
+    signedErrorIn: p.signedError * IN_PER_PX,
   };
 }
 
@@ -168,6 +113,29 @@ export function PathProjection() {
     setPoints((prev) => prev.map((point, i) => (i === index ? next : point)));
   };
 
+  const nudgeRobot = (dx: number, dy: number) => {
+    setRobot((prev) => ({x: clamp(prev.x + dx, 12, W - 12), y: clamp(prev.y + dy, 12, H - 12)}));
+  };
+  const nudgeControlPoint = (index: number, dx: number, dy: number) => {
+    setPoints((prev) =>
+      prev.map((point, i) => (i === index ? {x: clamp(point.x + dx, 12, W - 12), y: clamp(point.y + dy, 12, H - 12)} : point)),
+    );
+  };
+  const onRobotKeyDown = (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? NUDGE * 4 : NUDGE;
+    if (event.key === 'ArrowLeft') { nudgeRobot(-step, 0); event.preventDefault(); }
+    else if (event.key === 'ArrowRight') { nudgeRobot(step, 0); event.preventDefault(); }
+    else if (event.key === 'ArrowUp') { nudgeRobot(0, -step); event.preventDefault(); }
+    else if (event.key === 'ArrowDown') { nudgeRobot(0, step); event.preventDefault(); }
+  };
+  const onControlPointKeyDown = (index: number) => (event: React.KeyboardEvent) => {
+    const step = event.shiftKey ? NUDGE * 4 : NUDGE;
+    if (event.key === 'ArrowLeft') { nudgeControlPoint(index, -step, 0); event.preventDefault(); }
+    else if (event.key === 'ArrowRight') { nudgeControlPoint(index, step, 0); event.preventDefault(); }
+    else if (event.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); event.preventDefault(); }
+    else if (event.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); event.preventDefault(); }
+  };
+
   return (
     <Demo title="Closest-point projection: drag the robot and watch psi(p) move">
       <svg
@@ -219,6 +187,11 @@ export function PathProjection() {
           stroke="#fff"
           strokeWidth="2.5"
           style={{cursor: 'grab'}}
+          tabIndex={0}
+          role="slider"
+          aria-label={`Robot position (${Math.round(robot.x)}, ${Math.round(robot.y)}). Use arrow keys to move; hold Shift to move faster.`}
+          aria-valuetext={`x ${Math.round(robot.x)}, y ${Math.round(robot.y)}`}
+          onKeyDown={onRobotKeyDown}
           onPointerDown={(event) => {
             drag.current = 'robot';
             (event.target as Element).setPointerCapture(event.pointerId);
@@ -236,6 +209,11 @@ export function PathProjection() {
             stroke="#8ea2ff"
             strokeWidth="2.5"
             style={{cursor: 'grab'}}
+            tabIndex={0}
+            role="slider"
+            aria-label={`Bezier control point ${index + 1}, position (${Math.round(point.x)}, ${Math.round(point.y)}). Use arrow keys to move.`}
+            aria-valuetext={`x ${Math.round(point.x)}, y ${Math.round(point.y)}`}
+            onKeyDown={onControlPointKeyDown(index)}
             onPointerDown={(event) => {
               drag.current = String(index);
               (event.target as Element).setPointerCapture(event.pointerId);

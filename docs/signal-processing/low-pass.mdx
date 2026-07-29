@@ -64,10 +64,19 @@ $$
 \hat{x}_k = \alpha\,z_k + \alpha(1-\alpha)\,z_{k-1} + \alpha(1-\alpha)^2\,z_{k-2} + \cdots
 $$
 
-That fade sets the filter's **time constant** $\tau$ — how long it takes to absorb a change. The
-exact discrete relation is $\alpha = \Delta t / (\tau + \Delta t)$: the same $\alpha$ means a
-completely different $\tau$ at a different loop rate, which is why the deployable code below computes
-$\alpha$ *from* a target $\tau$ and the measured $\Delta t$ instead of hard-coding it.
+That fade sets the filter's **time constant** $\tau$ — how long it takes to absorb a change. Matching
+the sampled filter exactly to an exponential response gives
+
+$$
+\alpha = 1 - e^{-\Delta t/\tau},
+\qquad
+\tau = -\frac{\Delta t}{\ln(1-\alpha)}.
+$$
+
+The common formula $\alpha = \Delta t/(\tau+\Delta t)$ is the backward-Euler approximation. It is
+stable and often adequate when $\Delta t \ll \tau$, but it is not the exact step-response relation.
+Either way, the same hard-coded $\alpha$ represents a different $\tau$ at a different loop rate, so
+the deployable code computes $\alpha$ from a target $\tau$ and the measured $\Delta t$.
 
 <EmaWeightsExplorer />
 
@@ -104,7 +113,7 @@ final double TAU = 0.08;        // desired time constant, seconds
 
 while (opModeIsActive()) {
     double dt = timer.seconds(); timer.reset();
-    double alpha = dt / (TAU + dt);            // dt-aware: stable at any loop rate
+    double alpha = 1.0 - Math.exp(-dt / TAU);  // exact sampled exponential
 
     double raw = sensor.getDistance(DistanceUnit.CM);
     filtered += alpha * (raw - filtered);       // the whole filter

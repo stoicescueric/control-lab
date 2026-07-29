@@ -201,7 +201,8 @@ voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
     public Flywheel(HardwareMap hw) {
         motor   = hw.get(DcMotorEx.class, "flywheel");
         battery = hw.voltageSensor.iterator().next();
-        motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        // This class closes its own velocity loop; do not stack the hub's velocity loop under it.
+        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
     }
 
     public void run(double goalVel, double goalAccel) {        // real units, e.g. m/s

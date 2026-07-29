@@ -2,8 +2,8 @@
 .claude/
 .agents/
 skills-lock.json
-AGENTS.md
 .cursorrules
+CLAUDE.md
 
 # --- Verification & screenshot scaffolding (temporary, never ship) ---
 _*.js

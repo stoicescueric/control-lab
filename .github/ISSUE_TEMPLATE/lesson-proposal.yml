@@ -23,7 +23,7 @@ body:
         - Motor dynamics and control theory
         - Path following and kinematics
         - State-space control
-        - Advanced research
+        - Trajectory generation and implementation
     validations:
       required: true
   - type: textarea
@@ -55,9 +55,39 @@ body:
     validations:
       required: true
   - type: textarea
+    id: existing_material
+    attributes:
+      label: Existing curriculum and prior work
+      description: Link nearby Control Lab lessons and explain what this proposal adds rather than duplicates.
+    validations:
+      required: true
+  - type: textarea
     id: sources
     attributes:
       label: Primary sources
       description: Provide papers, official documentation, or authoritative hardware references.
     validations:
       required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that would make the lesson complete, correct, and reviewable.
+      placeholder: |
+        - Reader can derive ...
+        - Demo exposes ...
+        - Tests cover ...
+        - Hardware warning explains ...
+    validations:
+      required: true
+  - type: checkboxes
+    id: contributor_checks
+    attributes:
+      label: Contributor checks
+      options:
+        - label: I searched the existing curriculum for this concept.
+          required: true
+        - label: I understand that the maintainer may refine or decline the scope.
+          required: true
+        - label: I will verify AI-assisted output and disclose its use in the pull request.
+          required: true

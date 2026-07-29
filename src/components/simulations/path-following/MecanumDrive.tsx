@@ -15,6 +15,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {mecanumMix, desaturate} from '../../../lib/domain/controlMath';
 
 const SPEED = 95; // px/s at full command
 const TURN_RATE = 1.9; // rad/s at full turn command
@@ -95,14 +96,12 @@ export default function MecanumDrive() {
     const omega = turnC;
 
     // 1) the wheel-mixing matrix
-    const rawFL = vx - vy - omega;
-    const rawFR = vx + vy + omega;
-    const rawBL = vx + vy - omega;
-    const rawBR = vx - vy + omega;
+    const raw = mecanumMix(vx, vy, omega);
 
     // 4) desaturate: divide by the largest magnitude if it exceeds 1
-    const norm = Math.max(1, Math.abs(rawFL), Math.abs(rawFR), Math.abs(rawBL), Math.abs(rawBR));
-    const wheels = [rawFL / norm, rawFR / norm, rawBL / norm, rawBR / norm];
+    const norm = Math.max(1, Math.abs(raw.fl), Math.abs(raw.fr), Math.abs(raw.bl), Math.abs(raw.br));
+    const desat = desaturate(raw);
+    const wheels = [desat.fl, desat.fr, desat.bl, desat.br];
 
     // the achieved chassis motion is the command scaled by the same desaturation
     const achVx = vx / norm;

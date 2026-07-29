@@ -1,13 +1,13 @@
-/* Shared physics for the Advanced Research module.
+/* Shared physics for the Trajectory Generation & Implementation module.
    ------------------------------------------------------------------
-   Every sim in Module 6 (DragAwakening, the IntegratorBattle and
+   Every simulation in Module 7 (DragAwakening, the IntegratorBattle and
    TransferRealityCheck panels, InterpolationTrap, ShootOnTheMove) draws on the
    same paper model, so the model lives here exactly once. Keeping it pure (no
    React, no DOM) means it is unit-tested in projectile.test.ts and the demos
    cannot quietly disagree with each other about the physics.
 
-   Source: Stoicescu, "Real-Time Trajectory Compensation and Shoot-on-the-Move
-   Control for Subcritical Asymmetric Projectiles." */
+   Source: Stoicescu, "Drag-Aware Trajectory Planning and Shoot-on-the-Move
+   Control for a Mobile Robotic Launcher." */
 
 // ---- small shared helpers ----------------------------------------------
 
@@ -159,11 +159,11 @@ export function simulateVacuum(v0: number, angle: number, h0 = H0): VacuumFlight
   return {pts, range, apex, rimCross};
 }
 
-// ---- launcher energy transfer (paper §5) -------------------------------
+// ---- launcher velocity transfer (paper §5) -----------------------------
 
 /* Wheel-surface speed -> projectile exit speed is not 1:1. The naive firmware
-   assumes eta ~ 0.70; the measured transfer was nearer 0.26 and dropped with
-   launch angle as contact time shrank. */
+   assumes a velocity ratio eta ~ 0.70; the measured ratio was nearer 0.26 and
+   dropped with launch angle as contact time shrank. This is not energy efficiency. */
 export const ASSUMED_ETA = 0.7;
 
 export function measuredEta(angleDeg: number): number {
@@ -201,8 +201,8 @@ export interface SotmResult {
   iters: SotmIter[];
 }
 
-/* Fixed-point solver for the virtual aim point, exactly as Sensors.update()
-   runs it: aim at the real target, read flight time, shift by the robot's lead,
+/* Fixed-point solver for the virtual aim point: aim at the real target, read
+   flight time, shift opposite robot velocity to cancel inherited chassis motion,
    repeat until the flight time stops moving (<= SOTM_MAX_ITERS rounds). */
 export function solveSOTM(
   shooter: Vec2,
@@ -218,7 +218,7 @@ export function solveSOTM(
 
   for (let k = 1; k <= SOTM_MAX_ITERS; k++) {
     const T = FEEDER_DELAY + tf;
-    const pvNew: Vec2 = {x: goal.x + SOTM_GAIN * vR.x * T, y: goal.y + SOTM_GAIN * vR.y * T};
+    const pvNew: Vec2 = {x: goal.x - SOTM_GAIN * vR.x * T, y: goal.y - SOTM_GAIN * vR.y * T};
     const dNew = dist(pvNew, shooter);
     const tfNew = flightTime(dNew);
     const delta = Math.abs(tfNew - tf);
@@ -234,10 +234,25 @@ export function solveSOTM(
 
 // ---- calibration-table interpolation (paper §7.2) ----------------------
 
+function validateKnots(xs: number[], ys: number[]): void {
+  if (xs.length !== ys.length || xs.length < 2) {
+    throw new Error('xs and ys must have the same length and contain at least two knots');
+  }
+  for (let i = 0; i < xs.length; i++) {
+    if (!Number.isFinite(xs[i]) || !Number.isFinite(ys[i])) {
+      throw new Error('all knot coordinates must be finite');
+    }
+    if (i > 0 && xs[i] <= xs[i - 1]) {
+      throw new Error('x knots must be strictly increasing');
+    }
+  }
+}
+
 /* Natural cubic spline: smooth, but free to overshoot a flat data shelf.
    Solves the tridiagonal system for the second derivatives (natural ends
    M_0 = M_{n-1} = 0) via the Thomas algorithm, then evaluates the cubic. */
 export function naturalCubic(xs: number[], ys: number[]): (x: number) => number {
+  validateKnots(xs, ys);
   const n = xs.length;
   const h = (i: number) => xs[i + 1] - xs[i];
   const M = new Array(n).fill(0);
@@ -285,6 +300,7 @@ export interface MonotoneHermite {
    Returns the evaluator plus per-knot tangents and flags so the UI can show
    the algorithm acting. */
 export function monotoneHermite(xs: number[], ys: number[]): MonotoneHermite {
+  validateKnots(xs, ys);
   const n = xs.length;
   const delta: number[] = [];
   for (let i = 0; i < n - 1; i++) delta.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
@@ -303,6 +319,15 @@ export function monotoneHermite(xs: number[], ys: number[]): MonotoneHermite {
       flag[i] = flag[i] === 'projected' ? 'projected' : 'flat';
       flag[i + 1] = 'flat';
       continue;
+    }
+    // A tangent that opposes this interval's secant would create a local reversal.
+    if (m[i] / delta[i] < 0) {
+      m[i] = 0;
+      if (flag[i] !== 'flat') flag[i] = 'projected';
+    }
+    if (m[i + 1] / delta[i] < 0) {
+      m[i + 1] = 0;
+      if (flag[i + 1] !== 'flat') flag[i + 1] = 'projected';
     }
     const a = m[i] / delta[i];
     const b = m[i + 1] / delta[i];

@@ -1,6 +1,6 @@
 ---
 title: Angle Wrapping
-description: Why a heading controller sometimes spins the long way around — and the one-line fix that wraps every angle error into [−π, π].
+description: Why a heading controller sometimes spins the long way around — and the small fix that wraps every angle error into (−π, π].
 sidebar_position: 2
 tags: [angle-wrapping, heading, atan2, control, autonomous]
 ---
@@ -15,7 +15,7 @@ import AngleWrap from '@site/src/components/simulations/path-following/AngleWrap
 <Abstract>
 Headings live on a circle, so the same direction has infinitely many numeric labels and two angles can
 be numerically far apart while being physically adjacent. Wrapping every angle difference back into the
-range $[-\pi, \pi]$ is the small, mandatory step that stops a heading controller from taking the long
+range $(-\pi, \pi]$ is the small, mandatory step that stops a heading controller from taking the long
 way around.
 </Abstract>
 
@@ -48,9 +48,10 @@ wrong; we just forgot to read the answer *on the circle*, taking the shorter of 
 
 <AngleWrap />
 
-The fix is to **wrap** any angle (or angle difference) into the half-open interval $(-\pi, \pi]$. The
-clean, branch-free way uses the fact that $\operatorname{atan2}$ already returns a value in that range,
-and that feeding it the sine and cosine of an angle reconstructs the angle modulo $2\pi$:
+The fix is to **wrap** any angle (or angle difference) into the half-open interval $(-\pi, \pi]$. Feeding
+the sine and cosine to $\operatorname{atan2}$ reconstructs the angle modulo $2\pi$ and lands it directly
+in that interval — $\operatorname{atan2}$'s own range excludes $-\pi$ and includes $+\pi$, so the seam
+sits exactly at $\pm 180°$ with $+\pi$ as the canonical boundary value, no extra correction needed:
 
 $$
 \operatorname{wrap}(e) = \operatorname{atan2}\big(\sin e,\ \cos e\big)
@@ -73,14 +74,14 @@ it is recovering the shortest angle from a raw difference.)
 <Callout type="warn" title="Wrap the error, not just the setpoint.">
 It is the *difference* that has to be wrapped, every loop, right before it enters the controller.
 Wrapping only the target or only the measurement still leaves a difference that can land outside
-[−π, π].
+(−π, π].
 </Callout>
 
 </Theory>
 
 <Deploy title="One helper, used everywhere a heading appears">
 
-<JavaCode league="FTC" label="Angle wrapping and a heading-hold controller">{`/** Wraps any angle (radians) into the shortest-signed range (-pi, pi]. */
+<JavaCode league="FTC" label="Angle wrapping and a heading-hold controller">{`/** Wraps any angle (radians) into the canonical range (-pi, pi]. */
 public static double wrap(double radians) {
     return Math.atan2(Math.sin(radians), Math.cos(radians));
 }
@@ -99,7 +100,7 @@ never subtract two angles without it again.
 
 <Admonition type="note" title="Wrapping vs. unwrapping">
 
-Wrapping keeps an angle in $[-\pi, \pi]$ — correct for *control error*. The opposite operation,
+Wrapping keeps an angle in $(-\pi, \pi]$ — correct for *control error*. The opposite operation,
 *unwrapping*, removes the jumps to make a continuous signal — what you want before
 **differentiating** heading for an angular-velocity estimate, since a $2\pi$ jump at the seam would
 otherwise read as an enormous spike in $\dot\theta$.

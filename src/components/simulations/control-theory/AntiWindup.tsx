@@ -4,75 +4,25 @@ import {Trace} from '@site/src/lib/visualization/plot';
 import {usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Button, Buttons, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {
+  stepSaturatingPidPlant,
+  type SaturatingPidPlantConfig,
+  type SaturatingPidPlantState,
+} from '@site/src/lib/domain/pid';
 
-type ControllerState = {
-  x: number;
-  v: number;
-  integral: number;
-  raw: number;
-  out: number;
+type ControllerState = SaturatingPidPlantState & {
   trace: Trace;
   integralTrace: Trace;
 };
 
 const DT = 1 / 180;
-const KP = 3.8;
-const KI = 1.25;
-const KD = 1.35;
-const PLANT_GAIN = 4.8;
-const DAMPING = 2.2;
-const INTEGRAL_LIMIT_VOLTS = 2.2;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function sign(value: number): number {
-  if (Math.abs(value) < 1e-9) {
-    return 0;
-  }
-  return Math.sign(value);
-}
-
-function stepController(
-  state: ControllerState,
-  target: number,
-  voltageLimit: number,
-  antiWindup: boolean,
-) {
-  const error = target - state.x;
-  let nextIntegral = state.integral + error * DT;
-  const integralContribution = KI * nextIntegral;
-
-  if (antiWindup) {
-    const limitedContribution = clamp(
-      integralContribution,
-      -INTEGRAL_LIMIT_VOLTS,
-      INTEGRAL_LIMIT_VOLTS,
-    );
-    nextIntegral = limitedContribution / KI;
-  }
-
-  const rawCandidate = KP * error + KI * nextIntegral - KD * state.v;
-  const saturated = clamp(rawCandidate, -voltageLimit, voltageLimit);
-
-  if (antiWindup) {
-    const tryingToPushFurtherPositive = rawCandidate > voltageLimit && error > 0;
-    const tryingToPushFurtherNegative = rawCandidate < -voltageLimit && error < 0;
-    if (tryingToPushFurtherPositive || tryingToPushFurtherNegative) {
-      nextIntegral = state.integral;
-    }
-  }
-
-  const raw = KP * error + KI * nextIntegral - KD * state.v;
-  const out = clamp(raw, -voltageLimit, voltageLimit);
-  const accel = PLANT_GAIN * out - DAMPING * state.v;
-  state.v += accel * DT;
-  state.x += state.v * DT;
-  state.integral = nextIntegral;
-  state.raw = raw;
-  state.out = out;
-}
+const CONFIG: SaturatingPidPlantConfig = {
+  dt: DT,
+  gains: {kp: 3.8, ki: 1.25, kd: 1.35},
+  integralLimitVolts: 2.2,
+  plantGain: 4.8,
+  damping: 2.2,
+};
 
 export default function AntiWindup() {
   const [target, setTarget] = useState(6);
@@ -139,13 +89,13 @@ export default function AntiWindup() {
     const t = sim.current.t;
     const targetNow = targetRef.current;
     const limitNow = limitRef.current;
-    stepController(noAnti.current, targetNow, limitNow, false);
-    stepController(anti.current, targetNow, limitNow, true);
+    stepSaturatingPidPlant(noAnti.current, targetNow, limitNow, false, CONFIG);
+    stepSaturatingPidPlant(anti.current, targetNow, limitNow, true, CONFIG);
     sim.current.t += DT;
     noAnti.current.trace.push(t, noAnti.current.x);
     anti.current.trace.push(t, anti.current.x);
-    noAnti.current.integralTrace.push(t, KI * noAnti.current.integral);
-    anti.current.integralTrace.push(t, KI * anti.current.integral);
+    noAnti.current.integralTrace.push(t, CONFIG.gains.ki * noAnti.current.integral);
+    anti.current.integralTrace.push(t, CONFIG.gains.ki * anti.current.integral);
   }
 
   function draw() {
@@ -166,10 +116,10 @@ export default function AntiWindup() {
     }
 
     if (readouts.noAntiIntegral.current) {
-      readouts.noAntiIntegral.current.textContent = `${(KI * noAnti.current.integral).toFixed(2)} V`;
+      readouts.noAntiIntegral.current.textContent = `${(CONFIG.gains.ki * noAnti.current.integral).toFixed(2)} V`;
     }
     if (readouts.antiIntegral.current) {
-      readouts.antiIntegral.current.textContent = `${(KI * anti.current.integral).toFixed(2)} V`;
+      readouts.antiIntegral.current.textContent = `${(CONFIG.gains.ki * anti.current.integral).toFixed(2)} V`;
     }
     if (readouts.noAntiRaw.current) {
       readouts.noAntiRaw.current.textContent = `${noAnti.current.raw.toFixed(2)} V`;

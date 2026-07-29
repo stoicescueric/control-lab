@@ -275,7 +275,7 @@ to curvature, and command forward speed plus turn rate.
 // 1. Lookahead: first path point at least Ld ahead (never target behind us).
 Vector2d carrot = path.get(path.size() - 1);
 for (int i = lastIndex; i < path.size(); i++) {
-    if (robot.position.minus(path.get(i)).norm() >= LOOKAHEAD) {
+    if (robot.vec().minus(path.get(i)).norm() >= LOOKAHEAD) {
         carrot = path.get(i);
         lastIndex = i;
         break;
@@ -283,9 +283,9 @@ for (int i = lastIndex; i < path.size(); i++) {
 }
 
 // 2. Carrot in the robot frame (+x forward, +y left).
-Vector2d d = carrot.minus(robot.position);
-double h = robot.heading.toDouble();
-double yLocal = -Math.sin(h) * d.x + Math.cos(h) * d.y;
+Vector2d d = carrot.minus(robot.vec());
+double h = robot.heading();
+double yLocal = -Math.sin(h) * d.x() + Math.cos(h) * d.y();
 double L = d.norm();
 
 // 3. Arc curvature -> drive command.
@@ -323,7 +323,9 @@ void buildVelocityProfile(List<PathPoint> pts, double vPath, double kCurv, doubl
 
 /** 4*Area / (a*b*c): curvature of the circle through three points (0 if collinear). */
 static double mengerCurvature(Vector2d A, Vector2d B, Vector2d C) {
-    double area = 0.5 * Math.abs((B.x - A.x) * (C.y - A.y) - (C.x - A.x) * (B.y - A.y));
+    double area = 0.5 * Math.abs(
+        (B.x() - A.x()) * (C.y() - A.y())
+      - (C.x() - A.x()) * (B.y() - A.y()));
     double a = B.minus(C).norm(), b = A.minus(C).norm(), c = A.minus(B).norm();
     double denom = a * b * c;
     return denom < 1e-9 ? 0 : 4 * area / denom;
@@ -358,7 +360,7 @@ List<SplinePoint> resample(Spline s, double stepInches) {
 public void followSpline(List<SplinePoint> path) {
     Pose2d robot = localizer.getPose();
     while (index < path.size() - 1 &&
-           Math.hypot(path.get(index).x() - robot.x, path.get(index).y() - robot.y) < PATH_RADIUS) {
+           Math.hypot(path.get(index).x() - robot.x(), path.get(index).y() - robot.y()) < PATH_RADIUS) {
         index++;
     }
     SplinePoint p = path.get(index);
@@ -366,8 +368,8 @@ public void followSpline(List<SplinePoint> path) {
     double speed = Math.min(MAX_SPEED, Math.sqrt(LAT_ACCEL * Math.abs(p.radius())));
 
     // robot-frame direction to the point -> forward / strafe at the curvature-limited speed
-    double ex = p.x() - robot.x, ey = p.y() - robot.y;
-    double c = Math.cos(robot.heading), s = Math.sin(robot.heading);
+    double ex = p.x() - robot.x(), ey = p.y() - robot.y();
+    double c = Math.cos(robot.heading()), s = Math.sin(robot.heading());
     double dir = Math.atan2(ey * c - ex * s, ex * c + ey * s);
     double vx = speed * Math.cos(dir);
     double vy = speed * Math.sin(dir);
@@ -394,7 +396,8 @@ a tangent-only cubic does not.
 
 <Callout type="idea" title="On a tank (differential) drive">
 Pure pursuit outputs a signed curvature and a speed; a differential drive turns those straight into
-wheel speeds. With track width $T$, $\;L = v(2 + \kappa T)/2\;$ and $\;R = v(2 - \kappa T)/2$. (Our
+wheel speeds. With $+\kappa$ meaning a counter-clockwise (left) turn and track width $T$,
+$\;L = v(2 - \kappa T)/2\;$ and $\;R = v(2 + \kappa T)/2$. (Our
 mecanum stack instead feeds the same $(v,\ \omega = \kappa v)$ into the
 [mixer](./mecanum-kinematics.mdx).) Use a track width a few inches larger than the real one to absorb
 turning scrub.

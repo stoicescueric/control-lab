@@ -150,6 +150,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: '/contributors',
+          label: 'Contribute',
+          position: 'right',
+        },
+        {
           href: `https://github.com/${ORG}/${REPO}`,
           label: 'GitHub',
           position: 'right',
@@ -180,6 +185,8 @@ const config: Config = {
           title: 'More',
           items: [
             {label: 'Contributors', to: '/contributors'},
+            {label: 'Contribution guide', href: `https://github.com/${ORG}/${REPO}/blob/main/CONTRIBUTING.md`},
+            {label: 'AI-assisted workflow', href: `https://github.com/${ORG}/${REPO}/blob/main/AI_WORKFLOW.md`},
             {label: 'Privacy & Cookies', to: '/privacy'},
             {label: 'GitHub', href: `https://github.com/${ORG}/${REPO}`},
           ],
@@ -223,7 +230,7 @@ const config: Config = {
         offlineModeActivationStrategies: ['appInstalled', 'standalone', 'queryString'],
         pwaHead: [
           {tagName: 'link', rel: 'manifest', href: `/${REPO}/manifest.webmanifest`},
-          {tagName: 'meta', name: 'theme-color', content: '#4f6cf7'},
+          {tagName: 'meta', name: 'theme-color', content: '#2f52e0'},
           {tagName: 'link', rel: 'apple-touch-icon', href: `/${REPO}/img/logo.svg`},
         ],
       },
