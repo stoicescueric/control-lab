@@ -31,8 +31,11 @@ The closest-point recipe is what you code, but it isn't the cleanest object to *
 because "closest point" is itself the output of a search. The control-theory formulation (Kapitanyuk,
 Proskurnikov & Cao) writes the path as the **zero level set of a smooth function** $\varphi(x,y)$ — for a
 circle of radius $R$, $\varphi = x^2 + y^2 - R^2$; for a line $ax+by+c=0$, $\varphi = ax+by+c$. The value of
-$\varphi$ *is* a cross-track error (zero exactly on the path), and its gradient $\nabla\varphi$ points along
-the normal. The guiding vector field is then
+$\varphi$ is a zero-level-set function: it vanishes on the path, but it is generally a scaled or nonlinear
+proxy for cross-track distance. For example, the circle expression has units of distance squared.
+Only a signed-distance construction makes $\varphi$ equal the physical signed distance. Its gradient
+$\nabla\varphi$ points along the normal and its magnitude affects the convergence rate. The guiding
+vector field is then
 
 $$
 \boldsymbol{\chi} \;=\; \underbrace{E\,\nabla\varphi}_{\text{propagate along}} \;-\; \underbrace{k\,\varphi\,\nabla\varphi}_{\text{converge onto}},
@@ -42,8 +45,10 @@ $$
 
 $E$ is a 90° rotation, so $E\nabla\varphi$ is **tangent** to the level curve (it propagates the robot along
 the path) and $-k\,\varphi\,\nabla\varphi$ points down the gradient toward $\varphi = 0$ (it converges). This
-is *exactly* the same idea as the closest-point form: $E\nabla\varphi$ plays the role of $\hat{\mathbf{t}}$,
-$\nabla\varphi$ the role of $\hat{\mathbf{n}}$, and $\varphi$ the role of $e$. The level-set view is what
+has the same propagation-plus-convergence structure as the closest-point form:
+$E\nabla\varphi$ plays the role of a scaled tangent, $\nabla\varphi$ a scaled normal, and $\varphi$
+a path-error proxy. They are not numerically identical unless the level-set function is normalized
+appropriately. The level-set view is what
 makes the convergence proof clean.
 
 <Callout type="idea" title="Two views, one field.">
@@ -63,10 +68,10 @@ $$
 \dot V = e\,\dot e \;\propto\; -k_N\,e^2 \;\le\; 0
 $$
 
-The energy only ever **decreases**, and it reaches zero **only** on the path. By Lyapunov's theorem the path
-is asymptotically stable: the robot is driven onto the path and *stays* there. A lookahead chasing a moving
-point never gets this guarantee — its tracking error depends on speed and lookahead, and it never has a
-Lyapunov function in the cross-track error.
+The energy is nonincreasing. If the field is followed exactly and there are no off-path critical points
+where $\nabla\varphi=0$, the invariant set with $\dot V=0$ reduces to the path; LaSalle's invariance
+principle then gives asymptotic convergence. A standard geometric lookahead follower does not inherit
+this particular cross-track Lyapunov proof; its tracking error instead depends on speed and lookahead.
 
 In the level-set form the same argument runs on $\varphi$ directly: with $V = \tfrac12\varphi^2$, the
 converging term $-k\varphi\nabla\varphi$ gives $\dot\varphi = \nabla\varphi \cdot \dot{\mathbf{p}} \propto

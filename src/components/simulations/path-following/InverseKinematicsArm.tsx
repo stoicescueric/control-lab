@@ -1,4 +1,4 @@
-import {useMemo, useState, type PointerEvent} from 'react';
+import {useMemo, useState, type KeyboardEvent, type PointerEvent} from 'react';
 
 import {Button, Buttons, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 
@@ -23,6 +23,8 @@ const ORIGIN: Point = {x: 310, y: 305};
 const LINK_1 = 125;
 const LINK_2 = 100;
 const UNITS_PER_PIXEL = 0.1;
+const NUDGE_STEP = 10;
+const NUDGE_STEP_LARGE = 40;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -132,6 +134,33 @@ export default function InverseKinematicsArm() {
     }
   }
 
+  function nudgeTarget(event: KeyboardEvent<SVGCircleElement>) {
+    const step = event.shiftKey ? NUDGE_STEP_LARGE : NUDGE_STEP;
+    let dx = 0;
+    let dy = 0;
+    switch (event.key) {
+      case 'ArrowLeft':
+        dx = -step;
+        break;
+      case 'ArrowRight':
+        dx = step;
+        break;
+      case 'ArrowUp':
+        dy = -step;
+        break;
+      case 'ArrowDown':
+        dy = step;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    setTarget((prev) => ({
+      x: clamp(prev.x + dx, 45, WIDTH - 35),
+      y: clamp(prev.y + dy, 45, HEIGHT - 35),
+    }));
+  }
+
   return (
     <Demo title="Inverse kinematics - drag the claw target">
       <svg
@@ -229,6 +258,11 @@ export default function InverseKinematicsArm() {
           stroke="#fff7ed"
           strokeWidth="3"
           filter="url(#ik-glow)"
+          tabIndex={0}
+          role="application"
+          aria-label="Claw target position. Use arrow keys to move it, hold Shift to move in larger steps."
+          onKeyDown={nudgeTarget}
+          className="cursor-grab outline-none focus-visible:stroke-[#38bdf8]"
         />
         <text x={target.x + 17} y={target.y - 16} fill="#f8fafc" fontSize="13" fontWeight="700">
           target

@@ -1,6 +1,7 @@
 import {useRef, useState} from 'react';
 import {Demo, Stage, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {threePointCurvature} from '@site/src/lib/domain/curvature';
 
 /* Adaptive pure pursuit velocity planning, made live. Drag the waypoints to
    reshape the path; the demo densifies it (Catmull-Rom), measures curvature at
@@ -40,16 +41,6 @@ function catmull(p: Pt[], perSeg: number): Pt[] {
   return out;
 }
 
-// Menger curvature (1/in) of three points given in inch coordinates.
-function curvatureInches(A: Pt, B: Pt, C: Pt): number {
-  const area = 0.5 * Math.abs((B.x - A.x) * (C.y - A.y) - (C.x - A.x) * (B.y - A.y));
-  const a = dist(B, C);
-  const b = dist(A, C);
-  const c = dist(A, B);
-  const denom = a * b * c;
-  return denom < 1e-6 ? 0 : (4 * area) / denom;
-}
-
 const INIT: Pt[] = [
   {x: 70, y: 290},
   {x: 200, y: 80},
@@ -76,6 +67,19 @@ export function VelocityProfile() {
     const i = drag.current;
     setWp((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
   };
+  const onWaypointKeyDown = (i: number) => (e: React.KeyboardEvent<SVGCircleElement>) => {
+    const step = e.shiftKey ? 16 : 4;
+    const d: Record<string, Pt> = {
+      ArrowUp: {x: 0, y: -step},
+      ArrowDown: {x: 0, y: step},
+      ArrowLeft: {x: -step, y: 0},
+      ArrowRight: {x: step, y: 0},
+    };
+    const delta = d[e.key];
+    if (!delta) return;
+    e.preventDefault();
+    setWp((prev) => prev.map((q, j) => (j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q)));
+  };
 
   // densify, then work in inch coordinates for the physics
   const dense = catmull(wp, 34);
@@ -91,7 +95,7 @@ export function VelocityProfile() {
   const g = 3;
   const cap = new Array(n).fill(vPath);
   for (let i = g; i < n - g; i++) {
-    const k = curvatureInches(inch[i - g], inch[i], inch[i + g]);
+    const k = threePointCurvature(inch[i - g], inch[i], inch[i + g]);
     cap[i] = k < 1e-5 ? vPath : Math.min(vPath, kCurv / k);
   }
   // backward braking pass: v_i <= sqrt(v_{i+1}^2 + 2 a d)
@@ -142,10 +146,14 @@ export function VelocityProfile() {
               stroke="#cfe0ff"
               strokeWidth="2.5"
               style={{cursor: 'grab'}}
+              tabIndex={0}
+              role="button"
+              aria-label={`Waypoint ${i + 1} of ${wp.length}. Use arrow keys to move it; hold shift to move faster.`}
               onPointerDown={(e) => {
                 drag.current = i;
                 (e.target as Element).setPointerCapture(e.pointerId);
               }}
+              onKeyDown={onWaypointKeyDown(i)}
             />
           ))}
           <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8">

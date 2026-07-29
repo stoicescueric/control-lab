@@ -42,6 +42,30 @@
 }
 
 @font-face {
+  font-family: 'Manrope Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('@fontsource-variable/manrope/files/manrope-latin-ext-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB,
+    U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Manrope Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url('@fontsource-variable/manrope/files/manrope-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
   font-family: 'IBM Plex Mono';
   font-style: normal;
   font-display: swap;
@@ -113,21 +137,27 @@
   --font-sans: 'Source Sans 3 Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Self-hosted Manrope (subtly-rounded geometric sans) for the Apple-style
+     rounded treatment; ui-rounded/SF Pro Rounded remain as native fallbacks. */
+  --font-rounded: 'Manrope Variable', ui-rounded, 'SF Pro Rounded', 'Source Sans 3 Variable',
+    system-ui, sans-serif;
 
-  /* surfaces & ink */
-  --color-bg: #f5f7f8;
-  --color-bg-soft: #edf0f2;
+  /* surfaces & ink — neutral, quiet canvas */
+  --color-bg: #f5f5f7;
+  --color-bg-soft: #ededf0;
   --color-surface: #ffffff;
-  --color-surface-2: #f7f8fa;
-  --color-ink: #1d2228;
-  --color-ink-soft: #59636f;
-  --color-ink-faint: #89929d;
-  --color-line: #dfe3e7;
-  --color-line-soft: #edf0f2;
+  --color-surface-2: #fafafc;
+  --color-ink: #1d1d1f;
+  --color-ink-soft: #55555e;
+  --color-ink-faint: #86868b;
+  --color-line: #e2e2e7;
+  --color-line-soft: #efeff3;
 
-  /* brand + accents */
-  --color-brand: #4f6cf7;
-  --color-brand-dk: #3a52d6;
+  /* brand + accents — one confident cobalt accent; teal/amber/rose/green stay
+     as data-viz semantics inside the simulations, not decorative chrome */
+  --color-brand: #2f52e0;
+  --color-brand-dk: #2543c2;
+  --color-brand-soft: #aebaff;
   --color-teal: #11b5a4;
   --color-amber: #f59e0b;
   --color-rose: #ef4476;
@@ -138,9 +168,9 @@
   --color-panel-2: #16203a;
   --color-panel-ink: #e8edf7;
 
-  --radius-card: 8px;
-  --shadow-card: 0 1px 2px rgba(29, 34, 40, 0.06);
-  --shadow-pop: 0 10px 28px rgba(29, 34, 40, 0.1);
+  --radius-card: 16px;
+  --shadow-card: 0 1px 2px rgba(29, 34, 40, 0.04), 0 8px 24px rgba(29, 34, 40, 0.05);
+  --shadow-pop: 0 2px 6px rgba(29, 34, 40, 0.05), 0 24px 64px rgba(29, 34, 40, 0.1);
 }
 
 /* ---------------------------------------------------------------------------
@@ -148,13 +178,13 @@
    (Full chrome/surface/prose re-skin happens in Phase 2.)
    --------------------------------------------------------------------------- */
 :root {
-  --ifm-color-primary: #4f6cf7;
-  --ifm-color-primary-dark: #3a52d6;
-  --ifm-color-primary-darker: #3149c8;
-  --ifm-color-primary-darkest: #283ca3;
-  --ifm-color-primary-light: #6883f9;
-  --ifm-color-primary-lighter: #7991fa;
-  --ifm-color-primary-lightest: #a3b3fc;
+  --ifm-color-primary: #2f52e0;
+  --ifm-color-primary-dark: #2543c2;
+  --ifm-color-primary-darker: #1f3aab;
+  --ifm-color-primary-darkest: #182e88;
+  --ifm-color-primary-light: #4a68e6;
+  --ifm-color-primary-lighter: #5f7aea;
+  --ifm-color-primary-lightest: #93a5f2;
   --ifm-code-font-size: 95%;
   --ifm-font-family-base: var(--font-sans);
   --ifm-font-family-monospace: var(--font-mono);
@@ -178,15 +208,15 @@
   --ifm-hr-background-color: var(--color-line);
   --ifm-blockquote-border-color: var(--color-line);
 
-  /* Shape */
-  --ifm-global-radius: 8px;
-  --ifm-button-border-radius: 7px;
-  --ifm-card-border-radius: 8px;
-  --ifm-pre-border-radius: 8px;
+  /* Shape — continuous, generous corners; pill buttons */
+  --ifm-global-radius: 12px;
+  --ifm-button-border-radius: 999px;
+  --ifm-card-border-radius: 16px;
+  --ifm-pre-border-radius: 12px;
   --ifm-code-border-radius: 6px;
 
   /* Type scale (clean, high-contrast) — sized up for in-class readability */
-  --ifm-heading-font-weight: 700;
+  --ifm-heading-font-weight: 650;
   --ifm-h1-font-size: 2.7rem;
   --ifm-h2-font-size: 1.78rem;
   --ifm-h3-font-size: 1.4rem;
@@ -194,7 +224,7 @@
   --ifm-font-size-base: 112%;
 
   /* Inline code as a tinted chip */
-  --ifm-code-background: rgba(79, 108, 247, 0.08);
+  --ifm-code-background: rgba(47, 82, 224, 0.07);
 
   /* Navbar: taller, translucent, hairline border */
   --ifm-navbar-height: 3.75rem;
@@ -204,38 +234,38 @@
   /* Sidebar menu */
   --ifm-menu-color: var(--color-ink-soft);
   --ifm-menu-color-active: var(--color-brand);
-  --ifm-menu-color-background-active: rgba(79, 108, 247, 0.1);
-  --ifm-menu-color-background-hover: rgba(79, 108, 247, 0.06);
+  --ifm-menu-color-background-active: rgba(47, 82, 224, 0.1);
+  --ifm-menu-color-background-hover: rgba(47, 82, 224, 0.06);
 
-  --cl-scroll-thumb: #c4ccdc;
+  --cl-scroll-thumb: #c8c8d0;
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #93a7ff;
-  --ifm-color-primary-dark: #6f8bff;
+  --ifm-color-primary: #8fa5ff;
+  --ifm-color-primary-dark: #7089ff;
   --ifm-color-primary-darker: #5d7cff;
-  --ifm-color-primary-darkest: #3a52d6;
-  --ifm-color-primary-light: #b3c2ff;
-  --ifm-color-primary-lighter: #c5d0ff;
-  --ifm-color-primary-lightest: #e0e6ff;
+  --ifm-color-primary-darkest: #2543c2;
+  --ifm-color-primary-light: #aebcff;
+  --ifm-color-primary-lighter: #c2ccff;
+  --ifm-color-primary-lightest: #dde3ff;
   --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
 
   /* Re-point the Tailwind design tokens for dark mode. Because the kit's
      utilities (text-ink, bg-surface, border-line, …) resolve to these CSS
      variables, overriding them here flips the whole component palette. The
      demo PANEL tokens stay dark in both themes by design. */
-  --color-bg: #111315;
-  --color-bg-soft: #1a1e22;
-  --color-surface: #181b1f;
-  --color-surface-2: #14171a;
-  --color-ink: #f0f2f4;
-  --color-ink-soft: #b2bac4;
-  --color-ink-faint: #7e8792;
-  --color-line: #30353c;
-  --color-line-soft: #23282d;
-  --color-brand-dk: #93a7ff;
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.32);
+  --color-bg: #0d0d0f;
+  --color-bg-soft: #151517;
+  --color-surface: #161618;
+  --color-surface-2: #121214;
+  --color-ink: #f5f5f7;
+  --color-ink-soft: #a9a9b2;
+  --color-ink-faint: #7a7a83;
+  --color-line: #2c2c31;
+  --color-line-soft: #212125;
+  --color-brand-dk: #8fa5ff;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 2px 6px rgba(0, 0, 0, 0.4), 0 24px 64px rgba(0, 0, 0, 0.45);
 
   /* Re-skin Infima chrome for dark mode off the same tokens. */
   --ifm-background-color: var(--color-bg);
@@ -243,20 +273,20 @@
   --ifm-font-color-base: var(--color-ink);
   --ifm-heading-color: var(--color-ink);
   --ifm-color-content-secondary: var(--color-ink-soft);
-  --ifm-link-color: #93a7ff;
-  --ifm-link-hover-color: #c5d0ff;
+  --ifm-link-color: #8fa5ff;
+  --ifm-link-hover-color: #aebcff;
   --ifm-toc-border-color: var(--color-line);
   --ifm-color-emphasis-200: var(--color-line-soft);
   --ifm-color-emphasis-300: var(--color-line);
   --ifm-hr-background-color: var(--color-line);
   --ifm-blockquote-border-color: var(--color-line);
-  --ifm-code-background: rgba(147, 167, 255, 0.13);
-  --ifm-navbar-background-color: #111315;
+  --ifm-code-background: rgba(143, 167, 255, 0.12);
+  --ifm-navbar-background-color: #0d0d0f;
   --ifm-menu-color: var(--color-ink-soft);
-  --ifm-menu-color-active: #c5d0ff;
-  --ifm-menu-color-background-active: rgba(147, 167, 255, 0.14);
-  --ifm-menu-color-background-hover: rgba(147, 167, 255, 0.08);
-  --cl-scroll-thumb: #2a3656;
+  --ifm-menu-color-active: #c2ccff;
+  --ifm-menu-color-background-active: rgba(143, 167, 255, 0.14);
+  --ifm-menu-color-background-hover: rgba(143, 167, 255, 0.08);
+  --cl-scroll-thumb: #2a2a30;
 }
 
 /* ---------------------------------------------------------------------------
@@ -367,15 +397,18 @@ body {
   border-radius: 8px !important;
 }
 
-/* Headings: tighter tracking and balanced wrapping. */
+/* Headings: tighter display tracking and balanced wrapping. */
 h1,
 h2,
 h3,
-h4,
 .hero__title,
 .markdown h1,
 .markdown h2,
 .markdown h3 {
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+}
+h4 {
   letter-spacing: 0;
   text-wrap: balance;
 }
@@ -510,7 +543,7 @@ pre code {
 
 /* Pagination + buttons: a touch more rounded with a subtle lift. */
 .pagination-nav__link {
-  border-radius: 8px;
+  border-radius: 12px;
   transition:
     border-color 150ms ease,
     background-color 150ms ease;
@@ -549,7 +582,7 @@ pre code {
   border-radius: 4px;
 }
 ::selection {
-  background: rgba(79, 108, 247, 0.22);
+  background: rgba(47, 82, 224, 0.2);
 }
 
 /* Homepage motion is restrained and progressive: the live control model remains
@@ -578,17 +611,6 @@ pre code {
   }
 }
 
-@keyframes cl-spectrum-enter {
-  from {
-    opacity: 0;
-    transform: scaleX(0.25);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
-}
-
 @keyframes cl-live-pulse {
   0%,
   100% {
@@ -610,69 +632,28 @@ pre code {
 }
 
 .cl-home-plot {
-  box-shadow: 0 18px 50px rgba(29, 34, 40, 0.08);
-}
-
-[data-theme='dark'] .cl-home-plot {
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
-}
-
-.cl-spectrum-line {
-  width: 100%;
-  height: 4px;
-  transform-origin: left center;
-  background: linear-gradient(
-    90deg,
-    #4f6cf7 0%,
-    #4f6cf7 28%,
-    #11b5a4 48%,
-    #f59e0b 70%,
-    #ef4476 100%
-  );
-  animation: cl-spectrum-enter 900ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  box-shadow: var(--shadow-pop);
 }
 
 /* ---------------------------------------------------------------------------
-   Homepage hero background wash: a soft, layered gradient that gives the hero
-   its own identity without competing with the live plot or the type. Built
-   from radial washes in the brand/teal/amber hues already used by the
-   spectrum line, so it reads as one system rather than a bolt-on effect.
+   Homepage hero background wash: a restrained, single-hue gradient so the
+   flyline curves and the live plot carry the hero. Two brand radials at low
+   alpha — quiet depth, no competing hues.
    --------------------------------------------------------------------------- */
 .cl-hero-gradient {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* The diagonal wash uses stops outside 0–100% (a technique borrowed from
-     Nibiru's marketing site): the ramp's actual color transitions happen
-     off-canvas, so only a soft, muted slice is ever visible on screen rather
-     than a crisp banded diagonal. Layered under the two radial glows, which
-     stay put as the focal highlights. */
   background-image:
-    linear-gradient(
-      152deg,
-      rgba(245, 158, 11, 0.05) -30%,
-      rgba(79, 108, 247, 0.07) 35%,
-      rgba(17, 181, 164, 0.05) 90%,
-      rgba(239, 68, 118, 0.04) 140%
-    ),
-    radial-gradient(ellipse 60% 50% at 12% -10%, rgba(79, 108, 247, 0.16), transparent 60%),
-    radial-gradient(ellipse 50% 45% at 100% 0%, rgba(17, 181, 164, 0.12), transparent 60%),
-    radial-gradient(ellipse 45% 40% at 78% 100%, rgba(245, 158, 11, 0.08), transparent 65%);
+    radial-gradient(ellipse 60% 50% at 15% -10%, rgba(47, 82, 224, 0.1), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 95% 10%, rgba(47, 82, 224, 0.05), transparent 60%);
 }
 
 [data-theme='dark'] .cl-hero-gradient {
   background-image:
-    linear-gradient(
-      152deg,
-      rgba(245, 158, 11, 0.08) -30%,
-      rgba(93, 124, 255, 0.12) 35%,
-      rgba(17, 181, 164, 0.09) 90%,
-      rgba(239, 68, 118, 0.07) 140%
-    ),
-    radial-gradient(ellipse 60% 50% at 12% -10%, rgba(93, 124, 255, 0.22), transparent 60%),
-    radial-gradient(ellipse 50% 45% at 100% 0%, rgba(17, 181, 164, 0.16), transparent 60%),
-    radial-gradient(ellipse 45% 40% at 78% 100%, rgba(245, 158, 11, 0.1), transparent 65%);
+    radial-gradient(ellipse 60% 50% at 15% -10%, rgba(143, 167, 255, 0.14), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 95% 10%, rgba(143, 167, 255, 0.07), transparent 60%);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -696,7 +677,7 @@ pre code {
 .cl-example-gradient {
   background-image: radial-gradient(
     ellipse 70% 60% at 85% 0%,
-    rgba(79, 108, 247, 0.07),
+    rgba(47, 82, 224, 0.05),
     transparent 65%
   );
 }
@@ -704,46 +685,9 @@ pre code {
 [data-theme='dark'] .cl-example-gradient {
   background-image: radial-gradient(
     ellipse 70% 60% at 85% 0%,
-    rgba(93, 124, 255, 0.24),
+    rgba(143, 167, 255, 0.14),
     transparent 65%
   );
-}
-
-/* Topic marquee: a full-bleed dark ticker band directly under the hero, used
-   as a transition device between the hero and the first content section
-   (rather than a hard cut). Content is duplicated in the track and scrolled
-   exactly -50%, so the loop is seamless regardless of viewport width. */
-.cl-marquee {
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent,
-    #000 6%,
-    #000 94%,
-    transparent
-  );
-  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
-}
-
-.cl-marquee__track {
-  display: flex;
-  width: max-content;
-  animation: cl-marquee-scroll 38s linear infinite;
-}
-
-@keyframes cl-marquee-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cl-marquee__track {
-    animation: none;
-  }
 }
 
 .cl-live-marker {
@@ -767,7 +711,24 @@ pre code {
 @media (hover: hover) and (pointer: fine) {
   .cl-home-action:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(29, 34, 40, 0.12);
+    box-shadow: 0 8px 20px rgba(29, 34, 40, 0.1);
+  }
+}
+
+/* Flyline curves (hero background SVG): draw in once on load. The base state
+   below the media query is fully drawn, so reduced-motion users and non-
+   supporting browsers see the finished curves. */
+@media (prefers-reduced-motion: no-preference) {
+  .cl-flyline {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: cl-flyline-draw 1600ms cubic-bezier(0.2, 0.75, 0.25, 1) 200ms forwards;
+  }
+}
+
+@keyframes cl-flyline-draw {
+  to {
+    stroke-dashoffset: 0;
   }
 }
 

@@ -270,8 +270,10 @@ $$
 <Callout type="idea" title="This is the whole module in one equation.">
 $V = k_e\omega + IR$ is the seed of everything ahead. <strong>Feedforward</strong> is this equation solved
 for the voltage a target speed needs ($k_S, k_V, k_A$ are its terms). <strong>System identification</strong>
-measures $k_e, k_t, R$ for your real motor. <strong>Current control</strong> (model-based here, closed-loop
-on a real controller) is it solved for a target torque. Learn the motor and the controllers stop being magic.
+or mechanism characterization usually measures the lumped gains $k_S, k_V, k_A$. Dedicated electrical
+and dynamometer tests are needed to identify $k_e$, $k_t$, and $R$ separately. <strong>Current control</strong>
+(model-based here, closed-loop on a real controller) is the voltage equation solved for a target torque.
+Learn the motor and the controllers stop being magic.
 </Callout>
 
 </Theory>

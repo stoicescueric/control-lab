@@ -1,6 +1,13 @@
 import {useRef, useState} from 'react';
 import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {
+  bezierPoint as bez,
+  bezierDerivative as dbez,
+  bezierSecondDerivative as ddbez,
+  curvature,
+  type Point as Pt,
+} from '@site/src/lib/domain/bezier';
 
 /* Interactive cubic Bézier. Drag the four control points; scrub t to watch the
    de Casteljau construction; toggle the curvature comb. Pure React + SVG, so it
@@ -9,36 +16,9 @@ import {Slider} from '@site/src/components/kit/Slider';
 const W = 640;
 const H = 360;
 
-type Pt = {x: number; y: number};
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t});
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-// cubic Bézier value and derivatives at t
-function bez(p: Pt[], t: number): Pt {
-  const u = 1 - t;
-  return {
-    x: u * u * u * p[0].x + 3 * u * u * t * p[1].x + 3 * u * t * t * p[2].x + t * t * t * p[3].x,
-    y: u * u * u * p[0].y + 3 * u * u * t * p[1].y + 3 * u * t * t * p[2].y + t * t * t * p[3].y,
-  };
-}
-function dbez(p: Pt[], t: number): Pt {
-  const u = 1 - t;
-  return {
-    x: 3 * u * u * (p[1].x - p[0].x) + 6 * u * t * (p[2].x - p[1].x) + 3 * t * t * (p[3].x - p[2].x),
-    y: 3 * u * u * (p[1].y - p[0].y) + 6 * u * t * (p[2].y - p[1].y) + 3 * t * t * (p[3].y - p[2].y),
-  };
-}
-function ddbez(p: Pt[], t: number): Pt {
-  const u = 1 - t;
-  return {
-    x: 6 * u * (p[2].x - 2 * p[1].x + p[0].x) + 6 * t * (p[3].x - 2 * p[2].x + p[1].x),
-    y: 6 * u * (p[2].y - 2 * p[1].y + p[0].y) + 6 * t * (p[3].y - 2 * p[2].y + p[1].y),
-  };
-}
-function curvature(d: Pt, dd: Pt): number {
-  const denom = Math.pow(d.x * d.x + d.y * d.y, 1.5);
-  return denom < 1e-6 ? 0 : (d.x * dd.y - d.y * dd.x) / denom;
-}
+const NUDGE = 6;
 
 export function BezierExplorer() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -61,6 +41,20 @@ export function BezierExplorer() {
     const p = toSvg(e);
     const i = drag.current;
     setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+  };
+  const onPointKeyDown = (i: number) => (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? NUDGE * 4 : NUDGE;
+    let dx = 0;
+    let dy = 0;
+    if (e.key === 'ArrowLeft') dx = -step;
+    else if (e.key === 'ArrowRight') dx = step;
+    else if (e.key === 'ArrowUp') dy = -step;
+    else if (e.key === 'ArrowDown') dy = step;
+    else return;
+    e.preventDefault();
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+    );
   };
 
   // curve path
@@ -99,7 +93,6 @@ export function BezierExplorer() {
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
-        role="img"
         aria-label="Interactive cubic Bézier curve editor"
         onPointerMove={onMove}
         onPointerUp={() => (drag.current = null)}
@@ -139,10 +132,15 @@ export function BezierExplorer() {
                 stroke="#0b1120"
                 strokeWidth="2"
                 style={{cursor: 'grab'}}
+                tabIndex={0}
+                role="slider"
+                aria-label={`${isAnchor ? 'Anchor' : 'Handle'} point P${i}`}
+                aria-valuetext={`x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}`}
                 onPointerDown={(e) => {
                   drag.current = i;
                   (e.target as Element).setPointerCapture(e.pointerId);
                 }}
+                onKeyDown={onPointKeyDown(i)}
               />
               <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill={isAnchor ? '#9db0ff' : '#ffd98a'}>
                 P{i}

@@ -6,6 +6,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {poseExponential} from '@site/src/lib/domain/controlMath';
 
 const T = 0.4; // track width (m) for the math
 const vSpeed = 70; // px/s forward speed
@@ -78,17 +79,9 @@ export default function OdometryField() {
   function odoStep(p: Pose, dL: number, dR: number) {
     const ds = (dL + dR) / 2;
     const dth = (dR - dL) / T;
-    let sinC: number;
-    let cosC: number;
-    if (Math.abs(dth) < 1e-9) {
-      sinC = 1;
-      cosC = 0.5 * dth;
-    } else {
-      sinC = Math.sin(dth) / dth;
-      cosC = (1 - Math.cos(dth)) / dth;
-    }
-    p.x += ds * (sinC * Math.cos(p.th) - cosC * Math.sin(p.th));
-    p.y += ds * (sinC * Math.sin(p.th) + cosC * Math.cos(p.th));
+    const {x: lx, y: ly} = poseExponential(ds, 0, dth); // body-frame arc step
+    p.x += lx * Math.cos(p.th) - ly * Math.sin(p.th); // rotate into world frame
+    p.y += lx * Math.sin(p.th) + ly * Math.cos(p.th);
     p.th += dth;
   }
 

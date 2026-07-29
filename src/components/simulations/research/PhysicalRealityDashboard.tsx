@@ -113,11 +113,6 @@ function TransferRealityCheck() {
 
   const assumedEta = ASSUMED_ETA;
   const measEta = measuredEta(angle);
-  const xs = [6, 10, 14, 18, 22, 26, 30, 34];
-  const experimental = xs.map((x, i) => {
-    const ripple = [0.15, -0.05, 0.08, -0.12, 0.06, -0.08, 0.04, -0.1][i];
-    return {x, y: x * measEta + ripple};
-  });
   const targetWheel = 28;
   const assumedExit = targetWheel * assumedEta;
   const realExit = targetWheel * measEta;
@@ -130,7 +125,7 @@ function TransferRealityCheck() {
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full rounded-xl bg-[#0b1120]"
         role="img"
-        aria-label="Wheel surface speed to exit velocity transfer graph with theoretical and measured efficiency lines.">
+        aria-label="Wheel surface speed to exit velocity graph with assumed and measured velocity-transfer ratios.">
         <rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} fill="rgba(255,255,255,0.015)" />
         {Array.from({length: 8}, (_, i) => i * 5).map((x) => (
           <g key={`x${x}`}>
@@ -150,9 +145,6 @@ function TransferRealityCheck() {
         ))}
         <path d={line(assumedEta)} fill="none" stroke="#8294b8" strokeWidth="2.5" strokeDasharray="8 6" />
         <path d={line(measEta)} fill="none" stroke="#6f8bff" strokeWidth="3.5" />
-        {experimental.map((p, i) => (
-          <circle key={i} cx={sx(p.x)} cy={sy(p.y)} r="5.5" fill="#e8eefc" stroke="#0b1120" strokeWidth="2" />
-        ))}
         <line x1={sx(targetWheel)} y1={sy(0)} x2={sx(targetWheel)} y2={sy(assumedExit)} stroke="#ffc24d" strokeWidth="1.5" strokeDasharray="3 4" />
         <line x1={sx(targetWheel)} y1={sy(realExit)} x2={sx(targetWheel)} y2={sy(assumedExit)} stroke="#ff6f9c" strokeWidth="3" />
         <text x={sx(xMax) - 4} y={H - 6} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
@@ -168,8 +160,8 @@ function TransferRealityCheck() {
       </Controls>
       <Readout
         items={[
-          ['Firmware assumption eta', assumedEta.toFixed(2)],
-          ['Measured eta at this angle', measEta.toFixed(2)],
+          ['Assumed velocity ratio eta', assumedEta.toFixed(2)],
+          ['Measured velocity ratio eta', measEta.toFixed(2)],
           ['Predicted exit at 28 m/s wheel', `${assumedExit.toFixed(1)} m/s`],
           ['Reality estimate', `${realExit.toFixed(1)} m/s`],
         ]}
@@ -179,7 +171,6 @@ function TransferRealityCheck() {
           {color: '#8294b8', label: 'assumed transfer line, eta = 0.70'},
           {color: '#6f8bff', label: 'experimental transfer line, eta about 0.26 and angle-dependent'},
           {color: '#ff6f9c', label: 'lost velocity from contact losses'},
-          {color: '#e8eefc', label: 'calibration shots', dot: true},
         ]}
       />
     </>

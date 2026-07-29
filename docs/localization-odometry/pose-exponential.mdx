@@ -134,9 +134,9 @@ answer: apply the body motion as a straight step, then rotate. With no turn the 
 Add turn and they split — the chord cuts inside the arc, and the gap readout is the error committed
 *every loop*. Now push the **strafe** slider: the whole curve shears sideways yet both components
 still ride through the same $\mathbf{V}$ — this is the mecanum case the scalar arc formula from the
-odometry lesson simply cannot express, visible. Note what the gap depends on: it grows with the *turn
-per step*, not with speed — which is exactly why the demo below, which repeats the step many times,
-blows up at coarse loop rates and converges at fine ones.
+odometry lesson simply cannot express, visible. The one-step gap grows with both the body translation
+magnitude and the turn during that step. A finer loop reduces both per-step increments, which is why
+the repeated integration below converges as the step size shrinks.
 
 ### The small-angle limit recovers Euler
 
@@ -148,9 +148,10 @@ and wrong when the per-loop turn is large.
 ### See the gap
 
 The robot below holds one **constant twist**, so its true path is a perfect circle. The pose exponential
-lands exactly on that circle every step; Euler steps straight and rotates, chording across each arc and
-spiralling outward. Crank "turn per step" up (coarse, low-loop-rate integration) and watch the endpoint
-error balloon; bring it down and the two converge — the small-angle limit, live.
+lands exactly on that circle every step; Euler replaces every arc with a straight step, so its vertices
+trace a polygon on a slightly different effective circle and accumulate endpoint and phase error.
+Crank "turn per step" up (coarse, low-loop-rate integration) and watch the endpoint error balloon;
+bring it down and the two converge — the small-angle limit, live.
 
 <PoseExponential />
 

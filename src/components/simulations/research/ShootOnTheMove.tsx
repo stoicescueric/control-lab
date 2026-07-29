@@ -8,11 +8,11 @@
    iteration solves it in 2–3 rounds (Stoicescu §7.4–7.6):
 
        p_v⁽⁰⁾ = p_goal
-       p_v⁽ᵏ⁾ = p_goal + G · v_R · (t_d + t_f⁽ᵏ⁻¹⁾)      (G = 0.9, t_d = 0.05 s)
+       p_v⁽ᵏ⁾ = p_goal − G · v_R · (t_d + t_f⁽ᵏ⁻¹⁾)      (G = 0.9, t_d = 0.05 s)
        stop when |t_f⁽ᵏ⁾ − t_f⁽ᵏ⁻¹⁾| < 0.05 s
 
    Drag the robot (or click it and use WASD / arrows) and drag the cyan
-   velocity arrow. Watch the green virtual target lead the orange real one,
+   velocity arrow. Watch the green virtual target shift opposite the orange real one,
    and watch the solver converge in the debug panel. Distances are in inches
    to match the paper's deployed constants. Pure React + SVG (SSR-safe). */
 
@@ -149,7 +149,7 @@ export default function ShootOnTheMove() {
 
           {/* line of sight to the REAL target (where a naive turret points) */}
           <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(pgoal.x)} y2={SY(pgoal.y)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="6 6" />
-          {/* the lead: real → virtual */}
+          {/* cancellation offset: real → virtual, opposite chassis velocity */}
           <line x1={SX(pgoal.x)} y1={SY(pgoal.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke="#5ce08a" strokeWidth="1.5" strokeDasharray="3 4" />
           {/* line of sight the turret ACTUALLY uses (robot → virtual) */}
           <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke="#ffc24d" strokeWidth="2" />
@@ -191,7 +191,7 @@ export default function ShootOnTheMove() {
               {it.k === 0 ? (
                 <>: p_v = p_goal</>
               ) : (
-                <>: shift G·v_R·{it.T!.toFixed(2)}s</>
+                <>: shift −G·v_R·{it.T!.toFixed(2)}s</>
               )}
               <br />
               <span className="text-[#cfe0ff]">
@@ -207,7 +207,7 @@ export default function ShootOnTheMove() {
             </div>
           ))}
           <div className="mt-2 border-t border-white/10 pt-2 text-white">
-            lead = {dist(sol.pv, pgoal).toFixed(1)} in ahead
+            aim offset = {dist(sol.pv, pgoal).toFixed(1)} in opposite motion
           </div>
         </div>
       </div>

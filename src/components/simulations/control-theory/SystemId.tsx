@@ -10,6 +10,7 @@ import {useRef, useState} from 'react';
 import {usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {fitVelocityModel} from '@site/src/lib/domain/systemId';
 
 const TRUE_KS = 0.9; // volts to break friction
 const TRUE_KV = 0.035; // volts per rpm
@@ -67,25 +68,8 @@ export default function SystemId() {
 
   function refit() {
     const s = st.current;
-    if (s.kept.length < 3) return;
-    const n = s.kept.length;
-    let mv = 0;
-    let mV = 0;
-    for (const [v, V] of s.kept) {
-      mv += v;
-      mV += V;
-    }
-    mv /= n;
-    mV /= n;
-    let sxy = 0;
-    let sxx = 0;
-    for (const [v, V] of s.kept) {
-      sxy += (v - mv) * (V - mV);
-      sxx += (v - mv) * (v - mv);
-    }
-    if (sxx < 1e-9) return;
-    const kV = sxy / sxx;
-    s.fit = {kV, kS: mV - kV * mv};
+    const fit = fitVelocityModel(s.kept.map(([velocity, voltage]) => ({velocity, voltage})));
+    if (fit) s.fit = fit; // keep the prior fit when variance/sample-count guards reject the update
   }
 
   function step(dt: number) {

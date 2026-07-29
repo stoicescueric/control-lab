@@ -8,6 +8,7 @@
    The run replays in a loop. */
 
 import {useRef, useState} from 'react';
+import {brakingVelocityForDistance, predictedStoppingDistance} from '@site/src/lib/domain/braking';
 import {Trace} from '@site/src/lib/visualization/plot';
 import {useDprCanvas, usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
@@ -64,7 +65,7 @@ export default function PredictiveBraking() {
 
   function stepBot(b: Bot, predictive: boolean, t: number) {
     const {kP, decel} = ctrl.current;
-    const glide = (b.v * Math.abs(b.v)) / (2 * decel);
+    const glide = predictedStoppingDistance(b.v, decel);
     const e = predictive ? TARGET - (b.x + glide) : TARGET - b.x;
     const vCmd = Math.max(-V_MAX, Math.min(V_MAX, kP * e));
     // the robot's real acceleration limit — same for both
@@ -186,7 +187,7 @@ export default function PredictiveBraking() {
 
       if (b === s.pred) {
         // glide vector + ghost predicted stopping pose
-        const glide = (b.v * Math.abs(b.v)) / (2 * decel);
+        const glide = predictedStoppingDistance(b.v, decel);
         const xPred = pxm(Math.max(0, b.x + glide));
         if (Math.abs(b.v) > 0.05) {
           c.strokeStyle = '#ffc24d';
@@ -235,7 +236,7 @@ export default function PredictiveBraking() {
       const lim: [number, number][] = [];
       for (let i = 0; i <= 90; i++) {
         const d = (i / 90) * TARGET;
-        lim.push([d, Math.sqrt(2 * decel * d)]);
+        lim.push([d, brakingVelocityForDistance(d, decel)]);
       }
       p.line(lim, {color: '#5ce08a', width: 3, dash: [2, 6], alpha: 0.75});
       // live trajectories
@@ -259,7 +260,7 @@ export default function PredictiveBraking() {
       roPred.current.style.color = s.pred.overshoot > 0.05 ? '#ff6f9c' : '#5ce08a';
     }
     if (roGlide.current) {
-      const g = (s.pred.v * Math.abs(s.pred.v)) / (2 * ctrl.current.decel);
+      const g = predictedStoppingDistance(s.pred.v, ctrl.current.decel);
       roGlide.current.textContent = g.toFixed(2) + ' m';
     }
     if (roClock.current) roClock.current.textContent = s.t.toFixed(1) + ' s';

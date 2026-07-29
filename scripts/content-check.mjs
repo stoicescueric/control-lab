@@ -32,7 +32,7 @@ const trackedFiles = execFileSync('git', ['ls-files', '-z'], {
   .split('\0')
   .filter(Boolean);
 
-const localToolFiles = new Set(['CLAUDE.md', 'AGENTS.md', '.cursorrules', 'skills-lock.json']);
+const localToolFiles = new Set(['CLAUDE.md', '.cursorrules', 'skills-lock.json']);
 for (const file of trackedFiles) {
   if (!existsSync(path.join(root, file))) continue;
 
@@ -49,6 +49,9 @@ for (const file of trackedFiles) {
 const publicTextFiles = [
   path.join(root, 'README.md'),
   path.join(root, 'CONTRIBUTING.md'),
+  path.join(root, 'AGENTS.md'),
+  path.join(root, 'AI_WORKFLOW.md'),
+  path.join(root, 'GOVERNANCE.md'),
   path.join(root, 'package.json'),
   ...walk(path.join(root, 'docs'), (file) => file.endsWith('.mdx')),
   ...walk(path.join(root, 'src'), (file) => /\.(?:ts|tsx|js|jsx)$/.test(file)),
@@ -65,6 +68,7 @@ const placeholderPatterns = [
   /\bTODO(?:\([^)]*\))?:/i,
   /\bTBD\b/,
   /\bLorem ipsum\b/i,
+  /\{\{[A-Z][A-Z0-9_]*\}\}/,
   /YOUR-USERNAME/i,
   /#\/lessons\//,
 ];

@@ -1,6 +1,6 @@
 ---
 title: Voltage Compensation
-description: A robot's battery sags from 13.5 V to under 12 V across a match, so the same power command does less work as the game goes on. Dividing by the measured voltage holds behavior constant start to finish.
+description: A robot's battery voltage sags across a match, so the same power command does less work as the game goes on. Dividing by the measured voltage holds behavior constant start to finish.
 sidebar_position: 2
 tags: [voltage-compensation, battery, feedforward, brownout, control]
 ---
@@ -26,9 +26,11 @@ make every other controller — [feedforward](./feedforward.mdx), [PID](./pid.md
 <Problem title="The same command, quietly doing less">
 
 `motor.setPower(0.6)` does **not** apply a fixed voltage. It applies 60% of whatever the battery happens
-to read right now. A freshly charged pack sits near 13.5 V; after a few sprints and a climb it sags toward
-11 V under load. So `0.6` is $0.6 \times 13.5 = 8.1$ V early in the match and $0.6 \times 11 = 6.6$ V
-late — nearly a 20% drop in effort for the identical command. Your auto that was tuned on a full battery
+to read right now. A freshly charged 12 V pack typically reads somewhat above nominal — on the order of
+13 V — and can sag to roughly 11 V or lower under sustained load; the exact numbers depend on the battery's
+age, state of charge, and the current being drawn, but this range is illustrative, not a spec. So `0.6` is
+$0.6 \times 13 = 7.8$ V early in the match and $0.6 \times 11 = 6.6$ V late — a real drop in effort for the
+identical command. Your auto that was tuned on a full battery
 now undershoots; your flywheel that was on speed now falls short. Worse, your carefully *measured*
 feedforward gains are in **volts**: and they're being applied to a command that no longer maps to volts.
 
@@ -110,7 +112,9 @@ motor — the sensor call has real latency.
 - [WPILib: Feedforward Control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/controllers/feedforward.html) -
   competition-robotics reference for commanding mechanisms in volts instead of relying on unitless power.
 - Game Manual 0, [Motor Power](https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html) -
-  FTC battery, motor current, stall, and voltage-sag context.
+  FTC motor current and stall context, and the 12 V nominal basis for motor performance curves. (This page
+  does not itself cover battery voltage sag; no FTC-specific manufacturer source with sourced voltage-sag
+  figures was found, so the sag numbers above are presented as illustrative, not sourced.)
 - [How a Motor Works](./how-a-motor-works.mdx) - Control Lab's motor-model lesson explaining why voltage,
   current, speed, and torque are coupled.
 

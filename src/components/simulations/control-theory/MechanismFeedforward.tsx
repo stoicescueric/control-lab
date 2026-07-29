@@ -9,6 +9,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Stage, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {armFeedforward} from '@site/src/lib/domain/feedforward';
 
 const SLIDE_TABLE = [
   {height: 0.0, volts: 0.78},
@@ -66,9 +67,9 @@ export default function MechanismFeedforward() {
 
     // arm: J·θ'' = u − kG·cosθ − b·θ'   (volts standing in for torque)
     const thetaT = (armTargetDeg * Math.PI) / 180;
-    const armFF = ffOn ? ARM_KG * Math.cos(s.theta) : 0;
+    const armFF = ffOn ? armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0) : 0;
     const armU = KP * (thetaT - s.theta) + armFF;
-    const armAcc = (armU - ARM_KG * Math.cos(s.theta)) * 14 - 7 * s.thetaDot;
+    const armAcc = (armU - armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0)) * 14 - 7 * s.thetaDot;
     s.thetaDot += armAcc * DT;
     s.theta = clamp(s.theta + s.thetaDot * DT, (-75 * Math.PI) / 180, (100 * Math.PI) / 180);
 
@@ -88,7 +89,7 @@ export default function MechanismFeedforward() {
     const {w, h} = asize.current;
     const s = st.current;
     const {armTargetDeg, ffOn} = ctrl.current;
-    const holdV = ARM_KG * Math.cos(s.theta);
+    const holdV = armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0);
 
     const grd = c.createLinearGradient(0, 0, 0, h);
     grd.addColorStop(0, '#0d1530');
@@ -294,7 +295,7 @@ export default function MechanismFeedforward() {
 
     const s = st.current;
     const {armTargetDeg, slideTarget} = ctrl.current;
-    if (roArmHold.current) roArmHold.current.textContent = (ARM_KG * Math.cos(s.theta)).toFixed(2) + ' V';
+    if (roArmHold.current) roArmHold.current.textContent = (armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0)).toFixed(2) + ' V';
     if (roSlideHold.current) roSlideHold.current.textContent = interpolateKg(s.h).toFixed(2) + ' V';
     const armErr = armTargetDeg - (s.theta * 180) / Math.PI;
     if (roArmErr.current) {
