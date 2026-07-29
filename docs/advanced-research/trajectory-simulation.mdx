@@ -97,7 +97,7 @@ The demo uses the coefficient values specified for this research case study. Do 
 
 </Admonition>
 
-## Step 3: The launcher is not a perfect energy converter
+## Step 3: Wheel speed does not transfer one-for-one
 
 The firmware may start with a clean assumption:
 
@@ -105,33 +105,39 @@ $$
 v_{\text{exit}} = \eta v_{\text{wheel}}
 $$
 
-where $\eta$ is the transfer efficiency between the flywheel surface and the projectile. In the research case study, the naive assumption was about $\eta = 0.70$, while the measured transfer was closer to $\eta \approx 0.26$ and changed with launch angle.
+where $\eta$ is a **velocity-transfer ratio** between the flywheel surface and the projectile. In the
+research case study, the naive assumption was about $\eta = 0.70$, while the measured ratio was closer
+to $\eta \approx 0.26$ and changed with launch angle. It is not an energy efficiency: kinetic energy
+depends on mass or rotational inertia and on speed squared.
 
 <EquationLegend
   items={[
     {symbol: 'v_exit', meaning: 'projectile speed as it leaves the launcher', unit: 'm/s'},
     {symbol: 'v_wheel', meaning: 'linear speed of the flywheel surface', unit: 'm/s'},
-    {symbol: 'eta', meaning: 'energy-transfer efficiency from wheel contact to projectile exit speed', unit: 'unitless'},
+    {symbol: 'eta', meaning: 'projectile exit speed divided by wheel surface speed', unit: 'unitless'},
   ]}
 />
 
-That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator can expose the missing energy; calibration tells you how much is missing.
+That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator exposes the missing exit speed; calibration measures the ratio.
 
 ## How the deployed version is structured
 
-The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using an efficiency that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
+The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using a velocity ratio that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
 
 ```text
 desired exit speed  ->  wheel command
-    eta   <- measured efficiency at this launch angle   (from calibration, not theory)
+    eta   <- measured velocity ratio at this launch angle   (from calibration, not theory)
     guard:  eta must be positive, or the conversion is meaningless
     wheel command <- desired exit speed / eta
 ```
 
-The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one efficiency lookup.
+The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one velocity-ratio lookup.
 
 <Admonition type="tip" title="Source trail">
 
-This lesson is based on the paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, plus the public [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
+This lesson is based on Eric Stoicescu's July 2026
+[*Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic Launcher*](./index.mdx#research-paper),
+plus the public [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and
+[Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
 
 </Admonition>

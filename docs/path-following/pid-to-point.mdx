@@ -45,7 +45,7 @@ $$
 e_x = x^* - x, \qquad e_y = y^* - y, \qquad e_\theta = \operatorname{wrap}(\theta^* - \theta)
 $$
 
-The heading error is wrapped into $[-\pi, \pi]$ so the robot always turns the short way — exactly the
+The heading error is wrapped into $[-\pi, \pi)$ so the robot always turns the short way — exactly the
 [angle-wrapping](./angle-wrapping.mdx) lesson. But the drivetrain does not take field commands; it takes
 forward/strafe in the **robot frame**. So rotate the translational error by $-\theta$, the same rotation
 as field-centric driving:
@@ -208,12 +208,12 @@ public boolean goToPose(Pose2d target) {
     Pose2d robot = localizer.getPose();
 
     // 1) field-frame error; heading wrapped to the short way
-    double ex = target.x - robot.x;
-    double ey = target.y - robot.y;
-    double eh = wrap(target.heading - robot.heading);
+    double ex = target.x() - robot.x();
+    double ey = target.y() - robot.y();
+    double eh = wrap(target.heading() - robot.heading());
 
     // 2) rotate translational error into the robot frame (rotate by -heading)
-    double c = Math.cos(robot.heading), s = Math.sin(robot.heading);
+    double c = Math.cos(robot.heading()), s = Math.sin(robot.heading());
     double exR =  ex * c + ey * s;
     double eyR = -ex * s + ey * c;
 
@@ -255,7 +255,7 @@ public boolean follow() {
     boolean last = index == points.size() - 1;
 
     // advance early through intermediate points so the robot never stops mid-path
-    if (!last && robot.position.minus(points.get(index).position).norm() < ADVANCE_RADIUS) {
+    if (!last && robot.vec().minus(points.get(index).vec()).norm() < ADVANCE_RADIUS) {
         index++;
         last = index == points.size() - 1;
     }
@@ -269,7 +269,8 @@ For an overshoot-free approach, shape the command's *magnitude* by the braking c
 <JavaCode league="FTC" label="Distance-capped approach speed">{`/** Fastest approach speed (normalized) that can still stop at the target. */
 private double brakingCap(double distance) {
     double vStop = Math.sqrt(2.0 * MAX_DECEL * distance);   // m/s
-    return Math.min(vStop, MAX_SPEED) / MAX_SPEED;          // back to [0, 1]
+    double vProportional = kPxy * distance * MAX_SPEED;      // normalized P gain -> m/s
+    return Math.min(Math.min(vStop, MAX_SPEED), vProportional) / MAX_SPEED;
 }
 
 /** Drive toward a robot-frame error, but never faster than we can still stop. */
@@ -290,7 +291,10 @@ public Pose2d predictedPose() {
     double speed = v.norm();
     if (speed < 1e-6) return p;
     double glide = speed * speed / (2.0 * MAX_DECEL);  // braking distance
-    return new Pose2d(p.x + v.x / speed * glide, p.y + v.y / speed * glide, p.heading);
+    return new Pose2d(
+        p.x() + v.x() / speed * glide,
+        p.y() + v.y() / speed * glide,
+        p.heading());
 }
 
 // then run goToPose against predictedPose() instead of the live pose: it brakes early, automatically.

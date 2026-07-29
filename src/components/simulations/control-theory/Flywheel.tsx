@@ -6,6 +6,7 @@ import {Trace} from '@site/src/lib/visualization/plot';
 import {usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {motorFeedforward} from '@site/src/lib/domain/feedforward';
 
 // true plant constants (what the motor really obeys)
 const kS_true = 0.7;
@@ -72,7 +73,8 @@ export default function Flywheel() {
 
   function plant(v: number, V: number, load: number) {
     // first-order motor: a = (V - kV*v - kS*sign(v) - load) / kA
-    const drag = kV_true * v + kS_true * Math.sign(v || 1) + load;
+    // sign(0) === 0, so a motor at rest feels no static-friction drag.
+    const drag = motorFeedforward(kS_true, kV_true, 0, v, 0) + load;
     const a = (V - drag) / kA_true;
     return v + a * dt;
   }
@@ -83,7 +85,8 @@ export default function Flywheel() {
     s.t += dt;
     // --- FF + PID controller ---
     const eF = goal - s.vFF;
-    const ff = ffOn ? kS_c * Math.sign(goal || 1) + kVc * goal : 0;
+    // sign(0) === 0, so a zero target commands no spurious kS static-friction term.
+    const ff = ffOn ? motorFeedforward(kS_c, kVc, 0, goal, 0) : 0;
     const fb = kP * eF;
     const V = Math.max(-12, Math.min(12, ff + fb));
     s.lastFF = ff;

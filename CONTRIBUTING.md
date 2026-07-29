@@ -4,6 +4,46 @@ Control Lab is a technical curriculum, not a content dump. Contributions should 
 
 This guide explains the standards for lesson writing, interactive demos, Java examples, design, and pull requests.
 
+## How Contributions Are Accepted
+
+All published changes go through a pull request and require maintainer approval.
+The repository's `CODEOWNERS` file automatically requests `@stoicescueric`.
+The one-time maintainer setup activates a `main`-branch ruleset so that
+code-owner approval is required before merge. See
+[GOVERNANCE.md](GOVERNANCE.md) for the decision and merge policy.
+
+For a substantive new lesson or simulation:
+
+1. Open a
+   [lesson proposal](https://github.com/stoicescueric/control-lab/issues/new?template=lesson-proposal.yml).
+2. Wait for the maintainer to confirm or refine the scope.
+3. Fork the repository and create a focused branch.
+4. Scaffold the lesson with `npm run new:lesson -- --help`, or copy
+   [the lesson template](templates/lesson.mdx) into the accepted module.
+5. Implement, verify, and open a pull request linked to the proposal.
+6. Address CI and review feedback. The maintainer gives final approval and
+   merges accepted work.
+
+Small corrections, citations, and focused accessibility fixes may go directly
+to a pull request without a proposal issue.
+
+## Using an AI Assistant
+
+AI-assisted contributions are welcome. The project publishes one canonical,
+tool-neutral repository guide in [AGENTS.md](AGENTS.md). If an assistant does
+not load that file automatically, explicitly ask it to read the file before it
+plans or edits.
+
+Use [AI_WORKFLOW.md](AI_WORKFLOW.md) for ready-to-paste prompts that separate:
+
+1. proposal and evidence gathering;
+2. focused implementation;
+3. independent mathematical and engineering review.
+
+The human contributor remains responsible for the result. Verify sources
+yourself, read the generated diff, run the checks, and disclose assistance in
+the pull request. An AI response is not a source or an approval.
+
 ## Before You Start
 
 Set up the project:

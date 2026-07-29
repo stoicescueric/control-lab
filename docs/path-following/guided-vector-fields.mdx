@@ -89,10 +89,10 @@ $$
 Convergence says *where* to go, not *how fast*. Just like [adaptive pure pursuit](./pure-pursuit.mdx), real
 GVF followers cap speed where the path bends so the robot can physically make the turn. With path curvature
 $\kappa = 1/R$ and a lateral-acceleration budget $a_{\max}$, the fastest feasible speed through a bend is
-$v \le \sqrt{a_{\max}/\kappa}$. KookyBotz's follower writes this as a tunable cap
+$v \le \sqrt{a_{\max}/|\kappa|}$. KookyBotz's follower writes this as a tunable cap
 
 $$
-v_{\max} \;=\; \min\!\left(v_{\max},\;\sqrt{\frac{a_{\max}}{k_C\,\kappa}}\right)
+v_{\max} \;=\; \min\!\left(v_{\max},\;\sqrt{\frac{a_{\max}}{k_C\,|\kappa|}}\right)
 $$
 
 where $k_C$ trades cornering speed against grip. On a straight ($\kappa\to 0$) the cap lifts and you run at
@@ -129,9 +129,11 @@ public Vector2d gvfVelocity(Pose2d robot) {
     Vector2d chi = tangent.minus(normal.times(kN * e)).unit();
 
     // 3) SPEED: cap by curvature so the robot can actually make the bend
-    double kappa = path.curvature(t);
+    double curvatureMagnitude = Math.abs(path.curvature(t));
     double vMax  = MAX_LINEAR_SPEED;
-    if (kappa > 1e-6) vMax = Math.min(vMax, Math.sqrt(MAX_ACCEL / (kC * kappa)));
+    if (curvatureMagnitude > 1e-6) {
+        vMax = Math.min(vMax, Math.sqrt(MAX_ACCEL / (kC * curvatureMagnitude)));
+    }
 
     return chi.times(vMax * kS);                   // field-frame velocity
 }`}</JavaCode>
@@ -148,12 +150,12 @@ near the path don't stall.
 
 <JavaCode league="FTC" label="Field-frame velocity → mecanum powers">{`public void drive(Pose2d robot) {
     Vector2d v = gvfVelocity(robot);                 // field frame
-    Vector2d body = v.rotate(-robot.getHeading());   // into robot frame
-    double fwd = body.getX() / MAX_LINEAR_SPEED;
-    double str = body.getY() / MAX_LINEAR_SPEED;
+    Vector2d body = v.rotate(-robot.heading());      // into robot frame
+    double fwd = body.x() / MAX_LINEAR_SPEED;
+    double str = body.y() / MAX_LINEAR_SPEED;
 
     // heading: sqrt (motion-profiled) approach to the path tangent's heading
-    double dTheta = wrap(targetHeading - robot.getHeading());   // see Angle Wrapping
+    double dTheta = wrap(targetHeading - robot.heading());      // see Angle Wrapping
     double turn = Math.min(MAX_TURN, Math.sqrt(2 * A_THETA * Math.abs(dTheta)))
                 * Math.signum(dTheta) / MAX_TURN;
 

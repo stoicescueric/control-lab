@@ -1,6 +1,7 @@
 import {useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {poseExponential} from '@site/src/lib/domain/controlMath';
 
 /* Desmos-style math explorers for the Localization & Odometry module: pure
    functions of their sliders (no animation loop, SSR-safe), in the same frame
@@ -53,9 +54,12 @@ function Robot({x, y, angleDeg, color, ghost = false}: {x: number; y: number; an
   );
 }
 
-/* sinC / cosC with their small-angle limits. */
+/* sinC / cosC with their small-angle limits, for the readout labels only —
+   the actual arc geometry is computed by the shared poseExponential(). Uses
+   the same 1e-9 threshold as poseExponential so the displayed factors never
+   disagree with the geometry they describe. */
 function arcFactors(dTheta: number) {
-  if (Math.abs(dTheta) < 1e-6) return {sinC: 1, cosC: dTheta / 2};
+  if (Math.abs(dTheta) < 1e-9) return {sinC: 1, cosC: dTheta / 2};
   return {sinC: Math.sin(dTheta) / dTheta, cosC: (1 - Math.cos(dTheta)) / dTheta};
 }
 
@@ -71,9 +75,8 @@ export function ArcStepExplorer() {
 
   const ds = (dL + dR) / 2;
   const dTheta = (dR - dL) / track;
-  const {sinC, cosC} = arcFactors(dTheta);
-  const dx = ds * sinC; // robot-frame forward
-  const dy = ds * cosC; // robot-frame left
+  const {sinC, cosC} = arcFactors(dTheta); // display-only factors for the readout
+  const {x: dx, y: dy} = poseExponential(ds, 0, dTheta); // robot-frame forward/left
   const straight = Math.abs(dTheta) < 0.02;
   const R = straight ? Infinity : ds / dTheta;
 
@@ -86,8 +89,8 @@ export function ArcStepExplorer() {
     const N = 48;
     for (let i = 0; i <= N; i++) {
       const t = i / N;
-      const f = arcFactors(dTheta * t);
-      arc.push([S[0] + ds * t * f.sinC * K, S[1] - ds * t * f.cosC * K]);
+      const d = poseExponential(ds * t, 0, dTheta * t);
+      arc.push([S[0] + d.x * K, S[1] - d.y * K]);
     }
     return {arc};
   }, [ds, dTheta]);
@@ -271,10 +274,9 @@ export function TwistExplorer() {
   const [dThetaDeg, setDThetaDeg] = useState(75);
 
   const dTheta = (dThetaDeg * Math.PI) / 180;
-  const {sinC, cosC} = arcFactors(dTheta);
+  const {sinC, cosC} = arcFactors(dTheta); // display-only factors for the readout
   // local displacement = V(dθ) · body twist
-  const lx = sinC * dxb - cosC * dyb;
-  const ly = cosC * dxb + sinC * dyb;
+  const {x: lx, y: ly} = poseExponential(dxb, dyb, dTheta);
 
   const S: [number, number] = [235, 245];
   const K = 240;
@@ -289,10 +291,8 @@ export function TwistExplorer() {
     const N = 56;
     for (let i = 0; i <= N; i++) {
       const t = i / N;
-      const f = arcFactors(dTheta * t);
-      const px = f.sinC * dxb * t - f.cosC * dyb * t;
-      const py = f.cosC * dxb * t + f.sinC * dyb * t;
-      pts.push([S[0] + px * K, S[1] - py * K]);
+      const d = poseExponential(dxb * t, dyb * t, dTheta * t);
+      pts.push([S[0] + d.x * K, S[1] - d.y * K]);
     }
     return pts;
   }, [dxb, dyb, dTheta]);

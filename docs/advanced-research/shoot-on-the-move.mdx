@@ -46,7 +46,7 @@ Calibration data is sparse. The robot may know good shooter settings at a few di
 
 <LookupTableIllustration />
 
-A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf, the spline can overshoot between equal points and command a speed that was never measured. The safer choice for monotone data is a monotone cubic Hermite interpolant, using the Fritsch-Carlson slope constraint:
+A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf, the spline can overshoot between equal points and command a speed that was never measured. The safer choice for monotone data is a monotone cubic Hermite interpolant. First set both endpoint tangents to zero on every interval whose secant slope is zero. On every nonzero interval, initialize tangents with the same sign as the secant, so $\alpha_k \ge 0$ and $\beta_k \ge 0$, then apply the Fritsch-Carlson projection:
 
 $$
 \alpha_k^2 + \beta_k^2 \le 9
@@ -64,13 +64,13 @@ The dashboard lets you drag calibration knots. The red curve shows what a natura
 
 ## Step 3: Shoot-on-the-move is a fixed-point problem
 
-When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim at the real target; it should aim at a virtual target shifted by the robot motion during the projectile's flight:
+When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim at the real target; it should aim at a virtual target shifted opposite the robot motion during the launch delay and projectile flight. With $\mathbf v_R$ defined as the robot's field-frame chassis velocity, the projectile already inherits $+\mathbf v_R$, so the aim displacement must cancel it:
 
 $$
 \mathbf{p}^{(i+1)}_{\text{virtual}}
 =
 \mathbf{p}_{\text{target}}
-+
+-
 G\mathbf{v}_{R}\left(t_d + t_f^{(i)}\right)
 $$
 
@@ -78,7 +78,7 @@ $$
   items={[
     {symbol: 'p_virtual', meaning: 'virtual point the turret aims at', unit: 'field position'},
     {symbol: 'p_target', meaning: 'fixed real target location', unit: 'field position'},
-    {symbol: 'G', meaning: 'empirical lead gain from the research controller', unit: 'unitless'},
+    {symbol: 'G', meaning: 'empirical chassis-motion compensation gain', unit: 'unitless'},
     {symbol: 'v_R', meaning: 'robot chassis velocity vector', unit: 'distance/s'},
     {symbol: 't_d', meaning: 'feeder or launch delay before free flight', unit: 's'},
     {symbol: 't_f', meaning: 'projectile flight time from lookup or simulator', unit: 's'},
@@ -87,7 +87,12 @@ $$
 
 This is circular: the virtual target changes the distance, the distance changes flight time, and flight time changes the virtual target. Fixed-point iteration breaks the loop. Start with the real target, compute a flight time, shift the target, compute the new flight time, and stop when the time changes by less than the tolerance.
 
-It converges fast for a concrete reason: the lead distance $G v_R (t_d + t_f)$ is small next to the shot distance, and a small change in distance produces an even smaller change in flight time, so each pass moves the answer less than the last. The map is a contraction, and in the dashboard's solver trace you can watch $\Delta t_f$ shrink below the tolerance in two or three rounds. The iteration cap is there only to bound the real-time loop if a bad lookup table breaks that contraction — not because convergence is in doubt under normal conditions.
+The iteration is locally contractive when
+$G\lVert\mathbf v_R\rVert\,|dt_f/dd| < 1$; the radial projection can make the actual derivative smaller
+still. At ordinary speeds with a gently sloped flight-time table, each pass moves the answer less than
+the last, and the dashboard usually converges in two or three rounds. At very high chassis speed, near
+an abrupt table slope, or with impossible geometry, that bound can fail even if the table is otherwise
+valid. The hard iteration cap therefore protects the real-time loop from non-convergence as well as bad data.
 
 ## Step 4: The robot is braking while the shot happens
 
@@ -154,9 +159,10 @@ things at once:
    not where it was when the trigger was pulled.
 2. **The turret gets its command early.** A servo turret lags its command; aiming at the projected
    state means the turret arrives on time instead of chasing.
-3. **Voltage compensation costs one multiply.** The coefficients were regressed at some battery
-   voltage $V_0$. At a different voltage, scale the speed profile: $v(t)_{\text{new}} = v(t) \cdot V_{\text{new}} / V_0$.
-   The behavior stays consistent from a fresh pack to a tired one.
+3. **The measured initial state carries the battery effect.** Battery voltage changes the speed the
+   drivetrain can attain and the behavior of active braking, but it does not multiply a passive coast
+   trajectory that starts from a measured $v_0$. Use the measured $v_0$ in the zero-power coast model;
+   characterize active braking separately at the voltages where it will run.
 
 :::warning[Fit the coast you actually use]
 These coefficients are for a zero-power coast — hands off the sticks. A follower that brakes actively
@@ -169,16 +175,17 @@ the numbers do not transfer. Fit each behavior separately.
 Everything so far computes *where* to aim. But while the robot moves, that answer keeps changing:
 the virtual target sweeps across the field, so the turret angle that hits it is a moving reference
 $\theta^*(t)$, not a setpoint. Tracking a moving reference is the one job a position-only controller
-cannot do cleanly. A P controller chasing a reference that ramps at $\omega^* = d\theta^*/dt$ settles
-into a permanent lag:
+cannot do cleanly. For the ideal kinematic plant $\dot\theta=u$, a P controller chasing a reference
+that ramps at $\omega^* = d\theta^*/dt$ settles into a permanent lag:
 
 $$
 e_{ss} = \frac{\omega^*}{k_P}
 $$
 
-The turret points where the aim point *was*. Raising $k_P$ shrinks the lag and buys oscillation
-instead; it never removes it, because a position controller only produces output once an error
-already exists.
+For a real turret, the coefficient depends on the motor and mechanism dynamics, but the same structural
+lag remains: a position-only controller produces the command only after error exists. Raising $k_P$
+usually shrinks that lag at the cost of noise sensitivity and reduced stability margin; it does not
+provide the missing reference-velocity command.
 
 The clean fix is the full-state reference from
 [state-space control](../state-space-control/state-feedback.mdx). The turret is a two-state
@@ -211,7 +218,7 @@ closed form, so run the Step 3 solver at two nearby times and difference the aim
 <JavaCode league="FTC" label="Turret tracking with a full-state reference">{`// Aim angles now and DT ahead, both from the Step 4 coast projection.
 double thetaNow  = aimAngle(solveVirtual(poseAt(0.0)),  poseAt(0.0));
 double thetaNext = aimAngle(solveVirtual(poseAt(DT)),   poseAt(DT));
-double omegaStar = (thetaNext - thetaNow) / DT;        // reference velocity
+double omegaStar = wrap(thetaNext - thetaNow) / DT;    // seam-safe reference velocity
 
 double volts = K_POS * (thetaNow  - turretAngle)
              + K_VEL * (omegaStar - turretVel)
@@ -239,8 +246,8 @@ solve_virtual_target(shooter, target, robot_velocity):
     flight_time <- lookup_flight_time( distance(shooter, target) )
 
     repeat at most MAX_ITERATIONS times:
-        lead_time <- feeder_delay + flight_time
-        virtual   <- target + lead_gain * robot_velocity * lead_time
+        compensation_time <- feeder_delay + flight_time
+        virtual   <- target - motion_gain * robot_velocity * compensation_time
 
         next_time <- lookup_flight_time( distance(shooter, virtual) )
         if | next_time - flight_time | < tolerance:
@@ -260,6 +267,12 @@ Do not wait for an encoder reading to equal the target exactly. A match robot sh
 
 <Admonition type="info" title="Source trail">
 
-This lesson references the research paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles*, the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator. The coasting model in Step 4 — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick — is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance data behind the fit was collected by Jacob Ophoven.
+This lesson references Eric Stoicescu's July 2026
+[*Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic Launcher*](./index.mdx#research-paper),
+the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the
+[Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator. The coasting
+model in Step 4 — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick —
+is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance data behind the fit was
+collected by Jacob Ophoven.
 
 </Admonition>

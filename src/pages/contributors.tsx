@@ -92,6 +92,16 @@ function Contributors(): ReactNode {
           a lesson, correction, or implementation change, read the{' '}
           <Link to={`${repoUrl}/blob/main/CONTRIBUTING.md`}>contributing guide</Link>.
         </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link
+            className="button button--primary"
+            to={`${repoUrl}/issues/new?template=lesson-proposal.yml`}>
+            Propose a lesson
+          </Link>
+          <Link className="button button--secondary" to={`${repoUrl}/blob/main/AI_WORKFLOW.md`}>
+            Contribute with AI
+          </Link>
+        </div>
       </div>
 
       {status === 'loading' && (

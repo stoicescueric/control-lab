@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react';
 
-/* Static teaching figures for the Advanced Research module. These are diagrams,
+/* Static teaching figures for the Trajectory Generation & Implementation module. These are diagrams,
    not simulations: no state, no interaction. The interactive version of the
    lookup-table idea lives in the DynamicTargetingDashboard; this figure exists
    to make the concept legible on its own, in the same MathFigure frame the rest

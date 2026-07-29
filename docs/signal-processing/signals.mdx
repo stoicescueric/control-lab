@@ -41,9 +41,10 @@ Three distinct corruptions, each demanding a different defence:
 - **Drift / bias**: a slow, systematic lean away from the truth that accumulates.
 
 :::tip[Which sensors actually need this?]
-Not encoders. A quadrature encoder reports an exact tick count — there is no noise on "the shaft has
-moved 1 407 ticks," so filtering an encoder *position* adds lag and nothing else. (Encoder *velocity*
-is different: differencing positions amplifies the tick quantization into visible noise.) The signals
+Quadrature-encoder position is often cleaner than an analog reading, but it is quantized and can still
+miss edges or count false edges because of wiring, electrical noise, or excessive rate. Filtering a
+healthy encoder position often adds unnecessary lag; encoder *velocity* is different because
+differencing positions amplifies tick quantization and timing jitter. The signals
 genuinely worth filtering are the ones with real, roughly bell-shaped noise: **analog sensors** —
 distance sensors, analog absolute encoders, current sensors — and **vision**, where a tag's reported
 pose jitters from frame to frame. Those are the running examples in this module.
@@ -88,16 +89,19 @@ lines of code.
 Good filtering starts with knowing how noisy a sensor actually is. Sample it while the mechanism is
 held still and compute the standard deviation — that number sizes every filter that follows.
 
-<JavaCode league="FTC" label="Characterise a sensor's noise">{`// Hold the mechanism still, collect N samples, report the spread.
-int N = 200;
-double sum = 0, sumSq = 0;
+<JavaCode league="FTC" label="Characterise a sensor's noise">{`// Hold the mechanism still, collect N samples, report the population spread.
+int N = 200, count = 0;
+double mean = 0.0, m2 = 0.0;              // Welford's numerically stable update
 for (int i = 0; i < N; i++) {
     double x = sensor.getDistance(DistanceUnit.CM);
-    sum += x;  sumSq += x * x;
+    count++;
+    double delta = x - mean;
+    mean += delta / count;
+    double delta2 = x - mean;
+    m2 += delta * delta2;
     sleep(5);
 }
-double mean = sum / N;
-double std  = Math.sqrt(sumSq / N - mean * mean);   // typical reading error
+double std = Math.sqrt(m2 / count);          // population std for this characterization run
 telemetry.addData("mean", mean);
 telemetry.addData("noise (std)", std);              // use this to tune your filter`}</JavaCode>
 

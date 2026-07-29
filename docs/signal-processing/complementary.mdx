@@ -47,8 +47,9 @@ is the whole trick.
 
 Pass the motor encoder through a *high-pass* (keep its fast, accurate motion, block its slow drift)
 and the absolute encoder through a *low-pass* (keep its slow, honest average, reject its jitter).
-The two frequency responses are complements that sum to one, so nothing of the true signal is lost.
-In code, all of that collapses into a single recursive line:
+Their **complex transfer functions** are complementary and sum to one, so a common input is
+reconstructed without a gap. Their plotted magnitudes do not sum to one because the two paths have
+different phase. In code, all of that collapses into a single recursive line:
 
 $$
 \hat{\theta}_k = \alpha\,(\hat{\theta}_{k-1} + \Delta\theta_{\text{motor}}) + (1 - \alpha)\,\theta_{\text{abs}}
@@ -68,9 +69,9 @@ just enough of the absolute sensor to stay anchored.
 This Desmos-style graph is the "complements" claim, drawn. The rose curve is the absolute encoder's
 **low-pass**: it passes the slow, honest angle and rejects the fast noise. The teal curve is the
 motor encoder's **high-pass**: it passes fast motion and blocks the slow drift. They cross at the
-cutoff $f_c = 1/(2\pi\tau)$, where $\tau$ comes directly from $\alpha$ and the loop time, and at
-*every* frequency the two responses **sum to exactly one** (the dashed line): nothing of the true
-signal is lost, it is only reassigned to whichever sensor reports that band honestly. Push $\alpha$
+cutoff $f_c = 1/(2\pi\tau)$, where $\tau$ comes directly from $\alpha$ and the loop time. At crossover,
+each magnitude is $1/\sqrt{2}$; it is the **complex responses**, including phase, that sum to one.
+Push $\alpha$
 toward 1 and the crossover slides left — you trust the motor encoder deeper into the slow band and
 sip even less of the absolute sensor; the cost is that slip takes longer to cancel.
 
@@ -93,17 +94,21 @@ The fast source enters as a *delta* (ticks moved since last loop), the honest so
 reading. Seed the estimate from the absolute sensor so the filter starts true:
 
 <JavaCode league="FTC" label="Fuse a motor encoder with an absolute encoder">{`double angle = absEncoder.getAngleDeg();      // seed from the honest sensor
-final double ALPHA = 0.98;                    // motor-encoder trust
+final double TAU = 0.50;                      // fusion time constant, seconds
 int lastTicks = motor.getCurrentPosition();
 
 while (opModeIsActive()) {
+    double dt = timer.seconds();
+    timer.reset();
+    double alpha = Math.exp(-dt / TAU);        // exact, loop-rate-independent blend
+
     int ticks = motor.getCurrentPosition();
     double deltaDeg = (ticks - lastTicks) * DEG_PER_TICK;
     lastTicks = ticks;
 
     double absDeg = absEncoder.getAngleDeg();  // honest but noisy
 
-    angle = ALPHA * (angle + deltaDeg) + (1 - ALPHA) * absDeg;
+    angle = alpha * (angle + deltaDeg) + (1 - alpha) * absDeg;
 }`}</JavaCode>
 
 :::note[The drone-textbook version]

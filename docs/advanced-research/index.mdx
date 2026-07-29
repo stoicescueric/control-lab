@@ -1,30 +1,58 @@
 ---
-title: Advanced Research
-description: "The capstone module: RK4 trajectory simulation, quadratic air drag, launcher transfer losses, flywheel recovery, monotone interpolation, and shoot-on-the-move control."
-tags: [research, rk4, trajectory, air-drag, flywheel, shoot-on-the-move]
+title: Trajectory Generation & Implementation
+description: "Generate drag-aware projectile trajectories, calibrate a real launcher, and implement flywheel and shoot-on-the-move control on an FTC robot."
+tags: [trajectory-generation, implementation, rk4, air-drag, flywheel, shoot-on-the-move]
 ---
 
-# Module 7 - Advanced Research
+import useBaseUrl from '@docusaurus/useBaseUrl';
 
-This module is the capstone: the point where the curriculum stops being only FTC control theory and becomes an original engineering case study. The research problem is not "how do we shoot a ball?" It is more precise:
+# Module 7 - Trajectory Generation & Implementation
 
-> How can a robot compensate a projectile shot in real time while the projectile loses energy to drag, the launcher loses energy to contact, and the chassis is still moving?
+This capstone follows one model all the way from a desktop trajectory solver to a competition robot.
+The engineering question is precise:
 
-The answer is a pipeline:
+> How can a robot generate and execute a projectile trajectory in real time while the projectile loses
+> energy to drag, the launcher loses energy to contact, and the chassis is still moving?
 
-1. Build a physical simulator that is honest about drag and numerical integration.
-2. Calibrate the real launcher instead of trusting ideal energy transfer.
+The implementation pipeline is:
+
+1. Generate candidate trajectories with a quadratic-drag model and RK4 integration.
+2. Select feasible launch conditions and turn them into calibrated flywheel, hood, and time-of-flight maps.
 3. Control the flywheel so it recovers after each shot.
-4. Read sparse calibration tables without inventing unsafe overshoot.
-5. Aim at a virtual target when the robot is moving.
+4. Interpolate sparse calibration data without inventing unsafe overshoot.
+5. Compensate inherited chassis velocity with a fixed-point virtual-target solver.
 
 ## Lessons
 
-- [**Simulating Physical Reality**](./trajectory-simulation.mdx) - RK4 vs. Euler, vacuum vs. drag, and wheel-speed-to-exit-velocity transfer losses.
-- [**On-Bot Control & Dynamic Targeting**](./shoot-on-the-move.mdx) - flywheel recovery, monotone interpolation, and fixed-point shoot-on-the-move aiming.
+- [**Simulating Physical Reality**](./trajectory-simulation.mdx) - generate trajectories with RK4,
+  compare vacuum and drag models, and calibrate wheel-speed-to-exit-velocity transfer.
+- [**On-Bot Control & Dynamic Targeting**](./shoot-on-the-move.mdx) - implement flywheel recovery,
+  monotone interpolation, and fixed-point shoot-on-the-move aiming.
 
-<Admonition type="note" title="Author's capstone">
+## Research paper
 
-These lessons are built from the paper *Real-Time Trajectory Compensation and Shoot-on-the-Move Control for Subcritical Asymmetric Projectiles* and the public research repositories: [YaoMing](https://github.com/stoicescueric/YaoMing) and [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation).
+Eric Stoicescu, *Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic
+Launcher: From Aerodynamic Modelling to Competition-Scale Deployment*, revised preprint, July 2026.
+
+<div>
+  <a
+    href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')}
+    target="_blank"
+    rel="noopener noreferrer">
+    Open the research paper in your browser (PDF)
+  </a>
+  {' · '}
+  <a
+    href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')}
+    download="drag-aware-trajectory-planning.pdf">
+    Download the PDF
+  </a>
+</div>
+
+<Admonition type="note" title="Source trail">
+
+The paper documents the model-to-deployment workflow behind these lessons. The corresponding public
+implementations are available in the [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and
+[Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
 
 </Admonition>

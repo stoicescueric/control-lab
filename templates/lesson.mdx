@@ -1,0 +1,73 @@
+---
+title: "{{TITLE}}"
+description: "{{ONE_SENTENCE_DESCRIPTION}}"
+sidebar_position: {{SIDEBAR_POSITION}}
+tags: [{{TAG_LIST}}]
+---
+
+# {{TITLE}}
+
+<Difficulty level="{{Easy_OR_Medium_OR_Hard}}" />
+
+<Abstract>
+{{TWO_SENTENCE_SUMMARY_OF_THE_CONCEPT_AND_WHY_IT_MATTERS}}
+</Abstract>
+
+## {{CONCRETE_ENGINEERING_PROBLEM}}
+
+Describe one FTC or robotics failure that gives the lesson a reason to exist.
+State the observable symptom before introducing the solution.
+
+## Build the intuition
+
+Introduce a diagram or interactive model before the full derivation. Explain
+what the reader should change and what behavior they should notice.
+
+{/* Import a lesson-specific simulation at the top of this file, then render it
+here. Delete this comment if the lesson uses a static or shared illustration. */}
+
+## Derive the model
+
+State assumptions before the equation. Keep coordinate frames, signs, and units
+consistent with `docs/notation.mdx`.
+
+$$
+{{EQUATION}}
+$$
+
+<EquationLegend
+  items={[
+    {symbol: '{{SYMBOL}}', meaning: '{{MEANING}}', unit: '{{UNIT}}'},
+  ]}
+/>
+
+Explain the derivation, the exact or approximate nature of the result, and its
+important boundary cases.
+
+## Put it in the robot loop
+
+<JavaCode league="FTC" label="{{CODE_LABEL}}">{`/**
+ * {{WHAT_THIS_EXAMPLE_TEACHES}}
+ */
+public final class {{CLASS_NAME}} {
+    // Keep this example focused, non-blocking, and explicit about units.
+}`}</JavaCode>
+
+Connect each important line of code back to the equation. State what should be
+logged or measured when tuning it.
+
+:::warning[Hardware reality]
+{{PHYSICAL_LIMITATION_OR_FAILURE_MODE}}
+:::
+
+## Check your understanding
+
+- {{BOUNDARY_OR_SIGN_CHECK}}
+- {{IMPLEMENTATION_QUESTION}}
+- {{HARDWARE_TRADEOFF_QUESTION}}
+
+## Sources and further reading
+
+- [{{PRIMARY_SOURCE_TITLE}}]({{PRIMARY_SOURCE_URL}}): {{WHAT_IT_SUPPORTS}}.
+- [{{FOLLOW_UP_CONTROL_LAB_LESSON}}]({{RELATIVE_MDX_LINK}}).
+

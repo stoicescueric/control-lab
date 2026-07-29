@@ -1,5 +1,6 @@
 import {useRef, useState} from 'react';
 import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+import {threePointCurvature} from '@site/src/lib/domain/curvature';
 
 /* Curvature = 1/R of the circle through three points (Menger curvature).
    Drag P, Q, R; the circumscribed circle, its radius, and the curvature update
@@ -48,11 +49,25 @@ export function CurvatureCircle() {
     const i = drag.current;
     setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
   };
+  const onPointKeyDown = (i: number) => (e: React.KeyboardEvent<SVGCircleElement>) => {
+    const step = e.shiftKey ? 16 : 4;
+    const d: Record<string, Pt> = {
+      ArrowUp: {x: 0, y: -step},
+      ArrowDown: {x: 0, y: step},
+      ArrowLeft: {x: -step, y: 0},
+      ArrowRight: {x: step, y: 0},
+    };
+    const delta = d[e.key];
+    if (!delta) return;
+    e.preventDefault();
+    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q)));
+  };
 
   const cc = circumcircle(pts[0], pts[1], pts[2]);
   const straight = !cc || cc.r > 6000;
   const rInches = cc ? cc.r * SCALE : Infinity;
-  const kappa = straight ? 0 : 1 / rInches;
+  const ptsInches = pts.map((p) => ({x: p.x * SCALE, y: p.y * SCALE}));
+  const kappa = threePointCurvature(ptsInches[0], ptsInches[1], ptsInches[2]);
 
   return (
     <Demo title="Curvature is 1 / radius of the circle through three points">
@@ -106,10 +121,14 @@ export function CurvatureCircle() {
               stroke="#ff6f9c"
               strokeWidth="3"
               style={{cursor: 'grab'}}
+              tabIndex={0}
+              role="button"
+              aria-label={`Point ${LABELS[i]}. Use arrow keys to move it; hold shift to move faster.`}
               onPointerDown={(e) => {
                 drag.current = i;
                 (e.target as Element).setPointerCapture(e.pointerId);
               }}
+              onKeyDown={onPointKeyDown(i)}
             />
             <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="14" fill="#ffa8c4">
               {LABELS[i]}

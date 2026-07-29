@@ -15,20 +15,23 @@ import {ArcStepExplorer, Atan2Explorer} from '@site/src/components/simulations/l
 
 <Abstract>
 Odometry reconstructs the robot's field pose — position and heading — by integrating thousands of tiny
-wheel movements, because no sensor reports absolute position directly. This lesson develops the
+wheel movements, because no single wheel encoder or IMU reports the robot's full absolute field pose
+continuously. This lesson develops the
 constant-curvature pose update, explains why the estimate inevitably drifts, and shows how an absolute
 reference snaps it back.
 </Abstract>
 
-Autonomous routines need the robot's **pose**: position $(x, y)$ and heading $\theta$. No sensor
-reports this directly, so it is reconstructed every loop from incremental motion. Doing that
+Autonomous routines need the robot's **pose**: position $(x, y)$ and heading $\theta$. Wheel encoders
+and an IMU do not report that full field pose directly, so it is reconstructed every loop from
+incremental motion and can be corrected by absolute observations such as vision. Doing that
 reconstruction accurately — and knowing precisely how it fails — is the core of field-relative
 autonomous.
 
 <Problem title="No sensor reports absolute pose, and encoders drift">
 
 There is no "you are here" sensor on an FTC field. Pose must be *integrated* from wheel motion, and
-integration has a fundamental weakness: **errors accumulate and never cancel.** Worse, a powered
+integration has a fundamental weakness: **systematic errors accumulate.** Random errors may partly
+cancel, but scale bias, heading bias, and repeated slip do not. Worse, a powered
 drive wheel that slips during a hard acceleration or turn reports rotation that did not translate
 into ground movement, so its encoder lies. Over a match, the estimate spirals away from reality.
 This is the exact limitation that motivates the filters later in the curriculum.
@@ -161,9 +164,9 @@ and when the exact map earns its keep.
 
 Two engineering choices sharpen this in practice. **Heading from the IMU:** encoder-derived
 $d\theta$ is corrupted by wheel scrub, so most teams take heading from the gyro and use encoders
-only for distance. **Dead wheels:** unpowered omni "odometry pods" on light springs measure true
-ground motion, immune to drive slip — two parallel pods give forward distance and heading, a third
-(perpendicular) captures strafe.
+only for distance. **Dead wheels:** unpowered omni "odometry pods" on light springs are less affected
+by driven-wheel slip, but they are not immune to error: the pods can scrub, slip, lift, or flex.
+Two parallel pods give forward distance and heading, and a third (perpendicular) captures strafe.
 
 <DeadWheelsIllustration />
 
@@ -186,13 +189,13 @@ divides first — and the division destroys the evidence: $(-1.4, 0.9)$ and $(1.
 $\Delta x$ negative and watch the rose ghost: $\arctan$ points **directly away** from the target,
 wrong by 180° — command a robot with that heading and it drives backwards. Cross $\Delta x = 0$ and
 $\arctan$ divides by zero outright. `atan2` receives the two legs *separately*, so it still has both
-signs, resolves the correct quadrant, and returns the full $-\pi$ to $\pi$ range — which is exactly
-why every heading calculation in robotics uses it.
+signs and resolves the correct quadrant. Its seam may be reported as either signed representation of
+$\pi$; the shared wrapper canonicalizes controller errors to $[-\pi,\pi)$.
 
 <Callout type="warn" title="Headings wrap; differences don't, unless you wrap them.">
 Angles live on a circle, so <code>179°</code> and <code>-181°</code> are the same heading. When you
-subtract a target heading from the current one, normalize the result back into <code>[-π, π]</code>
-(<code>atan2(sin(e), cos(e))</code> is the clean trick) or a controller will spin the long way around a
+subtract a target heading from the current one, normalize the result back into <code>[-π, π)</code>
+(use the shared <code>wrap(e)</code> helper) or a controller will spin the long way around a
 seam that does not really exist.
 </Callout>
 
@@ -203,8 +206,8 @@ apply an **AprilTag fix** to snap the estimate back to truth.
 
 <OdometryField />
 
-<Callout type="warn" title="Odometry always decays.">
-Errors only accumulate. The remedy is periodic correction from an <em>absolute</em> reference — an
+<Callout type="warn" title="Odometry drifts without correction.">
+Systematic errors accumulate even though some random errors cancel. The remedy is periodic correction from an <em>absolute</em> reference — an
 AprilTag, a wall-facing distance sensor, field markings. Fusing that correction <em>optimally</em>
 with the drifting estimate is exactly what a <strong>Kalman filter</strong> does.
 </Callout>

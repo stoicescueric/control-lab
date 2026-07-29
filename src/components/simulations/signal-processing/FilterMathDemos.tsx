@@ -1,6 +1,7 @@
 import {useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {scalarKalmanUpdate} from '@site/src/lib/domain/controlMath';
 
 const W = 760;
 const H = 340;
@@ -130,7 +131,7 @@ export function NoiseAnatomyExplorer() {
 /* ---------------------------------------------------------------------------
    Low-pass (EMA): what α really is. Left: the geometric weights the filter
    quietly assigns to past readings. Right: the step response, with the time
-   constant τ — the exact discrete relation is α = Δt / (τ + Δt).
+   constant τ — the exact discrete relation is α = 1 − exp(−Δt/τ).
    --------------------------------------------------------------------------- */
 export function EmaWeightsExplorer() {
   const [alpha, setAlpha] = useState(0.25);
@@ -138,8 +139,8 @@ export function EmaWeightsExplorer() {
   const K = 16; // weight bars shown
   const STEPS = 26; // step-response samples shown
 
-  const tau = (dtMs * (1 - alpha)) / alpha; // ms — from α = dt/(τ+dt)
-  const n63 = -1 / Math.log(1 - alpha); // samples to reach 63.2 %
+  const tau = -dtMs / Math.log(1 - alpha); // ms — exact sampled exponential
+  const n63 = tau / dtMs; // samples to reach 63.2 %
 
   const boxL = {x: 36, y: 40, w: 330, h: 236};
   const boxR = {x: 396, y: 40, w: 330, h: 236};
@@ -212,7 +213,7 @@ export function EmaWeightsExplorer() {
         </g>
 
         <text x={W / 2} y={H - 16} fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13">
-          samples, newest → oldest · exact relation: α = Δt / (τ + Δt)
+          samples, newest → oldest · exact relation: α = 1 − exp(−Δt/τ)
         </text>
       </svg>
       <Controls>
@@ -313,7 +314,7 @@ export function ComplementarySplitExplorer() {
   const [alpha, setAlpha] = useState(0.98);
   const [dtMs, setDtMs] = useState(10);
   const dt = dtMs / 1000;
-  const tau = (dt * alpha) / (1 - alpha); // seconds
+  const tau = -dt / Math.log(alpha); // seconds — α = exp(−dt/τ)
   const fc = 1 / (2 * Math.PI * tau); // crossover Hz
   const fMin = 0.02;
   const fMax = 50;
@@ -347,10 +348,8 @@ export function ComplementarySplitExplorer() {
         <text x={W - P.r - 12} y={P.t + 22} fill="#5fe3d2" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12">
           motor encoder owns the fast motion
         </text>
-        {/* sum = 1: nothing is lost */}
-        <line x1={sx(Math.log10(fMin), Math.log10(fMin), Math.log10(fMax))} x2={sx(Math.log10(fMax), Math.log10(fMin), Math.log10(fMax))} y1={sy(1, 0, 1.12)} y2={sy(1, 0, 1.12)} stroke="#5ce08a" strokeWidth="2" strokeDasharray="3 7" />
-        <text x={W - P.r - 12} y={sy(1, 0, 1.12) - 8} fill="#5ce08a" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12">
-          low-pass + high-pass = 1 (the whole signal survives)
+        <text x={W - P.r - 12} y={P.t + 42} fill="#8294b8" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="11">
+          complex responses sum to 1; magnitudes include phase
         </text>
         {/* crossover */}
         <line x1={xc} x2={xc} y1={P.t + 6} y2={H - P.b} stroke="#ffc24d" strokeWidth="2" strokeDasharray="6 5" />
@@ -367,7 +366,7 @@ export function ComplementarySplitExplorer() {
       </Controls>
       <Readout
         items={[
-          ['time constant τ = Δt·α/(1−α)', `${tau.toFixed(2)} s`],
+          ['time constant τ = −Δt/ln(α)', `${tau.toFixed(2)} s`],
           ['crossover f_c = 1/2πτ', `${fc.toFixed(2)} Hz`],
           ['below f_c', 'absolute anchors · above f_c: motor encoder steers'],
         ]}
@@ -376,7 +375,6 @@ export function ComplementarySplitExplorer() {
         items={[
           {color: '#ff6f9c', label: 'absolute-encoder path — low-pass'},
           {color: '#2fd3c0', label: 'motor-encoder path — high-pass'},
-          {color: '#5ce08a', label: 'their sum: exactly 1'},
           {color: '#ffc24d', label: 'crossover frequency'},
         ]}
       />
@@ -391,10 +389,12 @@ export function KalmanGainExplorer() {
   const [rVar, setRVar] = useState(0.35);
   const min = -3;
   const max = 3;
-  const gain = pVar / (pVar + rVar);
-  const innovation = measurement - prediction;
-  const estimate = prediction + gain * innovation;
-  const posteriorVar = (1 - gain) * pVar;
+  const {gain, innovation, estimate, variance: posteriorVar} = scalarKalmanUpdate(
+    prediction,
+    pVar,
+    measurement,
+    rVar,
+  );
 
   const curves = useMemo(() => {
     const xs = Array.from({length: 180}, (_, i) => min + (i / 179) * (max - min));
