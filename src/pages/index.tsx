@@ -179,7 +179,7 @@ function Audience() {
     <section
       aria-labelledby="audience-heading"
       className="bg-panel text-panel-ink">
-      <div className="mx-auto max-w-6xl px-6 pb-20 pt-8 sm:py-24 lg:py-28">
+      <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24 lg:py-28">
         <div className="grid gap-12 lg:grid-cols-[1.05fr_1fr] lg:gap-20">
           <div>
             <SectionLabel inverse>Who this guide is for</SectionLabel>
@@ -457,10 +457,11 @@ export default function Home(): ReactNode {
       <CurveDivider className="bg-bg text-panel" />
       <TopicStrip />
       <main>
-        <Audience />
         <CurveDivider className="bg-panel text-surface-2" />
         <InteractiveExample />
-        <CurveDivider className="bg-surface text-surface-2" flip />
+        <CurveDivider className="bg-panel text-surface-2" flip />
+        <Audience />
+        <CurveDivider className="bg-panel text-surface" />
         <LearningMethod />
         <CurveDivider className="bg-surface text-bg" />
         <Curriculum />
