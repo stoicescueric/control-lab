@@ -141,21 +141,18 @@ say what you do about it.
 
 ## Naming in the algorithms
 
-The lessons show algorithms as pseudocode, not as Java you can paste. Translating them
-into your own subsystem is the exercise, so the blocks stop where a competent student
-can carry on.
+Every algorithm in this book is shown as Java, scoped to the method that *is* the lesson. What is
+missing is the program around it: helper methods, tuned constants, and the hardware are yours to write,
+and no block reads a sensor or drives a motor directly. That is deliberate — a block you can paste is a
+block you can skip.
 
-Pseudocode in this book uses `<-` for assignment, `snake_case` for local names, and
-`SCREAMING_CASE` for tuned constants. There are no types, braces or semicolons;
-indentation carries the structure. Comments beginning `# Work out:` or `# Look up:`
-mark the steps worth deriving by hand before writing any code.
+Names follow ordinary Java: `lowerCamelCase` for locals and methods, `SCREAMING_CASE` for tuned
+constants. Comments in a block carry only units and ranges. Anything worth deriving by hand appears
+after the block in an **Exercise**, often with a collapsible solution — those are the parts worth
+working out on paper before you write code.
 
-The names still mirror the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time;
-`wrap(angle)` for the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`PoseSample`/`moveStatus(...)` from the shared
-[Common Implementation](./path-following/common-implementation.mdx) page, which keep their exact spelling
-everywhere they appear. A follower's input must first satisfy the
+The names mirror the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time; `wrap(angle)` for
+the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`PoseSample`/`moveStatus(...)` from the shared
+[Common Implementation](./path-following/common-implementation.mdx) page, which keep their exact
+spelling everywhere they appear. A follower's input must first satisfy the
 [Pose Estimation Contract](./path-following/pose-estimation-contract.mdx).
-
-Literal Java appears only in `<JavaCode>` blocks, labelled **FTC** or **FRC**, and only
-where there is nothing to derive: a pattern being criticized, or a library call the
-lesson is telling you to make.

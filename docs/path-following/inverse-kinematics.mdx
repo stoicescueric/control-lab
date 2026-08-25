@@ -267,82 +267,116 @@ $\cos\theta_2=0$. The elbow-up branch uses $\sin\theta_2=-1$, giving shoulder $9
 elbow point $(0,10)$ above the directed base-to-target chord. The elbow-down branch gives shoulder $0°$,
 elbow $+90°$, and elbow point $(10,0)$. Both forward-solve to the same wrist target.
 
-<Pseudocode label="Two-link arm inverse kinematics">{`TWO-LINK ARM IK
-  in:   x, y        wrist target, measured FROM THE SHOULDER PIVOT
-        elbow_up    which of the two solutions you want
-  out:  shoulder angle, elbow angle, and whether the target is reachable
+<JavaCode label="Two-link arm inverse kinematics">{`// x, y is the wrist target measured FROM THE SHOULDER PIVOT. Units are
+// arbitrary but must match link1 and link2; angles come back in radians.
+ArmSolution solve(double x, double y, boolean elbowUp) {
+    if (!(link1 > 0 && link2 > 0)) throw new IllegalStateException("links");
 
-  units are arbitrary but must match: inches in, inches for link lengths.
-  angles come back in radians.
+    double r = Math.hypot(x, y);
 
-  require link1 > 0 and link2 > 0
+    double minReach = Math.abs(link1 - link2);   // cannot fold tighter
+    double maxReach = link1 + link2;             // cannot stretch past
+    boolean reachable = minReach <= r && r <= maxReach;
 
-  solve(x, y, elbow_up):
-      r <- sqrt(x^2 + y^2)                  # straight-line distance to target
+    double cosElbow = (r * r - link1 * link1 - link2 * link2)
+            / (2 * link1 * link2);
+    cosElbow = clamp(cosElbow, -1, 1);           // nearest pose, not a NaN
 
-      # ---- reachability: an annulus, not a disc ----
-      min_reach <- | link1 - link2 |        # cannot fold in tighter than this
-      max_reach <- link1 + link2           # cannot stretch past this
-      reachable <- min_reach <= r <= max_reach
+    double sinMagnitude = Math.sqrt(Math.max(0, 1 - cosElbow * cosElbow));
+    double sinElbow = elbowUp ? -sinMagnitude : sinMagnitude;
+    double elbow = Math.atan2(sinElbow, cosElbow);
 
-      # Draw it. The workspace is a ring. Work out when the inner hole
-      # disappears, and what that says about choosing link lengths.
+    double shoulder = Math.atan2(y, x)
+            - Math.atan2(link2 * sinElbow, link1 + link2 * cosElbow);
 
-      # ---- the elbow angle, straight from the law of cosines ----
-      cos_elbow <- (r^2 - link1^2 - link2^2) / (2 * link1 * link2)
-      clamp cos_elbow into [-1, 1]         # unreachable targets land outside;
-                                           # clamping gives the nearest pose
-                                           # instead of a NaN
+    return new ArmSolution(shoulder, elbow, reachable);
+}
+`}</JavaCode>
 
-      sin_magnitude <- sqrt(max(0, 1 - cos_elbow^2))
-      sin_elbow     <- -sin_magnitude if elbow_up else +sin_magnitude
-      # ^ the sign is the ONLY difference between the two solutions.
-      #   With +x right and +y up, a negative sine puts the elbow above the
-      #   line from shoulder to target. Draw both and confirm.
+The sign of `sinElbow` is the only difference between the two solutions. With $+x$ right and $+y$ up, a
+negative sine puts the elbow above the line from shoulder to target.
 
-      elbow <- atan2(sin_elbow, cos_elbow)
+<Exercise title="The workspace is a ring">
 
-      # ---- the shoulder angle: aim at the target, then correct ----
-      shoulder <- atan2(y, x)  -  atan2(link2*sin_elbow, link1 + link2*cos_elbow)
+Draw it. `minReach` and `maxReach` describe an annulus, not a disc. Work out when the inner hole
+disappears, and what that says about choosing link lengths.
 
-      return (shoulder, elbow, reachable)
+<Solution>
 
-# Derive the law-of-cosines line yourself. The triangle has sides link1,
-# link2 and r. Write c^2 = a^2 + b^2 - 2ab*cos(C) with C the interior angle
-# at the elbow, and solve for the cosine. Note that the returned elbow angle
-# is measured from straight-out, not the interior angle - work out the
-# relationship between the two.
-#
-# The second atan2 in the shoulder line is the angle between "straight at
-# the target" and "along link1". Draw the triangle, mark that angle, and
-# confirm the two legs are link2*sin(elbow) and link1 + link2*cos(elbow).
-#
-# Look up: "two-link planar manipulator inverse kinematics", "atan2 vs atan"
-#          - and work out why atan2 is mandatory here, using a target that
-#          is behind the shoulder.
-`}</Pseudocode>
+The hole closes when `link1 == link2`, since `|link1 - link2|` is then zero and the arm can fold back on
+itself to reach the pivot. Equal links give the largest usable workspace for a given total length, which
+is why most two-link designs come close to it. Unequal links buy you a dead zone right in front of the
+shoulder — often exactly where you wanted to pick something up.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Derive both angle lines">
+
+The triangle has sides `link1`, `link2` and `r`. Write $c^2 = a^2 + b^2 - 2ab\cos C$ with $C$ the
+interior angle at the elbow, and solve for the cosine. Note that the returned elbow angle is measured
+from *straight out*, not the interior angle — work out the relationship between the two.
+
+Then the shoulder line. The second `atan2` is the angle between "straight at the target" and "along
+link1." Draw the triangle, mark that angle, and confirm its two legs are `link2*sin(elbow)` and
+`link1 + link2*cos(elbow)`.
+
+<Solution>
+
+The law of cosines gives $r^2 = l_1^2 + l_2^2 - 2l_1l_2\cos C$, so
+$\cos C = (l_1^2 + l_2^2 - r^2)/(2l_1l_2)$ — which is the negative of the line above, because the
+returned angle is $\pi - C$: zero when the arm is straight out, not when it is folded shut. That sign
+flip is the whole relationship.
+
+For the shoulder, drop a perpendicular from the wrist onto the link1 direction. The component along
+link1 is $l_1 + l_2\cos(\text{elbow})$ and the component across it is $l_2\sin(\text{elbow})$, so
+their `atan2` is the offset between aiming at the target and aiming along link1.
+
+`atan2` rather than `atan` is mandatory: `atan` cannot distinguish a target behind the shoulder from
+one in front, since both give the same ratio. Look up "two-link planar manipulator inverse kinematics."
+
+</Solution>
+
+</Exercise>
 
 Then convert angles into your actual mechanism commands. That layer is robot-specific: encoder offsets,
 gear ratios, feedforward, joint limits, and homing sensors belong there, not inside the geometry solver.
 
-<Pseudocode label="Using the solver inside a subsystem">{`move_wrist_to(x_inches, y_inches):
-    target <- solve(x_inches, y_inches, elbow_up = true)
+<JavaCode league="FTC" label="Using the solver inside a subsystem">{`void moveWristTo(double xInches, double yInches) {
+    ArmSolution target = solve(xInches, yInches, true);
 
-    if not target.reachable:
-        report "arm target outside reachable workspace"
-        return                          # do NOT command a clamped pose the
-                                        # caller never asked for
+    if (!target.reachable()) {
+        report("arm target outside reachable workspace");
+        return;                       // do not command a clamped pose
+    }
 
-    command the shoulder controller to  to_shoulder_ticks(target.shoulder)
-    command the elbow controller    to  to_elbow_ticks(target.elbow)
+    shoulderController.setTarget(toShoulderTicks(target.shoulder()));
+    elbowController.setTarget(toElbowTicks(target.elbow()));
 
-    log the two angles in degrees       # radians are unreadable while tuning
+    // Radians are unreadable while tuning.
+    log(Math.toDegrees(target.shoulder()), Math.toDegrees(target.elbow()));
+}
+`}</JavaCode>
 
-# The geometry solver returns angles. It does not know about encoders, gear
-# ratios, zero offsets, or motor limits - your subsystem owns all of that,
-# and that is the whole point of the split. Work out what to_shoulder_ticks
-# needs to know, and where a mechanical zero offset belongs.
-`}</Pseudocode>
+<Exercise title="Where the offsets live">
+
+The geometry solver returns angles. It does not know about encoders, gear ratios, zero offsets, or motor
+limits — your subsystem owns all of that, and that split is the point. Work out what `toShoulderTicks`
+needs to know, and where a mechanical zero offset belongs.
+
+<Solution>
+
+It needs ticks per revolution, the gear reduction between motor and joint, the direction convention, and
+the encoder reading that corresponds to the geometric zero. All four are facts about *this* robot, and
+none of them appear in `solve` — which is why `solve` is testable at a desk with a calculator.
+
+The zero offset belongs in `toShoulderTicks`, not in `solve`. Put it in the solver and the geometry
+stops matching the diagram you derived it from, so every future check by hand disagrees with the code.
+
+</Solution>
+
+</Exercise>
 
 </Deploy>
 

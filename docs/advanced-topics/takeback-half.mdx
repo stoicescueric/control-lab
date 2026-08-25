@@ -66,45 +66,65 @@ converges geometrically. It is the cheapest possible way to find the steady comm
 
 <Deploy title="Take-back-half on the Control Hub">
 
-<Pseudocode label="Takeback-half velocity controller">{`TAKE-BACK-HALF      a velocity controller with ONE gain
+<JavaCode league="FTC" label="Takeback-half velocity controller">{`private double drive;         // the current output
+private double driveAtZero;   // the output at the last error sign change
+private Double lastError;     // null until the first update
 
-  state:  drive           <- 0     the current output
-          drive_at_zero   <- 0     the output at the last error sign change
-          last_error      <- none
+double update(double measured, double target, double dt) {
+    double error = target - measured;
+    drive = clamp(drive + GAIN * error * Math.max(0, dt), 0, 1);
 
-  update(measured, target, dt):
-      error <- target - measured
+    if (error != 0) {
+        if (lastError != null && Math.signum(error) != Math.signum(lastError)) {
+            drive = (drive + driveAtZero) / 2;
+            driveAtZero = drive;
+        }
+        lastError = error;
+    }
+    return drive;
+}
+`}</JavaCode>
 
-      drive <- drive + GAIN * error * max(0, dt)      # integrate
-      clamp drive into [0, 1]
+A zero error is skipped so it cannot fake a second crossing.
 
-      if error is not exactly zero:
-          if last_error exists and sign(error) differs from sign(last_error):
-              # we just crossed the target. take back half.
-              drive         <- (drive + drive_at_zero) / 2
-              drive_at_zero <- drive
-          last_error <- error
-          # a zero error is skipped so it cannot fake a second crossing
+<Exercise title="Why halving converges">
 
-      return drive
+TBH is a pure integrator with one trick: whenever the error changes sign, it jumps the output halfway
+back toward whatever it was at the *previous* crossing. Sketch a flywheel overshooting, crossing,
+undershooting, crossing again, and mark `drive` at each crossing.
 
-# TBH is a pure integrator with one trick: whenever the error changes sign,
-# it jumps the output halfway back toward whatever it was at the PREVIOUS
-# crossing. Work out why that converges. Sketch a flywheel overshooting,
-# crossing, undershooting, crossing again, and mark drive at each crossing.
-# The oscillation halves each time.
-#
-# Work out why this suits a flywheel where a PID struggles. A flywheel has
-# huge inertia and asymmetric authority: the motor can push hard but can
-# only coast down. What does an integrator with anti-windup do here, and how
-# many gains did you have to tune to get it right? TBH has one.
-#
-# Work out why drive is clamped to [0, 1] rather than [-1, 1].
-#
-# Look up: "take back half controller", originally from VEX flywheel
-#          control. Compare its step response to a tuned PI on the same
-#          mechanism.
-`}</Pseudocode>
+<Solution>
+
+Each crossing brackets the true holding voltage — one crossing happens with the output too high, the
+next with it too low. Halving between consecutive crossings is a bisection search on that bracket, so
+the oscillation amplitude halves every time and the output converges geometrically on the command that
+holds the target speed. No model, no second gain.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why a flywheel, and why [0, 1]">
+
+Work out why this suits a flywheel where a PID struggles: a flywheel has huge inertia and asymmetric
+authority, since the motor can push hard but can only coast down. What does an integrator with
+anti-windup have to be told to handle that, and how many gains did you tune to get there? Then work out
+why `drive` is clamped to $[0, 1]$ rather than $[-1, 1]$.
+
+<Solution>
+
+A PID needs `kP`, `kI`, `kD`, an I-zone, and an anti-windup rule to survive the asymmetry — five
+decisions, several of which interact. TBH needs `GAIN`. The clamp is $[0, 1]$ because a negative
+command means driving the flywheel backwards, which no shooter wants: the only way down is to stop
+pushing and let drag do it. Allowing negatives would let a single overshoot brake the wheel and cost
+far more recovery time than coasting.
+
+Look up "take back half controller," originally from VEX flywheel control, and compare its step
+response to a tuned PI on the same mechanism.
+
+</Solution>
+
+</Exercise>
 
 Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate ($k_V \cdot v_\text{target}$)
 and TBH converges in a single oscillation instead of several — the two techniques compose nicely.

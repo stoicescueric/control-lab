@@ -23,11 +23,15 @@ export function Demo({
   className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // Closing is its own phase so the exit can play on the way out. The node is
+  // never unmounted (see the note below), so there is nothing for an exit
+  // transition to hang off otherwise.
+  const [closing, setClosing] = useState(false);
 
   // Fullscreen mode: lock page scroll and close on Escape.
   useEffect(() => {
     if (!expanded) return undefined;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setClosing(true);
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -37,6 +41,19 @@ export function Demo({
     };
   }, [expanded]);
 
+  // Safety net: if the exit animation never reports back (display:none in a
+  // background tab, say), collapse anyway rather than trapping the reader.
+  useEffect(() => {
+    if (!closing) return undefined;
+    const t = window.setTimeout(finishClose, 400);
+    return () => window.clearTimeout(t);
+  }, [closing]);
+
+  function finishClose() {
+    setClosing(false);
+    setExpanded(false);
+  }
+
   // Fullscreen is a pure CSS state on the same elements — never a portal.
   // Reparenting would recreate the <canvas> nodes and orphan the sims'
   // ResizeObserver / rAF hooks, leaving every canvas demo blank.
@@ -44,13 +61,24 @@ export function Demo({
     <div
       className={
         expanded
-          ? 'fixed inset-0 z-[300] grid place-items-center bg-black/70 p-2 backdrop-blur-sm sm:p-5'
+          ? `cl-demo-scrim ${
+              closing ? 'cl-demo-scrim--out' : 'cl-demo-scrim--in'
+            } fixed inset-0 z-[300] grid place-items-center bg-black/70 p-2 backdrop-blur-sm sm:p-5`
           : 'contents'
       }
-      onClick={expanded ? (e) => e.target === e.currentTarget && setExpanded(false) : undefined}>
+      onAnimationEnd={(e) => {
+        // Only the scrim's own exit ends the close. Animation events bubble, so
+        // the panel's exit arrives here too and must not count.
+        if (e.target === e.currentTarget && e.animationName === 'cl-demo-scrim-out') {
+          finishClose();
+        }
+      }}
+      onClick={expanded ? (e) => e.target === e.currentTarget && setClosing(true) : undefined}>
       <div
         className={`cl-demo not-prose rounded-[8px] bg-panel p-[18px] text-panel-ink shadow-card ${
-          expanded ? 'max-h-full w-full max-w-5xl overflow-y-auto' : 'my-7'
+          expanded
+            ? `${closing ? 'cl-demo-panel--out' : 'cl-demo-panel--in'} max-h-full w-full max-w-5xl overflow-y-auto`
+            : 'my-7'
         } ${className}`}>
         <div className="mb-3.5 flex flex-wrap items-center gap-2.5 px-1 text-[1.02rem] font-bold text-white">
           {pill && (
@@ -63,8 +91,8 @@ export function Demo({
             type="button"
             aria-label={expanded ? 'Close fullscreen demo' : 'Expand demo to fullscreen'}
             title={expanded ? 'Close (Esc)' : 'Expand'}
-            onClick={() => setExpanded((e) => !e)}
-            className="ml-auto grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-white/15 bg-white/[0.06] text-[#cfe0ff] transition-colors hover:bg-white/15">
+            onClick={() => (expanded ? setClosing(true) : setExpanded(true))}
+            className="ml-auto grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-white/15 bg-white/[0.06] text-[#cfe0ff] transition-[background-color,transform] duration-100 ease-out hover:bg-white/15 active:scale-95">
             {expanded ? (
               <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                 <path d="M6 6l12 12M18 6L6 18" />
@@ -123,10 +151,12 @@ export function Button({primary = false, active = false, className = '', ...rest
     : active
       ? 'bg-teal border-teal text-[#042b27]'
       : 'bg-white/10 border-white/20 text-[#eaf0ff] hover:bg-white/20';
+  // Press feedback is on :active, not just :hover — hover does not exist on the
+  // touch devices a good share of readers are on.
   return (
     <button
       type="button"
-      className={`cursor-pointer rounded-[7px] border px-3.5 py-2 text-[0.85rem] font-semibold transition-colors ${tone} ${className}`}
+      className={`cursor-pointer rounded-[7px] border px-3.5 py-2 text-[0.85rem] font-semibold transition-[background-color,border-color,transform] duration-100 ease-out active:scale-[0.97] ${tone} ${className}`}
       {...rest}
     />
   );

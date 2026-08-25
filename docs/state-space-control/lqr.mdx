@@ -180,10 +180,9 @@ LinearQuadraticRegulator<N1, N1, N1> lqr = new LinearQuadraticRegulator<>(
     0.020);
 
 LinearSystemLoop<N1, N1, N1> loop =
-    new LinearSystemLoop<>(plant, lqr, observer, 12.0, 0.020);
+    new LinearSystemLoop<>(plant, lqr, observer, 12.0, 0.020);`}</JavaCode>
 
-// Every robot loop:
-loop.setNextR(VecBuilder.fill(targetRadPerSec));   // where we want the state
+<JavaCode league="FRC" label="...and every robot loop">{`loop.setNextR(VecBuilder.fill(targetRadPerSec));   // where we want the state
 loop.correct(VecBuilder.fill(encoder.getRate()));  // fold in the measurement
 loop.predict(0.020);                               // advance model + compute u
 flywheelMotor.setVoltage(loop.getU(0));`}</JavaCode>
@@ -193,52 +192,78 @@ use the gain produced by that complete library configuration. On FTC, the scalar
 above needs no runtime matrix library. Its controller is one line plus measured-loop guarding and
 [voltage compensation](../control-theory/voltage-compensation.mdx):
 
-<Pseudocode label="The same 20 ms discrete controller, gain precomputed">{`FLYWHEEL LQR ON A 20 ms LOOP
-  K is computed OFFLINE from the exact-ZOH model, the per-sample Q and R,
-  and a 20 ms design period. On the robot it is a single number.
+<JavaCode league="FTC" label="The same 20 ms discrete controller, gain precomputed">{`static final double K = 0.2332876;    // volts per (rad/s) of velocity error
+static final double DESIGN_PERIOD = 0.020;            // what K was designed for
+static final double MAX_VALID_LOOP_SECONDS = 0.030;   // margin below instability
 
-    K                       0.2332876  volts per (rad/s) of velocity error
-    DESIGN_PERIOD           0.020 s    what K was designed for
-    MAX_VALID_LOOP_SECONDS  0.030 s    a chosen margin below instability
+private final ElapsedTime timer = new ElapsedTime();
 
-  start():
-      reset the loop timer               # once, before the first update
+void start() {
+    timer.reset();
+}
 
-  run(target_velocity):
-      dt <- measured seconds since the last call
+void run(double targetVelocity) {
+    double dt = timer.seconds();
+    timer.reset();
+    if (!Double.isFinite(dt) || dt <= 0 || dt > MAX_VALID_LOOP_SECONDS) {
+        flywheel.setPower(0);            // the timing contract is broken
+        return;
+    }
 
-      if dt is not finite, or dt <= 0, or dt > MAX_VALID_LOOP_SECONDS:
-          command the motor to zero      # the timing contract is broken
-          return
+    double measured = flywheel.getVelocity(AngleUnit.RADIANS);
+    double requested = K * (targetVelocity - measured)   // the LQR feedback
+            + kV * targetVelocity;                       // feedforward, cruise
 
-      # ^ This guard is the entire reason the block exists. A gain computed
-      #   for a 20 ms sample is NOT valid at 45 ms. Work out what happens to
-      #   a discrete controller when the real period drifts past its design
-      #   point, and why refusing to act beats applying a stale design.
-      #   Look up: "discrete-time stability", "sample rate and gain margin".
+    double vbat = voltageSensor.getVoltage();
+    if (!Double.isFinite(vbat) || vbat < MIN_VALID_BATTERY_VOLTS) {
+        flywheel.setPower(0);
+        return;
+    }
 
-      measured  <- motor velocity, radians/second
-      requested <- K * (target_velocity - measured)   # the LQR feedback term
-                 + kV * target_velocity               # feedforward for cruise
+    double available = Math.min(12, vbat);   // never claim more than the rail
+    double volts = clamp(requested, -available, +available);
+    flywheel.setPower(clamp(volts / vbat, -1, +1));
+}
+`}</JavaCode>
 
-      vbat <- read the battery voltage
-      if vbat is not finite or vbat < MIN_VALID_BATTERY_VOLTS:
-          command the motor to zero
-          return
+<Exercise title="Why the loop-time guard is the point of the block">
 
-      available <- min(12, vbat)         # never claim more than the rail has
-      volts     <- clamp(requested, -available, +available)
-      command the motor with clamp(volts / vbat, -1, +1)
+A gain computed for a 20 ms sample is not valid at 45 ms. Work out what happens to a discrete
+controller when the real period drifts past its design point, and why refusing to act beats applying a
+stale design.
 
-# Work out why K is precomputed rather than solved on the robot. Solving the
-# LQR problem means solving a Riccati equation - look up what that involves
-# and estimate how it would fit in a 20 ms budget on a Control Hub.
-#
-# Then work out what this collapses to. For a single-state system the whole
-# LQR is one multiplication. What distinguishes it from a P controller is
-# not the RUNTIME form but where the gain came from: solved from a model and
-# a stated cost, rather than turned up until it looked right.
-`}</Pseudocode>
+<Solution>
+
+The gain encodes how much correction is appropriate *per sample*. Stretch the sample and the same
+correction is applied over more than twice the time it was designed for, so the effective loop gain
+rises — and past some period the discrete system goes unstable regardless of how conservative the
+continuous design was. Applying it anyway means the controller diverges precisely when the robot is
+already struggling. Commanding zero is a mechanism that coasts; commanding a stale gain is one that
+oscillates harder each loop. Look up "discrete-time stability" and "sample rate and gain margin."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why K is precomputed">
+
+Solving the LQR problem means solving a Riccati equation. Look up what that involves and estimate how
+it would fit in a 20 ms budget on a Control Hub. Then work out what the runtime form actually collapses
+to for a single-state system.
+
+<Solution>
+
+The Riccati solve is iterative matrix algebra — repeated multiplications and an inverse, run to
+convergence. Even at 1×1 it is wasted work, and at realistic state counts it does not belong in a
+control loop that also has to read sensors and drive motors.
+
+For one state, the whole LQR collapses to one multiplication. What distinguishes it from a P controller
+is not the runtime form at all but where the gain came from: solved from a measured model and a stated
+cost, rather than turned up until it looked right.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="idea" title="So how is this different from the PF controller you already had?">
 Structurally it isn't: gain times error, plus feedforward. What changed is the origin story. The PF

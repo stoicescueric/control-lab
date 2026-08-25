@@ -269,54 +269,64 @@ This is the required artifact: one pose sample becomes wrapped field error, robo
 mecanum command, and an explicit `MoveStatus`. Length is inches, speed is inches per second, heading is
 radians, and the mixer input is normalized power.
 
-<Pseudocode label="PID-to-point (proportional core)">{`PID TO POINT
+<JavaCode league="FTC" label="PID-to-point (proportional core)">{`void startMove(Pose2d target) {
+    activeTarget = target;
+    timer.reset();               // never reset this inside updateMove()
+}
 
-  start_move(target):            # ONCE, when a new move begins
-      active_target <- target
-      reset the move timer       # never reset this inside update()
+MoveStatus updateMove() {
+    if (activeTarget == null) return null;
+    PoseSample sample = poseSource.getSample();
+    MoveStatus status = moveStatus(sample, activeTarget, timer.seconds());
 
-  update_move():                 # once per loop, after pose_source.update()
-      require active_target exists
-      sample <- pose_source.get_sample()
-      status <- moveStatus(sample, active_target, timer)
+    if (status != RUNNING) {
+        drive(0, 0, 0);          // REACHED and TIMED_OUT both stop
+        return status;
+    }
 
-      if status is not RUNNING:
-          drive(0, 0, 0)         # both REACHED and TIMED_OUT stop the robot
-          return status
+    commandToward(activeTarget, sample.pose());
+    return RUNNING;
+}
 
-      command_toward(active_target, sample.pose)
-      return RUNNING
+void commandToward(Pose2d target, Pose2d poseForError) {
+    double ex = target.x() - poseForError.x();          // field frame
+    double ey = target.y() - poseForError.y();
+    double eh = wrap(target.heading() - poseForError.heading());
 
+    double c = Math.cos(poseForError.heading());
+    double s = Math.sin(poseForError.heading());
+    double exBot =  ex * c + ey * s;                    // into the robot frame
+    double eyBot = -ex * s + ey * c;
 
-  command_toward(target, pose_for_error):
-      # 1. error in the FIELD frame; heading takes the short way round
-      ex <- target.x - pose_for_error.x
-      ey <- target.y - pose_for_error.y
-      eh <- wrap(target.heading - pose_for_error.heading)
+    double vx = kPxy * exBot + kStatic(exBot);
+    double vy = kPxy * eyBot + kStatic(eyBot);
+    double w = kPheading * eh;
 
-      # 2. rotate the translation error into the ROBOT frame (by -heading)
-      c, s   <- cos(pose_for_error.heading), sin(pose_for_error.heading)
-      ex_bot <-  ex*c + ey*s
-      ey_bot <- -ex*s + ey*c
+    drive(vx, vy, w);                                   // the mixer desaturates
+}
+`}</JavaCode>
 
-      # Work out why the rotation is by MINUS the heading. The robot is at
-      # +heading in the field; expressing a field vector in its frame undoes
-      # that. Check it: robot facing +90 degrees, target straight ahead of it
-      # in the field (+y). What must ex_bot and ey_bot be?
+Note the signature of `commandToward`: the desired target and the pose that *supplies* the error are
+separate arguments. They are the same thing here, and the predictive version below is exactly this
+function with a different second argument — which is the whole reason it is written this way.
 
-      # 3. proportional command, plus the friction nudge near the goal
-      vx <- kP_xy * ex_bot + kStatic(ex_bot)
-      vy <- kP_xy * ey_bot + kStatic(ey_bot)
-      w  <- kP_heading * eh
+<Exercise title="Why rotate by minus the heading">
 
-      # 4. hand the chassis command to the mixer, which desaturates
-      drive(vx, vy, w)
+The robot sits at $+\text{heading}$ in the field, so expressing a field vector in the robot's frame
+undoes that. Check it: the robot faces $+90°$ and the target is straight ahead of it, which in the field
+is $+y$. What must `exBot` and `eyBot` come out to?
 
-# Note the signature: the DESIRED target and the pose that SUPPLIES the error
-# are separate arguments. They are the same thing here. The predictive
-# version below is exactly this function with a different second argument -
-# which is the whole reason it is written this way.
-`}</Pseudocode>
+<Solution>
+
+`exBot` must be the full distance and `eyBot` zero, because "straight ahead" in the robot frame is
+$+x$. Substituting $\text{heading} = 90°$ gives $c = 0$, $s = 1$, so `ex_bot = ey` and
+`ey_bot = -ex` — and with the target purely at $+y$ in the field, that is exactly the distance in
+`exBot` and nothing in `eyBot`. Rotating by $+\text{heading}$ instead would send the robot
+sideways, at right angles to the target, at full commanded speed.
+
+</Solution>
+
+</Exercise>
 
 The settle test matters as much as the controller: check position **and** heading **and** that the robot
 is actually slow, or an action will report "done" while the robot is still coasting through the point. Add
@@ -327,107 +337,153 @@ move and a timed-out move both stop, but only the reached move is success.
 
 To follow a *list* of poses continuously, wrap that loop in point-advance sequencing:
 
-<Pseudocode label="Following a list of poses (point-advance)">{`FOLLOW A LIST OF POSES
+<JavaCode league="FTC" label="Following a list of poses (point-advance)">{`void startPath(List<Pose2d> newPoints) {
+    points = List.copyOf(newPoints);
+    index = 0;
+    timer.reset();
+}
 
-  start_path(new_points):        # ONCE per list
-      points <- a copy of new_points
-      index  <- 0
-      reset the move timer
+MoveStatus follow() {
+    if (points.isEmpty()) {
+        drive(0, 0, 0);
+        return REACHED;                   // nothing to do is not a failure
+    }
 
-  follow():
-      if points is empty:
-          drive(0, 0, 0)
-          return REACHED         # nothing to do is not a failure
+    PoseSample sample = poseSource.getSample();
+    Pose2d robot = sample.pose();
+    boolean last = index == points.size() - 1;
 
-      sample <- pose_source.get_sample()
-      robot  <- sample.pose
-      last   <- (index is the final point)
+    if (!last && robot.vec().minus(points.get(index).vec()).norm()
+            < ADVANCE_RADIUS) {
+        index++;
+        timer.reset();                    // each leg gets its own deadline
+        last = index == points.size() - 1;
+    }
 
-      # advance EARLY through intermediate points, so the robot never has to
-      # come to a stop in the middle of the path
-      if not last and robot is within ADVANCE_RADIUS of points[index]:
-          index <- index + 1
-          reset the move timer   # each leg gets its own deadline
-          last  <- (index is the final point)
+    MoveStatus status = commandTowardAsInUpdateMove(points.get(index));
 
-      status <- command toward points[index], as in update_move above
+    if (status == TIMED_OUT) return TIMED_OUT;
+    if (last) return status;              // only the last leg may say REACHED
+    return RUNNING;
+}
+`}</JavaCode>
 
-      if status is TIMED_OUT: return TIMED_OUT
-      if last:                return status      # only the last leg may say REACHED
-      return RUNNING
+Advancing *early* through intermediate points is what keeps the robot from having to stop in the middle
+of a path.
 
-# Work out: ADVANCE_RADIUS is looser than POS_TOL. Why must it be? Trace a
-# robot that has to settle inside POS_TOL at every intermediate point and
-# describe how the path looks and sounds.
-`}</Pseudocode>
+<Exercise title="Why ADVANCE_RADIUS is looser than POS_TOL">
+
+Trace a robot that has to settle inside `POS_TOL` at every intermediate point, and describe how the
+path looks and sounds.
+
+<Solution>
+
+`POS_TOL` also requires the robot to be *slow* — that is the velocity term in `moveStatus` — so
+settling at every waypoint means decelerating to a stop, waiting to fall inside tolerance, then
+accelerating again. The path becomes a series of lurches with a pause at each point, it takes several
+times as long, and each stop-start is a current spike. `ADVANCE_RADIUS` says "close enough to start
+aiming at the next one," which lets the corners round off and the robot flow through.
+
+</Solution>
+
+</Exercise>
 
 For an overshoot-free approach, shape the command's *magnitude* by the braking cap before the mixer:
 
-<Pseudocode label="Distance-capped approach speed">{`BRAKING CAP    never approach faster than you can still stop
+<JavaCode league="FTC" label="Distance-capped approach speed">{`static final double MAX_SPEED = 40;   // inches/second
+static final double MAX_DECEL = 60;   // inches/second^2, positive magnitude
 
-  MAX_SPEED   inches/second
-  MAX_DECEL   inches/second^2, a positive magnitude
+double brakingCap(double distance) {
+    double vStop = Math.sqrt(2 * MAX_DECEL * distance);
+    double vProportional = kPxy * distance * MAX_SPEED;
+    return Math.min(Math.min(vStop, MAX_SPEED), vProportional) / MAX_SPEED;
+}
 
-  braking_cap(distance):
-      v_stop         <- sqrt(2 * MAX_DECEL * distance)   # inches/second
-      v_proportional <- kP_xy * distance * MAX_SPEED     # what P alone wanted
-      return min(v_stop, MAX_SPEED, v_proportional) / MAX_SPEED   # normalized
+void driveCapped(double exBot, double eyBot, double w) {
+    double dist = Math.hypot(exBot, eyBot);
+    double cap = brakingCap(dist);
+    double dir = Math.atan2(eyBot, exBot);
+    drive(cap * Math.cos(dir), cap * Math.sin(dir), w);
+}
+`}</JavaCode>
 
-  drive_capped(ex_bot, ey_bot, w):
-      dist <- sqrt(ex_bot^2 + ey_bot^2)
-      cap  <- braking_cap(dist)
-      dir  <- atan2(ey_bot, ex_bot)
-      drive(cap*cos(dir), cap*sin(dir), w)    # the mixer desaturates
+<Exercise title="Derive the braking cap">
 
-# v_stop is v^2 = 2*a*s solved for v. Derive it: a robot at speed v braking
-# at MAX_DECEL needs v^2/(2*a) inches to stop. Invert that for "the fastest
-# I may be going, given I am this far out".
-#
-# Work out why the direction is computed once and the SPEED is capped, rather
-# than capping ex_bot and ey_bot separately. Take ex_bot = 30, ey_bot = 40
-# and clamp each to 20. Which way is the robot now pointing?
-`}</Pseudocode>
+`vStop` is $v^2 = 2as$ solved for $v$. Derive it: a robot at speed $v$ braking at `MAX_DECEL` needs
+$v^2/(2a)$ inches to stop. Invert that into "the fastest I may be going, given I am this far out."
+
+Then work out why the direction is computed once and the *speed* is capped, rather than capping
+`exBot` and `eyBot` separately. Take `ex_bot = 30`, `ey_bot = 40`, and clamp each to 20.
+
+<Solution>
+
+Setting the stopping distance equal to the distance remaining gives $v^2/(2a) = s$, so
+$v = \sqrt{2as}$ — the speed from which the robot can still stop exactly on the target.
+
+For the second half: $(30, 40)$ points at 53.1° off the robot's nose. Clamped componentwise to
+$(20, 20)$ it points at 45°. The robot drives somewhere it was never asked to go, and the error grows
+with how lopsided the two components are. Capping the magnitude and rebuilding from `dir` leaves the
+direction untouched — the same reason the mecanum mixer desaturates all four wheels together.
+
+</Solution>
+
+</Exercise>
 
 ### Production extension: predictive stopping
 
 The predicted-pose variant changes the **robot state used to calculate error**, never the desired target:
 
-<Pseudocode label="Glide-distance predicted pose">{`PREDICTED POSE    where this sample says the robot will coast to a stop
+<JavaCode league="FTC" label="Glide-distance predicted pose">{`// Where this sample says the robot will coast to a stop.
+Pose2d predictedPose(PoseSample sample) {
+    Pose2d p = sample.pose();
+    Vector2d v = sample.fieldVelocity();   // filter this; raw velocity is noisy
+    double speed = v.norm();
+    if (speed < EPS) return p;             // standing still: no glide
 
-  predicted_pose(sample):
-      p     <- sample.pose
-      v     <- sample.fieldVelocity      # filter this. raw velocity is noisy.
-      speed <- v.norm()
-      if speed ~ 0: return p             # standing still: no glide
+    double glide = speed * speed / (2 * MAX_DECEL);   // the braking distance
+    return new Pose2d(
+            p.x() + (v.x() / speed) * glide,
+            p.y() + (v.y() / speed) * glide,
+            p.heading());                  // only translation is predicted
+}
 
-      glide <- speed^2 / (2 * MAX_DECEL) # the braking distance again
-      return a pose at
-            p.x + (v.x / speed) * glide
-            p.y + (v.y / speed) * glide
-            p.heading unchanged          # only translation is predicted
+MoveStatus updatePredictiveMove() {
+    if (activeTarget == null) return null;
+    PoseSample sample = poseSource.getSample();
+    MoveStatus status = moveStatus(sample, activeTarget, timer.seconds());
+    if (status != RUNNING) {
+        drive(0, 0, 0);
+        return status;
+    }
 
-      # (v / speed) is the unit vector along travel. Work out why dividing by
-      # speed is necessary, and what happens to the prediction if you forget.
+    commandToward(activeTarget, predictedPose(sample));
+    return RUNNING;
+}
+`}</JavaCode>
 
-  update_predictive_move():
-      require active_target exists
-      sample <- pose_source.get_sample()
-      status <- moveStatus(sample, active_target, timer)
-      if status is not RUNNING:
-          drive(0, 0, 0)
-          return status
+Read that last call carefully: the *target* is unchanged, and only the pose supplying the error is
+predicted. Worked example — target $x = 10$, actual robot $x = 2$, predicted $x = 8$. The error becomes
+$+2$ rather than $+8$, so the robot eases off early instead of charging the target and overshooting.
 
-      command_toward(active_target, predicted_pose(sample))
-      return RUNNING
+<Exercise title="The unit vector, and a noisy velocity">
 
-# Read that last call carefully. The TARGET is unchanged; only the pose
-# supplying the error is predicted. Worked example: target x = 10, actual
-# robot x = 2 but predicted x = 8. The error becomes +2, not +8, so the
-# robot eases off early instead of charging the target and overshooting.
-#
-# Work out: what does this controller do if fieldVelocity is noisy and
-# briefly reads twice its true value? This is why the filter note matters.
-`}</Pseudocode>
+Work out why `v` is divided by `speed`, and what the prediction does if you forget. Then work out what
+this controller does when `fieldVelocity()` is noisy and briefly reads twice its true value.
+
+<Solution>
+
+`v / speed` is the unit vector along travel, so multiplying by `glide` moves exactly `glide` inches in
+the direction of motion. Skip the division and you move `speed * glide` inches — a prediction that
+scales with the *cube* of speed and puts the robot's imagined position across the field.
+
+A doubled velocity reading quadruples `glide`, since it goes as $v^2$. The predicted pose leaps past
+the target, the error changes sign, and the robot brakes hard or reverses for one loop. That is why the
+filter note is not optional: the prediction amplifies velocity noise quadratically, and velocity is the
+noisiest thing the pose source produces.
+
+</Solution>
+
+</Exercise>
 
 </Deploy>
 

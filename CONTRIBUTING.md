@@ -166,54 +166,83 @@ the content check enforces a generous upper bound so one punctuation habit canno
 
 ### 5. Engineering Implementation
 
-Lessons do **not** hand out drop-in Java. A reader who pastes a finished class has
-skipped the part where the learning happens. Show the algorithm as pseudocode, in
-enough detail that a competent student can implement it, and no further.
+Every algorithm in the curriculum is a `<JavaCode>` block. There is no second
+notation to learn halfway through
+(see [ADR 0004](decisions/0004-java-everywhere-retire-pseudocode.md)).
 
-Write it as structured English, using `<Pseudocode>`:
+**A block is never a drop-in subsystem.** A reader who pastes a finished class has
+skipped the part where the learning happens. Scope the block to the method that *is*
+the lesson: the logic is complete, the program around it is not.
 
-- `<-` for assignment. Never `=`, which reads as equality.
-- `snake_case` names that match the lesson's symbols. `flight_time`, not `t_f`.
-- No types, no `public`/`private`, no semicolons, no braces. Indentation carries
-  the structure.
-- Control flow in English: `for each segment A -> B:`, `repeat at most N times:`.
-- Named constants stay `SCREAMING_CASE`: `MAX_ITERATIONS`, `MIN_VALID_BATTERY_VOLTS`.
-- Units in a trailing comment wherever they matter: `# inches/second`.
-- An `in:` / `out:` header on anything that is a callable procedure.
-- Keep the guards. They teach failure modes: `if dt is not finite or dt <= 0: skip`.
-- Put "look this up" and "work this out" hints in `#` comments, placed at the step
-  where a reader will actually stall. Do not use a bare `TODO` marker followed by a
-  colon; the content check treats that as an unresolved placeholder and fails.
+- No Javadoc. `//` comments only, carrying units or ranges.
+- No constructor boilerplate, no `@Config`, no `HardwareMap` wiring, no OpMode
+  lifecycle, no `telemetry`. Fields only where the method genuinely reads state
+  across loops.
+- Helper methods, tuned constants and hardware stay undefined. `shape(...)`,
+  `clamp(...)`, `setWheelPowers(...)` are the reader's to write, and that is what
+  makes the block unpasteable.
+- Keep the guards. They teach failure modes:
+  `if (!Double.isFinite(dt) || dt <= 0) return;`
+- Four-space indent, lines under 88 characters so nothing scrolls on a phone.
+- `league="FTC"` where the block touches robot hardware or SDK conventions,
+  `league="FRC"` for WPILib surface, and omit it for pure math and geometry.
 
-The shared vocabulary from [Common Implementation](docs/path-following/common-implementation.mdx)
-is the one exception to snake_case. `Vector2d`, `Pose2d`, `PoseSample`, `wrap`,
-`moveStatus`, `kStatic` and `drive` keep their exact spelling everywhere, because
-lessons across the site refer to them by name.
+```java
+private double filtered;
+private boolean seeded;
 
-Example style:
+double update(double raw, double dt) {
+    if (!Double.isFinite(raw)) return filtered;   // never seed on garbage
 
+    if (!seeded) {
+        filtered = raw;
+        seeded = true;
+    } else if (Double.isFinite(dt) && dt > 0) {
+        double alpha = 1 - Math.exp(-dt / TAU);
+        filtered += alpha * (raw - filtered);
+    }
+    return filtered;
+}
 ```
-FEEDFORWARD     output is volts, then normalized by the battery
 
-  calculate(velocity, acceleration, battery_voltage):
-      volts <- kS*sign(velocity) + kV*velocity + kA*acceleration
-      return volts / battery_voltage
+The shared vocabulary from [Common Implementation](docs/path-following/common-implementation.mdx) —
+`Vector2d`, `Pose2d`, `PoseSample`, `wrap`, `moveStatus`, `kStatic` and `drive` —
+keeps its exact spelling everywhere, because lessons across the site refer to those
+names in running prose.
 
-# Work out each term's job by deleting it on paper:
-#   no kS: the mechanism never quite starts from rest. why?
-#   no kV: the command does not scale with the speed you asked for.
-#   no kA: it tracks steady speeds but lags whenever the goal changes.
+#### Comments, and where the teaching goes
+
+**A code block is for code.** Comments carry units, ranges, or a tuned value —
+`// radians`, `// [-1, 1]`, `// ~0.06` — and nothing else. No ASCII banners
+(`// ---- 1. FOO ----`), no numbered step comments, no arrows pointing at the line
+above. A block that needs section banners is two blocks: split it and label each.
+Never a bare `TODO` followed by a colon; the content check treats that as an
+unresolved placeholder and fails.
+
+The content check caps any block at **three comment-only lines**. That is deliberate:
+the comments used to hold multi-paragraph "work out why…" essays, and 41% of every
+algorithm line in the curriculum was commentary.
+
+Those prompts belong in `<Exercise>`, placed immediately after the block they came from:
+
+```mdx
+<Exercise title="What kP's units are">
+
+`error` is in ticks and `command` is in $[-1, 1]$, so $k_P$ is "power per tick." If the arm
+is 500 ticks away and you want roughly half power, what is $k_P$?
+
+<Solution>
+
+$0.5 / 500 = 0.001$ power per tick — a number you derived from your own mechanism, not one
+copied out of a lesson.
+
+</Solution>
+
+</Exercise>
 ```
 
-Literal Java survives in `<JavaCode>` for exactly two cases, where there is nothing
-for the reader to derive:
-
-1. **An anti-pattern being criticized.** The real code is the point.
-2. **Bare SDK surface**, where the lesson's message is "call the library."
-
-When you do write Java for one of those, it should still look like code a strong FTC
-team would maintain: meaningful names, explicit units, no blocking `sleep()` in a
-loop-driven example.
+Add a `<Solution>` only where the answer is short and checkable by eye. An `<Exercise>`
+with no solution is valid; do not invent worked answers to fill them.
 
 ### 6. Hardware Reality
 
@@ -421,8 +450,8 @@ Please avoid:
 - Huge rewrites mixed with unrelated style changes.
 - New dependencies for small utilities that can be written locally.
 - Code snippets that teach blocking or fragile FTC patterns.
-- Drop-in Java implementations of a technique the lesson is teaching. Write the
-  algorithm as pseudocode instead; see Engineering Implementation above.
+- Drop-in Java implementations of a technique the lesson is teaching. Scope the
+  block to the method that is the lesson; see Engineering Implementation above.
 
 ## License
 

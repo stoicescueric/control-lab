@@ -148,29 +148,44 @@ FTCLib provides a convenient baseline controller, and FTC Dashboard tunes the ga
 Treat the refinements above as production requirements: verify whether your library implements them
 the way your mechanism needs, or use the explicit anti-windup controller in the next lesson.
 
-<Pseudocode label="A baseline PID loop for an arm">{`ARM CONTROLLER      the smallest thing that works
+<JavaCode league="FTC" label="A baseline PID loop for an arm">{`// Expose the gains for live tuning, not as constants buried in the file.
+public static double kP = 0.004, kI = 0, kD = 0.0002;
 
-  gains:  kP, kI, kD           expose these for live tuning, not as constants
-                               buried in the file
+private PIDController pid;
+private DcMotorEx arm;
 
-  setup():
-      take the arm motor
-      put it in open-loop mode          # YOU are the controller now, not the
-                                        # motor firmware's built-in one
+void setup() {
+    arm = hardwareMap.get(DcMotorEx.class, "arm");
+    arm.setMode(RUN_WITHOUT_ENCODER);   // YOU are the controller now
+    pid = new PIDController(kP, kI, kD);
+}
 
-  update(target_ticks):
-      refresh the gains                 # so a tuning edit takes effect this loop
-      power <- pid(measured_position, target_ticks)
-      command the motor with clamp(power, -1, +1)
+void update(double targetTicks) {
+    pid.setPID(kP, kI, kD);             // so a tuning edit lands this loop
+    double power = pid.calculate(arm.getCurrentPosition(), targetTicks);
+    arm.setPower(Math.max(-1, Math.min(1, power)));
+}`}</JavaCode>
 
-# The clamp is not decoration. Work out what a PID output of 3.7 means and
-# what the SDK does with it, then read the anti-windup lesson for what the
-# integrator was doing while the output sat pinned at 1.0.
-#
-# Work out why the motor must be in open-loop mode. If the firmware is also
-# running a position loop, how many controllers are fighting over the same
-# motor, and what does that look like on a graph?
-`}</Pseudocode>
+<Exercise title="The clamp is not decoration">
+
+Work out what a PID output of 3.7 means, and what the SDK does with it. Then work out why the motor has
+to be in open-loop mode: if the firmware is *also* running a position loop, how many controllers are
+fighting over the same motor, and what does that look like on a graph?
+
+<Solution>
+
+3.7 means the controller wants 3.7 times full power, which does not exist — `setPower` clips it to 1.0
+silently. The output is saturated, and everything the integrator accumulates while it sits there is
+windup, which is the subject of the next lesson.
+
+For the mode: `RUN_TO_POSITION` and `RUN_USING_ENCODER` put a controller inside the motor firmware. Add
+yours on top and two loops are commanding one motor with different ideas about the target, at different
+rates. On a graph it looks like oscillation you cannot tune away — lowering `kP` changes the amplitude
+but never removes it, because the other controller is still there.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="tip" title="Filters and controllers are a team.">
 The derivative term amplifies sensor noise. Production controllers run the measurement through a
@@ -236,59 +251,75 @@ A walkthrough of these exact upgrades — swapping the integral for feedforward,
 measurement, and low-pass-filtering the derivative — and why they beat a textbook PID on FTC mechanisms.
 </VideoEmbed>
 
-<Pseudocode label="PDFL: P, filtered D, constant F, static-friction L">{`PDFL      Proportional, Derivative, Feedforward, Lower-limit
-          note there is NO integral term - F and L do that job explicitly
+<JavaCode league="FTC" label="PDFL: P, filtered D, constant F, static-friction L">{`// No integral term at all: F and L do that job explicitly.
+double run(double target, double measurement, double dt) {
+    dt = Math.max(MIN_DT, dt);          // measured, never assumed
+    double error = target - measurement;
 
-  gains:     kP, kD, kF, kL
-  DEADZONE   ~5 ticks      inside this band, drop the L term
-  TAU        ~0.05 s       derivative filter time constant
+    double p = kP * error;
 
-  run(target, measurement):
-      dt    <- max(MIN_DT, seconds since the last call)   # measured, never assumed
-      error <- target - measurement
+    double rawD = firstLoop ? 0 : -(measurement - lastMeasurement) / dt;
+    double alpha = 1 - Math.exp(-dt / TAU);
+    filteredD += alpha * (rawD - filteredD);
+    double d = kD * filteredD;
 
-      # ---- P ----
-      p <- kP * error
+    lastMeasurement = measurement;
+    firstLoop = false;
 
-      # ---- D, taken on the MEASUREMENT and low-pass filtered ----
-      raw_d <- 0 on the very first loop,
-               otherwise  -(measurement - last_measurement) / dt
+    double f = kF;                      // a constant that holds against gravity
+    double l = kL * Math.signum(error); // a static-friction floor
 
-      alpha      <- 1 - exp(-dt / TAU)
-      filtered_d <- filtered_d + alpha * (raw_d - filtered_d)
-      d          <- kD * filtered_d
+    if (Math.abs(error) < DEADZONE) return p + d + f;   // drop L near target
+    return p + d + f + l;
+}`}</JavaCode>
 
-      remember measurement and the time for next loop
+Tune `kF` and `kL` by measurement rather than by guessing: find the smallest power that holds the arm
+still — that is `kF` — then the smallest power that makes it just break away and move. The difference
+is `kL`.
 
-      # Two separate ideas hide in those lines, and both are worth deriving:
-      #
-      # 1. Why the derivative is taken on the measurement and NEGATED, rather
-      #    than on the error. Step the target from 0 to 500 in one loop and
-      #    compute d(error)/dt. What does that spike do to the motor? Look
-      #    up: "derivative kick", "derivative on measurement".
-      #
-      # 2. Why raw_d is filtered at all. Differencing a quantized encoder
-      #    over a short dt amplifies noise: work out the velocity implied by
-      #    a one-tick jitter at dt = 0.02 s. Look up: "exponential moving
-      #    average", and confirm alpha -> 1 as dt grows past TAU.
+<Exercise title="Two ideas hidden in the D term">
 
-      # ---- F: a constant that holds against gravity ----
-      f <- kF
+Both are worth deriving.
 
-      # ---- L: a static-friction floor, in the direction of the error ----
-      l <- kL * sign(error)
+First, why the derivative is taken on the *measurement* and negated, rather than on the error. Step the
+target from 0 to 500 in one loop and compute $d(\text{error})/dt$. What does that spike do to the motor?
 
-      if | error | < DEADZONE:  return p + d + f          # drop L near target
-      else:                     return p + d + f + l
+Second, why `rawD` is filtered at all. Differencing a quantized encoder over a short `dt` amplifies
+noise — work out the velocity implied by a one-tick jitter at `dt = 0.02 s`, and confirm that
+$\alpha \to 1$ as `dt` grows past `TAU`.
 
-# Work out why L is dropped near the target. sign(error) flips every time the
-# arm crosses the setpoint. Trace three loops with the arm oscillating one
-# tick either side, and describe the noise the mechanism makes.
-#
-# Tune kF and kL by measurement, not by guessing: find the smallest power
-# that holds the arm still (that is kF), then the smallest power that makes
-# it just break away and move (the difference is kL).
-`}</Pseudocode>
+<Solution>
+
+A 500-tick step in one 20 ms loop makes $d(\text{error})/dt$ equal 25,000 ticks/s — a single enormous
+spike from the *target* moving, not the arm. The motor slams to full power for one loop and the
+mechanism jerks. Differentiating the measurement instead means the derivative only ever responds to
+what the arm actually did; the negation is because $\frac{d}{dt}(\text{target} - x) = -\dot x$ when the
+target is constant. Look up "derivative kick".
+
+For the filter: one tick over 20 ms is 50 ticks/s of pure noise, multiplied by `kD` and fed straight to
+the motor every loop. The low-pass averages it away at the cost of a little lag, and as `dt` grows past
+`TAU` the exponential term collapses so $\alpha \to 1$ — meaning "so much time has passed, just take
+the new reading."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why L is dropped near the target">
+
+`Math.signum(error)` flips every time the arm crosses the setpoint. Trace three loops with the arm
+oscillating one tick either side of the target, and describe the noise the mechanism makes.
+
+<Solution>
+
+`l` flips between `+kL` and `-kL` on alternating loops, so the command jumps by $2k_L$ at 50 Hz around
+a target the arm has effectively already reached. The mechanism buzzes audibly and the gearbox takes the
+load for nothing. `DEADZONE` exists so the friction term switches off once the arm is close enough that
+breaking friction no longer matters.
+
+</Solution>
+
+</Exercise>
 
 This mirrors the widely shared FTC `PDFL` controller. There is no integral term at all: $k_F$ holds the
 steady load and $k_L$ breaks friction, so there is nothing to wind up.

@@ -137,6 +137,41 @@ if (proseWordCount > 0 && (proseEmDashCount * 1000) / proseWordCount > 12) {
   fail('MDX prose exceeds the project-wide em-dash density limit of 12 per 1,000 words');
 }
 
+// Code-block conventions (ADR 0004). Every algorithm is <JavaCode>, scoped to
+// the method that is the lesson. The derivation prompts that used to fill these
+// blocks live in <Exercise> now, and a block that drifts back into a comment
+// essay is the regression this guards.
+const MAX_COMMENT_LINES = 3;
+
+for (const file of walk(path.join(root, 'docs'), (name) => name.endsWith('.mdx'))) {
+  const source = readFileSync(file, 'utf8');
+  const name = relative(file);
+
+  if (source.includes('<Pseudocode')) {
+    fail(`${name} uses <Pseudocode>; every algorithm is <JavaCode> (see decisions/0004)`);
+  }
+
+  for (const [, tag, label, body] of source.matchAll(
+    /<(Pseudocode|JavaCode)([^>]*)>\{`([\s\S]*?)`\}<\/\1>/g,
+  )) {
+    const lines = body.split('\n').filter((line) => line.trim());
+    const comments = lines.filter((line) => /^\s*(?:#|\/\/)/.test(line));
+
+    if (comments.length > MAX_COMMENT_LINES) {
+      fail(
+        `${name} has a <${tag}> block with ${comments.length} comment lines ` +
+          `(max ${MAX_COMMENT_LINES}); move the explanation into prose or an <Exercise>`,
+      );
+    }
+    if (/^\s*(?:#|\/\/) ?-{4}/m.test(body)) {
+      fail(`${name} has an ASCII banner comment in a <${tag}> block; split the block instead`);
+    }
+    if (!/label="/.test(label)) {
+      fail(`${name} has a <${tag}> block with no label`);
+    }
+  }
+}
+
 const homepageFiles = [
   path.join(root, 'src', 'pages', 'index.tsx'),
   path.join(root, 'src', 'components', 'home', 'ControlResponseHero.tsx'),
@@ -170,5 +205,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  'Content checks passed: lesson structure, repository hygiene, public language, and UI conventions.',
+  'Content checks passed: lesson structure, code-block conventions, repository hygiene, public language, and UI conventions.',
 );

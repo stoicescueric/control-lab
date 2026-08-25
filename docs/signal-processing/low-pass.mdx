@@ -139,45 +139,60 @@ accumulated history — there is no setting that wins both.
 The implementation is trivial; the engineering is choosing $\alpha$ from a target time constant and
 the measured loop time, so behaviour is independent of how fast the loop happens to run.
 
-<Pseudocode label="Low-pass a noisy sensor before using it">{`LOW-PASS FILTER      TAU is the time constant, in seconds
+<JavaCode league="FTC" label="Low-pass a noisy sensor before using it">{`private static final double TAU = 0.08;   // time constant, seconds
 
-  state:  filtered, and a flag for whether we have seeded it yet
+private double filtered;
+private boolean seeded;
 
-  each loop:
-      dt  <- measured seconds since the last loop
-      raw <- read the sensor
+double update(double raw, double dt) {
+    if (!Double.isFinite(raw)) return filtered;   // never seed on garbage
 
-      if raw is not finite:
-          take your sensor-fault path
-          continue          # do NOT seed the filter with garbage
+    if (!seeded) {
+        // The first good sample becomes the state outright, or the filter
+        // spends a second crawling up from a fake zero.
+        filtered = raw;
+        seeded = true;
+    } else if (Double.isFinite(dt) && dt > 0) {
+        double alpha = 1 - Math.exp(-dt / TAU);
+        filtered += alpha * (raw - filtered);
+    }
+    return filtered;      // hand this to the controller, never raw
+}`}</JavaCode>
 
-      if not seeded:
-          filtered <- raw   # first good sample becomes the state outright
-          seeded   <- true  # otherwise the filter spends a second crawling
-                            # up from a fake zero
+<Exercise title="Ten loops by hand">
 
-      else if dt is finite and > 0:
-          alpha    <- 1 - exp(-dt / TAU)
-          filtered <- filtered + alpha * (raw - filtered)     # the whole filter
+The single line that matters is `filtered += alpha * (raw - filtered)`: move a fraction $\alpha$ of the
+way from where you are to what you just measured. Take $\alpha = 0.2$, start at 0, and feed a constant
+reading of 10. Tabulate ten loops. How many does it take to pass 9?
 
-      hand filtered to the controller, never raw
+<Solution>
 
-# The single line that matters is the update: move a fraction alpha of the
-# way from where you are to what you just measured. Work it out by hand with
-# alpha = 0.2, starting at 0, with a constant reading of 10. Tabulate ten
-# loops. How many loops to pass 9? That number IS the response time.
-#
-# Now the alpha formula. Naively you would pick a constant like 0.2 - but
-# then the filter's real-world speed changes whenever your loop time does.
-# Work out what alpha = 1 - exp(-dt/TAU) gives at dt = TAU (about 0.63) and
-# as dt grows large (approaching 1, meaning "trust the new reading"). That
-# is why TAU is in seconds and alpha is recomputed every loop.
-# Look up: "exponential moving average", "RC filter time constant".
-#
-# Work out the cost, because there always is one: the filtered value is
-# always slightly BEHIND the truth. Estimate the lag for TAU = 0.08 s, and
-# decide whether a controller can tolerate it.
-`}</Pseudocode>
+`2.00, 3.60, 4.88, 5.90, 6.72, 7.38, 7.90, 8.32, 8.66, 8.93` — ten loops and it still has not reached 9;
+loop 11 gets there. That count *is* the response time. At a 50 Hz loop, 11 loops is 220 ms of lag
+before the filter fully believes a step that already happened.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why alpha is recomputed every loop">
+
+Naively you would pick a constant $\alpha$ like 0.2 — but then the filter's real-world speed changes
+whenever your loop time does. Work out what $\alpha = 1 - e^{-\Delta t/\tau}$ gives at
+$\Delta t = \tau$, and what it approaches as $\Delta t$ grows large. Then estimate the lag this filter
+costs at $\tau = 0.08$ s and decide whether your controller can tolerate it.
+
+<Solution>
+
+At $\Delta t = \tau$ it gives $1 - e^{-1} \approx 0.63$ — the 63 % you measured on the step test. As
+$\Delta t$ grows it approaches 1, meaning "so much time has passed, just trust the new reading."
+$\tau$ is in seconds, so the behavior is fixed in wall-clock terms no matter how fast the loop runs.
+The filtered value trails the truth by roughly $\tau$, so 80 ms here — survivable for a heading hold,
+usually not for a derivative term.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="tip" title="Free high-pass filter.">
 Subtract the low-pass output from the raw signal — <code>raw − filtered</code> — and you get a

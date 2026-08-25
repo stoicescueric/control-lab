@@ -121,47 +121,59 @@ three angle wraps per loop.
 The fast source enters as a *delta* (ticks moved since last loop), the honest source as an *absolute*
 reading. Seed the estimate from the absolute sensor so the filter starts true:
 
-<Pseudocode label="Fuse a motor encoder with an absolute encoder">{`COMPLEMENTARY FUSION
-  Two sensors with opposite weaknesses:
-     motor encoder    fast and smooth, but DRIFTS (slip, backlash)
-     absolute encoder honest long-term, but noisy loop to loop
-  radians throughout. TAU is the fusion time constant, in seconds.
+<JavaCode league="FTC" label="Fuse a motor encoder with an absolute encoder">{`private static final double TAU = 0.5;    // fusion time constant, seconds
+private static final double RAD_PER_TICK = 2 * Math.PI / TICKS_PER_REV;
 
-  state:  angle      <- the absolute encoder's current reading   # seed honestly
-          last_ticks <- the motor encoder's current ticks
+private double angle;        // seed from the absolute encoder, not from zero
+private double lastTicks;
 
-  each loop:
-      dt    <- measured seconds since the last loop
-      alpha <- exp(-dt / TAU)          # loop-rate independent
+double update(double ticks, double absRad, double dt) {
+    double alpha = Math.exp(-dt / TAU);        // loop-rate independent
 
-      ticks     <- read the motor encoder
-      delta     <- (ticks - last_ticks) * RAD_PER_TICK
-      last_ticks <- ticks
+    double delta = (ticks - lastTicks) * RAD_PER_TICK;
+    lastTicks = ticks;
 
-      abs_rad <- read the absolute encoder      # honest, but noisy
+    double prediction = wrap(angle + delta);
+    double innovation = wrap(absRad - prediction);
+    angle = wrap(prediction + (1 - alpha) * innovation);
+    return angle;
+}`}</JavaCode>
 
-      prediction <- wrap(angle + delta)              # trust the increment
-      innovation <- wrap(abs_rad - prediction)       # how wrong were we?
-      angle      <- wrap(prediction + (1 - alpha) * innovation)
+<Exercise title="Both extremes of alpha">
 
-# Read the last three lines as a sentence: assume the relative sensor was
-# right, measure how far that has drifted from the absolute one, then walk
-# back a fraction of the way. Fast motion rides on the encoder; slow drift
-# gets pulled out by the absolute reading.
-#
-# Work out both extremes before choosing TAU. With alpha = 1 the innovation
-# is ignored entirely - which sensor are you now using? With alpha = 0 the
-# prediction is discarded - which one now? TAU picks where between those you
-# sit, in seconds rather than in loops.
-#
-# Work out why EVERY line wraps. The three quantities are angles, and the
-# absolute encoder rolls over. Trace a fusion across the wrap point with the
-# wraps removed and find the exact loop where the estimate jumps by 2*pi.
-#
-# This is fusion, not filtering: neither sensor is being cleaned up on its
-# own. Look up: "complementary filter", and work out how it relates to the
-# Kalman gain in the next lesson.
-`}</Pseudocode>
+Work out both ends before choosing $\tau$. With $\alpha = 1$ the innovation is ignored entirely — which
+sensor are you now using? With $\alpha = 0$ the prediction is discarded — which one now?
+
+<Solution>
+
+$\alpha = 1$ leaves `angle = prediction`, so you are running on the motor encoder alone: smooth, and
+drifting forever. $\alpha = 0$ leaves `angle = absRad`, so you are running on the absolute encoder
+alone: honest, and jittering every loop. $\tau$ picks where between those you sit, and it picks it in
+seconds rather than in loops.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why every line wraps">
+
+All three quantities are angles, and the absolute encoder rolls over. Trace a fusion across the wrap
+point with the `wrap` calls removed, and find the exact loop where the estimate jumps by $2\pi$.
+
+<Solution>
+
+The break is in `innovation`. With the mechanism just past $\pi$, `absRad` has rolled to just above
+$-\pi$ while `prediction` is still just below $+\pi$. Unwrapped, their difference is about $-2\pi$
+instead of the true near-zero, so the filter concludes it is a full turn wrong and drags `angle`
+backwards on the very first loop after the rollover.
+
+</Solution>
+
+</Exercise>
+
+Read the last three lines as a sentence: assume the relative sensor was right, measure how far that has
+drifted from the absolute one, then walk back a fraction of the way. Fast motion rides on the motor
+encoder; slow drift gets pulled out by the absolute reading.
 
 :::note[The drone-textbook version]
 Most textbooks teach this filter on a gyro + accelerometer pair: integrate the gyro's rate (fast,

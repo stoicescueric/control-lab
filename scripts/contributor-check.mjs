@@ -67,7 +67,9 @@ for (const expected of [
   '<Difficulty',
   '<Abstract>',
   '<EquationLegend',
-  '<Pseudocode',
+  '<JavaCode',
+  '<Exercise',
+  'decisions/0004',
   ':::warning',
   '## Sources and further reading',
 ]) {

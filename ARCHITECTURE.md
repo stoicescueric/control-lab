@@ -71,13 +71,13 @@ Lesson-specific simulations are imported directly from their domain folder:
 import Kalman from '@site/src/components/simulations/signal-processing/Kalman';
 ```
 
-Shared MDX primitives such as `<Abstract>`, `<EquationLegend>`, `<Pseudocode>`, and
-`<JavaCode>` do not need local imports. They are registered once in
+Shared MDX primitives such as `<Abstract>`, `<EquationLegend>`, `<JavaCode>`, and
+`<Exercise>` do not need local imports. They are registered once in
 `src/theme/MDXComponents.tsx`.
 
-`<Pseudocode>` is the default for anything a reader is meant to implement.
-`<JavaCode>` is reserved for anti-patterns being criticized and for bare SDK
-surface. See CONTRIBUTING.md, Engineering Implementation.
+`<JavaCode>` carries every algorithm, scoped to the method that is the lesson so
+nothing is paste-ready. `<Exercise>` carries what the reader should derive. See
+CONTRIBUTING.md, Engineering Implementation.
 
 ### `src/components/`: React Presentation
 

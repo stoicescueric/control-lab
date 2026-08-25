@@ -21,9 +21,14 @@ export function ChallengeChip({
   progress?: number;
 }) {
   const [stored, setStored] = useState(false);
+  // True only for a pass earned in this session — a challenge already passed on
+  // an earlier visit renders straight into its passed state without replaying.
+  const [justPassed, setJustPassed] = useState(false);
   useEffect(() => setStored(isChallengePassed(id)), [id]);
   useEffect(() => {
     if (status === 'passed') {
+      // Read the store before writing to it: afterwards it always says passed.
+      if (!isChallengePassed(id)) setJustPassed(true);
       passChallenge(id);
       setStored(true);
     }
@@ -48,15 +53,22 @@ export function ChallengeChip({
         {label}
       </span>
       {passed ? (
-        <span className="shrink-0 rounded-[4px] bg-green/20 px-3 py-1 text-[0.75rem] font-bold text-green">
+        <span
+          className={`shrink-0 rounded-[4px] bg-green/20 px-3 py-1 text-[0.75rem] font-bold text-green ${
+            justPassed ? 'cl-challenge-pass' : ''
+          }`}>
           Passed
         </span>
       ) : (
         <span className="flex shrink-0 items-center gap-2">
           <span className="h-2 w-24 overflow-hidden rounded-full bg-white/10">
+            {/* scaleX, not width: the sim retargets `progress` roughly every
+                25ms, so a width transition never lands and the bar reads behind
+                the real hold. The source value is already smooth — transform it
+                straight through, no transition. */}
             <span
-              className="block h-full rounded-full bg-amber transition-[width] duration-200"
-              style={{width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%`}}
+              className="block h-full w-full origin-left rounded-full bg-amber"
+              style={{transform: `scaleX(${Math.max(0, Math.min(1, progress))})`}}
             />
           </span>
           <span className="font-mono text-[0.72rem] text-[#8294b8]">

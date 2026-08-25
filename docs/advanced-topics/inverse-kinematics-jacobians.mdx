@@ -1,7 +1,7 @@
 ---
 title: "Inverse Kinematics: Jacobians & Numerical Solvers"
 description: "The advanced side of inverse kinematics: using Jacobians to turn small end-effector errors into joint corrections when a closed-form geometry solution is no longer convenient."
-sidebar_position: 1.5
+sidebar_position: 1
 tags: [inverse-kinematics, jacobian, numerical-methods, mechanisms, robotics, advanced]
 ---
 
@@ -262,65 +262,86 @@ This is intentionally a skeleton rather than a copy-paste subsystem. The point i
 geometry computes small angle corrections; your real subsystem still owns encoder offsets, feedforward,
 limits, and motor commands.
 
-<Pseudocode label="Damped least-squares IK iteration">{`DAMPED LEAST-SQUARES IK STEP      planar two-link arm
-  One small correction from the current joint angles toward a target wrist
-  position. It does NOT command motors - it returns a delta.
+<JavaCode label="Damped least-squares IK step">{`// One small joint delta from the current angles toward a target wrist
+// position. Returns null for a degenerate step; commands no motors.
+double[] step(double theta1, double theta2, double targetX, double targetY) {
+    double x = link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
+    double y = link1 * Math.sin(theta1) + link2 * Math.sin(theta1 + theta2);
 
-  step(theta1, theta2, target_x, target_y):
+    double errorX = targetX - x;
+    double errorY = targetY - y;
 
-      # ---- where the wrist actually is right now (forward kinematics) ----
-      x <- link1*cos(theta1) + link2*cos(theta1 + theta2)
-      y <- link1*sin(theta1) + link2*sin(theta1 + theta2)
+    double j00 = -link1 * Math.sin(theta1) - link2 * Math.sin(theta1 + theta2);
+    double j01 = -link2 * Math.sin(theta1 + theta2);
+    double j10 =  link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
+    double j11 =  link2 * Math.cos(theta1 + theta2);
 
-      error_x <- target_x - x
-      error_y <- target_y - y
+    double a00 = j00 * j00 + j01 * j01 + LAMBDA * LAMBDA;
+    double a01 = j00 * j10 + j01 * j11;
+    double a10 = a01;                          // A is symmetric
+    double a11 = j10 * j10 + j11 * j11 + LAMBDA * LAMBDA;
 
-      # ---- the Jacobian: how the wrist moves per radian of each joint ----
-      J = [ dx/dtheta1   dx/dtheta2 ]
-          [ dy/dtheta1   dy/dtheta2 ]
+    double det = a00 * a11 - a01 * a10;
+    if (Math.abs(det) < EPS) return null;      // try again next loop
 
-      j00 <- -link1*sin(theta1) - link2*sin(theta1 + theta2)
-      j01 <- -link2*sin(theta1 + theta2)
-      j10 <-  link1*cos(theta1) + link2*cos(theta1 + theta2)
-      j11 <-  link2*cos(theta1 + theta2)
+    double w0 = ( a11 * errorX - a01 * errorY) / det;
+    double w1 = (-a10 * errorX + a00 * errorY) / det;
 
-      # Derive these four yourself - they are just the derivatives of the
-      # two forward-kinematics lines above. Differentiate x with respect to
-      # theta1, then theta2, and the same for y. Nothing more.
+    return new double[] {
+        clamp(j00 * w0 + j10 * w1, -MAX_STEP, MAX_STEP),
+        clamp(j01 * w0 + j11 * w1, -MAX_STEP, MAX_STEP),
+    };
+}
+`}</JavaCode>
 
-      # ---- A = J * transpose(J) + lambda^2 * I ----
-      a00 <- j00^2 + j01^2 + LAMBDA^2
-      a01 <- j00*j10 + j01*j11
-      a10 <- a01                          # A is symmetric
-      a11 <- j10^2 + j11^2 + LAMBDA^2
+The first two lines are forward kinematics; `j00` through `j11` are the manipulator Jacobian
+$J = \begin{bmatrix} \partial x/\partial\theta_1 & \partial x/\partial\theta_2 \\ \partial y/\partial\theta_1 & \partial y/\partial\theta_2\end{bmatrix}$;
+the `a` entries are $JJ^\top + \lambda^2 I$; and the last four lines solve $Aw = e$ and set
+$\Delta\theta = J^\top w$.
 
-      det <- a00*a11 - a01*a10
-      if | det | ~ 0: return no movement  # degenerate; try again next loop
+<Exercise title="Derive the four Jacobian entries">
 
-      # ---- solve A * w = error, then delta = transpose(J) * w ----
-      w0 <- ( a11*error_x - a01*error_y) / det
-      w1 <- (-a10*error_x + a00*error_y) / det
+They are nothing more than the derivatives of the two forward-kinematics lines above. Differentiate $x$
+with respect to $\theta_1$, then $\theta_2$, and do the same for $y$.
 
-      d_theta1 <- j00*w0 + j10*w1
-      d_theta2 <- j01*w0 + j11*w1
+</Exercise>
 
-      return (clamp(d_theta1, +/-MAX_STEP), clamp(d_theta2, +/-MAX_STEP))
+<Exercise title="What LAMBDA is protecting">
 
-# LAMBDA is the whole reason this is called DAMPED least squares. Without
-# it you would invert J*transpose(J) directly - which blows up near a
-# SINGULARITY, where the arm is fully extended or fully folded and the two
-# joints can no longer move the wrist independently. Work out what
-# determinant you get for a fully extended arm, and what step size a plain
-# inverse would then demand. Adding lambda^2 to the diagonal keeps the
-# matrix invertible at the cost of a slightly wrong direction.
-#
-# Work out what MAX_STEP is for. This is ONE iteration of a loop that runs
-# every control cycle; it does not have to arrive this loop. What could a
-# single unclamped step do to a real arm?
-#
-# Look up: "damped least squares", "Levenberg-Marquardt",
-#          "manipulator Jacobian", "kinematic singularity".
-`}</Pseudocode>
+`LAMBDA` is the whole reason this is called *damped* least squares. Without it you would invert
+$JJ^\top$ directly, which blows up near a singularity — where the arm is fully extended or fully
+folded and the two joints can no longer move the wrist independently. Work out what determinant you get
+for a fully extended arm, and what step size a plain inverse would then demand.
+
+<Solution>
+
+Fully extended, both links point the same way, so the two Jacobian columns become parallel and the
+determinant of $JJ^\top$ goes to zero. A plain inverse divides by it: the solver demands an
+arbitrarily large joint step to chase an error component the arm physically cannot produce in that
+configuration. Adding $\lambda^2$ to the diagonal keeps the matrix invertible at the cost of a
+slightly wrong direction — a small, bounded error instead of an unbounded one. Look up "damped least
+squares" and "Levenberg-Marquardt."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="What MAX_STEP is for">
+
+This is *one* iteration of a loop that runs every control cycle; it does not have to arrive this loop.
+Work out what a single unclamped step could do to a real arm.
+
+<Solution>
+
+Near a singularity, or with a target far outside the workspace, the solved delta can be several
+radians. Commanded as a joint target in one control cycle, that is the arm attempting to slew its full
+travel instantly — into a hard stop, into the robot, or into whatever is in front of it. Clamping turns
+the solver into something that converges over tens of loops, which at 50 Hz is still a fraction of a
+second.
+
+</Solution>
+
+</Exercise>
 
 In FTC, this becomes useful when the mechanism has more variables than the clean two-link formula:
 

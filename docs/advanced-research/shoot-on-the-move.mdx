@@ -125,27 +125,41 @@ valid. The hard iteration cap therefore protects the real-time loop from non-con
 On the robot the fixed-point loop is explicit and bounded. It runs inside the autonomous control loop, so
 even bad data or impossible geometry must return in predictable time.
 
-<Pseudocode label="The bounded fixed-point aim solver">{`solve_virtual_target(shooter, target, robot_velocity):
-    flight_time <- lookup_flight_time( distance(shooter, target) )
-    if flight_time is not finite and positive: return INVALID_LOOKUP
+<JavaCode league="FTC" label="The bounded fixed-point aim solver">{`// Returns a virtual aim point plus CONVERGED / NOT_CONVERGED / INVALID_LOOKUP.
+AimSolution solveVirtualTarget(Vector2d shooter, Vector2d target,
+                               Vector2d robotVelocity) {
+    double flightTime = lookupFlightTime(shooter.minus(target).norm());
+    if (!(Double.isFinite(flightTime) && flightTime > 0)) {
+        return AimSolution.invalidLookup();
+    }
 
-    repeat at most MAX_ITERATIONS times:
-        compensation_time <- feeder_delay + flight_time
-        virtual   <- target - motion_gain * robot_velocity * compensation_time
+    Vector2d virtual = target;
+    for (int i = 0; i < MAX_ITERATIONS; i++) {
+        double compensationTime = feederDelay + flightTime;
+        virtual = target.minus(
+                robotVelocity.times(motionGain * compensationTime));
 
-        next_time <- lookup_flight_time( distance(shooter, virtual) )
-        if next_time is not finite and positive: return INVALID_LOOKUP
-        if | next_time - flight_time | < tolerance:
-            return (virtual, CONVERGED)
-        flight_time <- next_time
+        double nextTime = lookupFlightTime(shooter.minus(virtual).norm());
+        if (!(Double.isFinite(nextTime) && nextTime > 0)) {
+            return AimSolution.invalidLookup();
+        }
+        if (Math.abs(nextTime - flightTime) < tolerance) {
+            return new AimSolution(virtual, CONVERGED);
+        }
+        flightTime = nextTime;
+    }
+    return new AimSolution(virtual, NOT_CONVERGED);
+}
+`}</JavaCode>
 
-    return (virtual, NOT_CONVERGED)
+At the call site, only `CONVERGED` may fire:
 
-solution <- solve_virtual_target(shooter, target, robot_velocity)
-if solution.status != CONVERGED:
-    inhibit_feeder()
-    hold_last_validated_aim_or_stop_turret()
-`}</Pseudocode>
+<JavaCode league="FTC" label="Refusing to shoot on an unvalidated solution">{`AimSolution solution = solveVirtualTarget(shooter, target, robotVelocity);
+if (solution.status() != CONVERGED) {
+    inhibitFeeder();
+    holdLastValidatedAimOrStopTurret();
+}
+`}</JavaCode>
 
 The convergence `tolerance` decides when "close enough" is reached. `MAX_ITERATIONS` guarantees only
 that computation terminates; it does **not** make the last iterate a valid aim. The monotone table from
@@ -351,56 +365,84 @@ That is the physical meaning of a full-state reference, and it is exactly what W
 For constant-velocity tracking, $\alpha^*=0$, so the static and velocity terms remain. An accelerating
 reference additionally needs $k_A\alpha^*$. Estimate both derivatives with seam-safe angle differences:
 
-<Pseudocode label="Turret tracking with velocity and acceleration feedforward">{`TURRET TRACKING
-  The turret must not merely point where the target IS - it must move at the
-  rate the aim point is moving. So solve the aim three times, at three
-  nearby instants, and difference the answers.
+<JavaCode league="FTC" label="Turret tracking with velocity and acceleration feedforward">{`AimSolution aim0 = solveVirtualTarget(poseAt(0));
+AimSolution aim1 = solveVirtualTarget(poseAt(DT));
+AimSolution aim2 = solveVirtualTarget(poseAt(2 * DT));
 
-  aim0 <- solve_virtual_target(pose_at(0))
-  aim1 <- solve_virtual_target(pose_at(DT))
-  aim2 <- solve_virtual_target(pose_at(2*DT))
-  # pose_at(t) is the COAST-projected robot state at t seconds from now
+if (aim0.status() != CONVERGED || aim1.status() != CONVERGED
+        || aim2.status() != CONVERGED) {
+    inhibitFeeder();                  // never fire an unvalidated solution
+    holdLastValidatedAimOrStopTurret();
+    return;
+}
 
-  if any of the three did not converge:
-      inhibit the feeder                # never fire an unvalidated solution
-      stop the turret, or hold the last validated aim
-      return
+double theta0 = aimAngle(aim0, poseAt(0));
+double theta1 = aimAngle(aim1, poseAt(DT));
+double theta2 = aimAngle(aim2, poseAt(2 * DT));
 
-  theta0 <- aim_angle(aim0, pose_at(0))
-  theta1 <- aim_angle(aim1, pose_at(DT))
-  theta2 <- aim_angle(aim2, pose_at(2*DT))
+double omegaStar = wrap(theta1 - theta0) / DT;      // radians/second
+double omegaNext = wrap(theta2 - theta1) / DT;
+double alphaStar = (omegaNext - omegaStar) / DT;    // radians/second^2
 
-  # ---- differentiate the aim angle, wrapping every difference ----
-  omega_star <- wrap(theta1 - theta0) / DT          # radians/second
-  omega_next <- wrap(theta2 - theta1) / DT
-  alpha_star <- (omega_next - omega_star) / DT      # radians/second^2
+double feedforward = kS * Math.signum(omegaStar)
+        + kV * omegaStar
+        + kA * alphaStar;
 
-  # Work out why each difference is wrapped. The three angles are absolute
-  # bearings; two of them can straddle the +/-pi discontinuity. Construct
-  # such a case and compute omega_star with and without the wrap.
-  #
-  # Work out why THREE solutions and not two. Two give you a rate. What does
-  # the third buy, and which term below would be missing without it?
+double volts = K_POS * (theta0 - measuredTurretAngle)
+        + K_VEL * (omegaStar - measuredTurretRate)
+        + feedforward;
 
-  # ---- feedforward from the aim's own motion ----
-  feedforward <- kS*sign(omega_star) + kV*omega_star + kA*alpha_star
+double vbat = voltageSensor.getVoltage();
+if (!Double.isFinite(vbat) || vbat <= MIN_VALID_BATTERY_VOLTS) {
+    turret.setPower(0);
+    return;
+}
+turret.setPower(clamp(volts / vbat, -1, +1));
+`}</JavaCode>
 
-  volts <- K_POS * (theta0 - measured_turret_angle)      # position error
-         + K_VEL * (omega_star - measured_turret_rate)   # rate error
-         + feedforward
+`poseAt(t)` is the coast-projected robot state $t$ seconds from now. The turret must not merely point
+where the target *is*; it must move at the rate the aim point is moving — so the aim is solved three
+times at three nearby instants and the answers are differenced.
 
-  # Note K_VEL closes the loop on RATE, not position. A turret that only
-  # tracks position always lags a moving target by however long it takes
-  # position error to build up. Work out that lag for a target sweeping at
-  # 1 rad/s with a position-only loop.
+<Exercise title="Why each difference is wrapped, and why three solutions">
 
-  vbat <- read the battery voltage
-  if vbat is not finite or vbat <= MIN_VALID_BATTERY_VOLTS:
-      stop the turret                    # sensor or sanity fault
-      return
+The three angles are absolute bearings, and two of them can straddle the $\pm\pi$ discontinuity.
+Construct such a case and compute `omegaStar` with and without the `wrap`. Then work out why the
+solver runs *three* times rather than two: two give you a rate, so what does the third buy, and which
+term above would be missing without it?
 
-  command the turret with clamp(volts / vbat, -1, +1)
-`}</Pseudocode>
+<Solution>
+
+Take `theta0 = 3.10` and `theta1 = -3.10` rad with `DT = 0.02`. The true motion is about 0.08 rad
+across the seam, so `omegaStar` should be roughly 4 rad/s. Unwrapped, the difference is $-6.20$ and
+the rate comes out at $-310$ rad/s — the turret slams the other way at full authority.
+
+The third solution gives a second rate, and differencing the two rates gives `alphaStar`. Without it
+the $k_A\alpha^*$ term has nothing to multiply, so the feedforward is correct only while the aim point
+moves at constant angular rate — which it does not do when the robot is turning or the geometry is
+changing.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Closing the loop on rate, not just position">
+
+`K_VEL` closes the loop on rate rather than position. A turret that only tracks position always lags a
+moving target by however long it takes position error to build up. Work out that lag for a target
+sweeping at 1 rad/s with a position-only loop.
+
+<Solution>
+
+At steady state a position-only loop settles where `K_POS * error` equals the voltage needed to sustain
+1 rad/s — so the error never reaches zero, it reaches whatever standing offset produces that voltage.
+With a typical turret that is a tenth of a radian or so of permanent lag, which at competition range is
+a miss. The rate term supplies the sustaining voltage directly, so the position error is free to go to
+zero.
+
+</Solution>
+
+</Exercise>
 
 `MIN_VALID_BATTERY_VOLTS` is a team-validated sensor-sanity threshold, not a universal FTC cutoff.
 

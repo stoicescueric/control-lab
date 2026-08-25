@@ -408,73 +408,96 @@ heading remains its own wrapped controller. The final command still passes throu
 
 The exact Pedro implementation has its own classes, tuners, and APIs. A clean FTC architecture inspired by the same decomposition would look like this:
 
-<Pseudocode label="Pedro-style follower decomposition">{`REACTIVE PATH FOLLOWER
-  The architectural point: one field-frame command, built by ADDING three
-  independent vectors, plus a separate heading term.
+<JavaCode league="FTC" label="Pedro-style follower decomposition">{`void startPath() {
+    lastT = 0;
+    timer.reset();
+}
 
-  start_path():                # once per traversal, including reuse
-      last_t <- 0
-      reset the move timer
+MoveStatus update(PoseSample sample) {
+    Pose2d pose = sample.pose();
+    Vector2d velocity = sample.fieldVelocity();
 
-  update(sample):
-      pose     <- sample.pose
-      velocity <- sample.fieldVelocity
+    lastT = path.project(pose.vec(), lastT);     // seeded from last loop
 
-      # ---- 1. PROJECT: where are we along the path? ----
-      last_t <- path.project(pose.vec(), seeded from last_t)
+    MoveStatus completion = moveStatus(sample, path.endPose(), timer);
+    boolean atEnd = lastT >= 1 - TERMINAL_TOL;
+    if (completion == TIMED_OUT || (completion == REACHED && atEnd)) {
+        drive(0, 0, 0);
+        return completion;
+    }
 
-      # ---- 2. COMPLETION, before anything else is computed ----
-      completion <- moveStatus(sample, path.end_pose(), timer)
-      at_end     <- last_t >= 1 - TERMINAL_TOL
-      if completion is TIMED_OUT or (completion is REACHED and at_end):
-          stop; return completion
+    Vector2d tangent = path.tangent(lastT).unit();
+    Vector2d leftNormal = new Vector2d(-tangent.y(), tangent.x());
+    double signedCurvature = path.curvature(lastT);   // + left, - right bend
+    double remaining = path.remainingArcLength(lastT);
 
-      # ---- 3. the local frame at that point ----
-      tangent <- path.tangent(last_t), normalized
-                 # if its length is ~0 the path has a cusp: stop and fail loudly
-      left_normal      <- (-tangent.y, tangent.x)     # fixed LEFT normal
-      signed_curvature <- path.curvature(last_t)      # + left bend, - right bend
-      remaining        <- path.remaining_arc_length(last_t)
+    double tangentSpeed = velocity.dot(tangent);
+    double brakingSpeed = Math.sqrt(2 * MAX_DECEL * remaining);
+    double endScale = clamp(remaining / END_SLOWDOWN_DISTANCE, 0, 1);
+    double desiredSpeed = Math.min(CRUISE_SPEED, brakingSpeed) * endScale;
 
-      # ---- 4. the speed plan ----
-      tangent_speed  <- velocity dot tangent          # how fast ALONG the path
-      braking_speed  <- sqrt(2 * MAX_DECEL * remaining)
-      end_scale      <- clamp(remaining / END_SLOWDOWN_DISTANCE, 0, 1)
-      desired_speed  <- min(CRUISE_SPEED, braking_speed) * end_scale
+    Vector2d alongPath = tangent.times(
+            DRIVE_KP * (desiredSpeed - tangentSpeed));
+    Vector2d towardPath = path.position(lastT).minus(pose.vec())
+            .times(TRANSLATION_KP);
+    Vector2d centripetal = leftNormal.times(
+            CENTRIPETAL_K * tangentSpeed * tangentSpeed * signedCurvature);
 
-      # ---- 5. THREE VECTORS, added ----
-      along_path  <- tangent * (DRIVE_KP * (desired_speed - tangent_speed))
-                     # close the loop on SPEED along the path
+    Vector2d fieldCommand = alongPath.plus(towardPath).plus(centripetal);
+    double turn = HEADING_KP * wrap(path.heading(lastT) - pose.heading());
 
-      toward_path <- (path.position(last_t) minus pose.vec()) * TRANSLATION_KP
-                     # pull back onto the path
+    driveFieldCentric(fieldCommand, turn);
+    return RUNNING;
+}
+`}</JavaCode>
 
-      centripetal <- left_normal * (CENTRIPETAL_K * tangent_speed^2 * signed_curvature)
-                     # lean into the bend BEFORE drifting out of it
+If the tangent's length is near zero the path has a cusp: stop and fail loudly rather than normalizing a
+zero vector. The three vectors each have one job — close the loop on speed *along* the path, pull back
+*onto* the path, and lean into the bend before drifting out of it.
 
-      field_command <- along_path + toward_path + centripetal
+<Exercise title="Delete each vector in turn">
 
-      # ---- 6. heading, handled separately ----
-      turn <- HEADING_KP * wrap(path.heading(last_t) - pose.heading)
+The decomposition is the lesson. Each vector can be tuned alone and switched off to see what it was
+doing. Work out what the robot does with each of the three deleted.
 
-      command the drive field-centric (field_command, turn)
-      return RUNNING
+<Solution>
 
-# The decomposition IS the lesson. Each vector has one job, can be tuned
-# alone, and can be switched off to see what it was doing. Work out what
-# the robot does with each of the three deleted:
-#   no along_path   -> ?
-#   no toward_path  -> ?
-#   no centripetal  -> ?
-#
-# Work out why heading is a separate scalar rather than a fourth vector.
-# What kind of drivetrain does that assume, and what would change on a
-# differential drive?
-#
-# Work out why the centripetal term uses tangent_speed SQUARED and the
-# SIGNED curvature. Which of the two decides the size of the lean, and
-# which decides its direction?
-`}</Pseudocode>
+Without `alongPath` nothing regulates speed: the robot still converges to the path and still points
+the right way, but it crawls or overruns depending only on the other two terms, and the braking plan
+does nothing.
+
+Without `towardPath` there is no correction for lateral error: push the robot off the line and it
+happily continues parallel to the path forever, because tangent speed and curvature are both still
+satisfied.
+
+Without `centripetal` the robot enters every bend on the old tangent and drifts wide, then
+`towardPath` yanks it back — so corners are cut on the outside and the path is tracked with a
+characteristic lag that gets worse the faster you go.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Heading as a scalar, and the squared speed">
+
+Work out why heading is a separate scalar rather than a fourth vector. What kind of drivetrain does that
+assume, and what would change on a differential drive? Then work out why the centripetal term uses
+`tangentSpeed` *squared* and the *signed* curvature — which of the two decides the size of the lean,
+and which decides its direction?
+
+<Solution>
+
+Separating heading assumes a holonomic drivetrain, where translation and rotation are independent
+commands. On a differential drive they are not: heading *is* how you translate, so the follower has to
+solve for a curvature the chassis can actually execute rather than adding a turn on top.
+
+For the centripetal term, required centripetal acceleration is $v^2\kappa$ — the squared speed sets
+the magnitude, which is why the lean grows quadratically as you speed up, and the sign of $\kappa$
+sets which side of the path to lean toward.
+
+</Solution>
+
+</Exercise>
 
 <Admonition type="warning" title="This is architecture, not drop-in Pedro source">
 
@@ -549,6 +572,6 @@ That is the core idea Pedro exposes to teams: a path follower that is reactive l
 - The $D(v) = av^2 + bv$ braking model, the Pedro 2 vs Pedro 3 braking implementations, and the
   active-braking caveat are from correspondence with Havish Sripada (Pedro Pathing); the
   braking-distance regression data was collected by Jacob Ophoven (Pedro Pathing).
-- This lesson extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx), [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx), and [GVF Convergence Theory](./gvf-convergence.mdx).
+- This lesson extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx) and [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx).
 
 </Admonition>

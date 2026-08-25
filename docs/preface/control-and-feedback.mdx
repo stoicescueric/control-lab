@@ -176,27 +176,52 @@ $$
 Here, $\epsilon$ is a tolerance band. Without a tolerance, a real robot may wait forever for the
 measurement to equal the setpoint exactly, which almost never happens.
 
-<Pseudocode label="Bang-bang arm hold with tolerance">{`error     <- target - measured_position
-TOLERANCE <- 20 ticks
+<JavaCode league="FTC" label="Bang-bang arm hold with tolerance">{`static final int TOLERANCE = 20;   // encoder ticks
 
-if error >  TOLERANCE:   drive up   at 0.45
-if error < -TOLERANCE:   drive down at 0.25
-otherwise:               power off
+double error = target - measuredPosition;
 
-# Two things here are worth stopping on.
-#
-# 1. The powers differ, and up is larger. Work out why. Which direction is
-#    gravity helping, and what would happen with 0.45 in both?
-#
-# 2. TOLERANCE is what makes this usable at all. Work out what the arm does
-#    with a tolerance of zero: the error crosses back and forth by one tick,
-#    and the motor is commanded full-up, full-down, full-up. Describe the
-#    sound, then say what it costs the battery.
-#
-# Work out the limitation you cannot fix by tuning: this controller has only
-# three outputs. Whether the arm is 5 ticks or 500 ticks away, it applies
-# exactly the same power. What does that do to the approach?
-`}</Pseudocode>
+if (error > TOLERANCE)       arm.setPower(0.45);    // drive up
+else if (error < -TOLERANCE) arm.setPower(-0.25);   // drive down
+else                         arm.setPower(0);
+`}</JavaCode>
+
+<Exercise title="Two things worth stopping on">
+
+The two powers differ, and up is the larger one. Work out why: which direction is gravity helping, and
+what would happen with 0.45 in both?
+
+Then `TOLERANCE`, which is what makes this usable at all. Work out what the arm does with a tolerance
+of zero — the error crosses back and forth by one tick, and the motor is commanded full-up, full-down,
+full-up. Describe the sound, then say what it costs the battery.
+
+<Solution>
+
+Gravity opposes the arm going up and helps it coming down, so the same power produces very different
+accelerations in the two directions. Using 0.45 both ways makes the descent a controlled fall: the arm
+slams down and the driver learns not to trust it.
+
+With zero tolerance the motor reverses at loop rate — up to 50 direction changes a second. It buzzes
+audibly, the gearbox takes shock loading it was not designed for, and each reversal is a current spike
+into the pack, so the rail sags for every other mechanism on the robot.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The limit you cannot tune away">
+
+This controller has exactly three outputs. Whether the arm is 5 ticks or 500 ticks away, it applies the
+same power. Work out what that does to the approach.
+
+<Solution>
+
+It arrives at full speed and then stops commanding — so it coasts through the target, trips the
+opposite branch, and comes back. No choice of the two powers fixes it, because the controller has no
+way to know it is close. That is precisely what the next controller adds.
+
+</Solution>
+
+</Exercise>
 
 Bang-bang is easy to understand, but it often oscillates because the command changes abruptly. A
 proportional controller is the next step:
@@ -208,26 +233,50 @@ $$
 Here, $k_P$ is the proportional gain. A larger error creates a larger command; a smaller error creates
 a smaller command.
 
-<Pseudocode label="Proportional arm controller">{`error   <- target - measured_position
-command <- kP * error
+<JavaCode league="FTC" label="Proportional arm controller">{`double error = target - measuredPosition;
+double command = kP * error;
 
-apply clamp(command, -1, +1)
+arm.setPower(clamp(command, -1, +1));
+`}</JavaCode>
 
-# Three lines, and it fixes the bang-bang problem completely: the further
-# away the arm is, the harder it pushes. Near the target it eases off by
-# itself, with no tolerance band to tune.
-#
-# Work out kP's units before guessing a value. error is in ticks, command is
-# in [-1, 1]. So kP is "power per tick" - if the arm is 500 ticks away and
-# you want roughly half power, what is kP? That estimate is your starting
-# point, not a number copied from a lesson.
-#
-# Then work out where this one still fails, because it does:
-#   the arm stops slightly short and stays there. what is missing?
-#   the arm sags under gravity at every angle. what is missing?
-#   the arm overshoots and oscillates. what is missing?
-# Each answer is a later lesson in this module.
-`}</Pseudocode>
+Three lines, and it fixes the bang-bang problem completely: the further away the arm is, the harder it
+pushes, and near the target it eases off by itself with no tolerance band to tune.
+
+<Exercise title="What kP's units are">
+
+Work out $k_P$'s units before guessing a value. `error` is in ticks and `command` is in $[-1, 1]$, so
+$k_P$ is "power per tick." If the arm is 500 ticks away and you want roughly half power, what is
+$k_P$?
+
+<Solution>
+
+$0.5 / 500 = 0.001$ power per tick. That estimate is your starting point — a number you derived from
+your own mechanism's range of travel — not a value copied out of a lesson written for someone else's
+arm.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Where this one still fails">
+
+It does fail, in three distinct ways. Match each symptom to what is missing:
+
+- the arm stops slightly short and stays there
+- the arm sags under gravity at every angle
+- the arm overshoots and oscillates
+
+<Solution>
+
+Stopping short is missing an *integral* term: the remaining error is too small to produce enough
+command to move, and nothing accumulates it. Sagging at every angle is missing *feedforward*: the
+controller only reacts to error it has already allowed to happen, so gravity always wins first.
+Overshoot is missing a *derivative* term: nothing damps the approach, so momentum carries the arm past
+the target. Each answer is a later lesson in this module.
+
+</Solution>
+
+</Exercise>
 
 This proportional rule is the first piece of PID. Later, the PID lesson adds memory of past error and
 reaction to changing error, but the core feedback idea is already here.
@@ -274,43 +323,64 @@ reaction to changing error, but the core feedback idea is already here.
 Production robot code should make the feedback loop explicit. Sensors read. Controllers compute.
 Actuators write. Telemetry records what happened.
 
-<Pseudocode label="A small feedback-control architecture">{`Three roles, kept apart on purpose.
+<JavaCode league="FTC" label="A small feedback-control architecture">{`interface FeedbackSensor {
+    double getMeasurement();          // in real engineering units
+}
 
-  FEEDBACK SENSOR
-      get_measurement()  -> the measured value, in real engineering units
+interface Actuator {
+    void setCommand(double c);        // normalized to [-1, 1]
+}
 
-  ACTUATOR
-      set_command(c)     -> apply c, normalized to [-1, 1]
+interface FeedbackController {
+    double calculate(double setpoint, double measurement, double dt);
+}
 
-  FEEDBACK CONTROLLER
-      calculate(setpoint, measurement, dt)  -> a command, before clamping
+class FeedbackLoop {
+    FeedbackSensor sensor;
+    FeedbackController controller;
+    Actuator actuator;
+    double setpoint;
 
+    void update(double dt) {
+        double measurement = sensor.getMeasurement();
+        double command = controller.calculate(setpoint, measurement, dt);
+        double safeCommand = clamp(command, -1, +1);
+        actuator.setCommand(safeCommand);
+        log(setpoint, measurement, setpoint - measurement, safeCommand);
+    }
+}
+`}</JavaCode>
 
-  FEEDBACK LOOP        holds one of each, plus a setpoint
+That `update()` is the block diagram from the top of this lesson, written out. Read it next to the
+diagram and match each line to an arrow.
 
-      update(dt):                    # exactly once per OpMode loop
-          measurement  <- sensor.get_measurement()
-          command      <- controller.calculate(setpoint, measurement, dt)
-          safe_command <- clamp(command, -1, +1)
-          actuator.set_command(safe_command)
+<Exercise title="What each boundary buys">
 
-          log setpoint, measurement, error, and safe_command
+The split into three roles is the point. Work out what becomes possible at each seam:
 
-# That update() is the block diagram from the top of this lesson, written
-# out. Read it next to the diagram and match each line to an arrow.
-#
-# The split is the point. Work out what each boundary buys:
-#   swap the CONTROLLER      -> bang-bang becomes P becomes PID, unchanged loop
-#   swap the SENSOR          -> encoder becomes potentiometer becomes camera
-#   swap the ACTUATOR        -> test the whole loop with no hardware attached
-#
-# Work out why the clamp lives in the loop rather than inside each
-# controller. How many places would have to remember it otherwise?
-#
-# Work out why all four values are logged, not just the command. You are
-# tuning, the arm oscillates, and you have one graph. Which of the four
-# tells you whether the problem is the sensor or the controller?
-`}</Pseudocode>
+- swap the **controller** — bang-bang becomes P becomes PID, loop unchanged
+- swap the **sensor** — encoder becomes potentiometer becomes camera
+- swap the **actuator** — test the whole loop with no hardware attached
+
+Then two questions about the loop itself. Why does the clamp live in `update()` rather than inside each
+controller? And why are all four values logged rather than just the command?
+
+<Solution>
+
+Each seam lets one piece change without the others knowing. The actuator seam is the one people
+underuse: a fake actuator that just records what it was told turns the entire control loop into
+something you can unit-test at your desk.
+
+The clamp lives in the loop because otherwise every controller you ever write has to remember it, and
+the one that forgets fails silently. One place, one rule.
+
+For the log: you are tuning, the arm is oscillating, and you have one graph. If `measurement` is noisy
+while `setpoint` is steady, the problem is the sensor. If `measurement` is clean but `safeCommand`
+swings hard, the problem is the controller. The command alone cannot distinguish those two.
+
+</Solution>
+
+</Exercise>
 
 This style makes later lessons easier to plug in. A proportional controller, PID controller,
 feedforward-plus-PID controller, or motion-profiled controller can all implement the same

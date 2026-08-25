@@ -72,32 +72,60 @@ on," which is never the voltage you compete on.
 Apply it at the very end, after the controller has produced a voltage. Read the battery once per loop
 (reading it is not free) and clamp the result to the legal power range.
 
-<Pseudocode label="Voltage-compensated output">{`MIN_VALID_BATTERY_VOLTS   6.0     # a telemetry sanity floor, NOT a battery cutoff
+<JavaCode league="FTC" label="Voltage-compensated output">{`// A telemetry sanity floor, NOT a battery cutoff.
+static final double MIN_VALID_BATTERY_VOLTS = 6.0;
 
-loop():
-    vbat <- read the battery voltage       # ONCE per loop, shared by every motor
-    set_voltage(left_motor,  left_desired_volts(),  vbat)
-    set_voltage(right_motor, right_desired_volts(), vbat)
+void loop() {
+    double vbat = voltageSensor.getVoltage();   // ONCE per loop, shared below
+    setVoltage(leftMotor,  leftDesiredVolts(),  vbat);
+    setVoltage(rightMotor, rightDesiredVolts(), vbat);
+}
 
-set_voltage(motor, desired_volts, vbat):
-    if vbat or desired_volts is not finite, or vbat < MIN_VALID_BATTERY_VOLTS:
-        command the motor to zero          # reject a disconnected sensor
-        return
+void setVoltage(DcMotor motor, double desiredVolts, double vbat) {
+    if (!Double.isFinite(vbat) || !Double.isFinite(desiredVolts)
+            || vbat < MIN_VALID_BATTERY_VOLTS) {
+        motor.setPower(0);          // reject a disconnected sensor
+        return;
+    }
 
-    power <- desired_volts / vbat          # volts -> the [-1, 1] the SDK wants
-    command the motor to clamp(power, -1, +1)
+    double power = desiredVolts / vbat;         // volts -> the SDK's [-1, 1]
+    motor.setPower(Math.max(-1, Math.min(1, power)));
+}`}</JavaCode>
 
-# Every mechanism computes what it wants in VOLTS. This is the single place
-# volts become motor power, and the same cached vbat reaches all of them.
-#
-# Work out why one reading is shared instead of each motor reading for
-# itself. Two motors reading a sagging rail milliseconds apart get different
-# divisors for the same commanded voltage.
-#
-# Work out the sign of the effect with real numbers: you want 6 volts. At a
-# fresh 13.0 V the power is 0.46. At a sagging 11.0 V it is 0.55. Explain
-# why commanding a LARGER number is the correct response to a weaker battery.
-`}</Pseudocode>
+Every mechanism computes what it wants in volts. This is the single place volts become motor power, and
+the same cached `vbat` reaches all of them.
+
+<Exercise title="Why one reading, shared">
+
+Each motor could read the battery for itself. Work out what goes wrong when two motors read a sagging
+rail a few milliseconds apart while being handed the same commanded voltage.
+
+<Solution>
+
+They get different divisors, so the same 6 V request becomes two different powers — and on a
+drivetrain that is a steering error the controller never asked for, appearing only when the pack is
+sagging, which is exactly when you are pushing. One reading per loop makes the whole robot agree on
+what the battery is doing.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The sign of the effect">
+
+You want 6 volts. At a fresh 13.0 V the power is 0.46; at a sagging 11.0 V it is 0.55. Explain why
+commanding a *larger* number is the correct response to a *weaker* battery.
+
+<Solution>
+
+`setPower` is a duty cycle, not a voltage — it is the fraction of the rail you are asking for. A
+weaker rail means a larger fraction is needed to reach the same actual voltage at the motor. Without
+the division, the same `0.46` would deliver 6.0 V on a fresh pack and 5.06 V on a sagging one, and
+every gain you tuned would quietly drift over the match.
+
+</Solution>
+
+</Exercise>
 
 In FRC, the motor controllers do it for you with `enableVoltageCompensation(nominalVolts)` — set it once
 and command in volts with `setVoltage(...)` thereafter. The idea is identical: stop thinking in

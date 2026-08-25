@@ -1,6 +1,6 @@
 # ADR 0002 — Teach algorithms as pseudocode; stop shipping drop-in Java
 
-- Status: Accepted
+- Status: Superseded in part by [ADR 0003](./0003-java-in-the-foundations-exercises-out-of-comments.md)
 - Date: 2026-08-24
 - Context source: curriculum review of every `<JavaCode>` block in `docs/**/*.mdx`.
 
@@ -73,6 +73,9 @@ notation contract rather than a Java API.
 - **A future contributor or agent will want to "helpfully" restore working Java.** That
   is the regression this ADR exists to prevent. Adding a drop-in implementation of a
   technique a lesson teaches is a reversal of this decision, not an improvement to it.
+  ADR 0003 later returned Modules 1-3 to `<JavaCode>` deliberately, for pedagogical
+  reasons argued there, but kept this constraint: the Java is method-level, and a
+  paste-ready subsystem is still the thing neither ADR wants.
 - Not addressed here: `src/components/kit/Exercise.tsx` and `Solution` remain built,
   unused and unregistered. They are the natural home for a future "try it yourself"
   pass, but research hints are inline comments for now, so nothing depends on them.

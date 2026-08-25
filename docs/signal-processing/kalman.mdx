@@ -56,41 +56,23 @@ Start with one quantity, such as an $x$ coordinate. The random-walk model below 
 measured motion increment `delta`, adds process variance `Q`, then corrects whenever an absolute
 measurement arrives. `xHat` and `P` are fields, so every loop starts from the previous corrected result.
 
-<Pseudocode label="Persistent scalar predict/correct loop">{`SCALAR KALMAN FILTER
-  x_hat   the estimate            <- start at your best guess
-  P       its variance            <- start LARGE if the guess is poor
-  Q       process noise variance  how much truth drifts between loops
-  R       measurement variance    how much the sensor lies (measure it!)
+<JavaCode league="FTC" label="Persistent scalar predict/correct loop">{`private double xHat;   // the estimate; start at your best guess
+private double P;      // its variance; start LARGE if the guess is poor
+private double Q;      // process noise: how far truth drifts per loop
+private double R;      // measurement noise: how much the sensor lies
 
-  predict(delta):                  # every loop, using a measured displacement
-      x_hat <- x_hat + delta
-      P     <- P + Q               # moving without measuring: less certain
+// Every loop, from a measured displacement.
+void predict(double delta) {
+    xHat += delta;
+    P += Q;
+}
 
-  correct(z):                      # ONLY when a validated measurement exists
-      K     <- P / (P + R)         # the Kalman gain
-      x_hat <- x_hat + K * (z - x_hat)      # (z - x_hat) is the innovation
-      P     <- (1 - K) * P                  # measuring: more certain
-
-# Everything interesting is in K = P / (P + R). Work out the two extremes:
-#   P much larger than R  -> K approaches 1. What does x_hat become?
-#   R much larger than P  -> K approaches 0. What does x_hat become?
-# The filter is choosing, every loop, how much to trust the sensor versus
-# itself - and it decides using the two variances, not a gain you tuned.
-#
-# Compare with the low-pass filter you already wrote. Both compute
-# estimate + gain * (measurement - estimate). The difference is entirely
-# where the gain comes from: you picked alpha; K is derived. Work out what
-# happens to K over many loops when Q and R are constant, and why that
-# explains a filter that gradually stops responding.
-#
-# Work out why predict and correct are separate. An FTC robot might predict
-# at 50 Hz from odometry but only correct when an AprilTag comes into view.
-# What does P do during a long stretch of predictions with no correction?
-#
-# Set R from the noise std you measured earlier - it is that number squared.
-# Q is the honest one to guess. Look up: "Kalman gain derivation",
-# "process noise tuning".
-`}</Pseudocode>
+// Only when a validated measurement exists.
+void correct(double z) {
+    double K = P / (P + R);      // the Kalman gain
+    xHat += K * (z - xHat);      // (z - xHat) is the innovation
+    P = (1 - K) * P;
+}`}</JavaCode>
 
 With `delta = 1`, `Q = 1`, `R = 4`, and measurements `1.2, 2.1, 2.9`, three complete loops are:
 
@@ -103,6 +85,38 @@ With `delta = 1`, `Q = 1`, `R = 4`, and measurements `1.2, 2.1, 2.9`, three comp
 If you can trace `predict` then `correct` and explain why a larger `P` produces a larger gain, the required
 artifact is complete. The external [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx)
 can supply an example motion increment, but this scalar filter is not itself a localization system.
+
+<Exercise title="The two extremes of the gain">
+
+Everything interesting is in $K = P/(P+R)$. Work out what $\hat x$ becomes when $P$ is far larger than
+$R$, and again when $R$ is far larger than $P$. Then take the second case further: an FTC robot might
+run `predict` at 50 Hz off odometry but only `correct` when an AprilTag comes into view. Trace what $P$
+does across a long blind stretch, and what that means for the gain on the next correction.
+
+<Solution>
+
+With $P \gg R$ the gain approaches 1 and $\hat x \to z$: the filter throws away its own estimate and
+believes the sensor. With $R \gg P$ the gain approaches 0 and $\hat x$ barely moves: the measurement is
+ignored. Between corrections `predict` adds $Q$ every loop, so $P$ grows without bound. The longer the
+robot goes without a tag, the larger $P$ is when one finally appears, and the harder the filter snaps to
+it. That is the behavior you want, and it is also why a tag seen at a bad angle can yank the pose.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Where alpha came from">
+
+Put this beside the low-pass filter you already wrote. Both compute
+`estimate + gain * (measurement - estimate)`; the only difference is where the gain comes from. You
+picked $\alpha$ by hand, and $K$ is derived. Work out what happens to $K$ over many loops when $Q$ and
+$R$ are held constant, and use it to explain a filter that gradually stops responding to its sensor.
+
+</Exercise>
+
+Set $R$ from the noise standard deviation you measured in
+[Signals and noise](./signals.mdx) — it is that number squared. $Q$ is the honest guess of the two:
+start with the drift you can actually observe between corrections and tune from there.
 
 <Theory title="Optional continuation: many states and the optimal gain">
 
