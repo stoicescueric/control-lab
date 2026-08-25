@@ -123,8 +123,8 @@ const config: Config = {
   themeConfig: {
     image: 'img/control-lab-social-card.png',
     colorMode: {
-      defaultMode: 'light',
-      respectPrefersColorScheme: true,
+      defaultMode: 'dark',
+      respectPrefersColorScheme: false,
     },
     docs: {
       sidebar: {
