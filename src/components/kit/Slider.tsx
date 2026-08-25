@@ -1,3 +1,5 @@
+import type {CSSProperties} from 'react';
+
 /* A labelled range slider for the dark demo panels. Controlled: pass value +
    onChange. */
 
@@ -22,6 +24,10 @@ export function Slider({
   format = (v) => v,
   className = '',
 }: SliderProps) {
+  // Drives the filled portion of the track (see `.cl-range` in custom.css), so
+  // the control shows its value position and not just the thumb's location.
+  const fill = max === min ? 0 : ((value - min) / (max - min)) * 100;
+
   return (
     <div className={className}>
       <label className="mb-1.5 flex items-baseline justify-between text-[0.85rem] font-semibold text-[#c7d2e8]">
@@ -30,6 +36,7 @@ export function Slider({
       </label>
       <input
         className="cl-range"
+        style={{'--cl-range-fill': `${fill}%`} as CSSProperties}
         type="range"
         min={min}
         max={max}

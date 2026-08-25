@@ -223,105 +223,172 @@ FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *me
 voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
 [voltage compensation](./voltage-compensation.mdx).
 
-<Pseudocode label="Feedforward + feedback, battery-compensated">{`FLYWHEEL      predict first, then correct what the prediction missed
+<JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`void setup() {
+    flywheel = hardwareMap.get(DcMotorEx.class, "flywheel");
+    flywheel.setMode(RUN_WITHOUT_ENCODER);   // this class closes its own loop
+}
 
-  gains:  kS, kV, kA      the feedforward model
-          kP              the feedback that cleans up after it
+// goalVelocity and goalAccel are in real units, e.g. metres/second.
+void run(double goalVelocity, double goalAccel) {
+    double measured = flywheel.getVelocity() * UNITS_PER_TICK;
 
-  setup():
-      take the flywheel motor
-      put it in open-loop mode
-      # This class closes its OWN velocity loop. Work out what happens if
-      # the hub's built-in velocity loop is also running underneath it.
+    double predict = kS * Math.signum(goalVelocity)
+            + kV * goalVelocity
+            + kA * goalAccel;
+    double correct = kP * (goalVelocity - measured);
 
-  run(goal_velocity, goal_accel):          # real units, e.g. metres/second
-      measured <- motor velocity * UNITS_PER_TICK
+    flywheel.setPower((predict + correct) / batteryVoltage());
+}`}</JavaCode>
 
-      predict <- kS*sign(goal_velocity) + kV*goal_velocity + kA*goal_accel
-      correct <- kP * (goal_velocity - measured)
+Read those two lines against each other. `predict` is computed entirely from the goal — it never looks
+at the sensor, so it can act the instant you ask for a new speed. `correct` is computed from the error,
+so by definition it can only act once the mechanism is already wrong.
 
-      command the motor with (predict + correct) / battery_voltage
+<Exercise title="What each term does, by deleting it">
 
-# Read the two lines against each other. predict is computed entirely from
-# the GOAL - it never looks at the sensor, so it can act the instant you ask
-# for a new speed. correct is computed from the ERROR, so by definition it
-# can only act after the mechanism is already wrong.
-#
-# Work out the consequence for tuning: with a good feedforward, what is left
-# for kP to do, and why does that let you run a smaller kP than you could
-# with feedback alone?
-#
-# Work out each term's job by deleting it on paper:
-#   no kS: the flywheel never quite starts from rest. why?
-#   no kV: the command does not scale with the speed you asked for.
-#   no kA: it tracks steady speeds fine but lags whenever the goal changes.
-`}</Pseudocode>
+Work out each term's job on paper before tuning any of them:
 
-<Pseudocode label="Arm feedforward with a gravity term">{`ARM FEEDFORWARD      output is volts
-  angle convention: 0 means the arm is HORIZONTAL.
-  if your encoder zero is elsewhere, add the offset before calling this.
+- no `kS` — the flywheel never quite starts from rest. Why?
+- no `kV` — the command does not scale with the speed you asked for.
+- no `kA` — it tracks steady speeds fine but lags whenever the goal changes.
 
-  calculate(angle, velocity, acceleration):
-      static_volts <- 0                       if | velocity | ~ 0
-                      kS * sign(velocity)     otherwise
+Then the consequence for tuning: with a good feedforward, what is left for `kP` to do, and why does
+that let you run a *smaller* `kP` than you could with feedback alone?
 
-      return static_volts
-           + kG * cos(angle)                  # <-- the gravity term
-           + kV * velocity
-           + kA * acceleration
+<Solution>
 
-# The cos(angle) is the whole difference from a flywheel's feedforward.
-# Derive it: gravity pulls straight down with force m*g, but only the
-# component PERPENDICULAR to the arm produces torque about the pivot. Draw
-# the arm at some angle from horizontal, resolve the weight into components
-# along and across the arm, and read off which one turns the joint.
-#
-# Then check the formula at angles you can verify by eye:
-#   arm horizontal (0)          -> cos = 1,  maximum hold voltage. correct?
-#   arm straight up (90 deg)    -> cos = 0,  no hold voltage. correct?
-#   arm hanging down (-90 deg)  -> cos = 0.  is that right, and why?
-#
-# Work out why static_volts is zeroed at ~zero velocity instead of just
-# using sign(velocity). What is sign(0), and what would a stationary arm do
-# with that term flickering?
-`}</Pseudocode>
+`kS` is the voltage that buys nothing but breaking static friction, so without it every command is
+short by exactly the amount needed to start moving. `kV` is the back-EMF cost, which scales with speed —
+drop it and the model is a constant. `kA` covers the extra torque a *change* in speed demands, so
+without it the model is only correct in steady state.
 
-<Pseudocode label="Slide feedforward with interpolated gravity">{`INTERPOLATED SLIDE FEEDFORWARD
-  For a vertical slide where ONE constant kG is not accurate across the
-  whole travel - rigging friction and stage engagement change with height.
+With all three, `kP` is left correcting model error and disturbance — a few percent, not the whole
+command. A small `kP` is what you want: `kP` amplifies sensor noise and can only react after the fact,
+so the less work it has to do, the less noise reaches the motor and the less it can overshoot.
 
-  built from measured data:
-      heights[]     the heights you tested at
-      hold_volts[]  the voltage that held the slide still at each height
-      require the two arrays match in length, and have at least 2 entries
+</Solution>
 
-  calculate(height, velocity, acceleration):
-      static_volts <- 0 if | velocity | ~ 0, else kS * sign(velocity)
+</Exercise>
 
-      return static_volts
-           + interpolate_hold_volts(height)   # instead of a constant kG
-           + kV * velocity
-           + kA * acceleration
+<JavaCode league="FTC" label="Arm feedforward with a gravity term">{`// Angle convention: 0 means the arm is HORIZONTAL. If your encoder zero is
+// elsewhere, add the offset before calling this. Output is volts.
+double calculate(double angle, double velocity, double acceleration) {
+    double staticVolts = Math.abs(velocity) < EPS
+            ? 0
+            : kS * Math.signum(velocity);
 
-  interpolate_hold_volts(height):
-      if height is below the first sample:  return the first hold voltage
-      find the bracketing pair i, i+1 with height <= heights[i+1]
-          t <- (height - heights[i]) / (heights[i+1] - heights[i])
-          return hold_volts[i] + t * (hold_volts[i+1] - hold_volts[i])
-      if height is above the last sample:   return the last hold voltage
+    return staticVolts
+            + kG * Math.cos(angle)      // <- the gravity term
+            + kV * velocity
+            + kA * acceleration;
+}`}</JavaCode>
 
-# That is linear interpolation, and the clamping at both ends is deliberate:
-# work out what extrapolating past your measured range would command, and
-# why holding the endpoint value is the safer wrong answer.
-#
-# Collect the table yourself rather than deriving it. Drive the slide to
-# each height, find the smallest voltage that holds it stationary, and write
-# the pair down. Five or six heights across the travel is plenty.
-#
-# Work out when this is worth the complexity. Measure hold voltage at the
-# bottom, middle and top of YOUR slide. If they agree within a few percent,
-# a single kG is fine and this whole class is over-engineering.
-`}</Pseudocode>
+<Exercise title="Derive the cosine">
+
+The `cos(angle)` is the whole difference from a flywheel's feedforward. Derive it: gravity pulls
+straight down with force $mg$, but only the component *perpendicular* to the arm produces torque about
+the pivot. Draw the arm at some angle from horizontal, resolve the weight into components along and
+across the arm, and read off which one turns the joint. Then check the formula at three angles you can
+verify by eye — horizontal, straight up, and hanging straight down.
+
+<Solution>
+
+The component along the arm is carried by the pivot bearing and does no work; the perpendicular
+component is $mg\cos\theta$, at a moment arm of the arm's length, so the holding torque goes as
+$\cos\theta$.
+
+Horizontal ($\theta = 0$): $\cos = 1$, maximum hold voltage — correct, this is the worst case.
+Straight up ($90°$): $\cos = 0$, no hold voltage — correct, the weight is straight down through the
+pivot. Hanging down ($-90°$): $\cos = 0$ again, and also correct for the same reason — but note that
+this is an unstable-feeling result in the other direction: the arm is *resting* there, and it takes no
+torque to keep it. The two zeros are physically very different situations that happen to need the same
+voltage.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why zero the static term near rest">
+
+`staticVolts` is forced to zero at near-zero velocity rather than just using `Math.signum(velocity)`.
+What is `Math.signum(0)`, and what would a stationary arm do with that term flickering?
+
+<Solution>
+
+`Math.signum(0)` is 0, so the exact-zero case is already handled — the problem is the case *around*
+zero. A stationary arm still has encoder velocity jittering between small positive and negative values,
+so `signum` flips sign every few loops and the command jumps by $2k_S$ at loop rate. The mechanism
+buzzes. The `EPS` band decides that "not really moving" means "do not apply a friction-breaking term at
+all."
+
+</Solution>
+
+</Exercise>
+
+<JavaCode league="FTC" label="Slide feedforward with interpolated gravity">{`// For a vertical slide where ONE constant kG is not accurate across the
+// travel: rigging friction and stage engagement change with height.
+private double[] heights;     // the heights you tested at
+private double[] holdVolts;   // the voltage that held the slide at each one
+
+double calculate(double height, double velocity, double acceleration) {
+    double staticVolts = Math.abs(velocity) < EPS
+            ? 0
+            : kS * Math.signum(velocity);
+
+    return staticVolts
+            + interpolateHoldVolts(height)   // instead of a constant kG
+            + kV * velocity
+            + kA * acceleration;
+}
+
+double interpolateHoldVolts(double height) {
+    if (heights.length < 2) return 0;
+    if (height <= heights[0]) return holdVolts[0];
+
+    for (int i = 0; i < heights.length - 1; i++) {
+        if (height <= heights[i + 1]) {
+            double t = (height - heights[i]) / (heights[i + 1] - heights[i]);
+            return holdVolts[i] + t * (holdVolts[i + 1] - holdVolts[i]);
+        }
+    }
+    return holdVolts[holdVolts.length - 1];   // clamp above the last sample
+}`}</JavaCode>
+
+Collect the table by measurement rather than derivation: drive the slide to each height, find the
+smallest voltage that holds it stationary, and write the pair down. Five or six heights across the
+travel is plenty.
+
+<Exercise title="Why clamp at both ends">
+
+That is linear interpolation, and the clamping at both ends is deliberate. Work out what extrapolating
+past your measured range would command, and why holding the endpoint value is the safer wrong answer.
+
+<Solution>
+
+Extrapolation continues the last segment's slope forever, so a height a little past the top of your
+table produces a voltage a little past the last one — and a sensor glitch reading far past it produces
+an arbitrarily large voltage, from a model that has no evidence out there at all. Clamping caps the
+error at "the hold voltage of the nearest height you actually measured," which is wrong by a known,
+small amount instead of unbounded.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Is this worth the complexity?">
+
+Measure the hold voltage at the bottom, middle and top of *your* slide.
+
+<Solution>
+
+If the three agree within a few percent, a single `kG` is fine and this whole class is
+over-engineering — you have added a table, an interpolator, and a tuning session to reproduce a
+constant. The table earns its place when the numbers diverge noticeably, which typically means
+cascading rigging where stages engage at different heights.
+
+</Solution>
+
+</Exercise>
 
 The identical recipe in FRC is one line, because WPILib bundles it:
 

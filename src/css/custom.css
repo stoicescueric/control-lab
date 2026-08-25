@@ -303,14 +303,29 @@
 }
 
 /* Range sliders inside the dark demo panels. */
+/* The primary control across every lesson sim. The track fills to the current
+   value (--cl-range-fill, set by Slider.tsx) so position is readable without
+   hunting for the thumb, and the thumb acknowledges the grab on pointer-DOWN
+   rather than waiting for a value change. It grows rather than shrinks: a
+   handle you have hold of should read as bigger, not pressed away. */
 input.cl-range[type='range'] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: #2a3656;
-  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--color-brand) 0 var(--cl-range-fill, 0%),
+    #2a3656 var(--cl-range-fill, 0%) 100%
+  );
+}
+/* Firefox paints its own track over the input background; clear it so the
+   gradient above is what shows. */
+input.cl-range[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
 }
 input.cl-range[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -322,6 +337,9 @@ input.cl-range[type='range']::-webkit-slider-thumb {
   cursor: pointer;
   border: 3px solid #fff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition:
+    transform 100ms ease-out,
+    box-shadow 100ms ease-out;
 }
 input.cl-range[type='range']::-moz-range-thumb {
   width: 18px;
@@ -330,6 +348,41 @@ input.cl-range[type='range']::-moz-range-thumb {
   background: var(--color-brand);
   cursor: pointer;
   border: 3px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition:
+    transform 100ms ease-out,
+    box-shadow 100ms ease-out;
+}
+@media (hover: hover) and (pointer: fine) {
+  input.cl-range[type='range']:hover::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+  input.cl-range[type='range']:hover::-moz-range-thumb {
+    transform: scale(1.12);
+  }
+}
+input.cl-range[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+input.cl-range[type='range']:active::-moz-range-thumb {
+  transform: scale(1.22);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+/* The old `outline: none` here outranked the global :focus-visible rule, so
+   keyboard focus on a slider showed nothing at all. Ring the thumb instead. */
+input.cl-range[type='range']:focus-visible {
+  outline: none;
+}
+input.cl-range[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(47, 82, 224, 0.55);
+}
+input.cl-range[type='range']:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 0 4px rgba(47, 82, 224, 0.55);
 }
 
 /* Inside the dark demo panel, links/inline-code must read on the dark bg
@@ -345,6 +398,83 @@ input.cl-range[type='range']::-moz-range-thumb {
 .cl-video-caption p {
   display: inline;
   margin: 0;
+}
+
+/* Fullscreen demo enter/exit. Occasional, deliberate, and the one state change
+   on the site that used to teleport, so it sits at the low end of the modal
+   budget: 200ms in, 160ms back out. The curve is the house ease-out already
+   used by the homepage entrance rather than a second near-identical one.
+
+   The panel scales from 0.97, never from 0 — and from centre, which is correct
+   for a modal: it is not anchored to the button that opened it. */
+@keyframes cl-demo-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cl-demo-scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes cl-demo-panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes cl-demo-panel-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.cl-demo-scrim--in {
+  animation: cl-demo-scrim-in 200ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.cl-demo-scrim--out {
+  animation: cl-demo-scrim-out 160ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.cl-demo-panel--in {
+  animation: cl-demo-panel-in 200ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.cl-demo-panel--out {
+  animation: cl-demo-panel-out 160ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+/* Passing a challenge is rare and earned — the one place on the site with a
+   delight budget. A small overshoot, once, on the transition into the pass;
+   a challenge already passed on a previous visit does not re-celebrate. */
+@keyframes cl-challenge-pass {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.cl-challenge-pass {
+  animation: cl-challenge-pass 320ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
 /* ---------------------------------------------------------------------------
@@ -740,15 +870,82 @@ pre code {
   }
 }
 
-/* Honour reduced-motion preferences across the whole site. */
+/* Honour reduced-motion preferences across the whole site.
+
+   Reduced motion means no vestibular motion, not no feedback. Keyframe and
+   scroll-linked animation goes; so does any *transition* of a moving property.
+   What stays is the opacity/colour half, which carries meaning (a control
+   lighting up, a panel arriving) without moving anything.
+
+   Note the deliberate absence of a blanket `transform: none` — Docusaurus
+   parks the mobile nav drawer off-screen with a translate, and zeroing that
+   would pin it open over the page. Transforms still apply; they just no
+   longer animate. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    animation-timeline: auto !important;
     scroll-behavior: auto !important;
+    transition-property: opacity, color, background-color, border-color, box-shadow, fill,
+      stroke !important;
+    transition-duration: 150ms !important;
+  }
+
+  /* The homepage entrance keeps its fade — the translate is what it loses.
+     Specificity beats the `*` rule above, so these win the duration back. */
+  .cl-home-enter {
+    animation: cl-home-fade 240ms ease both !important;
+  }
+  .cl-home-enter--model {
+    animation-delay: 80ms !important;
+  }
+  .cl-scroll-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* The demo overlay and the challenge pass keep their cross-fade — it is the
+     scale that goes. */
+  .cl-demo-panel--in,
+  .cl-challenge-pass {
+    animation: cl-home-fade 200ms ease both !important;
+  }
+  .cl-demo-panel--out {
+    animation: cl-demo-scrim-out 120ms ease both !important;
+  }
+  .cl-demo-scrim--in {
+    animation: cl-home-fade 200ms ease both !important;
+  }
+  .cl-demo-scrim--out {
+    animation: cl-demo-scrim-out 120ms ease both !important;
+  }
+}
+
+@keyframes cl-home-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Reduced transparency: a separate signal from reduced motion. The hero plot
+   and the demo scrim are the only translucent surfaces left on the site — make
+   them solid rather than frosted when the reader has asked for that. */
+@media (prefers-reduced-transparency: reduce) {
+  .cl-home-plot {
+    background: var(--ifm-background-surface-color) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Keep the scrim doing its job — dim harder to make up for the lost blur. */
+  .cl-demo-scrim {
+    background: rgba(0, 0, 0, 0.88) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }
 

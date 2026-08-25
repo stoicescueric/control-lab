@@ -36,20 +36,28 @@ At the **start of every OpMode loop**, call `update()` exactly once. Every contr
 reads the same immutable `PoseSample`, so pose, velocity, and timestamp cannot come from different sensor
 updates:
 
-<Pseudocode label="The boundary a follower consumes">{`POSE SOURCE     the only interface a follower is allowed to see
+<JavaCode league="FTC" label="The boundary a follower consumes">{`// The only interface a follower may see.
+interface PoseSource {
+    void update();          // refresh sensors and estimate; ONCE per loop
+    PoseSample getSample(); // one coherent pose + fieldVelocity + timestamp
+}
+`}</JavaCode>
 
-    update()        refresh the sensors and the estimate.
-                    called exactly ONCE at the top of the OpMode loop.
+<Exercise title="Why two methods">
 
-    get_sample()    ->  one coherent PoseSample:
-                            pose               field frame
-                            fieldVelocity      field frame, inches/second
-                            timestampSeconds   monotonic
+Refreshing is deliberately separate from reading. Work out how many times per loop `update()` is called,
+and how many times several followers, telemetry, and a logger might each call `getSample()`.
 
-# Two methods, deliberately. Work out why refreshing is separate from
-# reading: how many times per loop is update() called, and how many times
-# might several followers, telemetry, and a logger each call get_sample()?
-`}</Pseudocode>
+<Solution>
+
+`update()` once, `getSample()` as many times as anyone asks. Fusing them into one method would make
+every read a refresh, so each consumer would silently get a *different* estimate and the sensor work
+would run several times per loop for no benefit. Splitting them makes the sample immutable within a
+loop, which is the whole contract.
+
+</Solution>
+
+</Exercise>
 
 Select **one** length unit for the adapter, such as metres or inches, and name it in the adapter and
 telemetry. Do not mix the two inside a calculation. The spatial convention is the one used throughout
@@ -86,18 +94,31 @@ then test only the adapter contract here.
 
 ## Connect it to the loop
 
-<Pseudocode label="One update, one coherent sample">{`loop():
-    pose_source.update()                     # ONCE, at the top
-    sample <- pose_source.get_sample()
+<JavaCode league="FTC" label="One update, one coherent sample">{`void loop() {
+    poseSource.update();                 // ONCE, at the top
+    PoseSample sample = poseSource.getSample();
 
-    log (loop_clock_now - sample.timestampSeconds)    # the age of the estimate
-    follower.update(sample)                  # every consumer gets THIS sample
+    // The age of the estimate, worth logging every loop.
+    log(loopClockNow() - sample.timestampSeconds());
+    follower.update(sample);             // every consumer gets THIS sample
+}
+`}</JavaCode>
 
-# Work out what breaks if each consumer calls get_sample() for itself. Two
-# followers in the same loop would act on poses taken at different instants,
-# and the disagreement grows with robot speed. Compute it: at 60 inches/s,
-# how far apart are two readings 12 ms apart?
-`}</Pseudocode>
+<Exercise title="Two followers, two instants">
+
+Work out what breaks if each consumer calls `getSample()` for itself. At 60 inches/second, how far
+apart are two readings taken 12 ms apart?
+
+<Solution>
+
+About 0.7 inches — comparable to the position tolerance a follower is trying to hit. Two followers in
+the same loop would then be correcting toward targets that disagree by roughly their own tolerance, and
+the disagreement grows linearly with speed, so it is worst exactly when the robot is moving fastest and
+the corrections matter most. One `update()` per loop makes the disagreement structurally impossible.
+
+</Solution>
+
+</Exercise>
 
 Next, adopt the shared [`Pose2d`, `Vector2d`, and completion outcome](./common-implementation.mdx), then
 build the basic [PID-to-Point](./pid-to-point.mdx) follower.

@@ -140,88 +140,122 @@ readable without becoming one huge class.
 A minimal command interface is small. The complexity belongs in the scheduler and the reusable command
 objects, not in a giant OpMode.
 
-<Pseudocode label="The Command interface">{`A COMMAND is four methods and a declaration of what it needs.
+<JavaCode league="FTC" label="The Command interface">{`public interface Command {
+    void initialize();                  // once, when the command starts
+    void execute();                     // one loop of work; must return fast
+    boolean isFinished();               // true when the goal is met
+    void end(boolean interrupted);      // once, whether finished or cancelled
+    Set<Subsystem> getRequirements();   // subsystems it needs exclusively
+}`}</JavaCode>
 
-    initialize()          called ONCE when the command starts
-    execute()             one loop of work. must return quickly.
-    is_finished()  -> bool    true when the goal is met
-    end(interrupted)      called once, whether it finished or was cancelled
-                          interrupted says which
-    requirements() -> the subsystems this command needs exclusively
+Read WPILib's `Command` interface alongside this one; it carries the same five ideas.
 
-# Every one of the five has a reason. Work out what breaks without each:
-#
-#   no initialize()   -> where does one-time setup go, and what happens if
-#                        you put it at the top of execute()?
-#   no is_finished()  -> how does anything ever move on?
-#   no end()          -> a command is cancelled halfway. Who stops the motor?
-#   no requirements() -> two commands both want the lift. What happens?
-#
-# The interrupted flag is the subtle one. Work out a case where a command
-# should clean up differently after being cancelled than after succeeding.
-#
-# Look up: "command-based programming", and read WPILib's Command interface
-#          alongside this. It has these same five ideas.
-`}</Pseudocode>
+<Exercise title="What breaks without each of the five">
+
+Every one of the five earns its place. Work out what fails if you delete each:
+
+- no `initialize()` — where does one-time setup go, and what happens if you put it at the top of `execute()`?
+- no `isFinished()` — how does anything ever move on?
+- no `end()` — a command is cancelled halfway. Who stops the motor?
+- no `getRequirements()` — two commands both want the lift. What happens?
+
+Then the subtle one: find a case where a command should clean up differently after being cancelled
+than after succeeding. That is what the `interrupted` flag is for.
+
+<Solution>
+
+Setup at the top of `execute()` runs every loop, so a command that resets a timer or captures a
+starting pose would reset it forever and never finish. Without `isFinished()` the scheduler has no
+completion signal, and you are back to polling from the caller. Without `end()` a cancelled command
+leaves its motor at whatever power it last set — the lift keeps climbing after you let go of the
+button. Without requirements, two commands write conflicting powers to the same motor every loop and
+the mechanism buzzes.
+
+For `interrupted`: a command that drives to a pose should hold that pose when it *succeeds*, but stop
+the drivetrain when it is *cancelled* — because whatever cancelled it is about to take the drivetrain
+somewhere else.
+
+</Solution>
+
+</Exercise>
 
 A command should do one job and expose its requirement clearly:
 
-<Pseudocode label="A reusable lift command">{`RAISE LIFT      built with a lift and a target height
+<JavaCode league="FTC" label="A reusable lift command">{`public final class RaiseLift implements Command {
+    private final Lift lift;
+    private final double targetInches;
 
-    initialize():        tell the lift its new target height
-    execute():           run the lift's controller for one loop
-    is_finished():       return whether the lift reports it is at target
-    end(interrupted):    tell the lift to hold its current position
-    requirements():      the lift
+    public RaiseLift(Lift lift, double targetInches) {
+        this.lift = lift;
+        this.targetInches = targetInches;
+    }
 
-# Notice what this command does NOT contain: no PID math, no motor calls, no
-# encoder conversion. It sequences a subsystem that already knows how to
-# control itself. Work out where the boundary sits - which of these belongs
-# in the command and which in the Lift?
-#     the target height for the high junction
-#     kP for the lift controller
-#     the decision to raise now
-#     converting inches to encoder ticks
-#
-# Work out why end() holds position rather than cutting power. Trace a lift
-# that is interrupted at full extension with power set to zero.
-#
-# Then work out what "reusable" bought you: the same class raises to a low
-# junction, a high junction, or back to the floor. What made that possible?
-`}</Pseudocode>
+    public void initialize()           { lift.setTargetHeight(targetInches); }
+    public void execute()              { lift.updateController(); }
+    public boolean isFinished()        { return lift.atTarget(); }
+    public void end(boolean cancelled) { lift.holdCurrentPosition(); }
+
+    public Set<Subsystem> getRequirements() { return Set.of(lift); }
+}`}</JavaCode>
+
+Notice what it does *not* contain: no PID math, no motor calls, no encoder conversion. It sequences a
+subsystem that already knows how to control itself, which is what lets the same class raise to a low
+junction, a high junction, or back to the floor.
+
+<Exercise title="Which side of the boundary?">
+
+Each of these has to live either in `RaiseLift` or in `Lift`. Place them, and say why:
+
+- the target height for the high junction
+- `kP` for the lift controller
+- the decision to raise *now*
+- converting inches to encoder ticks
+
+<Solution>
+
+The high-junction height and the decision to raise now belong to the command — they are about *this*
+routine. `kP` and the inch-to-tick conversion belong to `Lift` — they are facts about the hardware and
+do not change between routines. The test is whether the answer would differ for a second command
+targeting the same mechanism.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why end() holds rather than cuts power">
+
+Trace a lift that is interrupted at full extension with `end()` setting power to zero instead of
+holding.
+
+<Solution>
+
+It falls. Gravity is still there, and a lift with no feedforward and no controller running has nothing
+opposing it — the mechanism slams down under its own weight, usually onto whatever the claw was about
+to score on. `holdCurrentPosition()` leaves the controller running with the current height as its
+target, which costs a small standing current and keeps the mechanism where the driver left it.
+
+</Solution>
+
+</Exercise>
 
 Now autonomous can be written as composition:
 
-<Pseudocode label="Autonomous as composed commands">{`SCORE PRELOAD  <-  in sequence:
-                       in parallel:  drive to the scoring pose
-                                     raise the lift to HIGH
-                       score the game element
-                       in parallel:  retract the lift
-                                     drive to the park pose
+<JavaCode league="FTC" label="Autonomous as composed commands">{`Command scorePreload = new SequentialCommandGroup(
+        new ParallelCommandGroup(
+                new DriveToPose(drive, scoringPose),
+                new RaiseLift(lift, HIGH_JUNCTION)),
+        new ScoreGameElement(claw),
+        new ParallelCommandGroup(
+                new RetractLift(lift),
+                new DriveToPose(drive, parkPose)));
 
-schedule(score_preload)
+scheduler.schedule(scorePreload);
 
-each loop while the OpMode is active:
-    update the pose estimate
-    run the scheduler          # advances whatever commands are active
-    push telemetry
-
-# Compare this against the step counter at the top of the lesson. Driving
-# and lifting AT THE SAME TIME is one word here. Work out what it took in
-# the switch: which case does it live in, and what is that case now named?
-#
-# Two composition rules do all the work:
-#   SEQUENCE  runs each in turn; starts the next when the previous finishes
-#   PARALLEL  runs all at once; finishes when... when what, exactly?
-#
-# That last question is real. Work out at least two defensible answers for
-# when a parallel group is done, find a case where each is the one you want,
-# then look up what WPILib actually offers. You should find more than two.
-#
-# Work out what the scheduler must do about requirements(): two scheduled
-# commands both require the lift. What are its options, and which would you
-# want mid-match?
-`}</Pseudocode>
+while (opModeIsActive()) {
+    drive.updatePoseEstimate();
+    scheduler.run();          // advances whatever commands are active
+    telemetry.update();
+}`}</JavaCode>
 
 That routine says what the robot should do without hiding the timing inside a pile of step numbers.
 Drive and lift overlap because they require different subsystems. Scoring waits because it comes after
@@ -229,6 +263,30 @@ the parallel group.
 
 The composed preload above is the beginner endpoint: lifecycle, requirements, sequential composition,
 and parallel composition are enough to build a non-blocking autonomous routine.
+
+<Exercise title="When is a parallel group finished?">
+
+Two composition rules do all the work here. `SEQUENTIAL` runs each command in turn and starts the next
+when the previous finishes. `PARALLEL` runs all of them at once and finishes when… when what, exactly?
+Work out at least two defensible answers, find a case where each is the one you want, then look up what
+WPILib actually offers — you should find more than two.
+
+Then the scheduler's side of it: two scheduled commands both require the lift. What are its options,
+and which would you want mid-match?
+
+<Solution>
+
+"All of them finish" is the safe default; "the first one finishes" is what you want when a drive should
+cancel a lift that is merely opportunistic; "one designated command finishes" is what you want when the
+drive is the real task and the lift is along for the ride. WPILib ships all three, plus a race variant.
+
+For the conflict, the scheduler can refuse the new command or cancel the old one. Mid-match you almost
+always want the newest to win, because it reflects what the driver just asked for — but then a command
+must survive being cancelled cleanly, which is what `end(interrupted)` is for.
+
+</Solution>
+
+</Exercise>
 
 ## Optional reference: FTC command frameworks
 

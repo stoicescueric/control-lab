@@ -80,22 +80,45 @@ converges onto the holding drive instead of bouncing across it.
 
 <Deploy title="Bang-bang on the Control Hub">
 
-<Pseudocode label="Bang-bang with a hysteresis band">{`BANG-BANG with hysteresis      for high-inertia mechanisms like a flywheel
+<JavaCode league="FTC" label="Bang-bang with a hysteresis band">{`// For high-inertia mechanisms like a flywheel.
+double bangBang(double measured, double target, double currentPower) {
+    if (measured < target - HYSTERESIS) return 1.0;
+    if (measured > target + HYSTERESIS) return 0.0;
+    return currentPower;      // inside the band: hold whatever is commanded
+}`}</JavaCode>
 
-  bang_bang(measured, target):
-      if measured < target - HYSTERESIS:  return FULL POWER
-      if measured > target + HYSTERESIS:  return OFF
-      return whatever power is already commanded      # inside the band: hold
+<Exercise title="What the band is for">
 
-# The band is the entire point. Work out what happens without it: the
-# measurement sits near the target and noise pushes it across on alternate
-# loops. Count the switches per second at a 50 Hz loop, then say what that
-# does to the motor and to the battery rail.
-#
-# Work out how to size HYSTERESIS. Too narrow and it still chatters; too wide
-# and the speed visibly sags between kicks. What measurement would you log
-# for one match to choose it?
-`}</Pseudocode>
+The band is the entire point. Work out what happens without it: the measurement sits near the target
+and noise pushes it across on alternate loops. Count the switches per second at a 50 Hz loop, then say
+what that does to the motor and to the battery rail.
+
+<Solution>
+
+Up to 25 full-power-to-off transitions per second. Each one is a current spike into a stalled-ish
+winding and a step on the battery rail, so the pack sags in sympathy with the chatter and every other
+mechanism on the robot feels it. The mechanical noise is the obvious symptom; the brownout is the one
+that ends the match.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Sizing HYSTERESIS">
+
+Too narrow and it still chatters; too wide and the speed visibly sags between kicks. What single
+quantity would you log for one match to choose the band?
+
+<Solution>
+
+Log the measured flywheel speed at full rate and look at the spread while it is *holding*. The noise
+band of that signal is the floor — `HYSTERESIS` has to be wider than the jitter or noise alone will
+trip it. The ceiling is whatever speed sag your shots can tolerate, which you get from the same trace
+by reading the dips between kicks.
+
+</Solution>
+
+</Exercise>
 
 </Deploy>
 

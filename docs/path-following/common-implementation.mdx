@@ -22,8 +22,9 @@ and `drive(vx, vy, omega)` without re-deriving them every time. This page is whe
 Production libraries (Road Runner, FTCLib) ship their own equivalents; these are the minimal versions the
 lessons assume.
 
-These names are a contract, not source you can paste. Implement each one in your own language, then keep
-the names, because every later lesson refers to them exactly as spelled here.
+These names are a contract, not source you can paste. The signatures below are the part that matters —
+write the bodies yourself, but keep the names exactly as spelled here, because every later lesson refers
+to them by name.
 
 ## Geometry: `Vector2d`, `Pose2d`, and `PoseSample`
 
@@ -33,66 +34,89 @@ pose-source adapter returns one atomic `PoseSample` containing the measured pose
 velocity, and the timestamp. Field coordinates are $+x$ toward the far wall, $+y$ left, and heading is
 CCW positive.
 
-<Pseudocode label="The two geometry primitives">{`VECTOR2D (x, y)        a 2-D vector, in field or robot coordinates
+<JavaCode label="Vector2d">{`// A 2-D vector, in field or robot coordinates. The signatures are the
+// contract; the algebra behind them is not what needs teaching.
+record Vector2d(double x, double y) {
+    Vector2d plus(Vector2d b)  { ... }
+    Vector2d minus(Vector2d b) { ... }
+    Vector2d times(double s)   { ... }
 
-    a plus b        <- (a.x + b.x,  a.y + b.y)
-    a minus b       <- (a.x - b.x,  a.y - b.y)
-    a times s       <- (a.x * s,    a.y * s)
+    double dot(Vector2d b)     { ... }   // zero when perpendicular
+    double cross(Vector2d b)   { ... }   // signed; the z of the 3-D cross
 
-    a dot b         <- a.x*b.x + a.y*b.y     # zero when perpendicular
-    a cross b       <- a.x*b.y - a.y*b.x     # signed; the z of the 3-D cross
-    a.norm()        <- sqrt(a.x^2 + a.y^2)   # length
-    a.unit()        <- a times (1 / a.norm()),  or a unchanged if norm ~ 0
+    double norm()              { ... }
+    Vector2d unit()            { ... }   // unchanged if norm is ~ 0
 
-    a.rotate(t)     <- ( a.x*cos(t) - a.y*sin(t),
-                         a.x*sin(t) + a.y*cos(t) )     # CCW positive
+    // (x cos t - y sin t, x sin t + y cos t) -- CCW positive
+    Vector2d rotate(double t)  { ... }
+}
+`}</JavaCode>
 
-    # Check rotate on a case your eye can verify: rotating (1,0) by 90
-    # degrees must give (0,1). If you get (0,-1), a sine sign is flipped.
-    # Look up: "rotation matrix". The two lines above are exactly its rows.
+Those last two lines are exactly the rows of a rotation matrix.
 
+<JavaCode label="Pose2d and PoseSample">{`// Position AND heading. Deliberately no velocity field.
+record Pose2d(double x, double y, double heading) {
+    Vector2d vec() { return new Vector2d(x, y); }
+}
 
-POSE2D (x, y, heading)     position AND heading. no velocity, deliberately.
+// One atomic reading from the pose source.
+record PoseSample(
+    Pose2d pose,               // where we are
+    Vector2d fieldVelocity,    // field frame, inches/second
+    double timestampSeconds    // when this reading was taken
+) {}
+`}</JavaCode>
 
-    pose.vec()      <- Vector2d(pose.x, pose.y)
+All three `PoseSample` fields come from the same reading. Never assemble one from a pose read this loop
+and a velocity read two loops ago. And `Pose2d` deliberately has no velocity field: with one, a *target*
+pose could carry a fake measured velocity, and someone would eventually read it. Leaving it out makes
+that bug unwriteable.
 
-    # Why is there no velocity field here? Because then a *target* pose
-    # could carry a fake measured velocity, and someone would eventually
-    # read it. Leaving it out makes that bug unwriteable.
+<Exercise title="Verify rotate by eye">
 
+Check `rotate` on a case your eye can settle: rotating $(1, 0)$ by 90° must give $(0, 1)$.
 
-POSESAMPLE                 one atomic reading from the pose source
-    pose                   where we are
-    fieldVelocity          field-frame, inches/second
-    timestampSeconds       when this reading was taken
+<Solution>
 
-    # All three fields come from the SAME reading. Never assemble a sample
-    # from a pose read this loop and a velocity read two loops ago.
+At $t = \pi/2$, $\cos t = 0$ and $\sin t = 1$, so the first row gives $1(0) - 0(1) = 0$ and the second
+gives $1(1) + 0(0) = 1$ — the vector $(0,1)$, pointing $+y$, which is left, which is counter-clockwise.
+If you get $(0,-1)$ a sine sign is flipped, and every heading in every follower will be mirrored.
 
-# Field frame: +x toward the far wall, +y left, heading CCW positive.
-`}</Pseudocode>
+</Solution>
+
+</Exercise>
 
 ## Angle wrapping
 
 Heading errors must be wrapped to $[-\pi, \pi)$ so the robot always turns the short way. This is the whole
 point of the [angle-wrapping lesson](./angle-wrapping.mdx); the standard one-liner:
 
-<Pseudocode label="wrap(angle) -> [-pi, pi)">{`wrap(a)   ->  the angle in [-pi, pi) pointing the same direction as a
+<JavaCode label="wrap(angle) -> [-pi, pi)">{`// The angle in [-pi, pi) pointing the same direction as a.
+static double wrap(double a) {
+    double turn = 2 * Math.PI;
+    return ((a + Math.PI) % turn + turn) % turn - Math.PI;
+}
+`}</JavaCode>
 
-    a <- remainder of (a + pi) divided by 2*pi
-    if a < 0: a <- a + 2*pi          # see the hint below
-    return a - pi
+<Exercise title="Three values by hand">
 
-# Work these out by hand before writing any code. What should wrap give for
-#       3.5*pi          -3.0 rad          exactly pi ?
-# The last is the interesting one: the interval is half-open, so pi comes
-# back as -pi. Decide whether your heading controller cares.
-#
-# Look up: how YOUR language's remainder operator handles a negative left
-#          operand. Java and C give a negative result; Python does not.
-#          That single difference is the most common bug in this function,
-#          and it is why line 2 exists.
-`}</Pseudocode>
+Work these out before writing any code. What should `wrap` give for $3.5\pi$, for $-3.0$ rad, and for
+exactly $\pi$?
+
+<Solution>
+
+$3.5\pi$ wraps to $-0.5\pi$, and $-3.0$ rad is already inside the range so it comes back unchanged.
+The last one is the interesting case: the interval is half-open, so exactly $\pi$ comes back as
+$-\pi$. Decide whether your heading controller cares — for a `kP * error` term it does not, since both
+produce the same magnitude of turn in opposite directions and the robot is equidistant either way. For
+anything that logs or compares headings for equality, it does.
+
+The doubled `mod` is not decoration: Java and C return a remainder with the sign of the dividend, while
+Python does not. That single difference is the most common bug in this function.
+
+</Solution>
+
+</Exercise>
 
 ## The completion outcome: `MoveStatus`
 
@@ -100,34 +124,63 @@ This is **Step 5** of the [pipeline](./index.mdx) — and the one piece worth ha
 A follower must distinguish reaching the target from timing out. Both outcomes stop the drivetrain, but
 only `REACHED` should advance autonomous policy normally.
 
-<Pseudocode label="One completion outcome, used by every follower">{`tolerances - tune these once, here, and nowhere else:
-    POS_TOL       1.0 inches
-    HEADING_TOL   2 degrees, expressed in radians
-    VEL_TOL       2.0 inches/second        # chassis speed
-    TIMEOUT       3.0 seconds              # hard deadline for one move
+<JavaCode label="One completion outcome, used by every follower">{`// Tolerances: tuned once, here, and nowhere else.
+static final double POS_TOL = 1.0;                        // inches
+static final double HEADING_TOL = Math.toRadians(2);
+static final double VEL_TOL = 2.0;                        // inches/second
+static final double TIMEOUT = 3.0;                        // seconds, one move
 
-MoveStatus is one of:   RUNNING, REACHED, TIMED_OUT
+enum MoveStatus { RUNNING, REACHED, TIMED_OUT }
 
-moveStatus(sample, target, time_in_move):
-    dist        <- (sample.pose.vec() minus target.vec()).norm()
-    heading_err <- | wrap(target.heading - sample.pose.heading) |
+static MoveStatus moveStatus(PoseSample sample, Pose2d target,
+                             double timeInMove) {
+    double dist = sample.pose().vec().minus(target.vec()).norm();
+    double headingErr = Math.abs(
+            wrap(target.heading() - sample.pose().heading()));
 
-    settled <- dist                        < POS_TOL
-           and heading_err                 < HEADING_TOL
-           and sample.fieldVelocity.norm() < VEL_TOL
+    boolean settled = dist < POS_TOL
+            && headingErr < HEADING_TOL
+            && sample.fieldVelocity().norm() < VEL_TOL;
 
-    if time_in_move > TIMEOUT:  return TIMED_OUT     # checked FIRST
-    if settled:                 return REACHED
-    return RUNNING
+    if (timeInMove > TIMEOUT) return TIMED_OUT;
+    if (settled) return REACHED;
+    return RUNNING;
+}
+`}</JavaCode>
 
-# Work out: why is the deadline checked before settled? Construct a case
-#           where a late sample lands inside tolerance after the timeout
-#           expired. Which answer do you want, and what goes wrong if the
-#           routine treats that run as a success?
-#
-# Work out: delete the velocity term and describe what a robot crossing the
-#           target at full speed now reports. This is why it is there.
-`}</Pseudocode>
+<Exercise title="Order of the two checks">
+
+The deadline is checked before `settled`. Construct a case where a late sample lands inside tolerance
+after the timeout expired. Which answer do you want, and what goes wrong if the routine treats that run
+as a success?
+
+<Solution>
+
+A robot pushed off its path recovers slowly and drifts into tolerance at 3.1 s on a 3.0 s deadline. You
+want `TIMED_OUT`, because the deadline exists to bound how long autonomous will spend on one move — and
+a `REACHED` here means the routine advances as though everything went to plan, on a schedule it has
+already blown. The rest of the routine then runs late with no signal that anything went wrong. Checking
+the deadline first makes the deadline mean what it says.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why velocity is in the settled test">
+
+Delete `sample.fieldVelocity().norm() < VEL_TOL` and describe what a robot crossing the target at full
+speed now reports.
+
+<Solution>
+
+`REACHED`, for the one loop it happens to be within an inch of the target — while travelling at 40
+inches per second and about to be a foot past it. The next move starts from a pose the routine believes
+is settled and the robot is nowhere near. The velocity term is what makes "reached" mean *arrived and
+stopped* rather than *passed through*.
+
+</Solution>
+
+</Exercise>
 
 `TIMEOUT` is a hard safety deadline, so it takes precedence after it expires even if that same late sample
 happens to lie inside the pose tolerances. Choose the deadline with the expected move duration and settling
@@ -145,20 +198,34 @@ Near the goal the proportional command shrinks below what it takes to overcome s
 the robot just short. A constant push *in the direction of the error*, applied **only inside a small
 band**, defeats it — see [PID-to-point](./pid-to-point.mdx) and [feedforward](../control-theory/feedforward.mdx).
 
-<Pseudocode label="kStatic(error)">{`K_STATIC         0.06 power units
-K_STATIC_RANGE   4.0 inches        # outer edge of the nudge band
+<JavaCode league="FTC" label="kStatic(error)">{`static final double K_STATIC = 0.06;         // power units
+static final double K_STATIC_RANGE = 4.0;    // inches, outer edge of the band
 
-kStatic(error):                    # error is robot-frame and signed
-    e <- | error |
-    if e > K_STATIC_RANGE:  return 0    # far out: kP is strong enough alone
-    if e < POS_TOL:         return 0    # settled: stop pushing
-    return K_STATIC * sign(error)       # inside the band: constant push,
-                                        # in the direction of the error
+// error is robot-frame and signed. Returns a constant push in the direction
+// of the error, or zero.
+static double kStatic(double error) {
+    double e = Math.abs(error);
+    if (e > K_STATIC_RANGE) return 0;   // far out: kP is strong enough alone
+    if (e < POS_TOL) return 0;          // settled: stop pushing
+    return K_STATIC * Math.signum(error);
+}
+`}</JavaCode>
 
-# The band has TWO edges and both earn their place. Work out what the robot
-# does if you remove the inner one, remembering that sign(error) flips every
-# time the robot crosses the target. Then describe the sound it makes.
-`}</Pseudocode>
+<Exercise title="Both edges of the band">
+
+The band has two edges and both earn their place. Work out what the robot does if you remove the inner
+one, remembering that `sign(error)` flips every time the robot crosses the target.
+
+<Solution>
+
+The push never switches off, so once the robot is at the target the term alternates between $+0.06$ and
+$-0.06$ every time noise flips the sign of the error — at loop rate. The robot jitters back and forth
+across the target and never reports settled, because `fieldVelocity` never drops below `VEL_TOL`. It
+buzzes audibly and the move times out on a target it reached two seconds ago.
+
+</Solution>
+
+</Exercise>
 
 ## The drivetrain entry point: `drive(vx, vy, omega)`
 
@@ -167,23 +234,34 @@ converts it to four wheel powers and desaturates. That mixer — including field
 shaping, and the desaturation step — is derived in full in
 [Mecanum kinematics](./mecanum-kinematics.mdx); the followers just call its entry point:
 
-<Pseudocode label="The one call every follower ends with">{`drive(vx, vy, omega)
+<JavaCode league="FTC" label="The one call every follower ends with">{`// A robot-frame chassis command: vx forward and vy left in inches/second,
+// omega CCW in radians/second. Writes four wheel powers to the motors.
+void drive(double vx, double vy, double omega) {
+    double[] powers = mixWheelPowers(vx, vy, omega);
 
-  in:   a robot-frame chassis command
-            vx      forward,   inches/second
-            vy      left,      inches/second
-            omega   CCW turn,  radians/second
-  out:  four wheel powers, written to the motors
+    double largest = 1;
+    for (double p : powers) largest = Math.max(largest, Math.abs(p));
 
-      mix the four wheel powers from (vx, vy, omega)
-      if any | power | > 1:
-          divide ALL FOUR by the largest magnitude
+    for (int i = 0; i < powers.length; i++) powers[i] /= largest;
+    setWheelPowers(powers);
+}
+`}</JavaCode>
 
-# The mixing step is derived in full in the Mecanum kinematics lesson.
-# The desaturation step is the one teams leave out. Work out what happens
-# to a command of (1.0, 1.0, 0.5) without it: the wheels clip individually,
-# and the robot's actual DIRECTION changes, not just its speed.
-`}</Pseudocode>
+<Exercise title="What desaturation protects">
+
+Desaturation is the step teams leave out. Work out what happens to a command of $(1.0, 1.0, 0.5)$
+without it.
+
+<Solution>
+
+The mix produces wheel powers outside $[-1, 1]$, and `setPower` clips each one independently. Clipping
+changes the ratios between the four wheels, and the ratios are what encode direction and turn rate — so
+the robot's actual *direction* changes, not just its speed. It curves away from the commanded heading
+exactly when the command is largest, which is when the follower is trying hardest to correct.
+
+</Solution>
+
+</Exercise>
 
 <Admonition type="note" title="How the lessons use this page">
 

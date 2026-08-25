@@ -13,10 +13,10 @@ simulations. It must stay independent of any one robotics topic.
 - `Difficulty`: lesson difficulty metadata.
 - `EquationLegend`: definitions for variables introduced by an equation.
 - `Formula`: styled inline formula emphasis.
-- `Pseudocode`: language-neutral algorithm sketches. The default for anything a
-  reader is meant to implement themselves.
-- `JavaCode`: literal FTC/FRC Java. Reserved for anti-patterns being criticized
-  and bare SDK surface, where there is nothing for the reader to derive.
+- `JavaCode`: every algorithm block. Scoped to the method that is the lesson --
+  no constructors, no hardware wiring, nothing a reader can paste into a robot.
+- `Exercise` / `Solution`: the derivation a reader should do by hand, with an
+  optional collapsible answer. Prompts live here, never in code comments.
 - `Slider`: accessible numeric control.
 - `Steps`: neutral titled lesson sections.
 - `VideoEmbed`: consent-aware, click-to-load external video.

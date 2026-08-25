@@ -136,53 +136,111 @@ The widget uses a real-time ramp of $0.10\ \mathrm{V/s}$ so its $0.35\ \mathrm{s
 at most about $0.035\ \mathrm{V}$ of intercept bias. Simulation time is displayed 12× faster only so the
 learner does not wait two minutes; the plant time constant and logged model remain unchanged.
 
-<Pseudocode label="Quasistatic ramp: collect (velocity, voltage) samples">{`QUASISTATIC RAMP     raise the command slowly and log every loop
+<JavaCode league="FTC" label="Quasistatic ramp: collect (velocity, voltage) samples">{`// Raise the command slowly and log every loop.
+void rampStep(double elapsedSeconds) {
+    double vbat = batteryVoltage();
+    double applied = Math.min(RAMP_VOLTS_PER_SEC * elapsedSeconds / vbat, 1.0);
+    motor.setPower(applied);
 
-    command <- RAMP_VOLTS_PER_SEC * elapsed_seconds / battery_voltage
-    apply min(command, 1.0) to the motor
+    double v = motor.getVelocity() * UNITS_PER_TICK;   // real units, not ticks/s
+    double volts = applied * vbat;                     // what was ACTUALLY applied
+    samples.add(new Sample(v, volts));
+}`}</JavaCode>
 
-    v <- motor velocity * UNITS_PER_TICK      # real units, not ticks/sec
-    V <- applied power * battery_voltage      # the volts ACTUALLY applied
-    record the pair (v, V)
+<Exercise title="How slow is quasistatic?">
 
-# "Quasistatic" means slow enough that acceleration is negligible, so the kA
-# term drops out and what is left is only kS and kV. Work out how slow that
-# has to be for your mechanism, and what the fit would show if you ramped
-# too fast.
-#
-# Note V is computed from the applied power and the measured battery, not
-# from what you asked for. Work out why those two differ.
-`}</Pseudocode>
+"Quasistatic" means slow enough that acceleration is negligible, so the $k_A$ term drops out and what
+is left is only $k_S$ and $k_V$. Work out how slow that has to be for your mechanism, and what the fit
+would show if you ramped too fast.
 
-<Pseudocode label="Ordinary least squares -> kS (intercept), kV (slope)">{`FIT  V = kS + kV * v   to the logged samples
+<Solution>
 
-  fit_line(samples):
-      require at least 3 moving samples
+Slow enough that $k_A a$ is small next to $k_V v$ — in practice, slow enough that the mechanism reaches
+its top speed over tens of seconds rather than one. Ramp too fast and the extra volts spent on
+acceleration get absorbed into the line: the fitted slope comes out too steep, so $k_V$ is
+overestimated, and every downstream feedforward will command more voltage than the mechanism needs.
 
-      mean_v <- the mean of all v
-      mean_V <- the mean of all V
+</Solution>
 
-      s_xy <- sum over samples of (v - mean_v) * (V - mean_V)
-      s_xx <- sum over samples of (v - mean_v)^2
+</Exercise>
 
-      require s_xx is finite and clearly greater than 0
-      # ^ zero spread means every sample had the same velocity. There is no
-      #   line through a single point. Work out what a near-zero s_xx does
-      #   to the division below, and why the guard beats a NaN gain.
+<Exercise title="Applied, not requested">
 
-      kV <- s_xy / s_xx                 # the slope
-      kS <- mean_V - kV * mean_v        # the intercept
-      return kS, kV
+`volts` comes from the applied power times the measured battery, not from the voltage you asked for.
+Work out why those two differ.
 
-# Derive these two lines rather than trusting them. Write the total squared
-# error  sum (V - kS - kV*v)^2,  differentiate with respect to kS and kV,
-# set both derivatives to zero, and solve the pair. The formulas above fall
-# out. Look up: "ordinary least squares", "normal equations".
-#
-# Then interpret them physically. kS is volts needed at zero speed - pure
-# static friction. kV is volts per unit of speed - what back-EMF costs you.
-# Work out what a fitted kS of zero would mean about your mechanism.
-`}</Pseudocode>
+<Solution>
+
+Two reasons, and both matter. The command is clamped at 1.0, so once the ramp passes full power you
+keep asking for more and the motor keeps receiving the same thing. And the rail is not 12 V — it sags
+under load, so the same duty cycle delivers different voltages over the test. Fitting against the
+requested voltage fits a line to a number the motor never saw.
+
+</Solution>
+
+</Exercise>
+
+<JavaCode league="FTC" label="Ordinary least squares -> kS (intercept), kV (slope)">{`// Fit V = kS + kV * v to the logged samples.
+double[] fitLine(List<Sample> samples) {
+    if (samples.size() < 3) return null;
+
+    double meanV = 0, meanVolts = 0;
+    for (Sample s : samples) {
+        meanV += s.v;
+        meanVolts += s.volts;
+    }
+    meanV /= samples.size();
+    meanVolts /= samples.size();
+
+    double sXY = 0, sXX = 0;
+    for (Sample s : samples) {
+        sXY += (s.v - meanV) * (s.volts - meanVolts);
+        sXX += (s.v - meanV) * (s.v - meanV);
+    }
+    if (!Double.isFinite(sXX) || sXX < MIN_SPREAD) return null;
+
+    double kV = sXY / sXX;                 // the slope
+    double kS = meanVolts - kV * meanV;    // the intercept
+    return new double[] {kS, kV};
+}`}</JavaCode>
+
+<Exercise title="Derive the two lines">
+
+Do not trust those formulas — derive them. Write the total squared error
+$\sum (V - k_S - k_V v)^2$, differentiate with respect to $k_S$ and $k_V$, set both derivatives to
+zero, and solve the pair. Then interpret the answers physically: what is $k_S$ in units, what is
+$k_V$, and what would a fitted $k_S$ of zero say about your mechanism?
+
+<Solution>
+
+Setting $\partial/\partial k_S = 0$ gives $k_S = \bar V - k_V \bar v$ immediately; substituting that
+into $\partial/\partial k_V = 0$ leaves $k_V = S_{xy}/S_{xx}$. Those are the normal equations, and
+they are the two lines above.
+
+$k_S$ is volts at zero speed — pure static friction, the voltage that buys you nothing but breaking the
+mechanism loose. $k_V$ is volts per unit of speed, which is what back-EMF costs you. A fitted $k_S$ of
+zero would mean the mechanism starts moving at any voltage above nothing, which no real gearbox does;
+in practice it means you fitted samples from before the mechanism broke free.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why guard the spread">
+
+`sXX` is the spread of the velocity samples. Work out what a near-zero `sXX` does to the division
+below it, and why refusing to fit beats returning the number anyway.
+
+<Solution>
+
+Zero spread means every sample had the same velocity, and there is no line through a single point.
+Dividing by it gives $\pm\infty$ or `NaN`, and `kS = meanVolts - kV * meanV` inherits it — so both
+gains become `NaN`, the feedforward becomes `NaN`, and `setPower(NaN)` is a silent dead motor with no
+error anywhere. A `null` return is a fit you can notice failed.
+
+</Solution>
+
+</Exercise>
 
 In FRC this is one tool: **SysId** runs the quasistatic and dynamic tests, fits all three gains, and even
 reports an $R^2$ so you know how well the model fits. FTC teams either run a small ramp OpMode like the

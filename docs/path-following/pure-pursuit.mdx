@@ -140,55 +140,86 @@ stored segment index plus $t$ makes progress monotone. If there is no intersecti
 inside the lookahead circle, hand off to that exact endpoint. If the robot is simply far from the path,
 retain the last accepted progress and recover toward it rather than irreversibly jumping to the end.
 
-<Pseudocode label="Lookahead point as a segment-circle intersection">{`LOOKAHEAD POINT
-  in:   path    a polyline of points
-        robot   the robot's position
-        Ld      the lookahead radius, inches
-        from    where we were on the path last loop (segment index, t)
-  out:  a point on the path exactly Ld from the robot, and new progress
+<JavaCode label="Segment-circle intersection">{`// Segment A->B, robot position P, lookahead radius Ld. Returns the
+// parameter t in [0, 1] where the circle crosses, or null.
+Double intersect(Vector2d A, Vector2d B, Vector2d P, double Ld) {
+    if (!(Ld > 0)) throw new IllegalArgumentException("Ld");
+    Vector2d d = B.minus(A);
+    Vector2d f = A.minus(P);
+    double a = d.dot(d);
+    if (a < EPS) return null;          // duplicate point; skip this segment
 
-  intersect(A, B, P, Ld):          # does the circle at P cross segment A->B?
-      require Ld > 0
-      d <- B minus A
-      f <- A minus P
-      a <- d dot d
-      if a ~ 0: return NONE        # duplicate point; skip this segment
+    double b = 2 * f.dot(d);
+    double c = f.dot(f) - Ld * Ld;
+    double disc = b * b - 4 * a * c;
+    if (disc < 0) return null;         // the circle never reaches this segment
 
-      b    <- 2 * (f dot d)
-      c    <- (f dot f) - Ld^2
-      disc <- b^2 - 4*a*c
-      if disc < 0: return NONE     # the circle never reaches this segment
+    double tFar  = (-b + Math.sqrt(disc)) / (2 * a);
+    double tNear = (-b - Math.sqrt(disc)) / (2 * a);
+    if (tFar >= 0 && tFar <= 1) return tFar;
+    if (tNear >= 0 && tNear <= 1) return tNear;
+    return null;
+}
+`}</JavaCode>
 
-      t_far  <- (-b + sqrt(disc)) / (2*a)
-      t_near <- (-b - sqrt(disc)) / (2*a)
-      return the first of t_far, t_near lying in [0, 1], else NONE
+<JavaCode label="Lookahead point, with progress carried between loops">{`// The "from" progress is where we were on the path last loop.
+// Returns a point exactly Ld from the robot, plus the new progress.
+Lookahead findLookahead(List<Vector2d> path, Vector2d robot, double Ld,
+                        Progress from) {
+    for (int i = from.segment(); i < path.size() - 1; i++) {
+        double minT = (i == from.segment()) ? from.t() : 0;
+        Double t = intersect(path.get(i), path.get(i + 1), robot, Ld);
+        if (t != null && t >= minT) {
+            return new Lookahead(pointAt(path, i, t), new Progress(i, t));
+        }
+    }
 
-  # Work out where that quadratic comes from. Write the condition "the point
-  # A + t(B-A) is exactly Ld away from P" as
-  #        | A + t(B-A) - P | = Ld
-  # square both sides and collect powers of t. You get a*t^2 + b*t + c, with
-  # exactly the a, b, c above.
-  # Look up: "line-circle intersection", and what a negative discriminant
-  #          means geometrically.
-  # Work out: why prefer t_far? Sketch a circle that crosses one segment
-  #           twice and ask which of the two hits is further along the path.
+    Vector2d last = path.get(path.size() - 1);
+    if (last.minus(robot).norm() <= Ld) {
+        return new Lookahead(last, from);       // we are finishing
+    }
+    return new Lookahead(pointAt(path, from), from);  // hold; do NOT jump
+}
+`}</JavaCode>
 
-  find_lookahead(path, robot, Ld, from):
-      for each segment i, starting at from.segment:
-          min_t <- from.t on that first segment, otherwise 0
-          t     <- intersect(path[i], path[i+1], robot, Ld)
-          if t exists and t >= min_t:
-              return the point at t on segment i, and progress (i, t)
+<Exercise title="Derive the quadratic">
 
-      # Starting at from.segment, and refusing t < min_t, is what stops the
-      # robot snapping onto an earlier part of a path that crosses itself.
-      # Work out what a figure-eight path does without those two guards.
+Write the condition "the point $A + t(B-A)$ is exactly $L_d$ away from $P$" as
+$|A + t(B-A) - P| = L_d$, square both sides, and collect powers of $t$. You should get
+$at^2 + bt + c$ with exactly the $a$, $b$, $c$ above. Then work out what a negative discriminant means
+geometrically, and why `tFar` is preferred when both roots are valid.
 
-      if the path's last point is within Ld:
-          return the last point        # we are finishing
-      return the point at from         # the circle missed everything:
-                                       # hold the last good point, do NOT jump
-`}</Pseudocode>
+<Solution>
+
+Squaring gives $|f + td|^2 = L_d^2$, and expanding the dot product produces
+$(d\cdot d)t^2 + 2(f\cdot d)t + (f\cdot f - L_d^2) = 0$ — the three coefficients above.
+
+A negative discriminant means the line carrying the segment never comes within $L_d$ of the robot: the
+circle and the line miss entirely, so there is no carrot on this segment.
+
+`tFar` is preferred because when the circle crosses one segment twice, the far root is the one further
+*along* the path. Taking the near root would aim the robot at a point behind the one it is already
+driving toward, and progress would stall. Look up "line-circle intersection."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="What the two guards prevent">
+
+Starting the scan at `from.segment()` and refusing `t < min_t` is what stops the robot snapping onto an
+earlier part of a path that crosses itself. Work out what a figure-eight path does without them.
+
+<Solution>
+
+At the crossing, the lookahead circle intersects both branches. An unguarded search returns whichever
+comes first in the point list — the earlier branch — so the robot latches onto the part of the path it
+already drove and loops the first half of the eight forever. The guards make progress monotonic: the
+carrot can only ever move forward along the path.
+
+</Solution>
+
+</Exercise>
 
 ### Fixed vs. dynamic lookahead
 
@@ -383,59 +414,86 @@ continuous motion. The code is in the Deploy section below.
 One iteration on the Control Hub: locate the carrot ahead, transform it into the robot frame, convert
 to curvature, and command forward speed plus turn rate.
 
-<Pseudocode label="Basic Pure Pursuit, one loop iteration">{`PURE PURSUIT
+<JavaCode league="FTC" label="Basic Pure Pursuit, one loop iteration">{`private Progress progress = new Progress(0, 0);   // persistent across loops
 
-  persistent across loops:   progress <- (segment 0, t 0)
+void start() {
+    progress = new Progress(0, 0);
+    timer.reset();
+}
 
-  start():                             # call exactly once per new path
-      progress <- (segment 0, t 0)
-      reset the move timer
+MoveStatus update(List<Vector2d> path, Pose2d endPose) {
+    if (path.size() < 2 || !(LOOKAHEAD > 0)) throw new IllegalStateException();
 
-  update(path, end_pose):              # call once per measured loop
-      require path has at least 2 points and LOOKAHEAD > 0
+    PoseSample sample = poseSource.getSample();   // once, at the loop top
+    Pose2d robot = sample.pose();
 
-      sample <- one reading from the pose source     # once, at the loop top
-      robot  <- sample.pose
+    if (moveStatus(sample, endPose, timer.seconds()) == TIMED_OUT) {
+        drive(0, 0, 0);
+        return TIMED_OUT;              // the deadline applies in every phase
+    }
 
-      if moveStatus(sample, end_pose, timer) is TIMED_OUT:
-          stop the drivetrain
-          return TIMED_OUT             # the deadline applies in every phase
+    Lookahead look = findLookahead(path, robot.vec(), LOOKAHEAD, progress);
+    progress = look.progress();
 
-      # 1. find the carrot
-      carrot, progress <- find_lookahead(path, robot.vec(), LOOKAHEAD, progress)
+    Vector2d d = look.carrot().minus(robot.vec());   // into the robot frame
+    double yLocal = -Math.sin(robot.heading()) * d.x()
+            + Math.cos(robot.heading()) * d.y();
+    double L = d.norm();
 
-      # 2. move it into the robot frame (+x forward, +y left)
-      d       <- carrot minus robot.vec()
-      y_local <- -sin(robot.heading)*d.x + cos(robot.heading)*d.y
-      L       <- d.norm()
+    if (progress.segment() == path.size() - 2
+            && (progress.t() >= 1.0
+                || (progress.t() > TERMINAL_T
+                    && robot.vec().minus(endPose.vec()).norm() < HANDOFF))) {
+        return terminalController.update(sample, endPose);
+    }
 
-      # 3. near the end, hand off to a point controller
-      if progress is on the final segment, and either
-             t has reached 1.0, or
-             t is past TERMINAL_T and the robot is within HANDOFF of end_pose:
-          return terminal_controller.update(sample, end_pose)
+    if (L < EPS) {
+        drive(0, 0, 0);
+        return RUNNING;                // zero chord: wait for a real target
+    }
 
-      # This is the ONLY place REACHED can come from. Work out what a
-      # follower that can report REACHED mid-path does to an autonomous
-      # routine that advances on REACHED.
+    double curvature = 2 * yLocal / (L * L);
+    double v = CRUISE;                 // inches/second
+    double omega = curvature * v;      // radians/second
+    drive(v, 0, omega);
+    return RUNNING;
+}
+`}</JavaCode>
 
-      if L ~ 0:
-          stop the drivetrain
-          return RUNNING               # zero chord: wait for a real target
+The handoff is the only place `REACHED` can come from.
 
-      # 4. turn the arc into a chassis command
-      curvature <- 2 * y_local / L^2
-      v         <- CRUISE              # inches/second
-      omega     <- curvature * v       # radians/second
-      command the chassis (v, 0, omega)
-      return RUNNING
+<Exercise title="Derive the curvature">
 
-  # Derive the curvature yourself. In the robot frame the arc from the robot
-  # to the carrot is a circle through the origin, tangent to the +x axis.
-  # Its radius satisfies  R = L^2 / (2*y_local),  and curvature is 1/R.
-  # Draw the circle, drop the perpendicular, and use the intersecting-chords
-  # relation. Look up: "pure pursuit curvature derivation".
-`}</Pseudocode>
+In the robot frame the arc from the robot to the carrot is a circle through the origin, tangent to the
+$+x$ axis. Its radius satisfies $R = L^2 / (2 y_{local})$, and curvature is $1/R$. Draw the circle, drop
+the perpendicular, and use the intersecting-chords relation.
+
+<Solution>
+
+The circle is tangent to $+x$ at the origin, so its centre lies on the $y$ axis at $(0, R)$. The carrot
+lies on the circle, so $x^2 + (y - R)^2 = R^2$, which expands to $x^2 + y^2 = 2Ry$. The left side is
+$L^2$ and the right is $2Ry_{local}$, so $R = L^2/(2y_{local})$ and
+$\kappa = 2y_{local}/L^2$ — the line above. Look up "pure pursuit curvature derivation."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why REACHED comes from only one place">
+
+Work out what a follower that can report `REACHED` mid-path does to an autonomous routine that advances
+on `REACHED`.
+
+<Solution>
+
+It advances early. The routine believes the path finished, starts the next action — scoring, or another
+drive — while the robot is somewhere in the middle of the field, and every subsequent move compounds
+the error. Funnelling `REACHED` through the terminal controller means the word can only be produced by
+something that has actually checked the end pose, the heading, and the velocity.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="tip" title="What the production libraries do.">
 Pure Pursuit is the foundation. Road Runner and Pedro Pathing follow full <em>trajectories</em> —
@@ -447,155 +505,203 @@ control.
 For the **adaptive** velocity plan, precompute it once over the dense path: curvature per point, a
 curvature speed cap, then the backward braking pass.
 
-<Pseudocode label="Adaptive velocity profile (offline, over the dense path)">{`VELOCITY PROFILE   built once, before the path runs
+<JavaCode label="Adaptive velocity profile (offline, over the dense path)">{`// aLatMax is the sideways acceleration the tires hold; aMax the forward
+// acceleration and braking limit; startSpeed how fast the robot is now.
+void planProfile(List<PathPoint> pts, double vPath, double aLatMax,
+                 double aMax, double startSpeed) {
+    for (int i = 1; i < pts.size() - 1; i++) {     // endpoints stay at zero
+        pts.get(i).curvature =
+                mengerCurvature(pts.get(i - 1), pts.get(i), pts.get(i + 1));
+    }
 
-  in:   pts          the dense path points
-        v_path       cruise speed
-        a_lat_max    sideways acceleration the tires can hold
-        a_max        forward acceleration and braking limit
-        start_speed  how fast the robot is actually moving right now
-  out:  a planned speed at every point
+    for (PathPoint p : pts) {                      // slower where it bends
+        p.speed = Math.abs(p.curvature) < EPS
+                ? vPath
+                : Math.min(vPath, Math.sqrt(aLatMax / Math.abs(p.curvature)));
+    }
 
-  require every limit is finite and positive
+    pts.get(0).speed = Math.min(pts.get(0).speed, startSpeed);
+    for (int i = 1; i < pts.size(); i++) {         // cannot speed up past aMax
+        double ds = pts.get(i).minus(pts.get(i - 1)).norm();
+        double reachable = Math.sqrt(
+                pts.get(i - 1).speed * pts.get(i - 1).speed + 2 * aMax * ds);
+        pts.get(i).speed = Math.min(pts.get(i).speed, reachable);
+    }
 
-  # 1. CURVATURE at each interior point, from the circle through it and its
-  #    two neighbours. The two endpoints stay at zero.
-  for each interior point i:
-      pts[i].curvature <- menger_curvature(pts[i-1], pts[i], pts[i+1])
+    pts.get(pts.size() - 1).speed = 0;
+    for (int i = pts.size() - 2; i >= 0; i--) {    // must still brake to a stop
+        double ds = pts.get(i + 1).minus(pts.get(i)).norm();
+        double reachable = Math.sqrt(
+                pts.get(i + 1).speed * pts.get(i + 1).speed + 2 * aMax * ds);
+        pts.get(i).speed = Math.min(pts.get(i).speed, reachable);
+    }
+}
 
-  # 2. PHYSICAL CAP - go slower where the path bends.
-  for each point p:
-      if p.curvature ~ 0:  p.speed <- v_path        # straight: no corner limit
-      else:                p.speed <- min(v_path, sqrt(a_lat_max / |p.curvature|))
+double mengerCurvature(Vector2d A, Vector2d B, Vector2d C) {
+    double area = Math.abs(B.minus(A).cross(C.minus(A))) / 2;
+    double denom = B.minus(C).norm() * A.minus(C).norm() * A.minus(B).norm();
+    if (denom < EPS) return 0;         // the three points are collinear
+    return 4 * area / denom;
+}
+`}</JavaCode>
 
-      # That cap is just  a = v^2 / r  rearranged for v. Work out why a
-      # tighter corner must mean a lower speed, and what physically happens
-      # when you exceed it.
+Menger curvature is $1/R$ for the circle through three points, computed without ever constructing the
+circle. At runtime, on top of the plan, rate-limit against the *measured* loop time:
 
-  # 3. FORWARD PASS - we cannot speed up faster than a_max allows.
-  pts[first].speed <- min(pts[first].speed, start_speed)
-  for each i going forward:
-      ds        <- distance from pts[i-1] to pts[i]
-      reachable <- sqrt(pts[i-1].speed^2 + 2*a_max*ds)
-      pts[i].speed <- min(pts[i].speed, reachable)
+<JavaCode league="FTC" label="Runtime rate limit against the measured loop time">{`double target = pts.get(closestIndex).speed;
+double maxStep = A_MAX * measuredDt;
+commanded += clamp(target - commanded, -maxStep, +maxStep);
+`}</JavaCode>
 
-  # 4. BACKWARD PASS - every point must still be able to brake to a stop.
-  pts[last].speed <- 0
-  for each i going backward:
-      ds        <- distance from pts[i] to pts[i+1]
-      reachable <- sqrt(pts[i+1].speed^2 + 2*a_max*ds)
-      pts[i].speed <- min(pts[i].speed, reachable)
+<Exercise title="The corner cap, and the two passes">
 
-  # Both passes are the same kinematic relation, v^2 = u^2 + 2*a*s, run in
-  # opposite directions. Work out what the profile looks like with only the
-  # forward pass, then say where the robot ends up.
+The curvature cap is $a = v^2/r$ rearranged for $v$. Work out why a tighter corner must mean a lower
+speed, and what physically happens when you exceed it. Then: both passes are the same kinematic
+relation $v^2 = u^2 + 2as$ run in opposite directions. Work out what the profile looks like with only
+the *forward* pass, and say where the robot ends up.
 
-  menger_curvature(A, B, C):
-      area  <- half the absolute cross product of (B - A) and (C - A)
-      denom <- |B-C| * |A-C| * |A-B|
-      if denom ~ 0: return 0                  # the three points are collinear
-      return 4*area / denom
+<Solution>
 
-      # Look up: "Menger curvature". It is 1/R for the circle through three
-      #          points, computed without ever constructing the circle.
+Holding a curve of radius $r$ at speed $v$ requires a sideways acceleration $v^2/r$, and the only thing
+supplying it is tire friction. Halve the radius and you need twice the acceleration at the same speed —
+past the friction limit the tires break loose and the robot slides straight on, wide of the corner and
+with its odometry now lying about where it is.
 
-  # At RUNTIME, on top of the plan, rate-limit against the MEASURED loop time:
-      target    <- pts[closest_index].speed
-      max_step  <- A_MAX * measured_dt
-      commanded <- commanded + clamp(target - commanded, -max_step, +max_step)
-`}</Pseudocode>
+With only the forward pass, the plan says "accelerate to cruise and stay there" and nothing ever brings
+the speed back down. The robot arrives at the last point at full speed and drives straight past it,
+braking only once the terminal controller notices. The backward pass exists to make the *plan* end at
+zero, so the deceleration is scheduled rather than reactive.
+
+</Solution>
+
+</Exercise>
 
 To follow a **resampled spline**, advance through its points, cap speed by each point's curvature radius,
 and add the centripetal feedforward:
 
-<Pseudocode label="Spline follower: exact endpoint and terminal handoff">{`SPLINE FOLLOWER    lengths in inches, speeds in inches/second, angles in radians
+<JavaCode label="Spline follower: resample by arc length">{`// Each SplinePoint holds x, y, heading, radius and speed.
+List<SplinePoint> resample(Spline spline, double step) {
+    if (!(step > 0)) throw new IllegalArgumentException("step");
 
-  a SPLINE POINT holds:  x, y, heading, radius, speed
+    List<Double> distances = new ArrayList<>();
+    for (double d = 0; d < spline.length(); d += step) distances.add(d);
+    distances.add(spline.length());          // the exact endpoint, always
 
-  # ---------- resample the spline by arc length ----------
-  resample(spline, step):
-      require step > 0
-      distances <- 0, step, 2*step, ... while below spline.length
-      then append spline.length EXACTLY
+    List<SplinePoint> out = new ArrayList<>();
+    double previousHeading = 0;
+    for (double d : distances) {
+        double t = spline.tAtDistance(d);
+        double dx = spline.dx(t), dy = spline.dy(t);
+        double ddx = spline.ddx(t), ddy = spline.ddy(t);
+        double speedSq = dx * dx + dy * dy;
 
-      # Work out why that last line is separate. Take a spline of length 10.5
-      # with step 1.0 and list the distances without it. Which point is
-      # missing, and what does the follower do when it never arrives?
+        double heading, curvature;
+        if (speedSq > EPS) {
+            heading = Math.atan2(dy, dx);
+            curvature = (dx * ddy - dy * ddx) / Math.pow(speedSq, 1.5);
+        } else {
+            heading = previousHeading;   // a cusp; atan2(0,0) is meaningless
+            curvature = 0;
+        }
+        previousHeading = heading;
 
-      for each distance d:
-          t        <- the spline parameter at arc length d
-          dx, dy   <- first derivatives at t
-          ddx, ddy <- second derivatives at t
-          speed_sq <- dx^2 + dy^2
+        double radius = Math.abs(curvature) < EPS
+                ? Double.POSITIVE_INFINITY
+                : 1 / curvature;
+        out.add(new SplinePoint(spline.x(t), spline.y(t), heading, radius, 0));
+    }
+    return out;
+}
+`}</JavaCode>
 
-          if speed_sq is not ~ 0:                    # a regular point
-              heading   <- atan2(dy, dx)
-              curvature <- (dx*ddy - dy*ddx) / speed_sq^1.5
-          else:                                      # a cusp: tangent vanishes
-              keep the PREVIOUS heading              # atan2(0,0) is meaningless
-              curvature <- 0
+The spline parameter $t$ is not proportional to distance along the curve, which is the whole reason an
+arc-length lookup has to exist. Look up "arc length parameterization."
 
-          radius <- INFINITY if |curvature| ~ 0, else 1 / curvature
-          emit (x, y, heading, radius, speed = 0)
+<JavaCode league="FTC" label="Spline follower: plan and follow">{`// Caps each point by its radius, then runs the same forward and backward
+// passes as planProfile. Returns NEW points; never mutates the input.
+List<SplinePoint> planSpeeds(List<SplinePoint> points, double cruise,
+                             double aLatMax, double aMax, double startSpeed) {
+    ...
+}
 
-      # Look up: "arc length parameterization". The parameter t is NOT
-      #          proportional to distance along a spline, which is the whole
-      #          reason a tAtDistance lookup has to exist.
+void start(Spline spline) {
+    active = planSpeeds(resample(spline, SPACING), CRUISE,
+                        A_LAT_MAX, A_MAX, poseSource.getSample()
+                                                    .fieldVelocity().norm());
+    index = 0;
+    timer.reset();
+}
 
-  # ---------- plan the speeds: the same three passes as above ----------
-  plan_speeds(points, cruise, a_lat_max, a_max, start_speed):
-      cap each point:  cruise if its radius is infinite,
-                       else min(cruise, sqrt(a_lat_max * |radius|))
-      forward pass, starting from start_speed, limited by a_max
-      last point <- 0
-      backward pass, so every point can still brake to zero
-      return NEW points - do not mutate the geometry you were handed
+MoveStatus update() {
+    PoseSample sample = poseSource.getSample();
+    Pose2d robot = sample.pose();
+    SplinePoint end = active.get(active.size() - 1);
 
-  # ---------- follow it ----------
-  start(spline):                       # once per path
-      active <- plan_speeds(resample(spline, SPACING), CRUISE,
-                            A_LAT_MAX, A_MAX,
-                            the pose source's current speed)
-      index  <- 0
-      reset the move timer
+    if (moveStatus(sample, end.pose(), timer.seconds()) == TIMED_OUT) {
+        drive(0, 0, 0);
+        return TIMED_OUT;
+    }
 
-  update():                            # once per measured loop
-      sample <- one reading from the pose source
-      robot  <- sample.pose
-      end    <- the last planned point
+    while (index < active.size() - 1
+            && robot.vec().minus(active.get(index).vec()).norm() < PATH_RADIUS) {
+        index++;                       // advance only; never walk back
+    }
 
-      if moveStatus(sample, end, timer) is TIMED_OUT:
-          stop the drivetrain
-          return TIMED_OUT
+    if (index == active.size() - 1) {
+        return terminalController.update(sample, end.pose());
+    }
 
-      while index is not the last and robot is within PATH_RADIUS of active[index]:
-          index <- index + 1           # advance only; never walk back
+    SplinePoint p = active.get(index);
+    double speed = p.speed();          // the final planned point is exactly 0
 
-      if index is the last:
-          return terminal_controller.update(sample, end)
+    double ex = p.x() - robot.x(), ey = p.y() - robot.y();
+    double c = Math.cos(robot.heading()), s = Math.sin(robot.heading());
+    double dir = Math.atan2(ey * c - ex * s, ex * c + ey * s);
 
-      p     <- active[index]
-      speed <- p.speed                 # the final planned point is exactly 0
+    double vx = speed * Math.cos(dir);
+    double vy = speed * Math.sin(dir);
+    vy += K_CENTRIPETAL * speed * speed / p.radius();   // lean into the corner
 
-      # the direction to p, expressed in the robot frame
-      ex, ey <- p.x - robot.x,  p.y - robot.y
-      c, s   <- cos(robot.heading), sin(robot.heading)
-      dir    <- atan2(ey*c - ex*s,  ex*c + ey*s)
+    drive(vx, vy, headingController(p.heading()));
+    return RUNNING;
+}
+`}</JavaCode>
 
-      vx <- speed * cos(dir)
-      vy <- speed * sin(dir)
+<Exercise title="Why the exact endpoint is appended separately">
 
-      vy <- vy + K_CENTRIPETAL * speed^2 / p.radius     # lean into the corner
+Take a spline of length 10.5 with `step = 1.0` and list the distances without that last line. Which
+point is missing, and what does the follower do when it never arrives?
 
-      command the chassis (vx, vy, heading_controller(p.heading))
-      return RUNNING
+<Solution>
 
-  # Work out the centripetal term. A robot tracking a curve of radius r at
-  # speed v needs a sideways acceleration of v^2/r just to stay on it.
-  # Without that feedforward the follower only reacts AFTER it has already
-  # drifted to the outside of the corner. Look up "centripetal acceleration"
-  # and confirm the units of K_CENTRIPETAL work out to seconds.
-`}</Pseudocode>
+The distances run 0 through 10, so the final half-inch is never sampled and the last planned point sits
+at 10.0 rather than 10.5. The follower advances to it, hands off to the terminal controller against a
+target that is not the end of the spline, and the robot settles half an inch short of every path it
+ever runs — a small, consistent bias that looks like a tuning problem and is not.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Derive the centripetal term">
+
+A robot tracking a curve of radius $r$ at speed $v$ needs a sideways acceleration of $v^2/r$ just to
+stay on it. Work out what the follower does without that feedforward, then confirm the units of
+`K_CENTRIPETAL` work out to seconds.
+
+<Solution>
+
+Without it the follower is purely reactive: it only turns harder once it has already drifted to the
+outside of the corner, so every bend is entered wide and corrected late, and the error grows with
+$v^2$. The feedforward supplies the known part of the demand before the error appears.
+
+For units: `speed^2 / radius` is $\text{in}^2/\text{s}^2 \div \text{in} = \text{in}/\text{s}^2$,
+an acceleration, and it is being added to `vy`, which is $\text{in}/\text{s}$. So `K_CENTRIPETAL`
+carries seconds — it is effectively how far ahead in time the feedforward is looking.
+
+</Solution>
+
+</Exercise>
 
 The velocity-facing adapter explicitly consumes inches per second and radians per second; it converts to
 wheel control at one boundary. Physical speed is never passed into the normalized-power `drive(...)`

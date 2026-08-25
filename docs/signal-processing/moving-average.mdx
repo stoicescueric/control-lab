@@ -121,38 +121,49 @@ filter (two lessons ahead) is dramatically better.
 On a Control Hub, implement the window as a ring buffer with a running sum, so each update is O(1)
 regardless of N. The cost to weigh against the low-pass is the N-value memory.
 
-<Pseudocode label="Moving average in constant time">{`MOVING AVERAGE over the last N samples
-  the naive version re-adds N numbers every loop. this one does 2 operations.
+<JavaCode league="FTC" label="Moving average in constant time">{`private final double[] buffer = new double[N];
+private int index;
+private int count;
+private double sum;
 
-  state:  buffer of N slots, all zero
-          index <- 0
-          count <- 0
-          sum   <- 0
+double update(double reading) {
+    sum -= buffer[index];      // drop the sample that is now N loops old
+    buffer[index] = reading;
+    sum += reading;
 
-  update(reading):
-      sum          <- sum - buffer[index]      # drop whatever occupied this slot
-      buffer[index] <- reading                 # overwrite it with the newest
-      sum          <- sum + reading
+    index = (index + 1) % buffer.length;
+    count = Math.min(count + 1, buffer.length);
 
-      index <- (index + 1) mod N               # wrap around the ring
-      count <- min(count + 1, N)
+    return sum / count;        // count, not N, until the window fills
+}`}</JavaCode>
 
-      return sum / count
+<Exercise title="Trace the ring buffer">
 
-# The trick is that the slot you are about to overwrite holds exactly the
-# sample that is now N loops old - so one subtraction and one addition keep
-# the running sum exact. Work through N = 4 with readings 1,2,3,4,5,6 and
-# write down buffer, index, sum and the returned average at every step.
-#
-# Work out why it divides by count rather than N. What does the average
-# read on loop 2 if you divide by N, and where did those zeros come from?
-#
-# Look up: "circular buffer", "sliding window". Then compare against the
-# low-pass filter in the previous lesson: this one forgets a sample
-# completely after N loops, while the exponential filter never entirely
-# forgets anything. Work out which behaviour you want after a single wild
-# outlier.
-`}</Pseudocode>
+The trick is that the slot you are about to overwrite holds exactly the sample that is now $N$ loops
+old, so one subtraction and one addition keep the running sum exact. Work through $N = 4$ with readings
+`1, 2, 3, 4, 5, 6` and write down `buffer`, `index`, `sum` and the returned average at every step. Then
+answer the second question: what does the average read on loop 2 if you divide by `N` instead of
+`count`, and where did those zeros come from?
+
+<Solution>
+
+The averages are `1, 1.5, 2, 2.5, 3.5, 4.5`. On loop 5 the reading `1` leaves the window and the sum
+jumps from 10 to 14 in one subtraction. Dividing by `N` on loop 2 gives `0.75` instead of `1.5`: the
+two untouched slots still hold their initial zeros, and those zeros are not measurements. `count`
+exists so the filter is honest before the window has filled.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="One wild outlier">
+
+Put this beside the low-pass filter from the previous lesson. This one forgets a sample completely
+after $N$ loops; the exponential filter never entirely forgets anything. Feed both a single wild spike
+and describe the two recoveries. Which behavior do you want on a distance sensor that occasionally
+reads through a gap in the field wall?
+
+</Exercise>
 
 Both filters here assume a *single* noisy sensor, and both share its hard limit: they cannot fix
 drift. The rest of the module switches to *fusion* — combining two imperfect sensors into one

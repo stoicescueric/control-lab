@@ -105,7 +105,8 @@ converging term makes it nonincreasing ($\dot V \propto -k_N e^2 \le 0$). This i
 modeled field, not a global promise for an arbitrary spline, projection search, or saturated drivetrain.
 The full Lyapunov proof, and the cleaner **implicit / level-set** formulation
 $\boldsymbol{\chi} = E\nabla\varphi - k\varphi\nabla\varphi$ it is usually proved with, are in
-[Advanced Topics → GVF convergence theory](../advanced-topics/gvf-convergence.mdx). Normalize
+Kapitanyuk, Proskurnikov and Cao's [*A Guiding Vector Field Algorithm for Path Following
+Control*](https://arxiv.org/abs/1610.04391). Normalize
 $\boldsymbol{\chi}$ and scale by your commanded speed to get the chassis velocity:
 
 $$
@@ -154,71 +155,93 @@ full $v_{\max}$; in a tight arc it clamps the speed down automatically.
 Three pieces every loop: **project** the robot onto the path (closest point + tangent + curvature), **blend**
 the field and cap the speed, then **rotate** the field-frame velocity into wheel commands.
 
-<Pseudocode label="Guided vector field follower">{`GAINS
-  kN   converge gain, 1/inch   how hard the field pulls back toward the path
-  kS   speed scale, 0..1       fraction of max speed to command
-  kC   curvature caution       bigger means slower through bends
-  kStatic                      stiction feedforward on the strafe axis
+<JavaCode league="FTC" label="Gains and path lifecycle">{`// kN  converge gain, 1/inch: how hard the field pulls back to the path
+// kS  speed scale, 0..1;  kC  curvature caution: bigger is slower in bends
+// kStatic  stiction feedforward on the strafe axis
 
-start_path(next_path):               # exactly once per new path
-    path   <- next_path
-    last_t <- 0
-    reset the move timer
+void startPath(Path nextPath) {
+    path = nextPath;
+    lastT = 0;
+    timer.reset();
+}
 
+Vector2d unitTangent(double t) {
+    Vector2d raw = path.tangent(t);
+    if (!raw.isFinite() || raw.norm() < EPS) {
+        drive(0, 0, 0);
+        throw new IllegalStateException("cusp: no forward direction at " + t);
+    }
+    return raw.times(1 / raw.norm());
+}
+`}</JavaCode>
 
-unit_tangent(t):
-    raw <- path.tangent(t)
-    if raw is not finite, or |raw| ~ 0:
-        stop the drivetrain, and fail loudly
-        # A zero tangent means the path has a cusp or a duplicated point.
-        # There is no "forward" there. Work out what direction the follower
-        # would pick if you silently returned a zero vector instead.
-    return raw / |raw|
+<JavaCode league="FTC" label="Guided vector field velocity">{`// Returns the desired FIELD-frame chassis velocity.
+Vector2d gvfVelocity(Pose2d robot) {
+    double prior = lastT;
+    double candidate = path.project(robot.vec(), prior);
+    double t = clamp(candidate, prior - MAX_BACKTRACK, prior + MAX_FORWARD);
+    lastT = t;
 
+    Vector2d c = path.get(t);                     // the closest point
+    Vector2d tangent = unitTangent(t);            // along-track direction
+    Vector2d normal = tangent.rotate(Math.PI / 2);
 
-gvf_velocity(robot):    ->  the desired FIELD-frame chassis velocity
+    Vector2d offset = robot.vec().minus(c);
+    double e = offset.dot(normal);          // + means on the +normal side
 
-    # 1. PROJECT - find the closest point on the path
-    prior <- last_t
-    candidate <- path.project(robot.vec(), seeded from prior)
-    clamp candidate into [prior - MAX_BACKTRACK, prior + MAX_FORWARD]
-    t      <- the clamped value
-    last_t <- t
+    Vector2d chi = tangent.minus(normal.times(kN * e)).unit();
 
-    # Seeding from last loop, then clamping to a window, is what keeps the
-    # projection local. Work out what an unseeded global search does on a
-    # path that doubles back near itself - which of the two nearby points
-    # does it pick, and what does the robot then do?
+    double k = Math.abs(path.curvature(t));
+    double vmax = MAX_LINEAR_SPEED;
+    if (k > EPS) vmax = Math.min(vmax, Math.sqrt(MAX_ACCEL / (kC * k)));
 
-    c       <- path.get(t)                  # the closest point
-    tangent <- unit_tangent(t)              # along-track direction
-    normal  <- tangent rotated by +90 degrees
+    double endScale = clamp((1 - t) / END_SLOWDOWN, 0, 1);
+    return chi.times(vmax * kS * endScale);
+}
+`}</JavaCode>
 
-    # 2. CROSS-TRACK ERROR, signed along that normal
-    offset <- robot.vec() minus c
-    e      <- offset dot normal             # positive: robot is on the +normal side
+A zero tangent means the path has a cusp or a duplicated point: there is no "forward" there, so the
+follower stops rather than normalizing a zero vector and picking a direction at random.
 
-    # 3. BLEND - flow along the path, minus a pull back toward it
-    chi <- (tangent  minus  normal * (kN * e)).unit()
+<Exercise title="Why the projection is seeded and clamped">
 
-    # This single line IS the guiding vector field. Work through the two
-    # extremes: e = 0 (on the path) leaves chi = tangent, pure flow. Large e
-    # makes the normal term dominate, so chi points almost straight at the
-    # path. kN sets how sharply it trades one for the other.
-    # Work out what happens as kN grows without bound. Look up "vector field
-    # guidance" and compare the approach angle for kN = 0.1 and kN = 5.
+Seeding from last loop's $t$ and then clamping to a window is what keeps the projection *local*. Work
+out what an unseeded global search does on a path that doubles back near itself — which of the two
+nearby points does it pick, and what does the robot then do?
 
-    # 4. SPEED - cap by curvature so the bend is physically makeable
-    k    <- | path.curvature(t) |
-    vmax <- MAX_LINEAR_SPEED
-    if k is not ~ 0:
-        vmax <- min(vmax, sqrt(MAX_ACCEL / (kC * k)))
+<Solution>
 
-    # 5. ease to zero over the final parameter window
-    end_scale <- clamp((1 - t) / END_SLOWDOWN, 0, 1)
+Whichever is closer by a hair, which can be the *later* branch even though the robot has not driven the
+loop yet. The follower jumps its parameter forward, decides it is nearly finished, and cuts across the
+loop it was supposed to drive. Worse, a wobble of a few millimetres can flip the answer back and forth
+between the two branches on consecutive loops, so the commanded direction oscillates. The window makes
+progress physically continuous: $t$ can only move as far in one loop as the robot could actually travel.
 
-    return chi * (vmax * kS * end_scale)
-`}</Pseudocode>
+</Solution>
+
+</Exercise>
+
+<Exercise title="The one line that is the whole field">
+
+Work through the two extremes of `chi`. With $e = 0$ the robot is on the path — what is `chi`? With
+large $e$, which term dominates and where does `chi` point? Then work out what happens as `kN` grows
+without bound, and compare the approach angle for `kN = 0.1` against `kN = 5`.
+
+<Solution>
+
+At $e = 0$ the normal term vanishes and `chi` is exactly the tangent: pure flow along the path. For
+large $e$ the normal term dominates and `chi` points almost straight at the path, so the robot attacks
+it perpendicularly. `kN` sets how sharply it trades one for the other.
+
+As `kN` grows the approach angle goes to 90° for any nonzero error, so the robot dives at the path,
+overshoots because it arrives with all its speed across the path rather than along it, and oscillates
+about the line. At `kN = 0.1` a one-inch error produces a lean of about 6° off tangent — a gentle,
+slow convergence. At `kN = 5` the same inch produces roughly 79°, which is nearly a right-angle attack.
+Look up "vector field guidance."
+
+</Solution>
+
+</Exercise>
 
 Progress is driven by geometry, not a clock. The snippet both seeds from last loop's $t$ and clamps the
 accepted result to a small backward/forward window. Choose those bounds from maximum motion per loop; they
@@ -230,48 +253,75 @@ speed a constant-deceleration stop would need — it eases into the target headi
 **kStatic** feedforward, $\operatorname{sign}(u)\cdot k_{\text{static}}$, breaks stiction so tiny corrections
 near the path don't stall.
 
-<Pseudocode label="Lifecycle-aware GVF update and terminal handoff">{`update(sample):
-    robot <- sample.pose
-    v     <- gvf_velocity(robot)         # this also advances last_t
+<JavaCode league="FTC" label="Lifecycle-aware GVF update and terminal handoff">{`MoveStatus update(PoseSample sample) {
+    Pose2d robot = sample.pose();
+    Vector2d v = gvfVelocity(robot);          // this also advances lastT
 
-    completion <- moveStatus(sample, path.end_pose(), timer)
+    MoveStatus completion = moveStatus(sample, path.endPose(), timer.seconds());
+    if (completion == TIMED_OUT
+            || (completion == REACHED && lastT >= 1 - TERMINAL_TOL)) {
+        drive(0, 0, 0);
+        return completion;
+    }
 
-    if completion is TIMED_OUT
-       or (completion is REACHED and last_t >= 1 - TERMINAL_TOL):
-        stop the drivetrain
-        return completion
+    if (lastT >= 1 - TERMINAL_HANDOFF) {
+        return terminalController.update(sample, path.endPose());
+    }
 
-    # Read that condition closely. A timeout is terminal anywhere. REACHED is
-    # only honoured once the path parameter says we are actually at the end.
-    # Work out the failure it prevents: a path that loops back near its own
-    # start would otherwise report REACHED on loop one.
+    Vector2d body = v.rotate(-robot.heading());
+    double fwd = body.x() / MAX_LINEAR_SPEED;
+    double str = body.y() / MAX_LINEAR_SPEED;
 
-    if last_t >= 1 - TERMINAL_HANDOFF:
-        return terminal_controller.update(sample, path.end_pose())
-        # The GVF speed goes to zero at t = 1, so it can approach the end but
-        # never settle on it. A point controller finishes the job.
+    Vector2d tangent = unitTangent(lastT);
+    double targetHeading = Math.atan2(tangent.y(), tangent.x());
+    double dTheta = wrap(targetHeading - robot.heading());
+    double turn = Math.min(MAX_TURN, Math.sqrt(2 * A_THETA * Math.abs(dTheta)))
+            * Math.signum(dTheta) / MAX_TURN;
 
-    # ---- into the robot frame and out to the wheels ----
-    body <- v rotated by -robot.heading
-    fwd  <- body.x / MAX_LINEAR_SPEED
-    str  <- body.y / MAX_LINEAR_SPEED
+    // Strafe is the axis mecanum wheels fight hardest.
+    str += Math.signum(str) * kStatic;
 
-    # heading: aim along the path tangent, approached on a sqrt profile
-    tangent        <- unit_tangent(last_t)
-    target_heading <- atan2(tangent.y, tangent.x)
-    d_theta        <- wrap(target_heading - robot.heading)
-    turn <- min(MAX_TURN, sqrt(2 * A_THETA * |d_theta|)) * sign(d_theta) / MAX_TURN
+    drive(fwd, str, turn);
+    return RUNNING;
+}
+`}</JavaCode>
 
-    # That sqrt is v^2 = 2*a*s again, in the rotational axis: the fastest
-    # turn rate that can still stop on the target heading. Work out what a
-    # plain proportional turn does differently on a large heading error.
+The GVF speed goes to zero at $t = 1$, so it can approach the end but never settle on it. That is what
+the handoff to a point controller is for.
 
-    str <- str + sign(str) * kStatic     # stiction feedforward: strafe is
-                                         # the axis mecanum wheels fight hardest
+<Exercise title="Read the terminal condition closely">
 
-    command the chassis robot-centric (fwd, str, turn)
-    return RUNNING
-`}</Pseudocode>
+A timeout is terminal anywhere, but `REACHED` is only honoured once the path parameter says the robot is
+actually at the end. Work out the failure that prevents.
+
+<Solution>
+
+A path that loops back near its own start would otherwise report `REACHED` on loop one: the robot is
+within `POS_TOL` of the end pose and not yet moving, so every condition in `moveStatus` is satisfied
+before the robot has driven anywhere. Requiring `last_t >= 1 - TERMINAL_TOL` says the robot must have
+travelled the path, not merely be standing near where it finishes.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why the turn uses a square root">
+
+That `sqrt` is $v^2 = 2as$ again, applied to the rotational axis: the fastest turn rate that can still
+stop on the target heading. Work out what a plain proportional turn does differently on a large heading
+error.
+
+<Solution>
+
+A proportional turn commands rate in *linear* proportion to the error, so on a large error it saturates
+and then decelerates far too late — the robot arrives at the target heading still turning fast and
+overshoots. The square-root profile is the braking curve: at every heading error it commands exactly
+the rate from which it can still decelerate to zero at `A_THETA`. Large errors get a much lower
+commanded rate than proportional would give, which is the point.
+
+</Solution>
+
+</Exercise>
 
 Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); use
 [angle wrapping](./angle-wrapping.mdx) on the heading error so it always turns the short way. The

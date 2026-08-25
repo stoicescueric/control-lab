@@ -46,19 +46,32 @@ important boundary cases.
 
 ## Turn it into an algorithm
 
-<Pseudocode label="{{ALGORITHM_LABEL}}">{`{{ALGORITHM_NAME}}
-  in:   {{INPUTS_WITH_UNITS}}
-  out:  {{OUTPUT_WITH_UNITS}}
+Scope the block to the method that *is* the lesson. Complete logic, incomplete
+program: helper methods, tuned constants and hardware stay the reader's, so
+nothing here can be pasted into a robot. Every algorithm is `<JavaCode>`; see
+`decisions/0004-java-everywhere-retire-pseudocode.md`.
 
-      {{THE_STEPS}}          # use <- for assignment, no types, no braces
-
-# Work out: {{SOMETHING_THE_READER_SHOULD_DERIVE_OR_CHECK_BY_HAND}}
-# Look up:  {{THE_TERM_THAT_UNLOCKS_THE_HARD_STEP}}
-`}</Pseudocode>
+<JavaCode league="FTC" label="{{ALGORITHM_LABEL}}">{`{{RETURN_TYPE}} {{ALGORITHM_NAME}}({{TYPED_ARGUMENTS}}) {
+    {{THE_STEPS}}            // comments carry units and ranges, nothing more
+}
+`}</JavaCode>
 
 Connect each important step back to the equation. State what should be logged or
-measured when tuning it. Do not supply a finished Java class; the reader
-implements this themselves.
+measured when tuning it.
+
+Anything the reader should derive goes here instead, immediately after the block:
+
+<Exercise title="{{WHAT_THE_READER_SHOULD_WORK_OUT}}">
+
+{{THE_QUESTION_STATED_AS_PROSE_WITH_CONCRETE_NUMBERS}}
+
+<Solution>
+
+{{THE_ANSWER_ONLY_IF_IT_IS_SHORT_AND_CHECKABLE_BY_EYE}}
+
+</Solution>
+
+</Exercise>
 
 :::warning[Hardware reality]
 {{PHYSICAL_LIMITATION_OR_FAILURE_MODE}}

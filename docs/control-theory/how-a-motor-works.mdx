@@ -7,6 +7,7 @@ tags: [motor, dc-motor, brushed, brushless, back-emf, commutator, torque-current
 
 import MotorCurve from '@site/src/components/simulations/control-theory/MotorCurve';
 import {MotorExploded, BrushedVsBrushless} from '@site/src/components/kit/MotorIllustrations';
+import motorCutaway from '@site/static/img/siemens-pm-dc-motor-cutaway.jpg';
 
 # How a Motor Works
 
@@ -68,9 +69,42 @@ into a twisting force on a shaft.
 - **Housing, bearings, shaft.** The steel can holds the magnets and closes the magnetic loop; the
   bearings let the shaft spin freely; the shaft carries the torque out to your gearbox.
 
+Those six parts, in real metal — a permanent-magnet DC motor sawn in half lengthwise, with the cut
+faces painted red:
+
+<figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+  <img
+    src={motorCutaway}
+    alt="A Siemens permanent-magnet DC motor sectioned lengthwise, showing the shaft and bearing at
+         left, the armature with its copper windings and laminated iron core in the centre, the
+         segmented copper commutator and the brushes to its right, and the magnets bonded inside the
+         steel housing"
+    className="block w-full bg-white"
+  />
+  <figcaption className="border-t border-line bg-surface-2 px-4 py-3 text-sm leading-relaxed text-ink-soft">
+    <strong className="text-ink">A DC motor cut in half.</strong> Left to right: the output shaft and its
+    bearing, then the armature — copper windings threaded through a laminated iron core — then the
+    segmented copper commutator with the brushes pressed against it, all inside the steel housing whose
+    dark inner arcs are the permanent magnets. The nameplate reads
+    <em>Perm.-Magn.-Mot.</em>, so the field here comes from magnets rather than a wound coil, exactly like
+    the motors on your robot. (The extra assembly on the far right is a tachometer, not part of the motor.)
+    Photo by <a href="https://commons.wikimedia.org/wiki/File:DC_motor_with_permanent_magnet_excitation.png">Oliver
+    Wallscheid</a>, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+  </figcaption>
+</figure>
+
 Current comes in the leads → through a brush → across the commutator → into a rotor coil → the magnets'
 field turns that current into force → the commutator keeps swapping coils so the force keeps pushing the
 same way → the shaft spins. That's the whole machine.
+
+<VideoEmbed
+  title="How does an Electric Motor work? (DC Motor)"
+  src="https://www.youtube.com/embed/CWulQ1ZSE3c"
+  href="https://www.youtube.com/watch?v=CWulQ1ZSE3c">
+  Jared Owen animates the same teardown in 3D. Worth watching for the commutator alone — seeing it swap
+  which coil is energised makes the "motor without this would just twitch and stop" point obvious in a way
+  a still diagram cannot.
+</VideoEmbed>
 
 ### Brushed vs. brushless
 
@@ -311,58 +345,107 @@ reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (m
   output speed = <Blue>ω_free / G</Blue> &nbsp;·&nbsp; output torque = <Rose>τ_stall · G · η</Rose>
 </Formula>
 
-<Pseudocode label="Motor specs -> geared output (use your datasheet numbers)">{`MOTOR SPEC      the three numbers every brushed DC motor publishes at 12 V
+<JavaCode league="FTC" label="Motor specs -> geared output (use your datasheet numbers)">{`// The three numbers every brushed DC motor publishes at 12 V.
+double freeSpeedRpm;       // RPM with nothing attached
+double stallTorqueNm;      // torque at zero speed
+double stallCurrentA;      // current at zero speed: this is your heat budget
 
-    free_speed_rpm      RPM with nothing attached
-    stall_torque_Nm     torque at zero speed
-    stall_current_A     current at zero speed  <- this is your heat budget
+// A reduction G, with efficiency eta.
+double gearedFreeSpeed   = freeSpeedRpm / G;           // speed divides DOWN
+double gearedStallTorque = stallTorqueNm * G * eta;    // torque multiplies UP`}</JavaCode>
 
-GEARING     a reduction G, with efficiency eta
+<Exercise title="Where the missing power went">
 
-    geared_free_speed  <- free_speed_rpm / G          # speed divides DOWN
-    geared_stall_torque <- stall_torque_Nm * G * eta  # torque multiplies UP
+One quantity divides and the other multiplies. Work out why, then check the result: speed times torque
+is power, and gears cannot create power. Where did the missing power go, and what is `eta` doing in
+that second line?
 
-# Work out why one divides and the other multiplies, then check that the
-# product still makes sense: speed times torque is power, and gears cannot
-# create power. Where did the missing power go, and what is eta doing there?
-#
-# Work out the number that is NOT affected by gearing: stall current. Gears
-# change the trade between speed and torque at the output shaft, but the
-# motor still draws what it draws. This is why a heavily geared mechanism
-# can quietly cook a motor while barely moving.
-`}</Pseudocode>
+<Solution>
+
+A reduction trades revolutions for turns of the output shaft: the output turns $G$ times slower and
+each turn carries $G$ times the torque, so the *product* is unchanged. That is the ideal case. Real
+gears lose some of it to friction and meshing, which is `eta` — typically 0.8 to 0.95 per stage, and
+it compounds, so a three-stage box can be under 0.7. The missing power leaves as heat in the gearbox.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The number gearing cannot change">
+
+One of the three datasheet numbers is unaffected by `G`. Find it, and work out why that matters for a
+heavily geared mechanism.
+
+<Solution>
+
+Stall current. Gears change the trade between speed and torque at the output shaft, but the motor
+still draws what the motor draws — stall current is set by the winding resistance and the rail, not by
+what is bolted to the shaft. This is why a heavily geared mechanism can quietly cook a motor while
+barely appearing to move: the output is slow and strong, and the current is exactly as high as an
+ungeared stall.
+
+</Solution>
+
+</Exercise>
 
 At runtime, a motor near stall is the fastest way to overheat a mechanism and brown out the robot. The hub can
 read current, so guard it — or, better, command current directly using the model.
 
-<Pseudocode label="Model-based current command, and a measured-current limiter">{`# ---- FEEDFORWARD current command: OPEN loop. Never reads actual current. ----
-set_current(motor, target_amps):
-    omega <- motor velocity in radians/second      # from the encoder
-    v_cmd <- KE * omega  +  target_amps * R        # back-EMF, plus I*R
-    command the motor with  v_cmd / battery_voltage
+<JavaCode league="FTC" label="Model-based current command">{`// OPEN loop. Never reads actual current.
+void setCurrent(DcMotorEx motor, double targetAmps) {
+    double omega = motor.getVelocity(AngleUnit.RADIANS);
+    double vCmd = KE * omega + targetAmps * R;    // back-EMF, plus I*R
+    motor.setPower(vCmd / batteryVoltage());
+}`}</JavaCode>
 
-# That line is the motor equation  V = ke*omega + I*R  solved for V. Derive
-# it: a spinning motor generates a back-EMF proportional to speed, and the
-# rest of the applied voltage is what pushes current through the winding
-# resistance. Look up: "DC motor back-EMF", "motor voltage equation".
-#
-# This is only as accurate as your KE and R. It commands the voltage that
-# SHOULD produce target_amps, and never checks. For a real closed loop, run
-# a controller on the error between measured and target current instead.
+That middle line is the motor equation $V = k_e\omega + IR$ solved for $V$, and it is only as accurate
+as your `KE` and `R`. It commands the voltage that *should* produce `targetAmps`, and never checks. For
+a real closed loop, run a controller on the error between measured and target current instead — or, at
+minimum, cap it:
 
+<JavaCode league="FTC" label="Measured-current limiter">{`// CLOSED loop. This one reads the sensor.
+void driveSafely(DcMotorEx motor, double command, double maxAmps) {
+    double current = motor.getCurrent(CurrentUnit.AMPS);
+    if (current > maxAmps) {
+        command *= maxAmps / current;    // scale back proportionally
+    }
+    motor.setPower(command);
+}`}</JavaCode>
 
-# ---- MEASURED limiter: CLOSED loop. This one reads the sensor. ----
-drive_safely(motor, command, max_amps):
-    current <- the motor's measured current
-    if current > max_amps:
-        command <- command * (max_amps / current)   # scale back proportionally
-    apply command
+<Exercise title="Derive the voltage command">
 
-# Work out why the scale factor is a ratio rather than a fixed step down.
-# At 1.5x the budget, what fraction of the command survives? Then work out
-# why this is a safety net and not a controller: what does it do when the
-# current is comfortably UNDER the budget?
-`}</Pseudocode>
+Derive $V = k_e\omega + IR$ rather than memorising it. A spinning motor generates a back-EMF
+proportional to its speed; the applied voltage has to overcome that *and* push current through the
+winding resistance. Write the loop equation and solve for $V$.
+
+<Solution>
+
+The winding sees the applied voltage $V$ opposed by the back-EMF $k_e\omega$, and whatever is left
+drives current through the resistance: $V - k_e\omega = IR$. Rearranged, $V = k_e\omega + IR$. At
+stall $\omega = 0$ and the whole rail goes into $IR$ — which is why stall current is $V/R$ and why
+stall is a thermal event. Look up "DC motor back-EMF".
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why the limiter scales instead of stepping down">
+
+Work out why the correction is a *ratio* rather than a fixed step down. At 1.5 times the budget, what
+fraction of the command survives? Then work out why this is a safety net and not a controller: what
+does it do when the current is comfortably under the budget?
+
+<Solution>
+
+The ratio lands on the budget in one loop regardless of how far over you are — at 1.5× the budget,
+`maxAmps / current` is 0.67, so two-thirds of the command survives and the current comes back to the
+cap immediately. A fixed step would take a different number of loops depending on the overshoot, and
+would oscillate around the cap. Under the budget it does nothing at all — it has no notion of a
+target, only of a ceiling, which is exactly what makes it a net rather than a loop.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="warn" title="Stall is a thermal event, not just a slow one.">
 A motor held near stall draws stall current <em>continuously</em>, and almost all of it becomes heat
@@ -394,5 +477,9 @@ to design with. Measuring the *real* constants for your specific motor is its ow
 - **Torque / current control**: Vikramaditya Nishant, *Introducing Torque-Current Control for FTC*
   ([Medium](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)),
   for the $V = k_e\omega + IR$ current-command and the current-limiting-during-defense argument.
+- **Cutaway photograph**: Oliver Wallscheid, *DC motor with permanent magnet excitation*
+  ([Wikimedia Commons](https://commons.wikimedia.org/wiki/File:DC_motor_with_permanent_magnet_excitation.png)),
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Resized and flattened onto white; not
+  otherwise altered.
 
 </Admonition>

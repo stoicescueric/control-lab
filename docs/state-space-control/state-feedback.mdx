@@ -202,38 +202,75 @@ LinearSystem<N2, N1, N1> elevator =
 FTC has no such library, and for one or two states you do not need it. Compute the gains offline (next
 lesson), then the runtime controller is plain arithmetic:
 
-<Pseudocode label="Two-state elevator feedback, gains precomputed offline">{`TWO-STATE ELEVATOR
-  K = {K_POS, K_VEL}, computed offline.
-  velocity is a FILTERED encoder derivative, not a raw difference.
+<JavaCode league="FTC" label="Two-state elevator feedback, gains precomputed offline">{`// K_POS and K_VEL are computed offline. velocity is a FILTERED encoder
+// derivative, not a raw difference.
+double update(double targetPosition, double position, double velocity) {
+    double vbat = voltageSensor.getVoltage();
+    if (!Double.isFinite(vbat) || vbat < MIN_VALID_BATTERY_VOLTS) return 0;
 
-  update(target_position, position, velocity):
-      vbat <- read the battery voltage
-      if vbat is not finite or vbat < MIN_VALID_BATTERY_VOLTS:
-          return 0
+    double requested = K_POS * (targetPosition - position)
+            + K_VEL * (0 - velocity)     // arrive STOPPED
+            + kG;                        // gravity feedforward, always on
 
-      requested <- K_POS * (target_position - position)
-                 + K_VEL * (0 - velocity)      # reference velocity is zero:
-                                               # we want it to arrive STOPPED
-                 + kG                          # gravity feedforward, always on
+    double available = Math.min(12, vbat);
+    double volts = clamp(requested, -available, +available);
+    return clamp(volts / vbat, -1, +1);
+}
+`}</JavaCode>
 
-      available <- min(12, vbat)
-      volts     <- clamp(requested, -available, +available)
-      return clamp(volts / vbat, -1, +1)
+<Exercise title="State feedback, not PD">
 
-# The velocity term is what makes this state feedback rather than a P
-# controller with a D term bolted on. Work out the difference: a PD
-# controller differentiates the ERROR, while this multiplies a measured
-# STATE by its own gain, chosen jointly with K_POS from the model. What is
-# the reference velocity here, and why is zero the right choice for a hold?
-#
-# Work out why kG is added outside the feedback entirely. Gravity is a known,
-# constant disturbance - what would the feedback have to do to cancel it on
-# its own, and what steady-state error would remain?
-#
-# Work out what "filtered encoder derivative" is doing for you here, then go
-# implement it from the low-pass lesson. Differencing raw ticks and
-# multiplying by K_VEL feeds quantization noise straight to the motor.
-`}</Pseudocode>
+The velocity term is what makes this state feedback rather than a P controller with a D term bolted on.
+Work out the difference: a PD controller differentiates the *error*, while this multiplies a measured
+*state* by its own gain, chosen jointly with `K_POS` from the model. What is the reference velocity
+here, and why is zero the right choice for a hold?
+
+<Solution>
+
+Zero, because a hold wants the elevator to arrive stopped — the desired velocity at the target *is*
+nothing. So the velocity error is $0 - v$, and the term is pure damping proportional to how fast the
+mechanism is currently moving.
+
+The structural difference is where the two gains come from. A PD controller's `kD` is tuned
+independently of `kP`; here `K_POS` and `K_VEL` are solved together from one model, so they are
+guaranteed consistent with each other. Bolt a D term onto a P controller and nothing enforces that
+relationship.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why kG sits outside the feedback">
+
+Gravity is a known, constant disturbance. Work out what the feedback would have to do to cancel it on
+its own, and what steady-state error would remain.
+
+<Solution>
+
+Feedback only produces output in response to error, so cancelling a constant load with `K_POS` alone
+requires a permanent position error large enough that `K_POS * error` equals the holding voltage —
+the elevator sits below its target forever, by exactly $k_G / K_{POS}$. Adding `kG` outside the loop
+supplies the known part directly, leaving the feedback to handle only what the model did not predict.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why the velocity must be filtered">
+
+Work out what "filtered encoder derivative" is buying you here, then go implement it from the
+[low-pass lesson](../signal-processing/low-pass.mdx).
+
+<Solution>
+
+Differencing raw ticks over a 20 ms loop turns one tick of quantization into a large apparent velocity,
+and `K_VEL` multiplies that straight into the motor command every loop. The mechanism buzzes and the
+feedback gain you can safely run drops — so the filter is not cosmetic, it is what makes `K_VEL`
+usable at all.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="idea" title="You have been doing scalar state feedback all along.">
 A P controller on velocity with a kV feedforward is state feedback on a one-state system. The

@@ -314,64 +314,99 @@ pose-level uncertainty. In Kou and Haggenmiller's mecanum simulation, the state 
 heading, and body velocity, while the measurement function combines landmark pose information with
 odometry-derived encoder measurements. The matrix algebra is the same `linalg` used in the site demos.
 
-<Pseudocode label="EKF update structure with a camera-domain gate">{`EXTENDED KALMAN FILTER      x is the state, P its covariance
+Below, `Mat` is any small dense matrix type — the site demos use `src/lib/domain/linalg.js`.
 
-  PREDICT      every loop, tag or no tag
-      F <- the motion Jacobian, linearized at the CURRENT x
-      x <- motion_model(x, wheel_deltas)
-      P <- F * P * transpose(F) + Q
+<JavaCode league="FTC" label="Predict: every loop, tag or no tag">{`private Mat x;    // the state
+private Mat P;    // its covariance
 
-      # Order matters: F is evaluated BEFORE x is advanced. Work out why -
-      # F is the derivative of the motion model at the point you are
-      # leaving, not the one you are arriving at.
+void predict(Mat wheelDeltas) {
+    // F is the derivative at the point you are leaving, so it is evaluated
+    // before x advances, not after.
+    Mat F = motionJacobian(x, wheelDeltas);
+    x = motionModel(x, wheelDeltas);
+    P = F.times(P).times(F.transpose()).plus(Q);
+}`}</JavaCode>
 
-  CORRECT WITH A TAG    ->  APPLIED or REJECTED
+The correction is where a tag can destroy the estimate, so the validity gate runs before any arithmetic
+that could divide by a bad depth:
 
-      # ---- the gate comes FIRST, before any arithmetic ----
-      camera <- the tag's position in camera coordinates
-                # computes Xc and Yc, but performs NO division yet
+<JavaCode league="FTC" label="Correct with a tag, gated before the division">{`boolean correctWithTag(TagDetection tag, Mat z) {
+    Mat camera = tagInCameraFrame(tag);    // finds xc and yc, divides by neither
+    double xc = camera.get(0);
+    double yc = camera.get(1);
 
-      valid <- the detection is valid
-           and the camera calibration is valid
-           and the measurement z is finite
-           and Xc and Yc are finite
-           and Xc > MIN_DEPTH            # strictly in FRONT of the camera
+    boolean valid = tag.isValid()
+            && calibration.isValid()
+            && z.isFinite()
+            && Double.isFinite(xc) && Double.isFinite(yc)
+            && xc > MIN_DEPTH;             // strictly in FRONT of the camera
+    if (!valid) return false;              // never evaluate 1/xc or 1/(xc*xc)
 
-      if not valid:
-          log "tag update REJECTED"
-          return REJECTED                # never evaluate 1/Xc or 1/Xc^2
+    Mat H = measurementJacobian(x);        // partials of h, evaluated at x
+    Mat y = z.minus(h(x));                 // residual, via the TRUE nonlinear h
+    Mat S = H.times(P).times(H.transpose()).plus(R);
+    Mat K = P.times(H.transpose()).times(S.inverse());
 
-      # This gate is the point of the whole block. The measurement Jacobian
-      # divides by Xc and by Xc squared. Work out what those become for a
-      # tag detected at Xc = 0.001 m, or at a NEGATIVE Xc (behind the
-      # camera). Then work out what a single such update does to P, and how
-      # many good frames it takes to recover. This is why the check happens
-      # before the division, not after.
+    x = x.plus(K.times(y));
+    P = I.minus(K.times(H)).times(P);
+    return true;
+}`}</JavaCode>
 
-      # ---- the standard EKF update ----
-      H  <- the measurement Jacobian: partials of h evaluated at x
-      y  <- z - h(x)                     # residual, via the TRUE nonlinear h
-      S  <- H * P * transpose(H) + R     # innovation covariance
-      K  <- P * transpose(H) * inverse(S)    # Kalman gain
+Those last five lines are the same five ideas as the scalar filter you already implemented: gain from
+the covariances, correct by gain times innovation, shrink the covariance. Everything else is
+bookkeeping for the fact that the state is a vector and the measurement model is curved.
 
-      x  <- x + K * y
-      P  <- (I - K*H) * P
-      return APPLIED
+<Exercise title="Why F is evaluated first">
 
-# Note where the linear H is used and where it is not. The residual y uses
-# the real nonlinear projection h(x), because that is the honest prediction
-# of what the camera should have seen. H is only used to propagate
-# COVARIANCE, where a linear approximation is all that is available.
-# Work out what breaks if you compute the residual as z - H*x instead.
-#
-# Compare against the scalar Kalman filter you already implemented. The five
-# update lines are the same five ideas: gain from covariances, correct by
-# gain times innovation, shrink the covariance. Everything else here is
-# bookkeeping for the fact that the state is a vector and the measurement
-# model is curved.
-# Look up: "extended Kalman filter", "Jacobian linearization",
-#          "AprilTag pinhole projection model".
-`}</Pseudocode>
+`predict` computes `F` from the current `x` and only then advances `x`. Work out why that order is not
+interchangeable, in terms of what a Jacobian actually is.
+
+<Solution>
+
+`F` is the derivative of the motion model *at a point*, and the linearization is meant to describe the
+step you are about to take — so the point is the one you are leaving. Advancing `x` first would
+linearize about the destination and propagate `P` through a slope the robot never travelled. Over one
+loop the error is small; over a long blind stretch it compounds into a covariance that no longer
+describes the estimate.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The gate is the point of the block">
+
+The measurement Jacobian divides by `xc` and by `xc` squared. Work out what those become for a tag
+detected at `xc = 0.001` m, and again for a negative `xc`. Then work out what a single such update does
+to `P`, and how many good frames it takes to recover.
+
+<Solution>
+
+At 1 mm the partials scale by $10^3$ and $10^6$, so `H` is enormous and `K` hands the tag almost total
+authority over the state. A negative `xc` is a tag behind the camera: the projection flips sign and the
+correction is applied backwards. Either way `P` collapses to a tiny, confidently wrong covariance —
+and because `P` only grows by `Q` per loop, recovery takes as many frames as it takes `Q` to re-inflate
+it. That can be seconds. Rejecting the frame costs one loop; accepting it costs the match.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Where the linear H is not used">
+
+The residual `y` uses the true nonlinear `h(x)`, while `H` appears only in `S`, `K`, and the covariance
+update. Work out what breaks if you compute the residual as `z.minus(H.times(x))` instead.
+
+<Solution>
+
+`H` is a first-order approximation valid near `x`; `h` is the honest prediction of what the camera
+should have seen. Using `H * x` as the prediction reintroduces the linearization error directly into
+the correction, so the filter chases a residual that is partly its own approximation. It biases the
+estimate toward wherever the tangent plane happens to sit, and the bias grows with the angle between
+the robot and the tag.
+
+</Solution>
+
+</Exercise>
 
 For production, prefer the maintained pose-estimator/localization API in your chosen stack instead of
 copying this matrix sketch: use [Road Runner's tuning/setup path](https://rr.brott.dev/docs/v1-0/tuning),

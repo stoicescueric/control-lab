@@ -295,14 +295,11 @@ export default function Drone() {
   }, droneRef);
 
   // dragging the target altitude
-  function pointToTarget(
-    ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
-  ) {
+  function pointToTarget(ev: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = droneRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const clientY = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
-    const py = clientY - rect.top;
+    const py = ev.clientY - rect.top;
     const h = dsize.current.h;
     const ground = h - 24;
     const top = 20;
@@ -340,24 +337,16 @@ export default function Drone() {
             aria-valuemin={0.5}
             aria-valuemax={9.5}
             className="block w-full touch-none rounded-xl bg-[#0b1120] outline-none focus:ring-2 focus:ring-[#6f8bff]"
-            onMouseDown={(e) => {
+            onPointerDown={(e) => {
               dragging.current = true;
+              // Capture so an overshoot past the canvas edge keeps tracking
+              // instead of silently dropping the drag.
+              e.currentTarget.setPointerCapture(e.pointerId);
               pointToTarget(e);
             }}
-            onMouseMove={(e) => dragging.current && pointToTarget(e)}
-            onMouseUp={() => (dragging.current = false)}
-            onMouseLeave={() => (dragging.current = false)}
-            onTouchStart={(e) => {
-              dragging.current = true;
-              pointToTarget(e);
-            }}
-            onTouchMove={(e) => {
-              if (dragging.current) {
-                pointToTarget(e);
-                e.preventDefault();
-              }
-            }}
-            onTouchEnd={() => (dragging.current = false)}
+            onPointerMove={(e) => dragging.current && pointToTarget(e)}
+            onPointerUp={() => (dragging.current = false)}
+            onPointerCancel={() => (dragging.current = false)}
             onKeyDown={onTargetKeyDown}
           />
           <div className="mt-1.5 text-[0.82rem] text-[#8294b8]">

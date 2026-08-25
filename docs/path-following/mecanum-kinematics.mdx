@@ -216,69 +216,119 @@ is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills d
 
 The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
 
-<Pseudocode label="Field-centric mecanum with dead zone, response curve, and desaturation">{`STICK SHAPING     dead zone and response curve in one step
+<JavaCode league="FTC" label="Stick shaping: dead zone and response curve">{`// One stick axis in [-1, 1] -> a shaped command in [-1, 1].
+// DEADZONE ~ 0.06, DRIVE_CURVE ~ 2.0.
+double shape(double s) {
+    double a = Math.abs(s);
+    if (a < DEADZONE) return 0;      // ignore stick drift at rest
 
-  shape(s):                            # s in [-1, 1]
-      a <- | s |
-      if a < DEADZONE: return 0        # ignore stick drift at rest
+    double scaled = (a - DEADZONE) / (1 - DEADZONE);
+    return Math.signum(s) * Math.pow(scaled, DRIVE_CURVE);
+}
+`}</JavaCode>
 
-      scaled <- (a - DEADZONE) / (1 - DEADZONE)
-      # ^ re-expand: 0 at the edge of the dead zone, 1 at full stick.
-      #   Without this the output would JUMP from 0 to DEADZONE.
-      #   Work out the jump size for DEADZONE = 0.06 and decide if you would
-      #   feel it.
+Re-expanding `scaled` matters: it runs from 0 at the edge of the dead zone to 1 at full stick. Without
+it the output would jump straight from 0 to `DEADZONE`.
 
-      return sign(s) * scaled^DRIVE_CURVE     # DEADZONE ~ 0.06, CURVE ~ 2.0
+<JavaCode league="FTC" label="Field-centric mecanum drive">{`// fwd +1 away from the driver, strafe +1 to the driver's left,
+// turn +1 counter-clockwise, all [-1, 1]. heading is field-frame radians.
+void drive(double fwd, double strafe, double turn, double heading) {
+    double mag = Math.min(1, Math.hypot(fwd, strafe));   // shape the MAGNITUDE
+    double dir = Math.atan2(strafe, fwd);
+    double m = shape(mag);
 
-  # Work out what the exponent does. Tabulate scaled^1 and scaled^2 at
-  # 0.25, 0.5, 0.75, 1.0. Where did the driver gain fine control, and what
-  # did they give up?
+    double fwdC = m * Math.cos(dir);
+    double strafeC = m * Math.sin(dir);
+    double w = shape(turn);
 
+    double c = Math.cos(heading), s = Math.sin(heading);  // rotate by -heading
+    double vx =  fwdC * c + strafeC * s;
+    double vy = -fwdC * s + strafeC * c;
 
-FIELD-CENTRIC DRIVE
-  in:   fwd      +1 away from the driver      [-1, 1]
-        strafe   +1 to the driver's left      [-1, 1]
-        turn     +1 counter-clockwise         [-1, 1]
-        heading  robot heading from the IMU, radians, field frame
+    double fl = vx - vy - w;                             // mix the wheels
+    double fr = vx + vy + w;
+    double bl = vx + vy - w;
+    double br = vx - vy + w;
 
-  # 1. shape the translation MAGNITUDE, so the direction survives
-  mag  <- min(1, sqrt(fwd^2 + strafe^2))
-  dir  <- atan2(strafe, fwd)
-  m    <- shape(mag)
-  fwd_c    <- m * cos(dir)
-  strafe_c <- m * sin(dir)
-  w        <- shape(turn)
+    double scale = Math.max(1, Math.max(
+            Math.max(Math.abs(fl), Math.abs(fr)),
+            Math.max(Math.abs(bl), Math.abs(br))));
+    setWheelPowers(fl / scale, fr / scale, bl / scale, br / scale);
+}
+`}</JavaCode>
 
-  # Work out why the magnitude is shaped and not fwd and strafe separately.
-  # Push the stick to a perfect 45 degrees and shape each axis with a square
-  # curve. What angle does the robot actually drive at?
+<Exercise title="What the exponent does">
 
-  # 2. rotate the field command into the robot frame (by -heading)
-  c, s <- cos(heading), sin(heading)
-  vx <-  fwd_c*c + strafe_c*s
-  vy <- -fwd_c*s + strafe_c*c
+Tabulate `scaled^1` and `scaled^2` at 0.25, 0.5, 0.75 and 1.0. Where did the driver gain fine control,
+and what did they give up? Then work out the jump size for `DEADZONE = 0.06` without the re-expansion,
+and decide whether you would feel it.
 
-  # 3. mix the wheels: add the three motions you asked for
-  fl <- vx - vy - w
-  fr <- vx + vy + w
-  bl <- vx + vy - w
-  br <- vx - vy + w
+<Solution>
 
-  # Those signs ARE the lesson. Derive them: a mecanum roller at 45 degrees
-  # turns wheel spin into a force at 45 degrees. Draw all four rollers from
-  # above, add the force vectors for "all wheels forward", then for
-  # "left pair forward, right pair backward". Look up: "mecanum wheel force
-  # decomposition".
+Squaring gives 0.0625, 0.25, 0.5625, 1.0 — so the bottom half of the stick now covers only a quarter of
+the output range. That is where fine control comes from: slow, precise motion gets most of the stick's
+travel. What the driver gave up is the top end, where the same stick movement now changes the output
+much faster, so full-speed driving becomes twitchier.
 
-  # 4. desaturate: if any wheel exceeds 1, scale ALL FOUR by the same factor
-  scale <- max(1, |fl|, |fr|, |bl|, |br|)
-  set the four wheel powers to fl/scale, fr/scale, bl/scale, br/scale
+Without the re-expansion, the first output past the dead zone is 0.06 rather than 0 — a 6 % power step
+the instant the stick crosses the threshold. On a drivetrain that is a visible twitch every time the
+driver starts moving.
 
-  # Work out why they must scale together. Take (fl,fr,bl,br) =
-  # (1.4, 0.6, 0.6, 1.4) and clamp each to 1.0 individually. Compare the
-  # ratio fl:fr before and after. The robot no longer drives where it was
-  # told - it curves.
-`}</Pseudocode>
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why the magnitude is shaped, not each axis">
+
+Push the stick to a perfect 45° and shape `fwd` and `strafe` separately with a square curve. What angle
+does the robot actually drive at?
+
+<Solution>
+
+Still 45°, in that one special case — squaring both equal components scales them equally. The failure
+shows up everywhere else. At 60° off-axis the two components are 0.5 and 0.866; squared they are 0.25
+and 0.75, and `atan2(0.75, 0.25)` is 71.6°, not 60°. Per-axis shaping bends every direction except the
+axes and the diagonals, so the robot does not go where the stick points. Shaping the magnitude and
+rebuilding from the angle leaves the direction untouched.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Derive the four signs">
+
+Those signs *are* the lesson. A mecanum roller at 45° turns wheel spin into a force at 45°. Draw all
+four rollers from above, add the force vectors for "all wheels forward," then for "left pair forward,
+right pair backward."
+
+<Solution>
+
+All four forward: the lateral components of the four roller forces cancel in pairs and the forward
+components add, so the robot translates straight ahead. Left pair forward with the right pair
+backward: now the forward components cancel and the lateral components add, so the robot strafes. The
+third combination — one diagonal pair against the other — produces a pure couple, which is the turn.
+Every entry in the mix is just which of those three the wheel contributes to, and with what sign. Look
+up "mecanum wheel force decomposition."
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why desaturate all four by one factor">
+
+`scale` divides every wheel by the same number rather than clipping each one at 1.
+
+<Solution>
+
+Clipping changes the *ratio* between the four wheels, and the ratio is what encodes the direction and
+the turn rate. Clip one wheel and the robot drives somewhere other than where you asked — usually
+curving, exactly when you are commanding the most. Scaling all four preserves the ratio, so the robot
+goes the right way, just slower than requested. That is the correct failure mode for a saturated
+command.
+
+</Solution>
+
+</Exercise>
 
 In an FTC `OpMode` the sticks map in like this (the Y axis is inverted on the gamepad, so negate it):
 

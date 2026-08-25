@@ -22,9 +22,9 @@ import {
 import {LookupTableIllustration} from '@site/src/components/kit/ResearchIllustrations';
 import {Problem, Theory, Deploy} from '@site/src/components/kit/Steps';
 import {Callout, Analogy} from '@site/src/components/kit/Callout';
+import {Exercise, Solution} from '@site/src/components/kit/Exercise';
 import {Formula, Blue, Teal, Amber, Rose, Faint} from '@site/src/components/kit/Formula';
 import {JavaCode} from '@site/src/components/kit/JavaCode';
-import {Pseudocode} from '@site/src/components/kit/Pseudocode';
 import {
   Demo,
   Stage,
@@ -58,14 +58,16 @@ export default {
   // prose helpers
   Callout,
   Analogy,
+  // pencil-and-paper prompts; the derivation the reader should do by hand
+  Exercise,
+  Solution,
   Formula,
   Blue,
   Teal,
   Amber,
   Rose,
   Faint,
-  // algorithm sketches (the default); JavaCode only for anti-patterns and SDK surface
-  Pseudocode,
+  // every algorithm block; scoped to the method, never a drop-in subsystem
   JavaCode,
   // interactive demo kit
   Demo,

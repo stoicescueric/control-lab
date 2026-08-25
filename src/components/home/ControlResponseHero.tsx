@@ -214,11 +214,20 @@ function ClosedLoopResponse() {
     draw();
   });
 
-  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+  const dragging = useRef(false);
+
+  function pointToTarget(event: ReactPointerEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const target = 1 - (event.clientY - rect.top) / rect.height;
     state.current!.target = Math.max(0.08, Math.min(0.92, target));
+    // Hold off the scripted step while the reader is driving the setpoint.
     state.current!.nextStep = state.current!.time + 4.5;
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    dragging.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointToTarget(event);
   }
 
   return (
@@ -242,8 +251,11 @@ function ClosedLoopResponse() {
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
+        onPointerMove={(e) => dragging.current && pointToTarget(e)}
+        onPointerUp={() => (dragging.current = false)}
+        onPointerCancel={() => (dragging.current = false)}
         role="img"
-        aria-label="Interactive closed-loop step-response plot. A solid output trace follows a dashed target line. Click or tap vertically to change the target."
+        aria-label="Interactive closed-loop step-response plot. A solid output trace follows a dashed target line. Drag vertically to move the target."
         className="block w-full cursor-crosshair touch-none"
       />
       <figcaption className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line/60 px-4 py-3 text-xs text-ink-soft">

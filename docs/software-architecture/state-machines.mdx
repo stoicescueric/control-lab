@@ -128,37 +128,57 @@ everything safely.
 This is the minimum useful pattern. `update()` performs one quick slice of work; `enter()` is the only
 place that changes state and resets state-local time.
 
-<Pseudocode label="A scorer: one state field, one transition gate">{`SCORER
+<JavaCode league="FTC" label="A scorer: one state field, one transition gate">{`enum State { IDLE, RAISING, RELEASING }
 
-  states:  IDLE, RAISING, RELEASING
-  own:     state          <- IDLE
-           time_in_state                  # reset ONLY on entry
+private State state = State.IDLE;
+private final ElapsedTime timeInState = new ElapsedTime();
 
-  enter(next):                            # the one place state changes
-      state         <- next
-      time_in_state <- 0
+// The one place state changes, so state-local time always resets with it.
+private void enter(State next) {
+    state = next;
+    timeInState.reset();
+}
 
-  request_score():                        # an outside event
-      if state is IDLE: enter(RAISING)
+public void requestScore() {          // an outside event
+    if (state == State.IDLE) enter(State.RAISING);
+}
 
-  update():                               # one slice of work. never blocks.
-      if state is IDLE:
-          hold the lift
-          close the claw
+// One slice of work. Never blocks.
+public void update() {
+    switch (state) {
+        case IDLE:
+            lift.hold();
+            claw.close();
+            break;
+        case RAISING:
+            lift.setTarget(SCORE_HEIGHT);
+            if (lift.atTarget()) enter(State.RELEASING);
+            break;
+        case RELEASING:
+            claw.open();
+            if (timeInState.seconds() >= RELEASE_TIME) enter(State.IDLE);
+            break;
+    }
+}`}</JavaCode>
 
-      if state is RAISING:
-          command the lift to SCORE_HEIGHT
-          if the lift reports it is at target: enter(RELEASING)
+`ElapsedTime` is the FTC SDK's non-blocking clock: readable at any moment without waiting on it, which
+is exactly what `sleep()` is not.
 
-      if state is RELEASING:
-          open the claw
-          if time_in_state >= RELEASE_TIME: enter(IDLE)
+<Exercise title="Where the timer resets">
 
-  # Work out: why must time_in_state reset inside enter(), and not at the
-  #           top of update()? Trace both versions through three loops.
-  # Look up:  a non-blocking timer for your SDK. It has to be readable
-  #           without waiting on it, which rules out sleep().
-`}</Pseudocode>
+`enter()` resets `timeInState`. Move that reset to the top of `update()` instead and trace both
+versions through three loops of `RELEASING`.
+
+<Solution>
+
+Resetting at the top of `update()` restarts the clock every single loop, so `timeInState.seconds()`
+is never more than one loop period and `RELEASING` never exits — the claw stays open forever. The
+timer has to measure "time since this state began," and the only moment that fact changes is inside
+`enter()`. Every state-local variable follows the same rule.
+
+</Solution>
+
+</Exercise>
 
 If you can trace the three legal transitions and confirm that no loop blocks, the core lesson is done.
 
@@ -205,37 +225,33 @@ the handlers yourself; there are nine of them and they are all variations on tho
 
 #### The state table: one field holds the mode
 
-A single `current_state` field is the one authoritative answer to "what is the robot doing right
+A single `currentState` field is the one authoritative answer to "what is the robot doing right
 now?" Everything else is bookkeeping the handlers lean on.
 
-<Pseudocode label="AdaptiveAuto - the state table">{`ADAPTIVE AUTO
+<JavaCode league="FTC" label="AdaptiveAuto: the state table">{`enum State {
+    WAIT_FOR_PICKUP,      // hold the scoring pose until settled
+    DISLODGE_CONE,        // recovery: push a stuck cone free
+    ALIGN_LEFT_RAM,       // contract, then line up on the stack
+    LEFT_RAM,             // follow the pickup path
+    CONTESTED_LEFT_RAM,   // recovery: we were pushed off-line
+    ALIGN_CONTESTED,      // line up to score
+    ALIGN_PARK,           // choose a park square, retract
+    PARK_CLOSE,           // drive into the square
+    CYCLE_TRANSFER        // hand off intake -> depositor
+}
 
-  states:
-      WAIT_FOR_PICKUP      hold the scoring pose until settled
-      DISLODGE_CONE        recovery: push a stuck cone free
-      ALIGN_LEFT_RAM       contract, then line up on the stack
-      LEFT_RAM             follow the pickup path
-      CONTESTED_LEFT_RAM   recovery: we were pushed off-line
-      ALIGN_CONTESTED      line up to score
-      ALIGN_PARK           choose a park square, retract
-      PARK_CLOSE           drive into the square
-      CYCLE_TRANSFER       hand off intake -> depositor
+// The one authoritative field.
+private State currentState = State.WAIT_FOR_PICKUP;
 
-  the one authoritative field:
-      current_state <- WAIT_FOR_PICKUP
+// Bookkeeping the handlers read. Reset by the gate, never by a handler.
+private ScoringState scoringState;
+private final ElapsedTime timeInState = new ElapsedTime();
+private final ElapsedTime timeSinceSettled = new ElapsedTime();
+private boolean pathComplete, parking, contracting, robotSettled;
+private double slidesPositionAtEntry;`}</JavaCode>
 
-  bookkeeping the handlers read:
-      scoring_state             which scoring approach we committed to
-      time_in_state             reset by the gate, never by a handler
-      time_since_settled
-      path_complete             this state's path has finished
-      parking, contracting      one-shot entry guards
-      robot_settled
-      slides_position_at_entry  snapshot taken on entry
-
-  # Notice what is absent: no step counter, no sleep, no "phase 2b" boolean.
-  # One field answers the question. Everything else is derived from it.
-`}</Pseudocode>
+Notice what is absent: no step counter, no `sleep()`, no `phase2b` boolean. One field answers the
+question, and everything else is derived from it.
 
 #### The loop and the gate
 
@@ -243,92 +259,113 @@ The loop never blocks. It runs the current state's handler and then, whatever st
 every subsystem and logs the mode. One gate owns every mode change, so timing and flags always reset
 together.
 
-<Pseudocode label="AdaptiveAuto - the loop and the transition gate">{`loop():                        # exactly one pass through. never blocks.
-    run the handler for current_state
+<JavaCode league="FTC" label="AdaptiveAuto: the loop">{`// Exactly one pass through. Never blocks.
+public void loop() {
+    runHandlerFor(currentState);
 
-    # then, regardless of which state we were in:
-    tick every subsystem
-    log current_state, scoring_state, time_in_state, path_complete
+    // Then, regardless of which state we were in:
+    tickEverySubsystem();
+    log(currentState, scoringState, timeInState.seconds(), pathComplete);
+}`}</JavaCode>
 
-transition_to(next):           # THE ONLY place current_state is written
-    if next is current_state and next is not CYCLE_TRANSFER:
-        return                 # re-entering a state is a no-op, except
-                               # CYCLE_TRANSFER, which is meant to repeat
+<JavaCode league="FTC" label="AdaptiveAuto: the transition gate">{`// The ONLY place currentState is written.
+private void transitionTo(State next) {
+    // Re-entering a state is a no-op, except CYCLE_TRANSFER, which repeats.
+    if (next == currentState && next != State.CYCLE_TRANSFER) return;
 
-    current_state    <- next
-    time_in_state    <- 0
-    time_since_settled <- 0
-    clear path_complete, parking, robot_settled
-    set contracting
+    currentState = next;
+    timeInState.reset();
+    timeSinceSettled.reset();
+    pathComplete = false;
+    parking = false;
+    robotSettled = false;
+    contracting = true;
+}
 
-request_park():                # an outside event, through the same gate
-    if current_state is not ALIGN_PARK:
-        transition_to(ALIGN_PARK)
+public void requestPark() {           // an outside event, same gate
+    if (currentState != State.ALIGN_PARK) transitionTo(State.ALIGN_PARK);
+}`}</JavaCode>
 
-# Work out: why do the flags reset here instead of in each handler?
-#           Add a tenth state on paper and count what you had to remember.
-`}</Pseudocode>
+<Exercise title="Why the flags reset in the gate">
+
+Every flag and timer resets in `transitionTo()` rather than in the handler that needs it. Add a tenth
+state to this machine on paper, writing the handler both ways, and count what you had to remember each
+time.
+
+<Solution>
+
+Resetting per handler means every new state must remember to clear every flag that any *other* state
+might have left set — so adding the tenth state is nine chances to forget one, and the bug it produces
+(`parking` still true, so the entry action silently never runs) appears only on one transition path.
+In the gate it is zero extra work: the new state starts from a known-clean set by construction. This
+is the same reason `enter()` existed in the scorer, scaled up.
+
+</Solution>
+
+</Exercise>
 
 #### Three handler shapes
 
 Every one of the nine handlers is one of these three. Once you can write these, the rest of the
 machine is repetition.
 
-<Pseudocode label="AdaptiveAuto - entry actions, preconditions, recovery">{`# SHAPE 1 - an entry action, then a non-blocking wait.
-align_park():
-    if not parking:                  # true on the first loop in this state
-        choose the closest park square
-        retract the slides
-        parking <- true              # ...and only the first loop
-    hold still
+<JavaCode league="FTC" label="Shape 1: an entry action, then a non-blocking wait">{`private void alignPark() {
+    if (!parking) {                 // true on the first loop in this state
+        chooseClosestParkSquare();
+        slides.retract();
+        parking = true;             // ...and only the first loop
+    }
+    drive.holdStill();
 
-    if time_in_state > PARK_SETTLE_TIME:   # poll a clock; never sleep on it
-        transition_to(PARK_CLOSE)
+    if (timeInState.seconds() > PARK_SETTLE_TIME) {   // poll; never sleep
+        transitionTo(State.PARK_CLOSE);
+    }
+}`}</JavaCode>
 
+<JavaCode league="FTC" label="Shape 2: a precondition, refusing to act until safe">{`private void alignLeftRam() {
+    if (contracting && lift.aboveSafeHeight()) {
+        drive.holdPosition();
+        return;                     // do nothing this loop; try again next
+    }
+    contracting = false;
+    robot.contract();
 
-# SHAPE 2 - a precondition. Refuse to act until the robot is safe.
-align_left_ram():
-    if contracting and the lift is still above its safe height:
-        hold position
-        return                       # do nothing this loop. try again next.
-    contracting <- false
-    contract the robot
+    boolean stillFollowing = follow(alignmentPath);
+    if (!stillFollowing) transitionTo(State.LEFT_RAM);
+}`}</JavaCode>
 
-    still_following <- follow the alignment path
-    if not still_following:
-        transition_to(LEFT_RAM)
+<JavaCode league="FTC" label="Shape 3: a branch, which is what makes it a policy">{`private void runLeftRam() {
+    if (pathProgress() > 0.05) slides.extend();
 
+    boolean stillFollowing = follow(pickupPath);
+    if (stillFollowing) return;
 
-# SHAPE 3 - a branch. This is what makes it a policy, not a script.
-run_left_ram():
-    once past 5% of the path: start extending the slides
-    still_following <- follow the pickup path
-    if still_following: return
+    slides.retract();
+    if (wasPushedOffLine()) {
+        transitionTo(State.CONTESTED_LEFT_RAM);   // recover, then come back
+    } else {
+        transitionTo(State.ALIGN_CONTESTED);      // carry on as planned
+    }
+    resetPath();
+}`}</JavaCode>
 
-    retract the slides
-    if the robot was pushed off-line:
-        transition_to(CONTESTED_LEFT_RAM)   # recover, then come back
-    else:
-        transition_to(ALIGN_CONTESTED)      # carry on as planned
-    reset the path
+And beneath all of it, every loop and in every state:
 
+<JavaCode league="FTC" label="The per-loop subsystem tick">{`private void tickEverySubsystem() {
+    drive.tick();
+    intake.tick();       // and the intake runs its own state machine
+    depositor.tick();    // and so does the depositor
+}`}</JavaCode>
 
-# ...and beneath all of it, every loop, in every state:
-tick every subsystem():
-    tick the drive
-    tick the intake      AND run the intake's own state machine
-    tick the depositor   AND run the depositor's own state machine
-
-# Look up: "hierarchical state machine". Subsystems running their own
-#          machines underneath a top-level one is the standard structure,
-#          and it is why update() has to run in every state.
-`}</Pseudocode>
+Subsystems running their own machines underneath a top-level one is the standard structure — look up
+"hierarchical state machine" — and it is why the subsystem tick has to run in every state, not just
+the ones that happen to move a mechanism.
 
 This is what makes the example valuable. The state machine is not just replacing `sleep()` with
 `if`; it is creating a recoverable autonomous policy. `ALIGN_LEFT_RAM` can refuse to move until the
 robot is contracted. `LEFT_RAM` can branch into `CONTESTED_LEFT_RAM` if the robot is pushed off-line.
 `ALIGN_PARK` has first-entry logic so the parking target is chosen once, not recalculated every loop.
-Every transition resets local timing through the one gate, so `time_in_state` always means "time
+Every transition resets local timing through the one gate, so `timeInState` always means "time
 since this state began" and never anything else.
 
 In mathematical language, this is still the same partial transition function:

@@ -158,11 +158,13 @@ exit speed, and the implied wheel-speed gap as contact conditions change.
 
 The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using a velocity ratio that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
 
-<Pseudocode label="Exit speed to wheel command">{`desired exit speed  ->  wheel command
-    eta   <- measured velocity ratio at this launch angle   (from calibration, not theory)
-    guard:  eta must be positive, or the conversion is meaningless
-    wheel command <- desired exit speed / eta
-`}</Pseudocode>
+<JavaCode label="Exit speed to wheel command">{`double wheelCommand(double desiredExitSpeed, double launchAngle) {
+    // Measured velocity ratio at this launch angle, from calibration.
+    double eta = velocityRatioAt(launchAngle);
+    if (!(eta > 0)) throw new IllegalStateException("no calibration");
+    return desiredExitSpeed / eta;
+}
+`}</JavaCode>
 
 The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one velocity-ratio lookup.
 

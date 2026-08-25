@@ -107,88 +107,127 @@ reach for S-curves only when jerk visibly hurts.
 Build the profile once from your limits, then ask it for the target state at the current time every loop
 and hand that to your feedforward + PID controller.
 
-<Pseudocode label="Trapezoidal profile (build once, sample each loop)">{`TRAPEZOIDAL PROFILE
-  built ONCE per move; sampled every loop afterwards
+<JavaCode league="FTC" label="Trapezoidal profile: build once">{`private double sign, distance, aMax, tAcc, tFlat, vPeak, total;
 
-  build(distance, v_max, a_max):
-      require distance is finite, and v_max > 0 and a_max > 0
+// Built ONCE per move; sampled every loop afterwards.
+void build(double d, double vMax, double a) {
+    if (!Double.isFinite(d) || vMax <= 0 || a <= 0) {
+        total = 0;                    // zero-length: sample() just holds
+        return;
+    }
 
-      sign     <- sign(distance)          # plan in positive distance,
-      distance <- | distance |            # put the sign back when sampling
+    sign = Math.signum(d);            // plan in positive distance,
+    distance = Math.abs(d);           // put the sign back when sampling
+    aMax = a;
 
-      t_ramp <- v_max / a_max             # time to reach cruise speed
-      d_ramp <- 0.5 * a_max * t_ramp^2    # distance used doing it
+    double tRamp = vMax / aMax;                   // time to reach cruise speed
+    double dRamp = 0.5 * aMax * tRamp * tRamp;    // distance used doing it
 
-      if 2 * d_ramp >= distance:          # TRIANGLE: too short to ever cruise
-          t_acc  <- sqrt(distance / a_max)
-          v_peak <- a_max * t_acc
-          t_flat <- 0
-      else:                               # full TRAPEZOID
-          t_acc  <- t_ramp
-          v_peak <- v_max
-          t_flat <- (distance - 2*d_ramp) / v_max
+    if (2 * dRamp >= distance) {      // TRIANGLE: too short to ever cruise
+        tAcc = Math.sqrt(distance / aMax);
+        vPeak = aMax * tAcc;
+        tFlat = 0;
+    } else {                          // full TRAPEZOID
+        tAcc = tRamp;
+        vPeak = vMax;
+        tFlat = (distance - 2 * dRamp) / vMax;
+    }
+    total = 2 * tAcc + tFlat;
+}`}</JavaCode>
 
-      total <- 2*t_acc + t_flat
+<JavaCode league="FTC" label="Trapezoidal profile: sample every loop">{`// Target position, velocity and acceleration at time t.
+ProfileState sample(double t) {
+    if (t >= total) return new ProfileState(sign * distance, 0, 0);
+    t = Math.max(0, t);
 
-      # Work out the triangle case yourself. If the move is too short to
-      # reach v_max, the profile is accelerate-then-decelerate with no
-      # cruise. Set "distance travelled accelerating + decelerating =
-      # distance" and solve for t_acc. You should land on the sqrt above.
+    double a, v, x;
+    if (t < tAcc) {                            // accelerating
+        a = aMax;
+        v = aMax * t;
+        x = 0.5 * aMax * t * t;
+    } else if (t < tAcc + tFlat) {             // cruising
+        a = 0;
+        v = vPeak;
+        x = 0.5 * aMax * tAcc * tAcc + vPeak * (t - tAcc);
+    } else {                                   // decelerating
+        double td = t - tAcc - tFlat;
+        a = -aMax;
+        v = vPeak - aMax * td;
+        x = 0.5 * aMax * tAcc * tAcc + vPeak * tFlat
+                + vPeak * td - 0.5 * aMax * td * td;
+    }
+    return new ProfileState(sign * x, sign * v, sign * a);
+}`}</JavaCode>
 
-  sample(t)  ->  target position, velocity and acceleration at time t
+<Exercise title="Derive the triangle case">
 
-      if t >= total:  return (sign*distance, 0, 0)     # hold the endpoint
-      clamp t to at least 0
+If the move is too short to reach `vMax`, the profile is accelerate-then-decelerate with no cruise. Set
+"distance travelled accelerating + distance travelled decelerating = distance" and solve for `tAcc`.
+You should land on the square root above.
 
-      if t < t_acc:                       # accelerating
-          a <- a_max
-          v <- a_max * t
-          x <- 0.5 * a_max * t^2
+<Solution>
 
-      else if t < t_acc + t_flat:         # cruising
-          a <- 0
-          v <- v_peak
-          x <- 0.5*a_max*t_acc^2  +  v_peak * (t - t_acc)
+Accelerating for $t_a$ at $a$ covers $\tfrac12 a t_a^2$, and the symmetric deceleration covers the
+same. So $a t_a^2 = d$, giving $t_a = \sqrt{d/a}$ — and the peak speed $a t_a$ is whatever that
+works out to, always below `vMax` (which is what put you in this branch).
 
-      else:                               # decelerating
-          td <- t - t_acc - t_flat
-          a  <- -a_max
-          v  <- v_peak - a_max*td
-          x  <- 0.5*a_max*t_acc^2 + v_peak*t_flat
-                + v_peak*td - 0.5*a_max*td^2
+</Solution>
 
-      return (sign*x, sign*v, sign*a)
+</Exercise>
 
-# Every x line above is just  x = x0 + v0*t + 0.5*a*t^2  applied to that
-# phase. Derive the cruising and decelerating lines yourself by asking where
-# the mechanism already was when the phase began.
-#
-# Check your implementation on a case you can verify by hand: distance 100,
-# v_max 10, a_max 5. Compute t_ramp, d_ramp, decide triangle or trapezoid,
-# and predict total. Then confirm sample(total/2) sits at half the distance.
-`}</Pseudocode>
+<Exercise title="Check it by hand">
 
-<Pseudocode label="Following the profile with feedforward + PID">{`each loop:
-    t <- seconds since the profile started
-    target_position, target_velocity, target_accel  <-  profile.sample(t)
+Every `x` line above is $x_0 + v_0 t + \tfrac12 a t^2$ applied to one phase; derive the cruising and
+decelerating lines yourself by asking where the mechanism already was when that phase began. Then check
+the whole thing on a case you can verify: `distance = 100`, `vMax = 10`, `aMax = 5`. Compute `tRamp` and
+`dRamp`, decide triangle or trapezoid, predict `total`, and confirm that `sample(total / 2)` sits at
+half the distance.
 
-    ff <- kS*sign(target_velocity) + kV*target_velocity + kA*target_accel
-    fb <- pid(measured_position, target_position)     # correct what ff missed
+<Solution>
 
-    command the motor with (ff + fb) / battery_voltage
+`tRamp = 2 s`, `dRamp = 10`, and `2 * dRamp = 20 < 100`, so it is a full trapezoid:
+`tAcc = 2`, `vPeak = 10`, `tFlat = 8`, `total = 12 s`. At `t = 6` you are cruising, and
+$x = \tfrac12(5)(2^2) + 10(6-2) = 10 + 40 = 50$ — exactly half. The symmetry is not a coincidence:
+the accelerate and decelerate phases are mirror images, so the midpoint of time is the midpoint of
+distance whenever they are.
 
-    done <- t >= profile.duration()
-            and | final_target - measured_position | < TOL
+</Solution>
 
-# The feedforward is computed from the PROFILE, not from the measurement. It
-# is the open-loop guess at the voltage this motion needs. The PID only has
-# to clean up the difference, which is why its gains end up so much smaller
-# than they would be alone.
-#
-# Work out why done checks both the clock and the position. Give a case
-# where the profile has finished but the mechanism has not arrived, and say
-# which of the two conditions catches it.
-`}</Pseudocode>
+</Exercise>
+
+<JavaCode league="FTC" label="Following the profile with feedforward + PID">{`void loop() {
+    double t = timer.seconds();
+    ProfileState target = profile.sample(t);
+
+    double ff = kS * Math.signum(target.v) + kV * target.v + kA * target.a;
+    double fb = pid(measuredPosition, target.x);   // correct what ff missed
+
+    motor.setPower((ff + fb) / batteryVoltage());
+
+    boolean done = t >= profile.duration()
+            && Math.abs(finalTarget - measuredPosition) < TOL;
+}`}</JavaCode>
+
+The feedforward is computed from the *profile*, not from the measurement. It is the open-loop guess at
+the voltage this motion needs, which is why the PID only has to clean up the difference — and why its
+gains end up so much smaller than they would be alone.
+
+<Exercise title="Why done checks two things">
+
+`done` requires both the clock and the position. Give a case where the profile has finished but the
+mechanism has not arrived, and say which of the two conditions catches it.
+
+<Solution>
+
+Any case where the mechanism could not keep up: a sagging battery, an extra game piece, a jam. The
+profile is a plan, and `t >= duration()` only says the plan is over — the mechanism can be centimetres
+short with the controller still working on it. The position term catches that. The clock term catches
+the opposite case, where the mechanism passes through the target early and momentarily reads inside
+`TOL` while still moving fast.
+
+</Solution>
+
+</Exercise>
 
 </Deploy>
 

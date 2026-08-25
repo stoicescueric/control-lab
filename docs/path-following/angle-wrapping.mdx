@@ -78,34 +78,57 @@ Wrapping only the target or only the measurement still leaves a difference that 
 
 <Deploy title="One helper, used everywhere a heading appears">
 
-<Pseudocode label="Angle wrapping and a heading hold">{`wrap(a)  ->  the angle in [-pi, pi) pointing the same way as a
+<JavaCode league="FTC" label="Angle wrapping and a heading hold">{`// The angle in [-pi, pi) pointing the same way as a.
+static double wrap(double a) {
+    double turn = 2 * Math.PI;
+    return ((a + Math.PI) % turn + turn) % turn - Math.PI;
+}
 
-    turn <- 2*pi
-    return ((a + pi)  mod turn  +  turn)  mod turn  -  pi
+double headingPower(double target, double heading) {
+    double error = wrap(target - heading);   // this is the entire lesson
+    return clamp(kP * error, -1, +1);
+}
+`}</JavaCode>
 
-# Read that line right to left and work out what each step buys you:
-#   (a + pi)        shift so the target range starts at 0 instead of -pi
-#   mod turn        collapse to one revolution ... but may be NEGATIVE
-#   + turn, mod turn   force it positive, whatever your language did
-#   - pi            shift back
-#
-# Look up: how your language's mod handles a negative left operand. The
-#          doubled mod exists only because Java, C and JavaScript return a
-#          negative remainder while Python does not. Test -3.0 rad by hand.
+<Exercise title="Read the wrap right to left">
 
+Work out what each step of that expression buys you:
 
-HEADING HOLD    turn toward a target heading, always the short way
+- `(a + pi)` — shift so the target range starts at 0 instead of $-\pi$
+- `mod turn` — collapse to one revolution, but the result may be negative
+- `+ turn`, `mod turn` — force it positive, whatever your language did
+- `- pi` — shift back
 
-    heading_power(target, heading):
-        error <- wrap(target - heading)     # <-- this is the entire lesson
-        return clamp(kP * error, -1, +1)
+Then look up how your language's `mod` handles a negative left operand, and test $-3.0$ rad by hand.
 
-# Work out both cases with real numbers before coding:
-#   target 170 deg, heading -170 deg.  What is target - heading?
-#   What does wrap turn it into? Which way does the robot spin, and how far?
-# Then delete the wrap and answer again. That difference is a 340-degree
-# spin in a match.
-`}</Pseudocode>
+<Solution>
+
+The doubled `mod` exists only because Java, C and JavaScript return a remainder with the sign of the
+*dividend*, while Python's `%` always returns a non-negative result for a positive divisor. In Java,
+`-1.0 % 6.283` is `-1.0`, not `5.283` — so a single `mod` leaves values in $(-2\pi, 2\pi)$ and the
+final $-\pi$ shift lands them outside the intended range. In Python the second `mod` is a no-op; port
+the code without it and it breaks on the FTC hub.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The 340-degree spin">
+
+Work both cases with real numbers before writing any code. The target is 170°, the heading is $-170°$.
+What is `target - heading`? What does `wrap` turn it into? Which way does the robot spin, and how far?
+Then delete the `wrap` and answer again.
+
+<Solution>
+
+`target - heading` is $340°$. Wrapped, that is $-20°$ — so the robot turns 20° clockwise, which is the
+short way and obviously correct. Without the wrap, `kP * 340°` saturates the command and the robot
+spins 340° counter-clockwise to arrive at the same place. In a match that is roughly a second and a half
+of the robot rotating for no reason, usually into an opponent.
+
+</Solution>
+
+</Exercise>
 
 The same `wrap` call belongs anywhere two headings are compared: the rotation term of a go-to-pose
 controller, a `turnTo` action, or the heading feedback of a path follower. Make it a static utility and

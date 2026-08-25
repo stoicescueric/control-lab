@@ -119,53 +119,93 @@ of how well its gains are tuned.
 Read the true loop time every iteration, and centralize the tick conversion so every downstream
 controller speaks real units.
 
-<Pseudocode label="Real loop time + a single source of units">{`UNITS - defined ONCE, as constants, never recomputed inline
-    WHEEL_R                0.048 m
-    TICKS_PER_OUTPUT_REV   537.7
-    METERS_PER_TICK        <- 2*pi*WHEEL_R / TICKS_PER_OUTPUT_REV
-    MAX_VALID_DT           0.25 s     # beyond this, something stalled
+<JavaCode league="FTC" label="Units, defined once">{`// Never recomputed inline, never retyped in a subsystem.
+static final double WHEEL_R = 0.048;                 // meters
+static final double TICKS_PER_OUTPUT_REV = 537.7;
+static final double METERS_PER_TICK =
+        2 * Math.PI * WHEEL_R / TICKS_PER_OUTPUT_REV;
+static final double MAX_VALID_DT = 0.25;      // s; beyond this, something stalled`}</JavaCode>
 
-state kept between loops:
-    have_previous_sample <- false
-    last_meters, integral, distance_from_velocity, derivative
+Then measure the loop time every iteration, and seed before differentiating anything:
 
-update(error):
-    meters <- encoder position * METERS_PER_TICK
+<JavaCode league="FTC" label="Real loop time, with a seed and a dt guard">{`private final ElapsedTime timer = new ElapsedTime();
+private boolean havePreviousSample;
+private double lastMeters, integral, distanceFromVelocity, derivative;
 
-    # ---- SEED before differentiating anything ----
-    if not have_previous_sample:
-        last_meters <- meters
-        reset the loop timer
-        have_previous_sample <- true
-        return                        # no dt yet, so no derivative yet
+void update(double error) {
+    double meters = motor.getCurrentPosition() * METERS_PER_TICK;
 
-    # Work out what the first derivative would be without this. last_meters
-    # starts at 0 and the encoder might read 4000 ticks. What velocity does
-    # that imply, and what does the controller do with it?
+    if (!havePreviousSample) {
+        lastMeters = meters;
+        timer.reset();
+        havePreviousSample = true;
+        return;                        // no dt yet, so no derivative yet
+    }
 
-    dt <- measured seconds since the last call
-    reset the loop timer
+    double dt = timer.seconds();
+    timer.reset();
 
-    if dt is not finite, or dt <= 0, or dt > MAX_VALID_DT:
-        last_meters <- meters         # RE-SEED, do not just skip
-        derivative  <- 0
-        return
+    if (!Double.isFinite(dt) || dt <= 0 || dt > MAX_VALID_DT) {
+        lastMeters = meters;           // RE-SEED, do not just skip
+        derivative = 0;
+        return;
+    }
 
-    # ^ A debugger pause or a stalled loop makes one enormous difference
-    #   quotient that is physically meaningless. Work out the implied
-    #   velocity after a 2-second pause, and why re-seeding beats both
-    #   using it and ignoring it while leaving last_meters stale.
+    derivative = (meters - lastMeters) / dt;   // m/s over THIS interval
+    integral += error * dt;                    // this rectangle's own dt
+    distanceFromVelocity += derivative * dt;
+    lastMeters = meters;
+}`}</JavaCode>
 
-    derivative             <- (meters - last_meters) / dt   # m/s over THIS interval
-    integral               <- integral + error * dt         # this rectangle's own dt
-    distance_from_velocity <- distance_from_velocity + derivative * dt
-    last_meters            <- meters
+<Exercise title="What the seed prevents">
 
-# Every dt above is MEASURED. Work out the error from assuming a constant
-# 20 ms when the loop actually runs at 24 ms: after 5 seconds of
-# integration, how far off is the integral term? Then work out why the
-# integral cannot simply use an average dt computed at the end.
-`}</Pseudocode>
+Delete the `havePreviousSample` branch. `lastMeters` starts at 0, and the encoder might already read
+4000 ticks when the OpMode starts. Work out the velocity that implies on the first loop, and what the
+controller does with it.
+
+<Solution>
+
+4000 ticks is 2.24 m, and the first `dt` is about 20 ms, so the derivative comes out around
+**112 m/s** — roughly 250 mph. A D term sees that once and slams the output to its limit before the
+mechanism has moved at all. The seed costs one loop and removes the entire failure.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why re-seed instead of skip">
+
+A debugger pause, a slow vision frame, or a stalled loop produces a `dt` far outside the valid band.
+Suppose the loop stalls for 2 seconds while a mechanism keeps moving at 1 m/s. Work out what happens
+on the *next* loop if the guard skips without re-seeding `lastMeters`.
+
+<Solution>
+
+The stall itself is survivable — 2 m of travel divided by 2 s is the right answer. The damage comes
+one loop later: `lastMeters` is still from before the stall, so the next update divides 2 m of travel
+by a 20 ms `dt` and reports **100 m/s** instead of 1 m/s. Re-seeding throws away one derivative;
+skipping without re-seeding poisons the one after it.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="Why the integral cannot use an average dt">
+
+Every `dt` above is measured. It is tempting to log the loop times, average them at the end, and
+multiply once. Work out why that is not the same number.
+
+<Solution>
+
+The integral is $\sum e_i \Delta t_i$, and replacing each $\Delta t_i$ with the mean gives
+$\bar{\Delta t} \sum e_i$. Those agree only if the error is uncorrelated with the loop time — and it
+is not: loops run longest exactly when the robot is doing the most work, which is when the error is
+largest. The bias is systematic, not noise. The practical objection is simpler still: the controller
+needs the integral *this* loop, not after the match.
+
+</Solution>
+
+</Exercise>
 
 <Callout type="warn" title="Hard-coding dt is a classic, invisible bug.">
 If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the integral accumulates
