@@ -76,6 +76,17 @@ $$
 \delta : S \times E \rightharpoonup S
 $$
 
+<EquationLegend
+  title="Reading the transition function"
+  items={[
+    {symbol: 'S', meaning: 'the SET of all states the machine can be in: your enum, written mathematically'},
+    {symbol: 'E', meaning: 'the set of all EVENTS that can happen: a button press, a path finishing, a timer expiring'},
+    {symbol: '\u03b4 (delta)', meaning: 'the transition function itself: given a state and an event, which state comes next. Not \u0394 for a change in a quantity'},
+    {symbol: 'S \u00d7 E', meaning: 'every possible pairing of a state with an event'},
+    {symbol: 'the half arrow \u21c0', meaning: 'PARTIAL: not every state and event pairing is defined. Most events do nothing in most states, and that is the point rather than an oversight'},
+  ]}
+/>
+
 Here, $S \times E$ means "a state paired with an event." The half-arrow $\rightharpoonup$ means the
 function is partial: not every event is legal from every state.
 
@@ -100,11 +111,58 @@ $$
 u_k = g(s_k)
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 's_k', meaning: 'which state the machine is in at loop k'},
+    {symbol: 'u_k', meaning: 'the actuator command chosen for that loop'},
+    {symbol: 'g(\u00b7)', meaning: 'the output function. That it depends on the state ALONE, not on the event that got you there, is what makes this a Moore machine and what makes the behaviour auditable'},
+  ]}
+/>
+
 Here, $s_k$ is the current state at loop $k$, and $u_k$ is the actuator command chosen for that state.
 For example, `INTAKING` runs the intake, `RAISING` commands the arm target, and `IDLE` stops or holds
 everything safely.
 
-## Real robot case study: adaptive autonomous control
+## Core checkpoint: one enum, one transition gate
+
+This is the minimum useful pattern. `update()` performs one quick slice of work; `enter()` is the only
+place that changes state and resets state-local time.
+
+<Pseudocode label="A scorer: one state field, one transition gate">{`SCORER
+
+  states:  IDLE, RAISING, RELEASING
+  own:     state          <- IDLE
+           time_in_state                  # reset ONLY on entry
+
+  enter(next):                            # the one place state changes
+      state         <- next
+      time_in_state <- 0
+
+  request_score():                        # an outside event
+      if state is IDLE: enter(RAISING)
+
+  update():                               # one slice of work. never blocks.
+      if state is IDLE:
+          hold the lift
+          close the claw
+
+      if state is RAISING:
+          command the lift to SCORE_HEIGHT
+          if the lift reports it is at target: enter(RELEASING)
+
+      if state is RELEASING:
+          open the claw
+          if time_in_state >= RELEASE_TIME: enter(IDLE)
+
+  # Work out: why must time_in_state reset inside enter(), and not at the
+  #           top of update()? Trace both versions through three loops.
+  # Look up:  a non-blocking timer for your SDK. It has to be readable
+  #           without waiting on it, which rules out sleep().
+`}</Pseudocode>
+
+If you can trace the three legal transitions and confirm that no loop blocks, the core lesson is done.
+
+## Optional case study: adaptive autonomous control
 
 The same idea scales from one subsystem to a full autonomous routine. During the Power Play season,
 WolfPackMachina modeled autonomous as a graph of scoring, pickup, recovery, and parking states. The
@@ -130,7 +188,7 @@ sources have. Before treating it as a citable source, the maintainer should conf
 and licensing to reproduce it are on record.
 :::
 
-## Engineering implementation
+### Engineering implementation
 
 The deployable FTC pattern is an `enum`, a `switch`, and a timer, but a real autonomous machine
 needs more than a pretty transition table. It needs **entry actions**, **timed exits**,
@@ -139,309 +197,139 @@ loop.
 
 What follows is an adapted, teaching-oriented reconstruction of the WolfPackMachina `Auto.java`
 pattern — **not** the full file. The original uses `Paths.Path` objects directly as states; this
-version wraps the same idea in a smaller `AutoState` enum so the architecture is easier to read.
+version wraps the same idea in a smaller, named state set so the architecture is easier to read.
 
-It is all one class, `AdaptiveAuto`, shown here in pieces so each idea stands on its own. Read them
-in order; stacked together they are the whole pattern.
+It is all one machine, `AdaptiveAuto`. What follows is its shape, not its source: a state table, the
+loop and the gate that owns every transition, and the three handler shapes that keep recurring. Write
+the handlers yourself; there are nine of them and they are all variations on those three.
 
-### The skeleton: one field holds the mode
+#### The state table: one field holds the mode
 
-The states live in an `enum`, and a single `currentState` field is the one authoritative answer to
-"what is the robot doing right now?" Everything else — a pair of timers, the subsystem handles, a few
-local flags — is just bookkeeping the handlers will lean on.
+A single `current_state` field is the one authoritative answer to "what is the robot doing right
+now?" Everything else is bookkeeping the handlers lean on.
 
-<JavaCode league="FTC" label="AdaptiveAuto — the state enum and fields">{`public abstract class AdaptiveAuto {
-    private enum AutoState {
-        WAIT_FOR_PICKUP,
-        DISLODGE_CONE,
-        ALIGN_LEFT_RAM,
-        LEFT_RAM,
-        CONTESTED_LEFT_RAM,
-        ALIGN_CONTESTED,
-        ALIGN_PARK,
-        PARK_CLOSE,
-        CYCLE_TRANSFER
-    }
+<Pseudocode label="AdaptiveAuto - the state table">{`ADAPTIVE AUTO
 
-    private AutoState currentState = AutoState.WAIT_FOR_PICKUP;
-    private AutoState scoringState = AutoState.ALIGN_CONTESTED;
+  states:
+      WAIT_FOR_PICKUP      hold the scoring pose until settled
+      DISLODGE_CONE        recovery: push a stuck cone free
+      ALIGN_LEFT_RAM       contract, then line up on the stack
+      LEFT_RAM             follow the pickup path
+      CONTESTED_LEFT_RAM   recovery: we were pushed off-line
+      ALIGN_CONTESTED      line up to score
+      ALIGN_PARK           choose a park square, retract
+      PARK_CLOSE           drive into the square
+      CYCLE_TRANSFER       hand off intake -> depositor
 
-    private final ElapsedTime stateTimer = new ElapsedTime();
-    private final ElapsedTime settleTimer = new ElapsedTime();
+  the one authoritative field:
+      current_state <- WAIT_FOR_PICKUP
 
-    private final Movement drive;
-    private final ClawIntake intake;
-    private final Depositor depositor;
+  bookkeeping the handlers read:
+      scoring_state             which scoring approach we committed to
+      time_in_state             reset by the gate, never by a handler
+      time_since_settled
+      path_complete             this state's path has finished
+      parking, contracting      one-shot entry guards
+      robot_settled
+      slides_position_at_entry  snapshot taken on entry
 
-    private boolean pathComplete = false;
-    private boolean parking = false;
-    private boolean contracting = true;
-    private boolean robotSettled = false;
-    private double slidesPositionAtEntry = 0.0;
-    // methods follow ↓
-`}</JavaCode>
+  # Notice what is absent: no step counter, no sleep, no "phase 2b" boolean.
+  # One field answers the question. Everything else is derived from it.
+`}</Pseudocode>
 
-### The loop: dispatch on the state, then tick everything
+#### The loop and the gate
 
-The loop never blocks. It runs the current state's handler and then — whatever state it is in —
-updates every subsystem and prints the state to telemetry. One gate, `transitionTo`, owns every mode
-change so timing and flags always reset together. An outside request like `requestPark()` is just
-another event handed to that gate.
+The loop never blocks. It runs the current state's handler and then, whatever state it is in, updates
+every subsystem and logs the mode. One gate owns every mode change, so timing and flags always reset
+together.
 
-<JavaCode league="FTC" label="AdaptiveAuto — the loop and the transition gate">{`    /**
-     * Runs exactly one autonomous loop. This method must never block.
-     */
-    public final void loop(Telemetry telemetry) {
-        switch (currentState) {
-            case ALIGN_PARK:
-                alignPark();
-                break;
+<Pseudocode label="AdaptiveAuto - the loop and the transition gate">{`loop():                        # exactly one pass through. never blocks.
+    run the handler for current_state
 
-            case DISLODGE_CONE:
-                dislodgeCone();
-                break;
+    # then, regardless of which state we were in:
+    tick every subsystem
+    log current_state, scoring_state, time_in_state, path_complete
 
-            case ALIGN_LEFT_RAM:
-                alignLeftRam();
-                break;
+transition_to(next):           # THE ONLY place current_state is written
+    if next is current_state and next is not CYCLE_TRANSFER:
+        return                 # re-entering a state is a no-op, except
+                               # CYCLE_TRANSFER, which is meant to repeat
 
-            case LEFT_RAM:
-                runLeftRam();
-                break;
+    current_state    <- next
+    time_in_state    <- 0
+    time_since_settled <- 0
+    clear path_complete, parking, robot_settled
+    set contracting
 
-            case CONTESTED_LEFT_RAM:
-                recoverFromContestedLeftRam();
-                break;
+request_park():                # an outside event, through the same gate
+    if current_state is not ALIGN_PARK:
+        transition_to(ALIGN_PARK)
 
-            case WAIT_FOR_PICKUP:
-                holdScoringPosition();
-                break;
+# Work out: why do the flags reset here instead of in each handler?
+#           Add a tenth state on paper and count what you had to remember.
+`}</Pseudocode>
 
-            case PARK_CLOSE:
-            case ALIGN_CONTESTED:
-            case CYCLE_TRANSFER:
-                runPathState(currentState);
-                break;
-        }
+#### Three handler shapes
 
-        updateSubsystems();
-        telemetry.addData("auto/state", currentState);
-        telemetry.addData("auto/scoringState", scoringState);
-        telemetry.addData("auto/timeInStateMs", stateTimer.milliseconds());
-        telemetry.addData("auto/pathComplete", pathComplete);
-    }
+Every one of the nine handlers is one of these three. Once you can write these, the rest of the
+machine is repetition.
 
-    /**
-     * All state changes go through one gate so entry timing and local flags reset together.
-     */
-    private void transitionTo(AutoState nextState) {
-        if (nextState == currentState && nextState != AutoState.CYCLE_TRANSFER) {
-            return;
-        }
+<Pseudocode label="AdaptiveAuto - entry actions, preconditions, recovery">{`# SHAPE 1 - an entry action, then a non-blocking wait.
+align_park():
+    if not parking:                  # true on the first loop in this state
+        choose the closest park square
+        retract the slides
+        parking <- true              # ...and only the first loop
+    hold still
 
-        currentState = nextState;
-        pathComplete = false;
-        stateTimer.reset();
-        settleTimer.reset();
-    }
+    if time_in_state > PARK_SETTLE_TIME:   # poll a clock; never sleep on it
+        transition_to(PARK_CLOSE)
 
-    /**
-     * A driver-independent request can redirect the autonomous routine into parking.
-     */
-    public final void requestPark() {
-        if (currentState != AutoState.ALIGN_PARK) {
-            transitionTo(AutoState.ALIGN_PARK);
-        }
-    }
 
-`}</JavaCode>
+# SHAPE 2 - a precondition. Refuse to act until the robot is safe.
+align_left_ram():
+    if contracting and the lift is still above its safe height:
+        hold position
+        return                       # do nothing this loop. try again next.
+    contracting <- false
+    contract the robot
 
-### Entry actions and non-blocking "waits"
+    still_following <- follow the alignment path
+    if not still_following:
+        transition_to(LEFT_RAM)
 
-This is where "don't block the loop" becomes concrete. `alignPark` does its one-time setup — pick a
-park square, retract the slides — behind a `parking` flag the first time it runs, then on every later
-loop just checks whether enough time has passed to move on. `dislodgeCone` does the same dance: act
-once, then poll a timer and a sensor. The robot keeps driving and reading sensors the entire time.
 
-<JavaCode league="FTC" label="AdaptiveAuto — entry actions and timed exits">{`    /**
-     * First-entry logic selects a park target once; later loops only wait for a safe transition.
-     */
-    private void alignPark() {
-        if (!parking) {
-            Pose2d target = getClosestParkingSquare();
-            setParkingTarget(target);
-            parking = true;
-            intake.retractSlides();
-        }
+# SHAPE 3 - a branch. This is what makes it a policy, not a script.
+run_left_ram():
+    once past 5% of the path: start extending the slides
+    still_following <- follow the pickup path
+    if still_following: return
 
-        drive.stopDrive();
+    retract the slides
+    if the robot was pushed off-line:
+        transition_to(CONTESTED_LEFT_RAM)   # recover, then come back
+    else:
+        transition_to(ALIGN_CONTESTED)      # carry on as planned
+    reset the path
 
-        if (stateTimer.milliseconds() > 650) {
-            transitionTo(AutoState.PARK_CLOSE);
-        }
-    }
 
-    /**
-     * Recovery state: push a stuck cone free, then return to the pickup cycle.
-     */
-    private void dislodgeCone() {
-        if (!pathComplete) {
-            depositor.setV4BState(Depositor.V4BState.HOME);
-            slidesPositionAtEntry = intake.getSlidesPosition();
-            intake.retractSlides();
+# ...and beneath all of it, every loop, in every state:
+tick every subsystem():
+    tick the drive
+    tick the intake      AND run the intake's own state machine
+    tick the depositor   AND run the depositor's own state machine
 
-            pathComplete = true;
-            stateTimer.reset();
-            return;
-        }
-
-        drive.holdPosition(getScoreHoldPose());
-
-        if (stateTimer.milliseconds() > 950
-                && (slidesPositionAtEntry <= intake.getContestedHighExtension()
-                || stateTimer.milliseconds() > 1400)) {
-            intake.retractSlides();
-            transitionTo(AutoState.WAIT_FOR_PICKUP);
-            return;
-        }
-
-        double slidesTarget = slidesPositionAtEntry + 280.0;
-        intake.setSlidesPosition(slidesTarget, 0.6);
-
-        if (stateTimer.milliseconds() < 700) {
-            Pose2d pushPose = getScoreHoldPose().translatedForward(28.0);
-            drive.holdPosition(pushPose);
-        }
-    }
-
-`}</JavaCode>
-
-### Branching and recovery: the part that makes it a _policy_
-
-These handlers are why an FSM beats a linear script. `alignLeftRam` refuses to drive until the robot
-has contracted to a safe size. `runLeftRam` follows its path, but if the robot is pushed off-line it
-branches into `CONTESTED_LEFT_RAM` instead of blindly continuing.
-
-<JavaCode league="FTC" label="AdaptiveAuto — branching and recovery">{`    /**
-     * Align before ramming into the stack. The robot contracts first so mechanisms are safe.
-     */
-    private void alignLeftRam() {
-        if (contracting && depositor.getLiftPosition() > depositor.getIntakeThreshold() * 3.0) {
-            drive.holdPosition(getScoreHoldPose());
-            return;
-        }
-
-        contracting = false;
-        contractRobot(true, true);
-
-        double headingHold = getLeftRamPath().progress() < 0.15
-                ? getScoreHoldPose().heading
-                : 0.0;
-
-        boolean stillFollowing = drive.followPath(
-                getLeftRamAlignmentPath(),
-                0.75,
-                headingHold,
-                MovementDash.FAST_VELOCITY_THRESHOLD);
-
-        if (!stillFollowing) {
-            drive.shiftLocation(0.0, 0.0);
-            transitionTo(AutoState.LEFT_RAM);
-        }
-    }
-
-    /**
-     * Main pickup path. If field interference moved the robot off-line, redirect to recovery.
-     */
-    private void runLeftRam() {
-        if (getLeftRamPath().progress() > 0.05) {
-            intake.setSlidesTarget(AutoDashboard.RAM_INTAKE_EXTENSION);
-        }
-
-        boolean stillFollowing = drive.followPath(
-                getLeftRamPath(),
-                1.0,
-                0.0,
-                MovementDash.FAST_VELOCITY_THRESHOLD / 3.0);
-
-        if (stillFollowing) {
-            return;
-        }
-
-        intake.retractSlides();
-
-        if (scoringState != AutoState.ALIGN_CONTESTED) {
-            scoringState = AutoState.ALIGN_CONTESTED;
-            switchYawScoreDirection();
-            setCloseHighScorePosition();
-        }
-
-        if (robotWasPushedOffLine()) {
-            transitionTo(AutoState.CONTESTED_LEFT_RAM);
-        } else {
-            transitionTo(AutoState.ALIGN_CONTESTED);
-        }
-
-        getLeftRamPath().reset();
-    }
-
-    /**
-     * Fail-safe path after an interaction with defense or field contact.
-     */
-    private void recoverFromContestedLeftRam() {
-        boolean stillFollowing = drive.followPath(
-                getContestedLeftRamPath(),
-                0.75,
-                0.0,
-                MovementDash.FAST_VELOCITY_THRESHOLD);
-
-        if (!stillFollowing) {
-            transitionTo(AutoState.LEFT_RAM);
-        }
-    }
-
-`}</JavaCode>
-
-The last piece is the steady-state hold plus the per-loop tick. `holdScoringPosition` re-checks that
-the robot is settled every loop, and `updateSubsystems` runs the intake's and depositor's _own_
-internal state machines underneath all of this — every loop, no matter which mode we are in.
-
-<JavaCode league="FTC" label="AdaptiveAuto — holding, and the per-loop subsystem tick">{`    /**
-     * Hold the scoring pose unless the robot is not settled or has been pushed off-line.
-     */
-    private void holdScoringPosition() {
-        Pose2d scorePose = getScoreHoldPose();
-        robotSettled = drive.holdPosition(scorePose);
-
-        if (!robotSettled || robotWasPushedOffLine()) {
-            contractRobot(currentState != AutoState.WAIT_FOR_PICKUP, true);
-            return;
-        }
-
-        settleTimer.reset();
-    }
-
-    private void updateSubsystems() {
-        drive.update();
-        intake.update();
-        intake.stateMachine();
-        depositor.update();
-        depositor.stateMachine();
-    }
-
-    protected abstract Pose2d getClosestParkingSquare();
-    protected abstract Pose2d getScoreHoldPose();
-    protected abstract Path getLeftRamPath();
-    protected abstract Path getLeftRamAlignmentPath();
-    protected abstract Path getContestedLeftRamPath();
-}`}</JavaCode>
+# Look up: "hierarchical state machine". Subsystems running their own
+#          machines underneath a top-level one is the standard structure,
+#          and it is why update() has to run in every state.
+`}</Pseudocode>
 
 This is what makes the example valuable. The state machine is not just replacing `sleep()` with
 `if`; it is creating a recoverable autonomous policy. `ALIGN_LEFT_RAM` can refuse to move until the
 robot is contracted. `LEFT_RAM` can branch into `CONTESTED_LEFT_RAM` if the robot is pushed off-line.
 `ALIGN_PARK` has first-entry logic so the parking target is chosen once, not recalculated every loop.
-Every transition resets local timing so `stateTimer.milliseconds()` always means "time since this
-state began."
+Every transition resets local timing through the one gate, so `time_in_state` always means "time
+since this state began" and never anything else.
 
 In mathematical language, this is still the same partial transition function:
 

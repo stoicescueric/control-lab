@@ -10,11 +10,16 @@
    desktop — previously they lived in raw canvas pixels and the behaviour drifted
    with the screen's width/aspect ratio. */
 
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {lookaheadPoint, pursuitCurvature, toRobotFrame} from '@site/src/lib/domain/purePursuit';
+import {
+  continuousLookaheadPoint,
+  pursuitCurvature,
+  toRobotFrame,
+  type PathProgress,
+} from '@site/src/lib/domain/purePursuit';
 
 const dt = 1 / 60;
 
@@ -23,7 +28,8 @@ const WX = 640;
 const WY = 380;
 const PAD = 12; // canvas padding (px) kept around the world when it's letterboxed
 const WP_NUDGE = 8; // arrow-key step for a focused waypoint, in world units (8 units = 8 cm)
-const WAYPOINT_COUNT = 5; // matches defaultPath() below; fixed so the keyboard overlay can render before init() runs
+const WAYPOINT_COUNT = 5; // matches defaultPath() below
+const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 interface Pose {
   x: number;
@@ -35,6 +41,7 @@ export default function PurePursuit() {
   const [Ld, setLd] = useState(55);
   const [spd, setSpd] = useState(110);
   const [playing, setPlaying] = useState(true);
+  const [ready, setReady] = useState(false);
   const ldRef = useRef(Ld);
   const spdRef = useRef(spd);
   const playingRef = useRef(playing);
@@ -54,7 +61,8 @@ export default function PurePursuit() {
     waypoints: [] as number[][],
     path: [] as {x: number; y: number}[],
     pose: null as Pose | null,
-    pi: 0,
+    pi: 0, // nearest sampled point, kept separate from continuous pursuit progress
+    pursuitProgress: {segmentIndex: 0, t: 0} as PathProgress,
     trail: [] as number[][],
     cte: 0,
     carrot: null as {x: number; y: number} | null,
@@ -104,11 +112,14 @@ export default function PurePursuit() {
 
   function restart() {
     const s = st.current;
+    if (s.path.length < 2) return; // safe no-op before canvas/world initialization
     const a = s.path[0];
     const b = s.path[Math.min(8, s.path.length - 1)];
     s.pose = {x: a.x, y: a.y, th: Math.atan2(b.y - a.y, b.x - a.x)};
     s.pi = 0;
+    s.pursuitProgress = {segmentIndex: 0, t: 0};
     s.trail = [];
+    if (s.inited) draw();
   }
 
   function init() {
@@ -116,6 +127,7 @@ export default function PurePursuit() {
     buildPath();
     restart();
     st.current.inited = true;
+    setReady(true);
   }
 
   function nearestAhead() {
@@ -141,11 +153,19 @@ export default function PurePursuit() {
     const v = spdRef.current;
     s.cte = nearestAhead();
     const last = s.path[s.path.length - 1];
-    if (s.pi >= s.path.length - 2 && Math.hypot(s.pose.x - last.x, s.pose.y - last.y) < 12) {
+    if (s.pursuitProgress.segmentIndex >= s.path.length - 2
+        && Math.hypot(s.pose.x - last.x, s.pose.y - last.y) < 12) {
       restart();
       return;
     }
-    s.carrot = lookaheadPoint(s.path, s.pose, ldRef.current, s.pi);
+    const lookahead = continuousLookaheadPoint(
+      s.path,
+      s.pose,
+      ldRef.current,
+      s.pursuitProgress,
+    );
+    s.carrot = lookahead.point;
+    s.pursuitProgress = lookahead.progress;
     const rf = toRobotFrame(s.carrot, s.pose);
     const L = Math.hypot(rf.x, rf.y) || ldRef.current;
     const curv = pursuitCurvature(rf, L);
@@ -212,7 +232,8 @@ export default function PurePursuit() {
       if (btn) {
         btn.style.left = `${PX(p[0])}px`;
         btn.style.top = `${PY(p[1])}px`;
-        btn.setAttribute('aria-valuetext', `x ${(p[0] / 100).toFixed(2)} m, y ${(p[1] / 100).toFixed(2)} m`);
+        const name = `Waypoint ${i + 1} at x ${(p[0] / 100).toFixed(2)} metres, y ${(p[1] / 100).toFixed(2)} metres. Use arrow keys to move; hold Shift to move faster.`;
+        if (btn.getAttribute('aria-label') !== name) btn.setAttribute('aria-label', name);
       }
     });
     if (s.trail.length > 1) {
@@ -257,11 +278,36 @@ export default function PurePursuit() {
     cx.fill();
     cx.restore();
     if (roCte.current) roCte.current.textContent = (s.cte / 100).toFixed(2) + ' m';
-    if (roProg.current) roProg.current.textContent = Math.round((100 * s.pi) / (path.length - 1)) + '%';
+    if (roProg.current) {
+      const progress = s.pursuitProgress.segmentIndex + s.pursuitProgress.t;
+      roProg.current.textContent = Math.round((100 * progress) / (path.length - 1)) + '%';
+    }
   }
 
+  // Initialize and paint independently of the animation loop. useRaf freezes
+  // its callback for reduced-motion users, but they still need a complete,
+  // keyboard-editable static diagram. Redraw after canvas resizes as well.
+  useEffect(() => {
+    const cv = canvas.current;
+    if (!cv) return;
+    let active = true;
+    const initializeAndDraw = () => {
+      if (!active) return;
+      if (!st.current.inited && size.current.w > 0) init();
+      if (st.current.inited) draw();
+    };
+    initializeAndDraw();
+    const observer = new ResizeObserver(() => {
+      queueMicrotask(initializeAndDraw); // run after useDprCanvas updates its size ref
+    });
+    observer.observe(cv);
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [ready, Ld, size]);
+
   useRaf((frameDt: number) => {
-    if (!st.current.inited && size.current.w > 0) init();
     if (!st.current.inited) return;
     acc.current += Math.min(frameDt, 0.1);
     let k = 0;
@@ -273,38 +319,50 @@ export default function PurePursuit() {
     draw();
   }, canvas);
 
-  // drag waypoints — pointer is read in canvas px, then projected back into world
-  // coords so dragging lands in the same place regardless of the canvas size.
-  function evtPos(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>): [number, number] {
+  // Drag waypoints using one pointer path for mouse, pen, and touch. Pointer
+  // capture keeps the drag alive if the pointer leaves the canvas mid-gesture.
+  function evtPos(ev: React.PointerEvent<HTMLCanvasElement>): [number, number] {
     const r = canvas.current!.getBoundingClientRect();
-    const cxp = 'touches' in ev ? ev.touches[0].clientX : ev.clientX;
-    const cyp = 'touches' in ev ? ev.touches[0].clientY : ev.clientY;
-    return [cxp - r.left, cyp - r.top];
+    return [ev.clientX - r.left, ev.clientY - r.top];
   }
-  function onDown(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+
+  function onPointerDown(ev: React.PointerEvent<HTMLCanvasElement>) {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    const s = st.current;
+    if (!s.inited || s.waypoints.length === 0 || s.path.length < 2) return;
     const [mx, my] = evtPos(ev);
     const {scale, ox, oy} = view();
-    const wp = st.current.waypoints;
+    if (!Number.isFinite(scale) || scale <= 0) return;
+    const wp = s.waypoints;
     for (let i = 0; i < wp.length; i++) {
       // hit-test in screen px so the grab radius feels the same on every device
       if (Math.hypot(ox + wp[i][0] * scale - mx, oy + wp[i][1] * scale - my) < 16) {
-        st.current.drag = i;
-        break;
+        s.drag = i;
+        ev.currentTarget.setPointerCapture(ev.pointerId);
+        ev.preventDefault();
+        return;
       }
     }
   }
-  function onMove(ev: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+
+  function onPointerMove(ev: React.PointerEvent<HTMLCanvasElement>) {
     const s = st.current;
-    if (s.drag < 0) return;
+    if (!s.inited || s.drag < 0 || !s.waypoints[s.drag]) return;
     const [mx, my] = evtPos(ev);
     const {scale, ox, oy} = view();
+    if (!Number.isFinite(scale) || scale <= 0) return;
     const wx = (mx - ox) / scale;
     const wy = (my - oy) / scale;
     s.waypoints[s.drag] = [Math.max(8, Math.min(WX - 8, wx)), Math.max(8, Math.min(WY - 8, wy))];
     buildPath();
-    if (ev.cancelable) ev.preventDefault();
+    restart();
+    ev.preventDefault();
   }
-  function onUp() {
+
+  function onPointerEnd(ev: React.PointerEvent<HTMLCanvasElement>) {
+    if (ev.currentTarget.hasPointerCapture(ev.pointerId)) {
+      ev.currentTarget.releasePointerCapture(ev.pointerId);
+    }
     st.current.drag = -1;
   }
 
@@ -321,9 +379,12 @@ export default function PurePursuit() {
       else if (ev.key === 'ArrowDown') dy = step;
       else return;
       ev.preventDefault();
-      const wp = st.current.waypoints[i];
-      st.current.waypoints[i] = [Math.max(8, Math.min(WX - 8, wp[0] + dx)), Math.max(8, Math.min(WY - 8, wp[1] + dy))];
+      const s = st.current;
+      const wp = s.waypoints[i];
+      if (!s.inited || !wp || s.path.length < 2) return;
+      s.waypoints[i] = [Math.max(8, Math.min(WX - 8, wp[0] + dx)), Math.max(8, Math.min(WY - 8, wp[1] + dy))];
       buildPath();
+      restart();
     };
   }
 
@@ -335,15 +396,12 @@ export default function PurePursuit() {
           role="img"
           aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path the robot chases."
           className="block w-full touch-none rounded-xl bg-[#0b1120]"
-          onMouseDown={onDown}
-          onMouseMove={onMove}
-          onMouseUp={onUp}
-          onMouseLeave={onUp}
-          onTouchStart={onDown}
-          onTouchMove={onMove}
-          onTouchEnd={onUp}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
         />
-        {Array.from({length: WAYPOINT_COUNT}, (_, i) => (
+        {ready && Array.from({length: WAYPOINT_COUNT}, (_, i) => (
           <button
             key={i}
             ref={(el) => {
@@ -351,15 +409,17 @@ export default function PurePursuit() {
             }}
             type="button"
             tabIndex={0}
-            role="slider"
-            aria-label={`Waypoint ${i + 1}`}
-            aria-valuemin={0}
-            aria-valuemax={Math.max(WX, WY)}
-            className="absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
+            role="application"
+            aria-label={`Waypoint ${i + 1} at x ${(st.current.waypoints[i][0] / 100).toFixed(2)} metres, y ${(st.current.waypoints[i][1] / 100).toFixed(2)} metres. Use arrow keys to move; hold Shift to move faster.`}
+            aria-keyshortcuts={SPATIAL_KEYS}
+            className="pointer-events-none absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
             onKeyDown={onWaypointKeyDown(i)}
           />
         ))}
       </div>
+      <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
+        Drag a waypoint, or Tab to it and use the arrow keys; hold Shift for a larger step.
+      </p>
       <Legend
         items={[
           {color: '#6f8bff', label: 'planned path'},
@@ -378,7 +438,7 @@ export default function PurePursuit() {
         <Button primary={playing} active={playing} onClick={() => setPlaying((v) => !v)}>
           {playing ? 'Pause' : 'Play'}
         </Button>
-        <Button onClick={restart}>↺ Restart from start</Button>
+        <Button onClick={restart} disabled={!ready}>↺ Restart from start</Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>Cross-track error: <b ref={roCte} className="text-white">—</b></span>

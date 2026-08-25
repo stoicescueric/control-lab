@@ -2,6 +2,12 @@ import {useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {scalarKalmanUpdate} from '@site/src/lib/domain/controlMath';
+import {
+  complementaryFrequencyResponse,
+  complexMagnitude,
+  discreteCrossoverFrequency,
+  nyquistFrequency,
+} from '@site/src/lib/domain/complementary';
 
 const W = 760;
 const H = 340;
@@ -314,10 +320,10 @@ export function ComplementarySplitExplorer() {
   const [alpha, setAlpha] = useState(0.98);
   const [dtMs, setDtMs] = useState(10);
   const dt = dtMs / 1000;
-  const tau = -dt / Math.log(alpha); // seconds — α = exp(−dt/τ)
-  const fc = 1 / (2 * Math.PI * tau); // crossover Hz
+  const tau = -dt / Math.log(alpha); // useful continuous-time-equivalent time constant
+  const fc = discreteCrossoverFrequency(alpha, dt) ?? 0;
   const fMin = 0.02;
-  const fMax = 50;
+  const fMax = nyquistFrequency(dt);
 
   const curves = useMemo(() => {
     const lp: [number, number][] = [];
@@ -325,22 +331,22 @@ export function ComplementarySplitExplorer() {
     const M = 160;
     for (let i = 0; i <= M; i++) {
       const f = fMin * Math.pow(fMax / fMin, i / M); // log sweep
-      const w = 2 * Math.PI * f * tau;
-      const lpMag = 1 / Math.sqrt(1 + w * w);
-      const hpMag = w / Math.sqrt(1 + w * w);
+      const response = complementaryFrequencyResponse(alpha, f, dt);
+      const lpMag = complexMagnitude(response.absolute);
+      const hpMag = complexMagnitude(response.relative);
       const lx = sx(Math.log10(f), Math.log10(fMin), Math.log10(fMax));
       lp.push([lx, sy(lpMag, 0, 1.12)]);
       hp.push([lx, sy(hpMag, 0, 1.12)]);
     }
     return {lp, hp};
-  }, [tau]);
+  }, [alpha, dt, fMax]);
 
   const xc = sx(Math.log10(clamp(fc, fMin, fMax)), Math.log10(fMin), Math.log10(fMax));
 
   return (
     <Demo title="The frequency split: each sensor keeps its own band" pill="Math explorer">
       <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Low-pass and high-pass frequency responses of a complementary filter, crossing at the cutoff frequency">
-        <Grid xLabel="frequency (Hz, log scale)" yLabel="how much gets through" />
+        <Grid xLabel={`frequency (Hz, log; Nyquist ${fMax.toFixed(1)} Hz)`} yLabel="exact sampled magnitude" />
         {/* the two bands */}
         <text x={P.l + 12} y={P.t + 22} fill="#ff9cbb" fontFamily="JetBrains Mono, monospace" fontSize="12">
           absolute owns the slow truth
@@ -367,7 +373,8 @@ export function ComplementarySplitExplorer() {
       <Readout
         items={[
           ['time constant τ = −Δt/ln(α)', `${tau.toFixed(2)} s`],
-          ['crossover f_c = 1/2πτ', `${fc.toFixed(2)} Hz`],
+          ['exact discrete crossover', `${fc.toFixed(2)} Hz`],
+          ['Nyquist limit', `${fMax.toFixed(1)} Hz`],
           ['below f_c', 'absolute anchors · above f_c: motor encoder steers'],
         ]}
       />

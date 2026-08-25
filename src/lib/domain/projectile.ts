@@ -1,6 +1,6 @@
-/* Shared physics for the Trajectory Generation & Implementation module.
+/* Shared physics for the elective drag-aware launcher case study.
    ------------------------------------------------------------------
-   Every simulation in Module 7 (DragAwakening, the IntegratorBattle and
+   Every simulation in the elective (DragAwakening, the IntegratorBattle and
    TransferRealityCheck panels, InterpolationTrap, ShootOnTheMove) draws on the
    same paper model, so the model lives here exactly once. Keeping it pure (no
    React, no DOM) means it is unit-tested in projectile.test.ts and the demos
@@ -55,9 +55,9 @@ export function eulerStep(s: State, dt: number, deriv: Deriv = projectileDeriv):
   return s.map((v, i) => v + dt * k[i]);
 }
 
-/* One classical RK4 step: sample the slope four times across the step. Exact
-   for motion whose state is polynomial up to degree 4, which is why it nails
-   the gravity term that Euler smears. */
+/* One classical, fourth-order-accurate RK4 step: sample the slope four times.
+   It exactly reproduces this model's constant-acceleration no-drag branch;
+   velocity-dependent drag retains a rapidly shrinking truncation error. */
 export function rk4Step(s: State, dt: number, deriv: Deriv = projectileDeriv): number[] {
   const k1 = deriv(s);
   const k2 = deriv(s.map((v, i) => v + 0.5 * dt * k1[i]) as unknown as State);
@@ -199,6 +199,7 @@ export interface SotmResult {
   d: number;
   tf: number;
   iters: SotmIter[];
+  converged: boolean;
 }
 
 /* Fixed-point solver for the virtual aim point: aim at the real target, read
@@ -210,26 +211,40 @@ export function solveSOTM(
   vR: Vec2,
   flightTime: (dIn: number) => number = tof,
 ): SotmResult {
+  if (![shooter.x, shooter.y, goal.x, goal.y, vR.x, vR.y].every(Number.isFinite)) {
+    throw new Error('SOTM positions and velocity must be finite');
+  }
+  const checkedFlightTime = (distanceInches: number): number => {
+    const value = flightTime(distanceInches);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error('SOTM flight time must be finite and positive');
+    }
+    return value;
+  };
   const iters: SotmIter[] = [];
   let pv: Vec2 = {...goal};
   let d = dist(pv, shooter);
-  let tf = flightTime(d);
+  let tf = checkedFlightTime(d);
+  let converged = false;
   iters.push({k: 0, pv, d, tf, T: null, delta: null, done: false});
 
   for (let k = 1; k <= SOTM_MAX_ITERS; k++) {
     const T = FEEDER_DELAY + tf;
     const pvNew: Vec2 = {x: goal.x - SOTM_GAIN * vR.x * T, y: goal.y - SOTM_GAIN * vR.y * T};
     const dNew = dist(pvNew, shooter);
-    const tfNew = flightTime(dNew);
+    const tfNew = checkedFlightTime(dNew);
     const delta = Math.abs(tfNew - tf);
     const done = delta < SOTM_TOL;
     iters.push({k, pv: pvNew, d: dNew, tf: tfNew, T, delta, done});
     pv = pvNew;
     d = dNew;
     tf = tfNew;
-    if (done) break;
+    if (done) {
+      converged = true;
+      break;
+    }
   }
-  return {pv, d, tf, iters};
+  return {pv, d, tf, iters, converged};
 }
 
 // ---- calibration-table interpolation (paper §7.2) ----------------------

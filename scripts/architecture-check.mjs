@@ -8,7 +8,6 @@ const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx', '.mdx']);
 const simulationDomains = new Set([
   'control-theory',
   'foundations',
-  'localization',
   'path-following',
   'research',
   'signal-processing',

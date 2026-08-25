@@ -166,39 +166,54 @@ the content check enforces a generous upper bound so one punctuation habit canno
 
 ### 5. Engineering Implementation
 
-Java examples should look like code a strong FTC team would actually maintain:
+Lessons do **not** hand out drop-in Java. A reader who pastes a finished class has
+skipped the part where the learning happens. Show the algorithm as pseudocode, in
+enough detail that a competent student can implement it, and no further.
 
-- Use meaningful class and method names.
-- Prefer interfaces or small records when they clarify boundaries.
-- Include Javadoc for public concepts.
-- Avoid blocking `sleep()` in loop-driven examples.
-- Show telemetry for quantities a driver or tuner would inspect.
-- Use explicit units in variable names or comments.
-- Keep snippets focused enough to teach one idea.
+Write it as structured English, using `<Pseudocode>`:
+
+- `<-` for assignment. Never `=`, which reads as equality.
+- `snake_case` names that match the lesson's symbols. `flight_time`, not `t_f`.
+- No types, no `public`/`private`, no semicolons, no braces. Indentation carries
+  the structure.
+- Control flow in English: `for each segment A -> B:`, `repeat at most N times:`.
+- Named constants stay `SCREAMING_CASE`: `MAX_ITERATIONS`, `MIN_VALID_BATTERY_VOLTS`.
+- Units in a trailing comment wherever they matter: `# inches/second`.
+- An `in:` / `out:` header on anything that is a callable procedure.
+- Keep the guards. They teach failure modes: `if dt is not finite or dt <= 0: skip`.
+- Put "look this up" and "work this out" hints in `#` comments, placed at the step
+  where a reader will actually stall. Do not use a bare `TODO` marker followed by a
+  colon; the content check treats that as an unresolved placeholder and fails.
+
+The shared vocabulary from [Common Implementation](docs/path-following/common-implementation.mdx)
+is the one exception to snake_case. `Vector2d`, `Pose2d`, `PoseSample`, `wrap`,
+`moveStatus`, `kStatic` and `drive` keep their exact spelling everywhere, because
+lessons across the site refer to them by name.
 
 Example style:
 
-```java
-/**
- * Computes a voltage-normalized feedforward command for a mechanism.
- */
-public final class SimpleMotorFeedforward {
-    private final double kS;
-    private final double kV;
-    private final double kA;
-
-    public SimpleMotorFeedforward(double kS, double kV, double kA) {
-        this.kS = kS;
-        this.kV = kV;
-        this.kA = kA;
-    }
-
-    public double calculate(double velocity, double acceleration, double batteryVoltage) {
-        double volts = kS * Math.signum(velocity) + kV * velocity + kA * acceleration;
-        return volts / batteryVoltage;
-    }
-}
 ```
+FEEDFORWARD     output is volts, then normalized by the battery
+
+  calculate(velocity, acceleration, battery_voltage):
+      volts <- kS*sign(velocity) + kV*velocity + kA*acceleration
+      return volts / battery_voltage
+
+# Work out each term's job by deleting it on paper:
+#   no kS: the mechanism never quite starts from rest. why?
+#   no kV: the command does not scale with the speed you asked for.
+#   no kA: it tracks steady speeds but lags whenever the goal changes.
+```
+
+Literal Java survives in `<JavaCode>` for exactly two cases, where there is nothing
+for the reader to derive:
+
+1. **An anti-pattern being criticized.** The real code is the point.
+2. **Bare SDK surface**, where the lesson's message is "call the library."
+
+When you do write Java for one of those, it should still look like code a strong FTC
+team would maintain: meaningful names, explicit units, no blocking `sleep()` in a
+loop-driven example.
 
 ### 6. Hardware Reality
 
@@ -406,6 +421,8 @@ Please avoid:
 - Huge rewrites mixed with unrelated style changes.
 - New dependencies for small utilities that can be written locally.
 - Code snippets that teach blocking or fragile FTC patterns.
+- Drop-in Java implementations of a technique the lesson is teaching. Write the
+  algorithm as pseudocode instead; see Engineering Implementation above.
 
 ## License
 

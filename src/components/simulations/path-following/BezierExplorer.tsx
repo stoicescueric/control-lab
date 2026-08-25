@@ -19,6 +19,7 @@ const H = 360;
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t});
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const NUDGE = 6;
+const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 export function BezierExplorer() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -55,6 +56,10 @@ export function BezierExplorer() {
     setPts((prev) =>
       prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
     );
+  };
+  const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    drag.current = null;
   };
 
   // curve path
@@ -93,23 +98,24 @@ export function BezierExplorer() {
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
+        role="group"
         aria-label="Interactive cubic Bézier curve editor"
         onPointerMove={onMove}
-        onPointerUp={() => (drag.current = null)}
-        onPointerLeave={() => (drag.current = null)}>
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}>
         {/* control polygon */}
-        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#3b4a6b" strokeWidth="2" strokeDasharray="7 7" />
+        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#3b4a6b" strokeWidth="2" strokeDasharray="7 7" pointerEvents="none" />
 
         {/* curvature comb */}
         {combHairs.map((h, i) => (
-          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" />
+          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" pointerEvents="none" />
         ))}
 
         {/* the curve */}
-        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" />
+        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />
 
         {/* de Casteljau scaffold at t */}
-        <g opacity="0.9">
+        <g opacity="0.9" pointerEvents="none" aria-hidden="true">
           <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#8294b8" strokeWidth="1.5" />
           <line x1={b.x} y1={b.y} x2={c.x} y2={c.y} stroke="#8294b8" strokeWidth="1.5" />
           <line x1={ab.x} y1={ab.y} x2={bc.x} y2={bc.y} stroke="#ffc24d" strokeWidth="2" />
@@ -132,23 +138,29 @@ export function BezierExplorer() {
                 stroke="#0b1120"
                 strokeWidth="2"
                 style={{cursor: 'grab'}}
+                className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
                 tabIndex={0}
-                role="slider"
-                aria-label={`${isAnchor ? 'Anchor' : 'Handle'} point P${i}`}
-                aria-valuetext={`x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}`}
+                role="application"
+                aria-label={`${isAnchor ? 'Anchor' : 'Handle'} point P${i} at x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}. Use arrow keys to move; hold Shift to move faster.`}
+                aria-keyshortcuts={SPATIAL_KEYS}
                 onPointerDown={(e) => {
                   drag.current = i;
-                  (e.target as Element).setPointerCapture(e.pointerId);
+                  svgRef.current?.setPointerCapture(e.pointerId);
+                  e.preventDefault();
                 }}
                 onKeyDown={onPointKeyDown(i)}
               />
-              <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill={isAnchor ? '#9db0ff' : '#ffd98a'}>
+              <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill={isAnchor ? '#9db0ff' : '#ffd98a'} pointerEvents="none" aria-hidden="true">
                 P{i}
               </text>
             </g>
           );
         })}
       </svg>
+
+      <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
+        Drag a point, or focus it and use the arrow keys; hold Shift for a larger step.
+      </p>
 
       <Controls>
         <Slider label="Parameter t" min={0} max={1} step={0.01} value={t} onChange={setT} format={(v) => v.toFixed(2)} />

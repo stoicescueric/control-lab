@@ -10,22 +10,27 @@ import {useRef, useState} from 'react';
 import {usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {fitVelocityModel} from '@site/src/lib/domain/systemId';
+import {
+  fitVelocityModel,
+  QUASISTATIC_SIM,
+  quasistaticVelocityStep,
+} from '@site/src/lib/domain/systemId';
 
-const TRUE_KS = 0.9; // volts to break friction
-const TRUE_KV = 0.035; // volts per rpm
-const V_MAX = 12;
-const RAMP_RATE = 1.35; // volts per second
+const TRUE_KS = QUASISTATIC_SIM.kS;
+const TRUE_KV = QUASISTATIC_SIM.kV;
+const V_MAX = QUASISTATIC_SIM.maxVoltage;
+const RAMP_RATE = QUASISTATIC_SIM.rampRate;
 const V_AXIS_RPM = 340;
-const SAMPLE_DT = 0.15;
-const MOVE_THRESHOLD = 6; // rpm below which a sample is rejected
+const SAMPLE_DT = QUASISTATIC_SIM.samplePeriod;
+const MOVE_THRESHOLD = QUASISTATIC_SIM.movingThreshold;
+const PRESENTATION_SPEED = 12;
 
 type Sample = [number, number]; // [rpm, volts]
 
 export default function SystemId() {
-  const [noiseAmp, setNoiseAmp] = useState(0.5);
-  const ctrl = useRef({noiseAmp});
-  ctrl.current = {noiseAmp};
+  const [noiseLevel, setNoiseLevel] = useState(0.5);
+  const ctrl = useRef({noiseLevel});
+  ctrl.current = {noiseLevel};
 
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const plotRef = usePlot(canvas, {
@@ -78,15 +83,17 @@ export default function SystemId() {
     s.t += dt;
     s.volts = Math.min(V_MAX, RAMP_RATE * s.t);
 
-    // motor: below kS it doesn't move; above, first-order lag to (V - kS)/kV
+    // Same first-order plant as the deterministic domain test.
+    s.rpm = quasistaticVelocityStep(s.rpm, s.volts, dt);
     const vss = s.volts > TRUE_KS ? (s.volts - TRUE_KS) / TRUE_KV : 0;
-    s.rpm += ((vss - s.rpm) / 0.35) * dt;
 
     s.sinceSample += dt;
     if (s.sinceSample >= SAMPLE_DT) {
-      s.sinceSample = 0;
-      const noisyV = s.volts + (Math.random() * 2 - 1) * ctrl.current.noiseAmp;
-      const noisyRpm = Math.max(0, s.rpm + (Math.random() * 2 - 1) * 4);
+      s.sinceSample -= SAMPLE_DT;
+      // One disclosed control scales both channels: ±level V and ±8*level rpm.
+      // At level zero the deterministic plant and fit contain no UI noise.
+      const noisyV = s.volts + (Math.random() * 2 - 1) * ctrl.current.noiseLevel;
+      const noisyRpm = Math.max(0, s.rpm + (Math.random() * 2 - 1) * 8 * ctrl.current.noiseLevel);
       if (noisyRpm < MOVE_THRESHOLD) s.rejected.push([noisyRpm, noisyV]);
       else s.kept.push([noisyRpm, noisyV]);
       refit();
@@ -136,7 +143,7 @@ export default function SystemId() {
       });
     }
     if (s.running) {
-      p.text(V_AXIS_RPM - 8, 12.4, `ramping… ${s.volts.toFixed(1)} V`, {
+      p.text(V_AXIS_RPM - 8, 12.4, `ramping… ${s.volts.toFixed(1)} V (${PRESENTATION_SPEED}x time)`, {
         color: '#8294b8',
         align: 'right',
         font: '11px ui-monospace, monospace',
@@ -159,12 +166,17 @@ export default function SystemId() {
   }
 
   useRaf((frameDt: number) => {
-    step(Math.min(frameDt, 0.1));
+    let remaining = Math.min(frameDt, 0.1) * PRESENTATION_SPEED;
+    while (remaining > 0) {
+      const dt = Math.min(remaining, 0.01);
+      step(dt);
+      remaining -= dt;
+    }
     draw();
   }, canvas);
 
   return (
-    <Demo title="System identification — run the ramp, watch the fit converge">
+    <Demo title="System identification — 0.10 V/s ramp shown at 12x simulated time">
       <canvas
         ref={canvas}
         role="img"
@@ -182,7 +194,8 @@ export default function SystemId() {
       />
 
       <Controls>
-        <Slider label="Measurement noise" min={0} max={2} step={0.1} value={noiseAmp} onChange={setNoiseAmp} format={(v) => `${v.toFixed(1)} V`} />
+        <Slider label="Noise level" min={0} max={2} step={0.1} value={noiseLevel} onChange={setNoiseLevel} format={(v) => `${v.toFixed(1)}×`} />
+        <div className="text-[0.74rem] text-[#8294b8]">1× adds up to ±1 V and ±8 rpm; 0× disables both.</div>
       </Controls>
       <Buttons>
         <Button primary onClick={restart}>
@@ -190,7 +203,7 @@ export default function SystemId() {
         </Button>
         <Button
           onClick={() => {
-            setNoiseAmp(0.5);
+            setNoiseLevel(0.5);
             restart();
           }}>
           ↺ Reset

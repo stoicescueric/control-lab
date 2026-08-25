@@ -58,31 +58,25 @@ const MODULES: Module[] = [
   },
   {
     number: '03',
-    title: 'Localization & Odometry',
-    description: 'Pose updates, dead-wheel geometry, pose exponentials, and accumulated error.',
-    to: '/docs/localization-odometry',
-  },
-  {
-    number: '04',
     title: 'Signal Processing',
     description: 'Low-pass, moving-average, complementary, Kalman, and extended Kalman filters.',
     to: '/docs/signal-processing',
   },
   {
-    number: '05',
+    number: '04',
     title: 'Path Following & Kinematics',
     description: 'Mecanum kinematics, point control, pure pursuit, splines, and vector fields.',
     to: '/docs/path-following',
   },
   {
-    number: '06',
+    number: '05',
     title: 'State-Space Control',
     description: 'System models, state feedback, observers, and linear-quadratic regulation.',
     to: '/docs/state-space-control',
   },
   {
-    number: '07',
-    title: 'Trajectory Generation & Implementation',
+    number: '06',
+    title: 'Elective: Drag-Aware Launcher',
     description: 'Drag-aware trajectory generation, launcher calibration, flywheel control, and dynamic targeting.',
     to: '/docs/advanced-research',
   },
@@ -150,7 +144,7 @@ const TOPICS: string[] = [
   'State-Space Control',
   'Motion Profiling',
   'Feedforward',
-  'Odometry',
+  'Actuator Saturation',
   'Guided Vector Fields',
   'Quintic Splines',
   'System Identification',
@@ -464,11 +458,11 @@ export default function Home(): ReactNode {
       <TopicStrip />
       <main>
         <Audience />
-        <CurveDivider className="bg-panel text-surface" />
-        <LearningMethod />
-        <CurveDivider className="bg-surface-2 text-surface" flip />
+        <CurveDivider className="bg-panel text-surface-2" />
         <InteractiveExample />
-        <CurveDivider className="bg-surface-2 text-bg" />
+        <CurveDivider className="bg-surface text-surface-2" flip />
+        <LearningMethod />
+        <CurveDivider className="bg-surface text-bg" />
         <Curriculum />
         <Closing />
       </main>

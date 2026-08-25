@@ -11,6 +11,7 @@ import {evalSpline, moments} from '@site/src/lib/domain/naturalCubicSpline';
 const W = 640;
 const H = 360;
 const KEY_STEP = 8; // px per arrow-key nudge, in SVG viewBox units
+const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 type Pt = {x: number; y: number};
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -45,23 +46,28 @@ export function NaturalCubicSpline() {
     );
   };
   const onKeyDown = (i: number) => (e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? KEY_STEP * 4 : KEY_STEP;
     switch (e.key) {
       case 'ArrowLeft':
-        nudge(i, -KEY_STEP, 0);
+        nudge(i, -step, 0);
         break;
       case 'ArrowRight':
-        nudge(i, KEY_STEP, 0);
+        nudge(i, step, 0);
         break;
       case 'ArrowUp':
-        nudge(i, 0, -KEY_STEP);
+        nudge(i, 0, -step);
         break;
       case 'ArrowDown':
-        nudge(i, 0, KEY_STEP);
+        nudge(i, 0, step);
         break;
       default:
         return;
     }
     e.preventDefault();
+  };
+  const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    drag.current = null;
   };
 
   const n = pts.length;
@@ -95,21 +101,21 @@ export function NaturalCubicSpline() {
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
-        role="img"
+        role="group"
         aria-label="Natural cubic spline through draggable waypoints with a curvature comb"
         onPointerMove={onMove}
-        onPointerUp={() => (drag.current = null)}
-        onPointerLeave={() => (drag.current = null)}>
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}>
         {/* waypoint polyline */}
-        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="2" strokeDasharray="6 7" />
+        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="2" strokeDasharray="6 7" pointerEvents="none" />
 
         {/* curvature comb */}
         {hairs.map((h, i) => (
-          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" />
+          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" pointerEvents="none" />
         ))}
 
         {/* the spline */}
-        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
 
         {/* waypoints (all on the curve) */}
         {pts.map((p, i) => {
@@ -124,18 +130,20 @@ export function NaturalCubicSpline() {
                 stroke={isEnd ? '#ffc24d' : '#9db0ff'}
                 strokeWidth="3"
                 style={{cursor: 'grab'}}
+                className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
                 tabIndex={0}
-                role="slider"
-                aria-label={`Waypoint ${i + 1} of ${n}${isEnd ? ' (curvature pinned to 0)' : ''}`}
-                aria-valuetext={`x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}`}
+                role="application"
+                aria-label={`Waypoint ${i + 1} of ${n} at x ${p.x.toFixed(0)}, y ${p.y.toFixed(0)}${isEnd ? '; curvature pinned to zero' : ''}. Use arrow keys to move; hold Shift to move faster.`}
+                aria-keyshortcuts={SPATIAL_KEYS}
                 onPointerDown={(e) => {
                   drag.current = i;
-                  (e.target as Element).setPointerCapture(e.pointerId);
+                  svgRef.current?.setPointerCapture(e.pointerId);
+                  e.preventDefault();
                 }}
                 onKeyDown={onKeyDown(i)}
               />
               {isEnd && (
-                <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffd98a">
+                <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffd98a" pointerEvents="none" aria-hidden="true">
                   κ = 0
                 </text>
               )}
@@ -143,6 +151,10 @@ export function NaturalCubicSpline() {
           );
         })}
       </svg>
+
+      <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
+        Drag a waypoint, or focus it and use the arrow keys; hold Shift for a larger step.
+      </p>
 
       <Buttons>
         <Button active={comb} onClick={() => setComb((v) => !v)}>

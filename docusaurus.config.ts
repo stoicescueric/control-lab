@@ -71,6 +71,7 @@ const config: Config = {
                 "object-src 'none'",
                 "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
                 "style-src 'self' 'unsafe-inline'",
+                "font-src 'self' data:",
                 "img-src 'self' data:",
                 "connect-src 'self' https://*.google-analytics.com",
                 'frame-src https://www.youtube-nocookie.com',

@@ -58,6 +58,17 @@ $$
 RK4 samples the slope four times inside the same step:
 
 $$
+\begin{aligned}
+\mathbf{k}_1 &= f(\mathbf{x}_k), \\
+\mathbf{k}_2 &= f\!\left(\mathbf{x}_k + \frac{\Delta t}{2}\mathbf{k}_1\right), \\
+\mathbf{k}_3 &= f\!\left(\mathbf{x}_k + \frac{\Delta t}{2}\mathbf{k}_2\right), \\
+\mathbf{k}_4 &= f\!\left(\mathbf{x}_k + \Delta t\,\mathbf{k}_3\right).
+\end{aligned}
+$$
+
+Those four state derivatives are combined in the weighted update:
+
+$$
 \mathbf{x}_{k+1}
 =
 \mathbf{x}_k
@@ -68,9 +79,20 @@ $$
 \right)
 $$
 
-The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during the time step, so the simulator should not pretend the first slope remains true until the next loop. Euler commits to the start-of-step velocity for the whole step, so under constant gravity alone it already lands long — it never feels the velocity it picks up *during* the step. RK4 is exact for motion whose state is polynomial in time up to fourth order, which is why it captures the gravity term essentially for free and only pays a small error for the velocity-dependent drag.
+The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during
+the time step, so the simulator should not pretend the first slope remains true until the next loop. Euler
+commits to the start-of-step velocity for the whole step, so under constant gravity alone it already lands
+long — it never feels the velocity it picks up *during* the step. Classical RK4 is **fourth-order accurate**
+for smooth dynamics. It exactly reproduces this constant-acceleration, no-drag model; velocity-dependent
+drag still has a small numerical error that shrinks rapidly with the step size.
 
 In the dashboard, slide $\Delta t$ up: Euler's range error grows roughly linearly with the step, passing a quarter-metre well before RK4 has moved a centimetre. That gap is not a tuning artifact — it is the discretization choice deciding whether the offline model is trustworthy before any robot code exists.
+
+:::tip[Dashboard task: Integrator]
+**Predict:** which trace will move farther when $\Delta t$ increases. **Act:** open **Integrator** and move
+the time-step slider from its smallest value upward. **Observe:** compare each method's reported miss to
+the reference before reading the explanation again.
+:::
 
 ## Step 2: Drag is not a small correction
 
@@ -97,6 +119,12 @@ The demo uses the coefficient values specified for this research case study. Do 
 
 </Admonition>
 
+:::tip[Dashboard task: Drag awakening]
+**Predict:** whether drag shortens or lengthens range at the current exit speed. **Act:** open **Drag
+Awakening**, then change exit speed and launch angle. **Observe:** compare the solid drag trajectory with
+the dashed vacuum trajectory and watch how their landing points separate.
+:::
+
 ## Step 3: Wheel speed does not transfer one-for-one
 
 The firmware may start with a clean assumption:
@@ -120,16 +148,21 @@ depends on mass or rotational inertia and on speed squared.
 
 That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator exposes the missing exit speed; calibration measures the ratio.
 
+:::tip[Dashboard task: Transfer reality]
+**Predict:** whether the assumed or measured transfer ratio will demand more wheel speed for the same
+exit speed. **Act:** open **Transfer Reality** and change the launch angle. **Observe:** compare $\eta$,
+exit speed, and the implied wheel-speed gap as contact conditions change.
+:::
+
 ## How the deployed version is structured
 
 The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using a velocity ratio that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
 
-```text
-desired exit speed  ->  wheel command
+<Pseudocode label="Exit speed to wheel command">{`desired exit speed  ->  wheel command
     eta   <- measured velocity ratio at this launch angle   (from calibration, not theory)
     guard:  eta must be positive, or the conversion is meaningless
     wheel command <- desired exit speed / eta
-```
+`}</Pseudocode>
 
 The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one velocity-ratio lookup.
 

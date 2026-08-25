@@ -1,7 +1,8 @@
 import {useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {scalarLqrGain} from '@site/src/lib/domain/lqr';
+import {scalarDiscreteLqr} from '@site/src/lib/domain/lqr';
+import {discretizeScalarPlant, scalarPlantStep} from '@site/src/lib/domain/stateSpace';
 
 /* Desmos-style math explorer for the state-space module. Pure function of the
    sliders (no animation loop, SSR-safe), same frame as the other explorers. */
@@ -48,12 +49,45 @@ function Grid({xLabel, yLabel}: {xLabel: string; yLabel: string}) {
   );
 }
 
+/** One exact sampled step before the module introduces multi-state matrices. */
+export function ScalarStateStepExplorer() {
+  const [velocity, setVelocity] = useState(100);
+  const [volts, setVolts] = useState(4);
+  const [dt, setDt] = useState(0.02);
+  const a = -4; // 1/s, from kV=0.02 and kA=0.005
+  const b = 200; // (rad/s^2)/V
+  const target = 120; // rad/s
+  const feedbackGain = 0.08; // V/(rad/s), illustrative state-feedback gain
+  const holdVolts = 0.02 * target;
+  const requested = feedbackGain * (target - velocity) + holdVolts;
+  const clipped = Math.max(-12, Math.min(12, requested));
+  const {ad, bd} = discretizeScalarPlant(a, b, dt);
+  const openNext = scalarPlantStep(velocity, volts, a, b, dt);
+  const feedbackNext = scalarPlantStep(velocity, clipped, a, b, dt);
+
+  return (
+    <Demo title="One sampled state step" pill="Core checkpoint">
+      <Controls>
+        <Slider label="Current velocity v" min={0} max={250} step={5} value={velocity} onChange={setVelocity} format={(v) => `${v.toFixed(0)} rad/s`} />
+        <Slider label="Applied voltage V" min={-12} max={12} step={0.5} value={volts} onChange={setVolts} format={(v) => `${v.toFixed(1)} V`} />
+        <Slider label="Measured loop time dt" min={0.005} max={0.08} step={0.005} value={dt} onChange={setDt} format={(v) => `${(v * 1000).toFixed(0)} ms`} />
+      </Controls>
+      <Readout
+        items={[
+          ['exact sampled model', `Ad=${ad.toFixed(4)}, Bd=${bd.toFixed(4)}`],
+          ['one open-loop step', `vNext=${openNext.toFixed(2)} rad/s`],
+          ['feedback request', `${requested.toFixed(2)} V → clipped ${clipped.toFixed(2)} V`],
+          ['one feedback step', `vNext=${feedbackNext.toFixed(2)} rad/s toward 120 rad/s`],
+        ]}
+      />
+    </Demo>
+  );
+}
+
 /* ---------------------------------------------------------------------------
-   LQR on a one-state flywheel: dv/dt = a·v + b·u with a = −kV/kA, b = 1/kA.
-   For one state the Riccati equation collapses to the quadratic
-   2aP − b²P²/R + Q = 0, so the gain has a closed form:
-   K = (a + sqrt(a² + b²·Q/R)) / b. Bryson's rule sets Q and R from "how much
-   error can I stand" and "how many volts do I have."
+   Discrete LQR on an exact-ZOH 20 ms model of the one-state flywheel. The
+   scalar discrete Riccati equation has a closed-form positive root. Bryson's
+   rule sets Q and R from error tolerance and available voltage.
    --------------------------------------------------------------------------- */
 export function LqrExplorer() {
   const [qTol, setQTol] = useState(8); // tolerable velocity error, rad/s
@@ -62,26 +96,30 @@ export function LqrExplorer() {
   const kA = 0.005; // V per rad/s²
   const a = -kV / kA; // -4 s⁻¹
   const b = 1 / kA; // 200 (rad/s²) per volt
+  const sampleDt = 0.020;
   const target = 300; // rad/s
   const T = 1.4; // seconds shown
-  const V_LIM = 12;
+  const V_LIM = rMax;
 
   const Q = 1 / (qTol * qTol);
   const R = 1 / (rMax * rMax);
-  const K = scalarLqrGain(a, b, Q, R); // volts per rad/s of error
+  const {ad, bd} = discretizeScalarPlant(a, b, sampleDt);
+  const design = scalarDiscreteLqr(ad, bd, Q, R);
+  const K = design.gain; // volts per rad/s of error
 
   const SHOT_AT = 0.1; // a shot steals 60 rad/s here
   const SHOT_DIP = 60;
 
   const sim = useMemo(() => {
-    const dt = 0.002;
     const vel: [number, number][] = [];
     const volts: [number, number][] = [];
     let v = target;
     let shotFired = false;
     let settle: number | null = null;
     let saturated = false;
-    for (let t = 0; t <= T; t += dt) {
+    const steps = Math.round(T / sampleDt);
+    for (let step = 0; step <= steps; step++) {
+      const t = step * sampleDt;
       if (!shotFired && t >= SHOT_AT) {
         v -= SHOT_DIP;
         shotFired = true;
@@ -92,20 +130,21 @@ export function LqrExplorer() {
       u = Math.max(-V_LIM, Math.min(V_LIM, u));
       vel.push([t, v]);
       volts.push([t, u]);
-      v += (a * v + b * u) * dt;
+      v = ad * v + bd * u;
       if (shotFired) {
-        if (settle == null && Math.abs(target - v) < 6) settle = t - SHOT_AT;
+        // v now represents the next sampled instant, t + sampleDt.
+        if (settle == null && Math.abs(target - v) < 6) settle = (t + sampleDt) - SHOT_AT;
         if (settle != null && Math.abs(target - v) >= 6) settle = null;
       }
     }
     return {vel, volts, settle, saturated};
-  }, [K]);
+  }, [K, V_LIM, ad, bd]);
 
   const vMaxAxis = 360;
 
   return (
-    <Demo title="LQR: state a preference, get a gain" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Flywheel step response and voltage under an LQR gain computed from the Q and R weights">
+    <Demo title="Discrete LQR: state a preference, get a 20 ms gain" pill="Math explorer">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Flywheel step response and voltage under a 20 millisecond discrete LQR gain computed from the Q and R weights">
         <Grid xLabel="seconds" yLabel="flywheel speed (rad/s)" />
         {/* target */}
         <line x1={sx(0, 0, T)} x2={sx(T, 0, T)} y1={sy(target, 0, vMaxAxis)} y2={sy(target, 0, vMaxAxis)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="2 8" />
@@ -140,13 +179,16 @@ export function LqrExplorer() {
         )}
       </svg>
       <Controls>
-        <Slider label="Q: tolerable velocity error" min={1} max={40} step={1} value={qTol} onChange={setQTol} format={(v) => `±${v.toFixed(0)} rad/s`} />
-        <Slider label="R: available control effort" min={2} max={12} step={0.5} value={rMax} onChange={setRMax} format={(v) => `±${v.toFixed(1)} V`} />
+        <Slider label="Velocity-error tolerance" min={1} max={40} step={1} value={qTol} onChange={setQTol} format={(v) => `±${v.toFixed(0)} rad/s`} />
+        <Slider label="Voltage budget" min={2} max={12} step={0.5} value={rMax} onChange={setRMax} format={(v) => `±${v.toFixed(1)} V`} />
       </Controls>
       <Readout
         items={[
+          ['derived Q = 1/tolerance²', Q.toExponential(3)],
+          ['derived R = 1/budget² (feedback scale)', R.toExponential(3)],
+          ['exact sampled model', `Ad=${ad.toFixed(4)}, Bd=${bd.toFixed(4)} at 20 ms`],
           ['gain K', `${K.toFixed(4)} V per rad/s of error`],
-          ['Bryson: Q = 1/tol², R = 1/volts²', `${Q.toExponential(1)} · ${R.toExponential(1)}`],
+          ['closed-loop sampled pole', design.closedLoopPole.toFixed(4)],
           ['recovers after the shot (±6 rad/s)', sim.settle != null ? `${sim.settle.toFixed(2)} s` : 'not in view'],
           ['saturating?', sim.saturated ? 'yes — the model is lying to itself' : 'no'],
         ]}

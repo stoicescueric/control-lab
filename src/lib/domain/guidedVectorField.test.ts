@@ -17,6 +17,11 @@ describe('closestPointOnPath', () => {
     expect(proj.signedError).toBeCloseTo(0, 3);
   });
 
+  it('rejects invalid sample counts and cubic control-point lists', () => {
+    expect(() => closestPointOnPath({x: 0, y: 0}, CURVE, 0)).toThrow(/positive integer/);
+    expect(() => closestPointOnPath({x: 0, y: 0}, CURVE.slice(0, 3))).toThrow(/four/);
+  });
+
   it('finds a perpendicular closest point (error vector orthogonal to tangent) off-path', () => {
     const proj = closestPointOnPath({x: 100, y: 50}, CURVE);
     const dot = proj.tangent.x * (100 - proj.point.x) + proj.tangent.y * (50 - proj.point.y);
@@ -61,5 +66,23 @@ describe('guidedVectorField', () => {
     // Safe fallback: zero derivative everywhere collapses tangent/normal/direction to (0, 0).
     expect(result.direction.x).toBe(0);
     expect(result.direction.y).toBe(0);
+  });
+
+  it('is invariant when length coordinates and inverse-length gain are scaled together', () => {
+    const position = {x: 100, y: 50};
+    const inches = guidedVectorField(position, CURVE, 0.5);
+    const scale = 4.44;
+    const scaledCurve = CURVE.map((p) => ({x: p.x * scale, y: p.y * scale}));
+    const pixels = guidedVectorField(
+      {x: position.x * scale, y: position.y * scale},
+      scaledCurve,
+      0.5 / scale,
+    );
+    expect(pixels.direction.x).toBeCloseTo(inches.direction.x, 8);
+    expect(pixels.direction.y).toBeCloseTo(inches.direction.y, 8);
+  });
+
+  it('rejects invalid convergence gains', () => {
+    expect(() => guidedVectorField({x: 10, y: 10}, CURVE, -1)).toThrow(/non-negative/);
   });
 });

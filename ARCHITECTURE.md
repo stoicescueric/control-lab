@@ -71,9 +71,13 @@ Lesson-specific simulations are imported directly from their domain folder:
 import Kalman from '@site/src/components/simulations/signal-processing/Kalman';
 ```
 
-Shared MDX primitives such as `<Abstract>`, `<EquationLegend>`, and `<JavaCode>`
-do not need local imports. They are registered once in
+Shared MDX primitives such as `<Abstract>`, `<EquationLegend>`, `<Pseudocode>`, and
+`<JavaCode>` do not need local imports. They are registered once in
 `src/theme/MDXComponents.tsx`.
+
+`<Pseudocode>` is the default for anything a reader is meant to implement.
+`<JavaCode>` is reserved for anti-patterns being criticized and for bare SDK
+surface. See CONTRIBUTING.md, Engineering Implementation.
 
 ### `src/components/`: React Presentation
 
@@ -96,7 +100,6 @@ analytics, and URL safety belong in `src/lib/platform`.
 | `software-architecture/` | State machines, command scheduling, and loop timing. |
 | `control-theory/` | Motor models, PID, feedforward, identification, saturation, and profiles. |
 | `signal-processing/` | Filters, Kalman estimation, EKF linearization, and sensor uncertainty. |
-| `localization/` | Odometry, twists, and pose exponentials. |
 | `path-following/` | Kinematics, pursuit, splines, vector fields, and steering geometry. |
 | `state-space/` | State feedback and optimal-control explorers. |
 | `research/` | Projectile simulation and shoot-on-the-move case studies. |

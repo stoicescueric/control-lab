@@ -48,6 +48,15 @@ $$
 u_{raw} = u_P + u_I + u_D + u_{FF}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'u_raw', meaning: 'what the controller ASKED for, before any limit is applied. This number can be anything, including values no motor could produce'},
+    {symbol: 'u_P, u_I, u_D', meaning: 'the three PID terms as separate contributions to that request, so the anti-windup rules below can reason about the integral term alone'},
+    {symbol: 'u_FF', meaning: 'any feedforward added on top: gravity hold, kV, kS'},
+    {symbol: 'K_p, K_i, K_d', meaning: 'the PID gains, written capitalized here; the same gains appear as k_P, k_I, k_D elsewhere on the site'},
+  ]}
+/>
+
 where:
 
 - $u_{raw}$ is the command the controller wants to send.
@@ -63,6 +72,14 @@ $$
 u = \operatorname{sat}(u_{raw}, u_{min}, u_{max})
 }
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'u', meaning: 'what the actuator actually RECEIVES. The gap between u and u_raw is the entire subject of this lesson'},
+    {symbol: 'sat(\u00b7)', meaning: 'saturate: pass the value through unchanged if it fits between the limits, otherwise return the limit it exceeded'},
+    {symbol: 'u_min, u_max', meaning: 'the physical output limits. For normalized motor power these are \u22121 and +1; for voltage code they are the measured battery rail'},
+  ]}
+/>
 
 where $u_{min}$ and $u_{max}$ are the physical output limits. For normalized FTC motor power, those limits
 are usually $-1$ and $1$. For voltage-based code:
@@ -85,6 +102,13 @@ $$
 I_{k+1} = I_k + e_k\Delta t
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'I_k', meaning: 'the STORED integral at loop k: the running sum of every past error, not the current error'},
+    {symbol: 'e_k \u0394t', meaning: 'this loop\u2019s contribution: one rectangle of height e_k and width \u0394t. Using the measured \u0394t is what keeps the sum honest when the loop rate varies'},
+  ]}
+/>
+
 where $I_k$ is the stored integral at loop $k$, $e_k$ is the current error, and $\Delta t$ is the measured
 loop time. If the target is far away, $e_k$ is large. The controller may request:
 
@@ -105,32 +129,61 @@ stored integral is still large. The controller keeps pushing and overshoots.
 That is integral windup: the integral term stores a command that the actuator never had the authority to
 execute.
 
-### Three practical anti-windup tools
+### Core checkpoint: choose an anti-windup rule
 
-The first tool is **integrator clamping**:
+Start with **conditional integration**. The failure and repair are compact:
+
+<Pseudocode label="Conditional integration: the failure and the repair">{`# THE FAILURE - integrates regardless of whether the actuator can obey:
+    integral <- integral + error * dt
+
+# THE REPAIR - only keep the update if it helps us LEAVE saturation:
+    candidate     <- integral + error * dt
+    candidate_raw <- non_integral_volts + kI * candidate
+
+    pushes_farther <- (candidate_raw > max  and  error > 0)
+                   or (candidate_raw < min  and  error < 0)
+
+    if not pushes_farther:
+        integral <- candidate            # otherwise: silently discard it
+
+# Work out the two clauses. If the raw command already exceeds max and the
+# error is still positive, more integral makes a number that is already
+# unusable even more unusable - and every bit of it has to be unwound later.
+# Note what is NOT blocked: integration that would pull the command back
+# toward the usable range is always allowed.
+`}</Pseudocode>
+
+Here `nonIntegralVolts` is the current P + D + feedforward command. In the repaired form, if
+$u_{raw} > u_{max}$ and $e > 0$, more integration only pushes farther into the
+positive limit, so pause it. If $u_{raw} < u_{min}$ and $e < 0$, pause it in the negative direction. If
+the error changes sign and would pull the command back toward the valid range, integration resumes.
+
+The second tool is **integrator clamping**:
 
 $$
 u_I = \operatorname{clamp}(K_i I, I_{min}, I_{max})
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'I_min, I_max', meaning: 'limits on the integral\u2019s CONTRIBUTION in output units, not on the raw sum. Clamping K_i\u00b7I rather than I means retuning K_i does not silently change the limit'},
+  ]}
+/>
+
 where $I_{min}$ and $I_{max}$ are output-sized limits on the integral contribution. Do not think of them
 as error limits; think in actuator units. If your motor command is voltage, clamp the integral in volts.
-
-The second tool is **conditional integration**:
-
-$$
-\text{integrate only if the actuator is not saturated, or if the error would pull it out of saturation.}
-$$
-
-In code form, if $u_{raw} > u_{max}$ and $e > 0$, more integration only pushes further into the positive
-limit, so pause it. If $u_{raw} < u_{min}$ and $e < 0$, pause it in the negative direction. If the error
-has changed sign and would pull the command back toward the valid range, integration is allowed again.
 
 The third tool is an **I-zone**:
 
 $$
 I = 0 \quad \text{when} \quad |e| > e_{zone}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'e_zone', meaning: 'the I-zone half-width. Outside this band the integral is reset to zero rather than merely frozen, on the reasoning that far from the target the integral has no business acting at all'},
+  ]}
+/>
 
 where $e_{zone}$ is a chosen error threshold. This says: do not use integral control while the mechanism
 is far away. Let feedforward, proportional, and derivative control do the large movement; allow integral
@@ -142,6 +195,10 @@ $k_G\cos(\theta)$ for arms. Feedforward supplies the predictable holding effort 
 does not have to slowly discover it by accumulating error.
 </Callout>
 
+The required artifact is one saturating controller that logs raw and applied output and prevents the
+integrator from pushing farther into saturation. The Java block below combines clamping, an I-zone, and
+conditional integration; start with only the pieces your logged failure requires.
+
 </Theory>
 
 <Deploy title="A saturating PID controller with anti-windup">
@@ -151,126 +208,94 @@ voltage to what the battery can deliver, then divide by measured battery voltage
 motor. If your project still uses normalized power internally, the same pattern works with limits
 $[-1, 1]$.
 
-<JavaCode league="FTC" label="PID with integrator clamp, I-zone, and conditional integration">{`/**
- * PID controller with explicit actuator saturation and anti-windup.
- *
- * <p>The output is in volts. Convert to FTC motor power by dividing by the
- * measured battery voltage after calculate() returns.</p>
- */
-public final class SaturatingPidController {
-    private final double kP;
-    private final double kI;
-    private final double kD;
-    private final double iZone;
-    private final double minIntegralVolts;
-    private final double maxIntegralVolts;
+<Pseudocode label="PID with integrator clamp, I-zone, and conditional integration">{`SATURATING PID       output is in VOLTS, not motor power
 
-    private double integral;
-    private double previousMeasurement;
-    private boolean firstLoop = true;
+  gains and limits:
+      kP, kI, kD
+      I_ZONE                  only integrate when | error | is within this
+      MIN_I_VOLTS, MAX_I_VOLTS    hard clamp on the integral's CONTRIBUTION
 
-    public SaturatingPidController(
-            double kP,
-            double kI,
-            double kD,
-            double iZone,
-            double minIntegralVolts,
-            double maxIntegralVolts) {
-        this.kP = kP;
-        this.kI = kI;
-        this.kD = kD;
-        this.iZone = iZone;
-        this.minIntegralVolts = minIntegralVolts;
-        this.maxIntegralVolts = maxIntegralVolts;
-    }
+  state kept between loops:
+      integral
+      previous_measurement
+      first_loop
 
-    /**
-     * Calculates a saturated voltage command.
-     *
-     * @param setpoint desired position or velocity
-     * @param measurement measured position or velocity
-     * @param dtSeconds measured loop time in seconds
-     * @param minVolts lower actuator limit, usually -battery voltage
-     * @param maxVolts upper actuator limit, usually +battery voltage
-     * @return saturated voltage command
-     */
-    public double calculate(
-            double setpoint,
-            double measurement,
-            double dtSeconds,
-            double minVolts,
-            double maxVolts) {
-        double dt = Math.max(1e-3, dtSeconds);
-        double error = setpoint - measurement;
+  calculate(setpoint, measurement, dt, min_volts, max_volts):
+      dt    <- max(MIN_DT, dt)             # measured loop time, never assumed
+      error <- setpoint - measurement
 
-        boolean insideIZone = Math.abs(error) <= iZone;
-        if (!insideIZone) {
-            integral = 0.0;
-        }
+      # ---- 1. I-ZONE: far from target, the integral has no business acting
+      inside_izone <- | error | <= I_ZONE
+      if not inside_izone:
+          integral <- 0                    # reset, do not merely freeze
 
-        double measurementRate = firstLoop ? 0.0 : (measurement - previousMeasurement) / dt;
-        firstLoop = false;
-        previousMeasurement = measurement;
+      # ---- 2. derivative on the MEASUREMENT (see the PID lesson) ----
+      rate <- 0 on the first loop,
+              otherwise (measurement - previous_measurement) / dt
+      remember measurement for next loop
 
-        double candidateIntegral = integral;
-        if (insideIZone) {
-            candidateIntegral += error * dt;
-        }
-        double candidateIntegralVolts = clamp(
-            kI * candidateIntegral,
-            minIntegralVolts,
-            maxIntegralVolts);
-        candidateIntegral = kI == 0.0 ? 0.0 : candidateIntegralVolts / kI;
+      # ---- 3. propose an integral, then CLAMP ITS CONTRIBUTION ----
+      candidate <- integral + (error * dt  if inside_izone  else 0)
+      clamp (kI * candidate) into [MIN_I_VOLTS, MAX_I_VOLTS]
+      convert that clamped voltage back into a candidate integral
+      # (if kI is zero there is nothing to convert; the integral is zero)
 
-        double rawWithCandidate =
-            kP * error
-            + kI * candidateIntegral
-            - kD * measurementRate;
+      # Work out why the clamp is applied to kI*integral rather than to the
+      # raw integral. Which of the two has units you can reason about, and
+      # what happens to a raw-integral clamp the moment you retune kI?
 
-        boolean saturatedHigh = rawWithCandidate > maxVolts;
-        boolean saturatedLow = rawWithCandidate < minVolts;
-        boolean pushesFurtherHigh = saturatedHigh && error > 0.0;
-        boolean pushesFurtherLow = saturatedLow && error < 0.0;
+      # ---- 4. CONDITIONAL INTEGRATION: would this push us farther out? ----
+      raw_with_candidate <- kP*error + kI*candidate - kD*rate
 
-        if (insideIZone && !pushesFurtherHigh && !pushesFurtherLow) {
-            integral = candidateIntegral;
-        }
+      pushes_farther <- (raw_with_candidate > max_volts  and  error > 0)
+                     or (raw_with_candidate < min_volts  and  error < 0)
 
-        double raw =
-            kP * error
-            + kI * integral
-            - kD * measurementRate;
+      if inside_izone and not pushes_farther:
+          integral <- candidate            # accept. otherwise discard it.
 
-        return clamp(raw, minVolts, maxVolts);
-    }
+      # ---- 5. the real output, from the integral we actually kept ----
+      raw <- kP*error + kI*integral - kD*rate
+      return clamp(raw, min_volts, max_volts)
 
-    public void reset() {
-        integral = 0.0;
-        firstLoop = true;
-    }
+  reset():
+      integral   <- 0
+      first_loop <- true
 
-    private static double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
-    }
-}`}</JavaCode>
+# There are THREE separate defences here and they solve different problems.
+# Work out which one each of these breaks without:
+#   a) the arm is 90 degrees away for four seconds before you tune anything
+#   b) the command sits pinned at max while a stuck mechanism frees itself
+#   c) kI is raised and an integral that was fine becomes enormous
+#
+# Look up: "integral windup", "conditional integration", "integrator clamping",
+#          "I-zone". Then work out why a controller can need all three rather
+#          than picking one.
+`}</Pseudocode>
 
 Use it from a subsystem by measuring both loop time and battery voltage:
 
-<JavaCode league="FTC" label="Applying the saturated voltage to an FTC motor">{`public void update(double targetTicks) {
-    double now = timer.seconds();
-    double dt = now - lastTime;
-    lastTime = now;
+<Pseudocode label="Applying the saturated voltage to a motor">{`update(target):
+    dt <- seconds since the last call          # MEASURE it. never hardcode 0.02.
 
-    double batteryVolts = voltageSensor.getVoltage();
-    double commandVolts = controller.calculate(
-        targetTicks,
-        motor.getCurrentPosition(),
-        dt,
-        -batteryVolts,
-        batteryVolts);
+    vbat <- read the battery voltage
+    if vbat is not finite or vbat < MIN_VALID_BATTERY_VOLTS:
+        command the motor to zero              # bad telemetry: refuse to guess
+        return
 
-    motor.setPower(commandVolts / batteryVolts);
-}`}</JavaCode>
+    command_volts <- controller.calculate(
+                         target, measured_position, dt,
+                         min_volts = -vbat,     # the actuator limits ARE
+                         max_volts = +vbat)     # the battery, right now
+
+    command the motor with clamp(command_volts / vbat, -1, +1)
+
+# The important line is passing the battery in as the saturation limit. The
+# controller's idea of "what the actuator can do" tracks the real rail
+# instead of a constant someone picked in the pits.
+#
+# Work out what the anti-windup logic does differently on a fresh 13.0 V pack
+# versus a sagging 11.0 V one, given the same mechanism and the same error.
+`}</Pseudocode>
 
 This pattern belongs anywhere the integral term is nonzero: slides, arms, heading hold, velocity hold,
 and any mechanism that can spend real time pinned at full output.

@@ -38,6 +38,13 @@ Calculus is the set of tools that connects those three layers.
 
 <CalculusLiveDemo />
 
+:::tip[Predict, manipulate, explain]
+Predict the velocity at a position peak, then move **Time** to that peak and check the tangent/readout.
+Next double **Motion amplitude** and explain why both the steepest velocity and the signed velocity area
+change. The shaded area is bounded by $v(t)$ and zero, so it equals $x(t)-x(0)$ rather than an integral
+of position.
+:::
+
 <VideoEmbed
   title="3Blue1Brown: Essence of Calculus"
   src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr"
@@ -86,11 +93,29 @@ v_k \approx \frac{x_k - x_{k-1}}{\Delta t},
 x_k \approx x_{k-1} + v_k \Delta t
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'subscript k', meaning: 'which loop. x_k is the position measured this loop, x_{k-1} the position last loop'},
+    {symbol: '\u0394t', meaning: 'the MEASURED seconds between those two loops, not an assumed constant'},
+    {symbol: 'the \u2248', meaning: 'these are approximations. A derivative is defined as \u0394t shrinking to nothing, but a robot only ever has the loop it actually ran'},
+  ]}
+/>
+
 Here, $k$ is the current loop number, $k-1$ is the previous loop, and $\Delta t$ is the measured time
 between those two loops.
 
 This is why measuring $\Delta t$ matters. If your loop sometimes takes 8 ms and sometimes 40 ms, the
 same encoder change implies a different velocity.
+
+For example, if an encoder-derived lift position changes from $0.420\ \mathrm{m}$ to
+$0.432\ \mathrm{m}$ over a measured $0.024\ \mathrm{s}$ loop, then
+
+$$
+v_k \approx \frac{0.432-0.420}{0.024}=0.50\ \mathrm{m/s}.
+$$
+
+Using an assumed $0.020\ \mathrm{s}$ period would incorrectly report $0.60\ \mathrm{m/s}$ from the same
+two readings.
 
 ## Engineering use case: motion profiling
 
@@ -110,6 +135,15 @@ feedback cleans up the remaining error:
 $$
 u = k_S\operatorname{sign}(v) + k_Vv + k_Aa + k_P(x_\text{target} - x_\text{measured})
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'x_target', meaning: 'where the profile says the mechanism SHOULD be right now'},
+    {symbol: 'x_measured', meaning: 'where the encoder says it actually is'},
+    {symbol: 'the first three terms', meaning: 'feedforward, computed only from the plan. They can act before any error exists'},
+    {symbol: 'the last term', meaning: 'feedback, computed from the difference. It can only act after the mechanism is already wrong'},
+  ]}
+/>
 
 Here, $u$ is the motor command, $k_S$ fights static friction, $k_V$ scales with velocity, $k_A$ scales
 with acceleration, and $k_P$ corrects position error.

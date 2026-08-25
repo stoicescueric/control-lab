@@ -6,6 +6,7 @@ skills-lock.json
 CLAUDE.md
 
 # --- Verification & screenshot scaffolding (temporary, never ship) ---
+/tmp/
 _*.js
 _*.png
 _shot-*.png

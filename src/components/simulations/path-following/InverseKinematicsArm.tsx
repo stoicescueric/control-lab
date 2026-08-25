@@ -55,7 +55,9 @@ function solveTwoLink(targetSvg: Point, elbowUp: boolean): Solution {
     (radius * radius - LINK_1 * LINK_1 - LINK_2 * LINK_2) / (2 * LINK_1 * LINK_2);
   const cosElbow = clamp(c2Raw, -1, 1);
   const sinElbowMagnitude = Math.sqrt(Math.max(0, 1 - cosElbow * cosElbow));
-  const sinElbow = elbowUp ? sinElbowMagnitude : -sinElbowMagnitude;
+  // In the displayed +x-right/+y-up frame, the negative-sine branch places
+  // the elbow above (left of) the directed base-to-target chord.
+  const sinElbow = elbowUp ? -sinElbowMagnitude : sinElbowMagnitude;
 
   const elbow = Math.atan2(sinElbow, cosElbow);
   const shoulder =

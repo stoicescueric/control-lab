@@ -265,7 +265,7 @@ export default function MotorCurve() {
   }, motorCanvas);
 
   return (
-    <Demo title="Torque–speed curve — goBILDA 5000-0002-0117 (MATRIX), 12 V">
+    <Demo title="One-quadrant motoring curve — goBILDA 5000-0002-0117 (MATRIX), 12 V">
       <Stage split>
         <canvas
           ref={motorCanvas}
@@ -276,7 +276,7 @@ export default function MotorCurve() {
         <canvas
           ref={plotCanvas}
           role="img"
-          aria-label="Plot of a DC motor torque versus speed curve with the live operating point sliding along it."
+          aria-label="Plot of a one-quadrant DC motor motoring torque versus speed curve with the live operating point sliding along it; reverse and regeneration are not modeled."
           className="block w-full rounded-xl bg-[#0b1120]"
         />
       </Stage>

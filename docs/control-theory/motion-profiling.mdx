@@ -48,11 +48,26 @@ t_\text{ramp} = \frac{v_\text{max}}{a_\text{max}},
 d_\text{ramp} = \tfrac12 a_\text{max} t_\text{ramp}^2 = \frac{v_\text{max}^2}{2 a_\text{max}}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 't_ramp', meaning: 'how long the acceleration phase lasts, from a standstill up to cruise speed', unit: 's'},
+    {symbol: 'd_ramp', meaning: 'how much DISTANCE that ramp consumes. The profile needs room for two of these, one at each end', unit: 'in'},
+    {symbol: 'v_max, a_max', meaning: 'the mechanism\u2019s real limits, measured rather than assumed'},
+  ]}
+/>
+
 If the move is long enough to fit both ramps ($2\,d_\text{ramp} \le d$), the middle is spent cruising for
 
 $$
 t_\text{cruise} = \frac{d - 2\,d_\text{ramp}}{v_\text{max}}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'd', meaning: 'the total distance of this move', unit: 'in'},
+    {symbol: 't_cruise', meaning: 'how long is spent at constant v_max, after both ramps have taken their share. If 2\u00b7d_ramp exceeds d there is no cruise phase at all and the profile becomes a triangle', unit: 's'},
+  ]}
+/>
 
 If the move is **too short** to ever reach $v_\text{max}$, the trapezoid collapses to a **triangle**: you
 accelerate to a lower peak and immediately decelerate, peaking at $v_\text{peak} = \sqrt{a_\text{max}\,d}$.
@@ -60,6 +75,11 @@ Drag the sliders below — shrink the distance or raise the cruise speed and wat
 triangle, while the total time and peak speed update.
 
 <MotionProfile />
+
+For a short $5\ \mathrm{in}$ move with $a_\text{max}=20\ \mathrm{in/s^2}$ and
+$v_\text{max}=10\ \mathrm{in/s}$, each full-speed ramp requires $2.5\ \mathrm{in}$. There is no
+distance left to cruise, so the boundary case is triangular with
+$t_\text{acc}=\sqrt{5/20}=0.5\ \mathrm{s}$ and $v_\text{peak}=10\ \mathrm{in/s}$.
 
 At each instant the profile gives you a full target state — position $x(t)$, velocity $v(t)$, and
 acceleration $a(t)$. That triplet is exactly what the rest of the stack wants: feed $v(t)$ and $a(t)$ to
@@ -87,52 +107,88 @@ reach for S-curves only when jerk visibly hurts.
 Build the profile once from your limits, then ask it for the target state at the current time every loop
 and hand that to your feedforward + PID controller.
 
-<JavaCode league="FTC" label="Trapezoidal profile (build once, sample each loop)">{`public class TrapezoidalProfile {
-    private final double aMax, vPeak, tAcc, tFlat, total, distance, sign;
+<Pseudocode label="Trapezoidal profile (build once, sample each loop)">{`TRAPEZOIDAL PROFILE
+  built ONCE per move; sampled every loop afterwards
 
-    public TrapezoidalProfile(double distance, double vMax, double aMax) {
-        this.aMax = aMax;
-        this.distance = Math.abs(distance);
-        this.sign = Math.signum(distance);
-        double tRamp = vMax / aMax;
-        double dRamp = 0.5 * aMax * tRamp * tRamp;
-        if (2 * dRamp >= this.distance) {           // triangle: never reaches vMax
-            tAcc  = Math.sqrt(this.distance / aMax);
-            vPeak = aMax * tAcc;
-            tFlat = 0;
-        } else {                                     // full trapezoid
-            tAcc  = tRamp;
-            vPeak = vMax;
-            tFlat = (this.distance - 2 * dRamp) / vMax;
-        }
-        total = 2 * tAcc + tFlat;
-    }
+  build(distance, v_max, a_max):
+      require distance is finite, and v_max > 0 and a_max > 0
 
-    public double duration() { return total; }
+      sign     <- sign(distance)          # plan in positive distance,
+      distance <- | distance |            # put the sign back when sampling
 
-    /** Target {position, velocity, acceleration} at time t. */
-    public double[] sample(double t) {
-        t = Math.max(0, Math.min(t, total));
-        double x, v, a;
-        if (t < tAcc) {                              // accelerating
-            a = aMax;  v = aMax * t;  x = 0.5 * aMax * t * t;
-        } else if (t < tAcc + tFlat) {               // cruising
-            a = 0;     v = vPeak;     x = 0.5 * aMax * tAcc * tAcc + vPeak * (t - tAcc);
-        } else {                                     // decelerating
-            double td = t - tAcc - tFlat;
-            a = -aMax; v = vPeak - aMax * td;
-            x = 0.5 * aMax * tAcc * tAcc + vPeak * tFlat + vPeak * td - 0.5 * aMax * td * td;
-        }
-        return new double[]{sign * x, sign * v, sign * a};
-    }
-}`}</JavaCode>
+      t_ramp <- v_max / a_max             # time to reach cruise speed
+      d_ramp <- 0.5 * a_max * t_ramp^2    # distance used doing it
 
-<JavaCode league="FTC" label="Following the profile with feedforward + PID">{`double t = timer.seconds();
-double[] s = profile.sample(t);                 // {x*, v*, a*}
-double ff  = kS * Math.signum(s[1]) + kV * s[1] + kA * s[2];
-double fb  = pid.calculate(encoderPos, s[0]);   // correct the tracking error
-motor.setPower((ff + fb) / battery.getVoltage());
-boolean done = t >= profile.duration() && Math.abs(target - encoderPos) < TOL;`}</JavaCode>
+      if 2 * d_ramp >= distance:          # TRIANGLE: too short to ever cruise
+          t_acc  <- sqrt(distance / a_max)
+          v_peak <- a_max * t_acc
+          t_flat <- 0
+      else:                               # full TRAPEZOID
+          t_acc  <- t_ramp
+          v_peak <- v_max
+          t_flat <- (distance - 2*d_ramp) / v_max
+
+      total <- 2*t_acc + t_flat
+
+      # Work out the triangle case yourself. If the move is too short to
+      # reach v_max, the profile is accelerate-then-decelerate with no
+      # cruise. Set "distance travelled accelerating + decelerating =
+      # distance" and solve for t_acc. You should land on the sqrt above.
+
+  sample(t)  ->  target position, velocity and acceleration at time t
+
+      if t >= total:  return (sign*distance, 0, 0)     # hold the endpoint
+      clamp t to at least 0
+
+      if t < t_acc:                       # accelerating
+          a <- a_max
+          v <- a_max * t
+          x <- 0.5 * a_max * t^2
+
+      else if t < t_acc + t_flat:         # cruising
+          a <- 0
+          v <- v_peak
+          x <- 0.5*a_max*t_acc^2  +  v_peak * (t - t_acc)
+
+      else:                               # decelerating
+          td <- t - t_acc - t_flat
+          a  <- -a_max
+          v  <- v_peak - a_max*td
+          x  <- 0.5*a_max*t_acc^2 + v_peak*t_flat
+                + v_peak*td - 0.5*a_max*td^2
+
+      return (sign*x, sign*v, sign*a)
+
+# Every x line above is just  x = x0 + v0*t + 0.5*a*t^2  applied to that
+# phase. Derive the cruising and decelerating lines yourself by asking where
+# the mechanism already was when the phase began.
+#
+# Check your implementation on a case you can verify by hand: distance 100,
+# v_max 10, a_max 5. Compute t_ramp, d_ramp, decide triangle or trapezoid,
+# and predict total. Then confirm sample(total/2) sits at half the distance.
+`}</Pseudocode>
+
+<Pseudocode label="Following the profile with feedforward + PID">{`each loop:
+    t <- seconds since the profile started
+    target_position, target_velocity, target_accel  <-  profile.sample(t)
+
+    ff <- kS*sign(target_velocity) + kV*target_velocity + kA*target_accel
+    fb <- pid(measured_position, target_position)     # correct what ff missed
+
+    command the motor with (ff + fb) / battery_voltage
+
+    done <- t >= profile.duration()
+            and | final_target - measured_position | < TOL
+
+# The feedforward is computed from the PROFILE, not from the measurement. It
+# is the open-loop guess at the voltage this motion needs. The PID only has
+# to clean up the difference, which is why its gains end up so much smaller
+# than they would be alone.
+#
+# Work out why done checks both the clock and the position. Give a case
+# where the profile has finished but the mechanism has not arrived, and say
+# which of the two conditions catches it.
+`}</Pseudocode>
 
 </Deploy>
 

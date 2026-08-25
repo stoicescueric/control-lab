@@ -11,6 +11,7 @@ import {
   simulateVacuum,
   solveSOTM,
   SOTM_GAIN,
+  SOTM_MAX_ITERS,
   tof,
   type State,
 } from './projectile';
@@ -60,6 +61,7 @@ describe('shoot-on-the-move solver', () => {
     const shooter = {x: 50, y: 28};
     const goal = {x: 100, y: 120};
     const sol = solveSOTM(shooter, goal, {x: 0, y: 0});
+    expect(sol.converged).toBe(true);
     expect(sol.pv.x).toBeCloseTo(goal.x, 6);
     expect(sol.pv.y).toBeCloseTo(goal.y, 6);
   });
@@ -68,6 +70,7 @@ describe('shoot-on-the-move solver', () => {
     const shooter = {x: 50, y: 28};
     const goal = {x: 100, y: 120};
     const sol = solveSOTM(shooter, goal, {x: 26, y: 10});
+    expect(sol.converged).toBe(true);
     expect(sol.pv.x).toBeLessThan(goal.x); // robot moves +x, so aim shifts -x
     expect(sol.pv.y).toBeLessThan(goal.y); // robot moves +y, so aim shifts -y
     expect(sol.iters[sol.iters.length - 1].done).toBe(true);
@@ -78,6 +81,7 @@ describe('shoot-on-the-move solver', () => {
     const velocity = {x: 26, y: 10};
     const fixedFlightTime = 0.8;
     const sol = solveSOTM({x: 50, y: 28}, goal, velocity, () => fixedFlightTime);
+    expect(sol.converged).toBe(true);
     const compensationTime = FEEDER_DELAY + fixedFlightTime;
     expect(sol.pv.x).toBeCloseTo(goal.x - SOTM_GAIN * velocity.x * compensationTime, 12);
     expect(sol.pv.y).toBeCloseTo(goal.y - SOTM_GAIN * velocity.y * compensationTime, 12);
@@ -85,6 +89,27 @@ describe('shoot-on-the-move solver', () => {
 
   it('keeps the time-of-flight LUT monotone in distance', () => {
     expect(tof(120)).toBeGreaterThan(tof(80));
+  });
+
+  it('reports the iteration cap instead of presenting a nonconverged aim as valid', () => {
+    const speed = 3.5 * 39.37;
+    const direction = Math.PI / 6;
+    const sol = solveSOTM(
+      {x: 6, y: 6},
+      {x: 100, y: 120},
+      {x: speed * Math.cos(direction), y: speed * Math.sin(direction)},
+    );
+    expect(sol.converged).toBe(false);
+    expect(sol.iters).toHaveLength(SOTM_MAX_ITERS + 1);
+    expect(sol.iters[sol.iters.length - 1].done).toBe(false);
+  });
+
+  it('rejects invalid geometry and nonphysical flight-time lookup outputs', () => {
+    const shooter = {x: 50, y: 28};
+    const goal = {x: 100, y: 120};
+    expect(() => solveSOTM({...shooter, x: Number.NaN}, goal, {x: 0, y: 0})).toThrow(/finite/);
+    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => Number.NaN)).toThrow(/finite and positive/);
+    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => 0)).toThrow(/finite and positive/);
   });
 });
 

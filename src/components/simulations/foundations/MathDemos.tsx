@@ -54,10 +54,19 @@ export function CalculusLiveDemo() {
   const omega = 0.85;
   const f = (t: number) => amplitude * Math.sin(omega * t) + 0.08 * t - 0.35;
   const df = (t: number) => amplitude * omega * Math.cos(omega * t) + 0.08;
-  const pts = useMemo<[number, number][]>(() => {
-    return Array.from({length: 180}, (_, i) => {
-      const t = (i / 179) * 10;
-      return [sx(t), sy(f(t))];
+  const xPlot = (t: number) => P.l + (t / 10) * PW;
+  const yPosition = (value: number) => 28 + (1 - (value + 1.8) / 3.6) * 112;
+  const yVelocity = (value: number) => 177 + (1 - (value + 1.15) / 2.3) * 104;
+  const positionPoints = useMemo<[number, number][]>(() => {
+    return Array.from({length: 240}, (_, i) => {
+      const t = (i / 239) * 10;
+      return [xPlot(t), yPosition(f(t))];
+    });
+  }, [amplitude]);
+  const velocityPoints = useMemo<[number, number][]>(() => {
+    return Array.from({length: 240}, (_, i) => {
+      const t = (i / 239) * 10;
+      return [xPlot(t), yVelocity(df(t))];
     });
   }, [amplitude]);
   const t0 = time;
@@ -66,19 +75,28 @@ export function CalculusLiveDemo() {
   const dx = 1.4;
   const areaPts = Array.from({length: 80}, (_, i) => {
     const t = (i / 79) * t0;
-    return [sx(t), sy(f(t))] as [number, number];
+    return [xPlot(t), yVelocity(df(t))] as [number, number];
   });
+  const displacement = y0 - f(0);
+  const zeroVelocityY = yVelocity(0);
 
   return (
-    <Demo title="Calculus: move the instant and watch slope become velocity">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Interactive calculus slope and area demo">
-        <Grid xLabel="time" yLabel="position" />
-        <path d={`${path(areaPts)} L ${sx(t0).toFixed(1)} ${sy(-1.4).toFixed(1)} L ${sx(0).toFixed(1)} ${sy(-1.4).toFixed(1)} Z`} fill="#6f8bff" opacity="0.16" />
-        <path d={path(pts)} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
-        <line x1={sx(t0 - dx)} y1={sy(y0 - m * dx)} x2={sx(t0 + dx)} y2={sy(y0 + m * dx)} stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" />
-        <line x1={sx(t0)} x2={sx(t0)} y1={P.t} y2={H - P.b} stroke="#ff6f9c" strokeWidth="2" strokeDasharray="7 7" />
-        <circle cx={sx(t0)} cy={sy(y0)} r="7" fill="#ffffff" />
-        <text x={sx(t0) + 14} y={sy(y0) - 16} fill="#ffffff" fontFamily="JetBrains Mono, monospace" fontSize="13">
+    <Demo title="Calculus: slope gives velocity; velocity area gives displacement">
+      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Position and velocity panels: a tangent shows instantaneous velocity and signed velocity area shows displacement">
+        <rect width={W} height={H} rx="18" fill="#0b1120" />
+        <rect x={P.l} y="28" width={PW} height="112" fill="#101a2e" stroke="#2a3656" />
+        <rect x={P.l} y="177" width={PW} height="104" fill="#101a2e" stroke="#2a3656" />
+        <line x1={P.l} x2={W - P.r} y1={zeroVelocityY} y2={zeroVelocityY} stroke="rgba(255,255,255,0.4)" />
+        <text x="18" y="88" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12" transform="rotate(-90 18 88)">position x (m)</text>
+        <text x="18" y="236" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12" transform="rotate(-90 18 236)">velocity v (m/s)</text>
+        <text x={W / 2} y="316" fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">time (s)</text>
+        <path d={`${path(areaPts)} L ${xPlot(t0).toFixed(1)} ${zeroVelocityY.toFixed(1)} L ${xPlot(0).toFixed(1)} ${zeroVelocityY.toFixed(1)} Z`} fill="#6f8bff" opacity="0.24" />
+        <path d={path(positionPoints)} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
+        <path d={path(velocityPoints)} fill="none" stroke="#2fd3c0" strokeWidth="3" strokeLinecap="round" />
+        <line x1={xPlot(t0 - dx)} y1={yPosition(y0 - m * dx)} x2={xPlot(t0 + dx)} y2={yPosition(y0 + m * dx)} stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" />
+        <line x1={xPlot(t0)} x2={xPlot(t0)} y1="28" y2="281" stroke="#ff6f9c" strokeWidth="2" strokeDasharray="7 7" />
+        <circle cx={xPlot(t0)} cy={yPosition(y0)} r="7" fill="#ffffff" />
+        <text x={xPlot(t0) + 14} y={yPosition(y0) - 12} fill="#ffffff" fontFamily="JetBrains Mono, monospace" fontSize="13">
           instant
         </text>
       </svg>
@@ -90,10 +108,10 @@ export function CalculusLiveDemo() {
         items={[
           ['position x(t)', y0.toFixed(2)],
           ['velocity dx/dt', m.toFixed(2)],
-          ['area idea', 'accumulated motion'],
+          ['integral v dt = x(t) - x(0)', `${displacement.toFixed(2)} m`],
         ]}
       />
-      <Legend items={[{color: '#5ce08a', label: 'position curve'}, {color: '#ffc24d', label: 'tangent slope'}, {color: '#6f8bff', label: 'accumulated area'}]} />
+      <Legend items={[{color: '#5ce08a', label: 'position x(t)'}, {color: '#ffc24d', label: 'position tangent'}, {color: '#2fd3c0', label: 'velocity v(t)'}, {color: '#6f8bff', label: 'signed velocity area to zero'}]} />
     </Demo>
   );
 }

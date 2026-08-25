@@ -28,6 +28,7 @@ export default function LowPass() {
   const st = useRef({
     t: 0,
     est: 0,
+    initialized: false,
     stepOffset: 0,
     lag: 0.5,
     trueT: new Trace(800),
@@ -42,11 +43,16 @@ export default function LowPass() {
     s.t += dt;
     const truth = 2.2 * Math.sin(s.t * 0.7) + s.stepOffset;
     const m = truth + noise * randn();
-    s.est = s.est + alpha * (m - s.est);
+    if (!s.initialized) {
+      s.est = m;
+      s.initialized = true;
+    } else {
+      s.est = s.est + alpha * (m - s.est);
+    }
     s.trueT.push(s.t, truth);
     s.measT.push(s.t, m);
     s.filtT.push(s.t, s.est);
-    s.lag = dt / Math.max(alpha, 1e-3);
+    s.lag = alpha <= 0 ? Number.POSITIVE_INFINITY : alpha >= 1 ? 0 : -dt / Math.log1p(-alpha);
   }
 
   function draw() {
@@ -62,7 +68,7 @@ export default function LowPass() {
         p.line(s.filtT.points(), {color: '#6f8bff', width: 3});
       });
     }
-    if (lagEl.current) lagEl.current.textContent = '≈ ' + s.lag.toFixed(2) + ' s';
+    if (lagEl.current) lagEl.current.textContent = Number.isFinite(s.lag) ? s.lag.toFixed(2) + ' s' : '∞';
     const pts = s.filtT.points();
     const tp = s.trueT.points();
     let sum = 0;
@@ -112,7 +118,7 @@ export default function LowPass() {
         <Button onClick={() => (st.current.stepOffset = st.current.stepOffset > 1 ? 0 : 3.5)}>Sudden jump (step test)</Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Lag: <b ref={lagEl} className="text-white">—</b></span>
+        <span>Time constant τ: <b ref={lagEl} className="text-white">—</b></span>
         <span>Noise left in output: <b ref={residEl} className="text-white">—</b></span>
       </div>
     </Demo>

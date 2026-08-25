@@ -75,7 +75,7 @@ export default function AngleWrap() {
             <g key={d}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#8294b8" strokeWidth="2" />
               <text x={lx} y={ly + 4} fill="#8294b8" textAnchor="middle" fontFamily={MONO} fontSize="12">
-                {d === 180 ? '+/-180 deg' : `${d} deg`}
+                {d === 180 ? '-180 deg (canonical seam)' : `${d} deg`}
               </text>
             </g>
           );

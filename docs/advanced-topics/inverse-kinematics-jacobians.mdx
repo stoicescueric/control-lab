@@ -18,11 +18,13 @@ change in joint angles changes the claw position, then repeatedly correct the an
 reaches the target.
 </Abstract>
 
-<Admonition type="note" title="Prerequisite">
+<Admonition type="note" title="Readiness and prerequisite recap">
 
 Read [Inverse Kinematics](../path-following/inverse-kinematics.mdx) first. This page assumes you already
 know the two-link forward equations and the difference between task space $(x, y)$ and joint space
-$(\theta_1, \theta_2)$.
+$(\theta_1, \theta_2)$. You should also be comfortable with partial derivatives and multiplying a
+$2\times2$ matrix by a vector. The arm widget below deliberately reuses the closed-form solver as a
+visual prerequisite recap; the numerical correction is calculated in the text, not animated by that widget.
 
 </Admonition>
 
@@ -97,6 +99,14 @@ J(\theta_1,\theta_2) =
 \end{bmatrix}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'J', meaning: 'the JACOBIAN: a table of "if I nudge this joint, how far does the claw move". Rows are task-space directions, columns are joints'},
+    {symbol: '\u2202x/\u2202\u03b8\u2081', meaning: 'a partial derivative: how x changes when \u03b8\u2081 alone moves and everything else is held still'},
+    {symbol: 'L_1, L_2', meaning: 'the two fixed link lengths, as in the geometric solution', unit: 'in'},
+  ]}
+/>
+
 For this arm:
 
 $$
@@ -122,6 +132,14 @@ $$
 \Delta \mathbf{x} \approx J\,\Delta\boldsymbol{\theta}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: '\u0394x', meaning: 'a small desired change in TASK space: where you want the claw to move'},
+    {symbol: '\u0394\u03b8', meaning: 'the corresponding small change in JOINT space: how much each motor must turn'},
+    {symbol: 'the \u2248', meaning: 'this holds only for SMALL steps. J is recomputed at the current pose, and it stops describing the arm once you move far from it'},
+  ]}
+/>
+
 where:
 
 - $\Delta \mathbf{x} = \begin{bmatrix}\Delta x & \Delta y\end{bmatrix}^T$ is a small desired change in
@@ -129,6 +147,23 @@ where:
 - $\Delta\boldsymbol{\theta} =
   \begin{bmatrix}\Delta\theta_1 & \Delta\theta_2\end{bmatrix}^T$ is the small joint-angle change that
   should cause it.
+
+### One numerical correction
+
+Let $L_1=L_2=1$, $(\theta_1,\theta_2)=(0,\pi/2)$, and the current claw position be $(1,1)$. For a nearby
+target $(0.9,1.1)$, the desired task-space change is
+$\Delta\mathbf{x}=[-0.1,\ 0.1]^T$. At that pose,
+
+$$
+J=\begin{bmatrix}-1&-1\\1&0\end{bmatrix},\qquad
+J^{-1}=\begin{bmatrix}0&1\\-1&-1\end{bmatrix},\qquad
+\Delta\boldsymbol{\theta}=J^{-1}\Delta\mathbf{x}
+=\begin{bmatrix}0.1\\0\end{bmatrix}\ \text{rad}.
+$$
+
+One small step therefore raises the shoulder target by about $0.1$ rad while leaving the elbow target
+unchanged. Recompute $J$ after moving; the linear approximation is local, so a numerical solver repeats
+rather than applying one large correction.
 
 Forward velocity kinematics is easy:
 
@@ -159,6 +194,16 @@ $$
 J^T\left(JJ^T + \lambda^2 I\right)^{-1}\Delta\mathbf{x}
 $$
 
+<EquationLegend
+  title="Symbols in the damped pseudoinverse"
+  items={[
+    {symbol: '\u03bb (lambda)', meaning: 'the DAMPING factor. It is the whole point: near a singularity JJ\u1d40 becomes uninvertible, and adding \u03bb\u00b2 to the diagonal keeps it solvable at the cost of a slightly wrong direction'},
+    {symbol: 'I', meaning: 'the identity matrix, so \u03bb\u00b2I adds \u03bb\u00b2 down the diagonal and nothing elsewhere'},
+    {symbol: 'J\u1d40', meaning: 'the transpose of the Jacobian. For a square invertible J this whole expression collapses back to J\u207b\u00b9 as \u03bb goes to zero'},
+    {symbol: 'a singularity', meaning: 'a pose where the arm is fully extended or fully folded and the joints can no longer move the claw independently. A plain inverse demands infinite joint motion there'},
+  ]}
+/>
+
 where:
 
 - $J^T$ is the transpose of the Jacobian.
@@ -177,6 +222,14 @@ inverse, compute the target error and push the joints in the direction that most
 $$
 \Delta\boldsymbol{\theta} = \alpha J^T\mathbf{e}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: '\u03b1', meaning: 'a small step size. Here \u03b1 is a learning rate, not a filter blend factor or an angular acceleration'},
+    {symbol: 'e', meaning: 'the task-space error: target position minus current position'},
+    {symbol: 'J\u1d40e', meaning: 'the transpose used INSTEAD of an inverse. It points roughly downhill on the error rather than solving for the exact step, so it never blows up, but it converges more slowly'},
+  ]}
+/>
 
 where:
 
@@ -209,83 +262,65 @@ This is intentionally a skeleton rather than a copy-paste subsystem. The point i
 geometry computes small angle corrections; your real subsystem still owns encoder offsets, feedforward,
 limits, and motor commands.
 
-<JavaCode league="FTC" label="Damped least-squares IK iteration">{`/**
- * One damped least-squares inverse-kinematics step for a planar two-link arm.
- *
- * <p>This class computes a small correction from the current joint angles
- * toward a desired wrist position. It does not command motors directly.</p>
- */
-public final class TwoLinkNumericalIk {
-    private final double link1;
-    private final double link2;
-    private final double damping;
-    private final double maxStepRad;
+<Pseudocode label="Damped least-squares IK iteration">{`DAMPED LEAST-SQUARES IK STEP      planar two-link arm
+  One small correction from the current joint angles toward a target wrist
+  position. It does NOT command motors - it returns a delta.
 
-    public TwoLinkNumericalIk(double link1, double link2, double damping, double maxStepRad) {
-        this.link1 = link1;
-        this.link2 = link2;
-        this.damping = damping;
-        this.maxStepRad = maxStepRad;
-    }
+  step(theta1, theta2, target_x, target_y):
 
-    /**
-     * Computes one joint-space correction toward the target.
-     *
-     * @param theta1 current shoulder angle, radians
-     * @param theta2 current elbow angle, radians
-     * @param targetX desired wrist x position
-     * @param targetY desired wrist y position
-     * @return small shoulder/elbow angle update, radians
-     */
-    public JointDelta step(double theta1, double theta2, double targetX, double targetY) {
-        double x = link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
-        double y = link1 * Math.sin(theta1) + link2 * Math.sin(theta1 + theta2);
+      # ---- where the wrist actually is right now (forward kinematics) ----
+      x <- link1*cos(theta1) + link2*cos(theta1 + theta2)
+      y <- link1*sin(theta1) + link2*sin(theta1 + theta2)
 
-        double errorX = targetX - x;
-        double errorY = targetY - y;
+      error_x <- target_x - x
+      error_y <- target_y - y
 
-        double j00 = -link1 * Math.sin(theta1) - link2 * Math.sin(theta1 + theta2);
-        double j01 = -link2 * Math.sin(theta1 + theta2);
-        double j10 =  link1 * Math.cos(theta1) + link2 * Math.cos(theta1 + theta2);
-        double j11 =  link2 * Math.cos(theta1 + theta2);
+      # ---- the Jacobian: how the wrist moves per radian of each joint ----
+      J = [ dx/dtheta1   dx/dtheta2 ]
+          [ dy/dtheta1   dy/dtheta2 ]
 
-        // A = J * J^T + lambda^2 I
-        double a00 = j00 * j00 + j01 * j01 + damping * damping;
-        double a01 = j00 * j10 + j01 * j11;
-        double a10 = a01;
-        double a11 = j10 * j10 + j11 * j11 + damping * damping;
+      j00 <- -link1*sin(theta1) - link2*sin(theta1 + theta2)
+      j01 <- -link2*sin(theta1 + theta2)
+      j10 <-  link1*cos(theta1) + link2*cos(theta1 + theta2)
+      j11 <-  link2*cos(theta1 + theta2)
 
-        double det = a00 * a11 - a01 * a10;
-        if (Math.abs(det) < 1e-9) {
-            return new JointDelta(0.0, 0.0);
-        }
+      # Derive these four yourself - they are just the derivatives of the
+      # two forward-kinematics lines above. Differentiate x with respect to
+      # theta1, then theta2, and the same for y. Nothing more.
 
-        // y = A^-1 * error
-        double y0 = ( a11 * errorX - a01 * errorY) / det;
-        double y1 = (-a10 * errorX + a00 * errorY) / det;
+      # ---- A = J * transpose(J) + lambda^2 * I ----
+      a00 <- j00^2 + j01^2 + LAMBDA^2
+      a01 <- j00*j10 + j01*j11
+      a10 <- a01                          # A is symmetric
+      a11 <- j10^2 + j11^2 + LAMBDA^2
 
-        // deltaTheta = J^T * y
-        double dTheta1 = j00 * y0 + j10 * y1;
-        double dTheta2 = j01 * y0 + j11 * y1;
+      det <- a00*a11 - a01*a10
+      if | det | ~ 0: return no movement  # degenerate; try again next loop
 
-        return new JointDelta(clampStep(dTheta1), clampStep(dTheta2));
-    }
+      # ---- solve A * w = error, then delta = transpose(J) * w ----
+      w0 <- ( a11*error_x - a01*error_y) / det
+      w1 <- (-a10*error_x + a00*error_y) / det
 
-    private double clampStep(double value) {
-        return Math.max(-maxStepRad, Math.min(maxStepRad, value));
-    }
+      d_theta1 <- j00*w0 + j10*w1
+      d_theta2 <- j01*w0 + j11*w1
 
-    /** Small correction to apply to the joint targets. */
-    public static final class JointDelta {
-        public final double shoulderRad;
-        public final double elbowRad;
+      return (clamp(d_theta1, +/-MAX_STEP), clamp(d_theta2, +/-MAX_STEP))
 
-        public JointDelta(double shoulderRad, double elbowRad) {
-            this.shoulderRad = shoulderRad;
-            this.elbowRad = elbowRad;
-        }
-    }
-}`}</JavaCode>
+# LAMBDA is the whole reason this is called DAMPED least squares. Without
+# it you would invert J*transpose(J) directly - which blows up near a
+# SINGULARITY, where the arm is fully extended or fully folded and the two
+# joints can no longer move the wrist independently. Work out what
+# determinant you get for a fully extended arm, and what step size a plain
+# inverse would then demand. Adding lambda^2 to the diagonal keeps the
+# matrix invertible at the cost of a slightly wrong direction.
+#
+# Work out what MAX_STEP is for. This is ONE iteration of a loop that runs
+# every control cycle; it does not have to arrive this loop. What could a
+# single unclamped step do to a real arm?
+#
+# Look up: "damped least squares", "Levenberg-Marquardt",
+#          "manipulator Jacobian", "kinematic singularity".
+`}</Pseudocode>
 
 In FTC, this becomes useful when the mechanism has more variables than the clean two-link formula:
 

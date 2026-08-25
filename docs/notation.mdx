@@ -47,8 +47,9 @@ inverted motor. See [angle wrapping](./path-following/angle-wrapping.mdx) for th
 
 ## Units
 
-Formulas are written in SI: metres, seconds, radians, volts, newton-metres. Code converts at the
-boundary, once:
+Derivations use SI unless a section explicitly labels another unit. The equations remain dimensionally
+valid in any consistent unit system; FTC snippets may use inches when variable names or comments state
+that choice. Convert once at a hardware or library boundary and never mix unit systems in one calculation:
 
 - **Encoder ticks → real units** happens in exactly one constant
   (`METERS_PER_TICK`) — see [From Math to a Loop](./software-architecture/discretization.mdx).
@@ -58,16 +59,33 @@ boundary, once:
 
 ## Recurring symbols
 
+### Indices, increments, and decorations
+
+These appear in almost every equation on the site, so they are defined once here rather than
+re-stated in each lesson.
+
+| Symbol | Meaning |
+|---|---|
+| subscript $k$ | **the control loop index.** $x_k$ is the value this loop, $x_{k+1}$ the value next loop. It counts loops, not seconds |
+| subscript $i$ | an index into a *list*: path points, samples, wheels. Position in a collection, never time |
+| $\Delta t$ | the *measured* seconds between loop $k$ and loop $k+1$ |
+| $\Delta s, \Delta\theta$ | how far the robot moved and turned during one loop |
+| $\dot{x}, \ddot{x}$ | first and second derivative with respect to time: $\dot{x}$ is a velocity, $\ddot{x}$ an acceleration |
+| $\hat{x}$ | an *estimate* of $x$, not a measurement of it |
+| $\mathbf{x}$ (bold) | a vector or matrix; the same letter unbolded is a single number |
+| $A^{\top}$ | transpose: rows and columns swapped |
+| $\lVert v \rVert$ | the length of vector $v$ |
+
+So a line like $\mathbf{x}_{k+1} = f(\mathbf{x}_k, \Delta s, \Delta\theta)$ reads: the state vector at
+the next loop is some function of the state now, plus how far the robot moved and turned in between.
+
 ### Pose & geometry
 
 | Symbol | Meaning | Unit |
 |---|---|---|
 | $x, y, \theta$ | field-frame pose: position + heading | m, m, rad |
 | $v, \omega$ | linear speed, angular velocity | m/s, rad/s |
-| $ds, d\theta$ | one loop's distance and rotation | m, rad |
 | $\kappa = 1/R$ | path curvature (radius $R$) | 1/m |
-| $T$ | track width — distance between wheel tracks | m |
-| $\boldsymbol{\xi} = (\Delta x_b, \Delta y_b, \Delta\theta)$ | body twist: one loop's motion in the robot frame | m, m, rad |
 
 ### Control
 
@@ -106,9 +124,38 @@ boundary, once:
 | $\alpha$ | a filter blend factor in $(0, 1)$ — low-pass smoothing or complementary trust |
 | $\tau$ | a filter time constant; exact EMA relation $\alpha = 1-e^{-\Delta t/\tau}$ |
 
-## Naming in code
+### State space
 
-Java in the lessons mirrors the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time;
-`wrap(angle)` for the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`atTarget(...)` from the shared
-[Common Implementation](./path-following/common-implementation.mdx) page. `<JavaCode>` blocks carry an
-**FTC** or **FRC** label showing which SDK the snippet targets.
+Capital letters here are the *model*, not gains. They say how the mechanism behaves; the gains
+say what you do about it.
+
+| Symbol | Meaning |
+|---|---|
+| $\mathbf{x}$ | the **state**: the smallest set of numbers that captures where the mechanism is right now |
+| $\mathbf{u}$ | the input you command (the same $u$ as in control, written as a vector) |
+| $A$ | how the state evolves on its own, with no input |
+| $B$ | how the input pushes the state |
+| $C$ | which parts of the state a sensor can actually see |
+| $A_d, B_d$ | the same two matrices *discretized*: the exact effect of holding $\mathbf{u}$ constant for one $\Delta t$ |
+| $K$ | the feedback gain solved from the model (context separates this from the Kalman gain) |
+
+## Naming in the algorithms
+
+The lessons show algorithms as pseudocode, not as Java you can paste. Translating them
+into your own subsystem is the exercise, so the blocks stop where a competent student
+can carry on.
+
+Pseudocode in this book uses `<-` for assignment, `snake_case` for local names, and
+`SCREAMING_CASE` for tuned constants. There are no types, braces or semicolons;
+indentation carries the structure. Comments beginning `# Work out:` or `# Look up:`
+mark the steps worth deriving by hand before writing any code.
+
+The names still mirror the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time;
+`wrap(angle)` for the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`PoseSample`/`moveStatus(...)` from the shared
+[Common Implementation](./path-following/common-implementation.mdx) page, which keep their exact spelling
+everywhere they appear. A follower's input must first satisfy the
+[Pose Estimation Contract](./path-following/pose-estimation-contract.mdx).
+
+Literal Java appears only in `<JavaCode>` blocks, labelled **FTC** or **FRC**, and only
+where there is nothing to derive: a pattern being criticized, or a library call the
+lesson is telling you to make.

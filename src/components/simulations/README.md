@@ -7,7 +7,6 @@ by the curriculum concept they teach:
 - `software-architecture/`: scheduling, state, and loop timing.
 - `control-theory/`: actuators, controllers, feedforward, and identification.
 - `signal-processing/`: filters and estimators.
-- `localization/`: odometry and pose integration.
 - `path-following/`: kinematics, geometry, splines, and followers.
 - `state-space/`: state feedback and optimal control.
 - `research/`: projectile and dynamic-targeting case studies.

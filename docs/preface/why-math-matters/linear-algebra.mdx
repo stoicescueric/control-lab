@@ -71,6 +71,13 @@ $$
 \mathbf{y} = A\mathbf{x}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'A', meaning: 'a MATRIX: a grid of numbers that turns one vector into another. Every matrix on this page is a recipe for "given these inputs, produce these outputs"'},
+    {symbol: 'Ax', meaning: 'matrix times vector. Each row of A produces one number of the answer, by multiplying that row against x and adding the results'},
+  ]}
+/>
+
 Here, $\mathbf{x}$ is the input vector, $A$ is the matrix doing the transformation, and $\mathbf{y}$ is
 the output vector after the transformation.
 
@@ -146,6 +153,17 @@ $$
 \mathbf{u}
 $$
 
+<EquationLegend
+  title="Symbols in the wheel-mixing matrix"
+  items={[
+    {symbol: 'w_FL, w_FR, w_BL, w_BR', meaning: 'the four wheel speeds: front-left, front-right, back-left, back-right. The subscript names the corner of the robot'},
+    {symbol: 'r', meaning: 'the wheel RADIUS. Dividing by it converts a chassis speed in metres per second into a wheel speed in radians per second', unit: 'm'},
+    {symbol: 'L', meaning: 'half the wheelbase: the front-to-back distance from the robot\u2019s centre to a wheel', unit: 'm'},
+    {symbol: 'W', meaning: 'half the track width: the side-to-side distance from centre to a wheel', unit: 'm'},
+    {symbol: 'L + W', meaning: 'how much leverage a wheel has for turning. A wheel further from the centre must spin faster to produce the same rotation, which is why this appears only in the \u03c9 column'},
+  ]}
+/>
+
 Here, $r$ is wheel radius. $L$ is the distance from the robot center to the front/back wheel line, and
 $W$ is the distance from the robot center to the left/right wheel line. The term $L + W$ describes how
 strongly robot rotation contributes to wheel speed. The signs depend on wheel order, roller direction,
@@ -165,9 +183,9 @@ Here, $\mathbf{w}_\text{normalized}$ is the motor command vector after desaturat
 at least $1$, so small commands are not amplified, but large commands are compressed while preserving
 the requested drive direction.
 
-For a visual sanity check, open this Desmos graph: [Basic Mecanum Movement With Odo](https://www.desmos.com/calculator/x39el6adbw).
-Use it to connect the abstract vector $\mathbf{u}$ to the way an FTC robot actually translates,
-strafes, rotates, and accumulates odometry on the field.
+For a visual sanity check, open this Desmos graph: [Mecanum wheel-mixing visual](https://www.desmos.com/calculator/x39el6adbw).
+Use its chassis and wheel vectors to connect the abstract vector $\mathbf{u}$ to the way an FTC robot
+actually translates, strafes, and rotates; pose estimation is outside this lesson's scope.
 
 Different teams use different sign conventions depending on wheel order and coordinate choices, but
 the engineering idea is stable: wheel mixing is a linear transformation.
@@ -194,7 +212,7 @@ look.
   visual intuition for vectors, matrices, basis changes, and linear transformations.
 - Game Manual 0, [Mecanum Drive](https://gm0.org/en/latest/docs/software/tutorials/mecanum-drive.html) -
   FTC-specific mecanum movement and wheel-power mixing.
-- [Basic Mecanum Movement With Odo](https://www.desmos.com/calculator/x39el6adbw) - the Desmos reference
-  used for the FTC wheel-mixing example.
+- [Mecanum wheel-mixing visual](https://www.desmos.com/calculator/x39el6adbw) - the Desmos reference used
+  only for the FTC wheel-mixing example.
 
 </Admonition>

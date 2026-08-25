@@ -34,7 +34,25 @@ for *this* robot, with a number that tells us how much to trust them.
 
 </Problem>
 
-<Theory title="Fit the motor model to measured data">
+## Safe acquisition workflow
+
+Before the algebra, make the experiment safe and reproducible:
+
+1. For a drivetrain, test on the floor in a clear, controlled lane. For a standalone mechanism, secure
+   its fixture while leaving the intended output free to move. Do not characterize a drivetrain lifted.
+2. Set a voltage limit and keep an immediate stop control available.
+3. Measure battery voltage instead of assuming a nominal value.
+4. Choose one physical velocity unit and log time, applied volts, velocity, and acceleration every loop.
+5. Discard the stuck/static regime before fitting the moving model.
+6. Fit all valid samples offline, then validate the constants on a separate run.
+
+:::tip[Predict, run, inspect]
+Before pressing **Run a new test**, predict where the fitted intercept should land. Set **Noise level**
+to zero (which disables both voltage and velocity noise), run the accelerated display, then explain why the small residual intercept error is bounded by
+the real-time ramp rate times the plant lag rather than by the 12× presentation speed.
+:::
+
+<Theory title="Optional derivation: fit the motor model to measured data">
 
 Recall the model from [feedforward](./feedforward.mdx): to hold velocity $v$ and accelerate at $a$,
 
@@ -47,8 +65,8 @@ kinds of test and the constants fall out.
 
 ### The quasistatic ramp → kS and kV
 
-Drive the mechanism with a *slowly* rising voltage, so slowly that acceleration is negligible ($a \approx
-0$). The model collapses to a straight line:
+Drive the mechanism with a *slowly* rising voltage, so slowly that acceleration voltage is negligible
+($k_Aa \approx 0$). The model collapses to a straight line:
 
 $$
 V = k_S + k_V\,v \qquad (\text{moving forward, } a \approx 0)
@@ -62,6 +80,16 @@ k_V = \frac{\sum (v_i - \bar v)(V_i - \bar V)}{\sum (v_i - \bar v)^2},
 \qquad
 k_S = \bar V - k_V\,\bar v
 $$
+
+<EquationLegend
+  title="Symbols in the least-squares fit"
+  items={[
+    {symbol: 'v_i, V_i', meaning: 'the i-th logged sample: a measured velocity and the voltage actually applied at that moment. The subscript numbers samples, not loops'},
+    {symbol: 'v\u0304, V\u0304', meaning: 'the bar means the MEAN over all n samples. Both formulas are written as deviations from those means'},
+    {symbol: 'n', meaning: 'how many samples you logged'},
+    {symbol: 'the numerator', meaning: 'how much v and V vary TOGETHER; the denominator is how much v varies on its own. Their ratio is the slope of the best-fit line'},
+  ]}
+/>
 
 The **intercept is $k_S$** (the voltage that produces motion at zero speed — pure friction) and the
 **slope is $k_V$** (extra volts per unit speed — the back-EMF term). Below is the ramp test: each blue dot
@@ -81,11 +109,17 @@ $$
 k_A = \frac{V - k_S - k_V\,v}{a}
 $$
 
-evaluated over the accelerating samples (again by least squares, not a single point). This simplified
-form assumes a forward-moving test; when you combine forward and reverse data, keep the full
-$k_S\,\operatorname{sign}(v)$ term so static friction points the correct way. $k_A$ is usually
-small — it only matters when the setpoint is *changing*, which is precisely what [motion
-profiling](./motion-profiling.mdx) does.
+<EquationLegend
+  items={[
+    {symbol: 'a', meaning: 'the measured acceleration during the step test. Everything else on the right is already known from the ramp test, so k_A is what is left over', unit: 'in/s\u00b2 or rad/s\u00b2'},
+  ]}
+/>
+
+Do **not** divide each sample by $a$. Instead, fit every valid accelerating sample jointly with a design
+row $[\operatorname{sign}(v_i),v_i,a_i]$ and response $V_i$; one multivariable least-squares solve returns
+$k_S,k_V,k_A$ without exploding near $a=0$. A dynamic voltage step supplies acceleration that the
+quasistatic ramp intentionally avoids. When combining forward and reverse data, the sign column keeps
+static friction pointed correctly.
 
 <Callout type="idea" title="This is just linear regression.">
 "System identification" sounds exotic; for a motor it is fitting a line (or a plane) to data. The same
@@ -98,31 +132,57 @@ at a time — not the math.
 
 <Deploy title="Run the test, fit the line">
 
-The procedure is: command a ramp, log voltage and velocity each loop, then fit offline (or on the next
-init). Keep the raw log — you will want to re-fit when a gearbox wears.
+The widget uses a real-time ramp of $0.10\ \mathrm{V/s}$ so its $0.35\ \mathrm{s}$ plant lag contributes
+at most about $0.035\ \mathrm{V}$ of intercept bias. Simulation time is displayed 12× faster only so the
+learner does not wait two minutes; the plant time constant and logged model remain unchanged.
 
-<JavaCode league="FTC" label="Quasistatic ramp: collect (velocity, voltage) samples">{`// During the ramp OpMode, slowly raise the command and log each loop:
-double command = RAMP_VOLTS_PER_SEC * timer.seconds() / battery.getVoltage();
-motor.setPower(Math.min(command, 1.0));
-double v = motor.getVelocity() * UNITS_PER_TICK;     // real units!
-double V = motor.getPower() * battery.getVoltage();  // volts actually applied
-samples.add(new double[]{v, V});`}</JavaCode>
+<Pseudocode label="Quasistatic ramp: collect (velocity, voltage) samples">{`QUASISTATIC RAMP     raise the command slowly and log every loop
 
-<JavaCode league="FTC" label="Ordinary least squares → kS (intercept), kV (slope)">{`/** Fit V = kS + kV * v to the logged samples. Returns {kS, kV}. */
-static double[] fitLine(List<double[]> samples) {
-    int n = samples.size();
-    double mv = 0, mV = 0;
-    for (double[] s : samples) { mv += s[0]; mV += s[1]; }
-    mv /= n; mV /= n;
-    double sxy = 0, sxx = 0;
-    for (double[] s : samples) {
-        sxy += (s[0] - mv) * (s[1] - mV);
-        sxx += (s[0] - mv) * (s[0] - mv);
-    }
-    double kV = sxy / sxx;
-    double kS = mV - kV * mv;
-    return new double[]{kS, kV};
-}`}</JavaCode>
+    command <- RAMP_VOLTS_PER_SEC * elapsed_seconds / battery_voltage
+    apply min(command, 1.0) to the motor
+
+    v <- motor velocity * UNITS_PER_TICK      # real units, not ticks/sec
+    V <- applied power * battery_voltage      # the volts ACTUALLY applied
+    record the pair (v, V)
+
+# "Quasistatic" means slow enough that acceleration is negligible, so the kA
+# term drops out and what is left is only kS and kV. Work out how slow that
+# has to be for your mechanism, and what the fit would show if you ramped
+# too fast.
+#
+# Note V is computed from the applied power and the measured battery, not
+# from what you asked for. Work out why those two differ.
+`}</Pseudocode>
+
+<Pseudocode label="Ordinary least squares -> kS (intercept), kV (slope)">{`FIT  V = kS + kV * v   to the logged samples
+
+  fit_line(samples):
+      require at least 3 moving samples
+
+      mean_v <- the mean of all v
+      mean_V <- the mean of all V
+
+      s_xy <- sum over samples of (v - mean_v) * (V - mean_V)
+      s_xx <- sum over samples of (v - mean_v)^2
+
+      require s_xx is finite and clearly greater than 0
+      # ^ zero spread means every sample had the same velocity. There is no
+      #   line through a single point. Work out what a near-zero s_xx does
+      #   to the division below, and why the guard beats a NaN gain.
+
+      kV <- s_xy / s_xx                 # the slope
+      kS <- mean_V - kV * mean_v        # the intercept
+      return kS, kV
+
+# Derive these two lines rather than trusting them. Write the total squared
+# error  sum (V - kS - kV*v)^2,  differentiate with respect to kS and kV,
+# set both derivatives to zero, and solve the pair. The formulas above fall
+# out. Look up: "ordinary least squares", "normal equations".
+#
+# Then interpret them physically. kS is volts needed at zero speed - pure
+# static friction. kV is volts per unit of speed - what back-EMF costs you.
+# Work out what a fitted kS of zero would mean about your mechanism.
+`}</Pseudocode>
 
 In FRC this is one tool: **SysId** runs the quasistatic and dynamic tests, fits all three gains, and even
 reports an $R^2$ so you know how well the model fits. FTC teams either run a small ramp OpMode like the
@@ -147,7 +207,8 @@ $k_S\,\mathrm{sign}(v)$ flips, so fit each direction separately); and a sagging 
 
 <Admonition type="info" title="Sources & references">
 
-- **FRC SysId**: WPILib's system-identification tool (quasistatic + dynamic routines, least-squares fit
+- **[WPILib SysId routines](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/system-identification/creating-routine.html)**:
+  official quasistatic and dynamic test definitions and safety structure (least-squares fit
   of $k_S/k_V/k_A$), the reference implementation this lesson mirrors.
 
 </Admonition>

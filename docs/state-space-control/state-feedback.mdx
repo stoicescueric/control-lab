@@ -5,6 +5,8 @@ sidebar_position: 1
 tags: [state-space, state-feedback, pole-placement, wpilib, modeling]
 ---
 
+import {ScalarStateStepExplorer} from '@site/src/components/simulations/state-space/StateSpaceDemos';
+
 # State-Space Models & State Feedback
 
 <Difficulty level="Hard" />
@@ -55,9 +57,85 @@ $$
 A = -\frac{k_V}{k_A}, \qquad B = \frac{1}{k_A}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'A', meaning: 'how the state changes on its OWN, with zero input. Negative here means a coasting flywheel slows down, which is what you would expect'},
+    {symbol: 'B', meaning: 'how much the input moves the state. Since k_A is volts per unit of acceleration, 1/k_A is acceleration per volt'},
+    {symbol: 'the sign of A', meaning: 'a negative A is a system that settles by itself; a positive A is one that runs away. This single number decides which'},
+  ]}
+/>
+
 $A$ says how the system moves on its own (back-EMF and friction bleed speed off, hence the minus
 sign). $B$ says how hard the input pushes on the state. Both numbers came out of the
 [system-identification](../control-theory/system-identification.mdx) fit — the model costs nothing new.
+
+### Take one exact sampled step
+
+The robot runs a loop, not a differential equation, so the model gets converted once into a
+step-ahead form (the same move as everywhere in
+[From Math to a Loop](../software-architecture/discretization.mdx)):
+
+$$
+\mathbf{x}_{k+1} = A_d\,\mathbf{x}_k + B_d\,\mathbf{u}_k
+$$
+
+WPILib does this conversion internally from your loop period. For one state,
+
+$$
+A_d=e^{A\Delta t}, \qquad
+B_d=\begin{cases}
+B\Delta t, & A=0 \\
+\dfrac{e^{A\Delta t}-1}{A}B, & A\ne0
+\end{cases}
+$$
+
+<EquationLegend
+  title="Symbols in the discretization"
+  items={[
+    {symbol: 'A_d, B_d', meaning: 'the DISCRETE versions of A and B: the exact effect of holding the input constant for one whole \u0394t, rather than the instantaneous rate A and B describe'},
+    {symbol: 'e^{A\u0394t}', meaning: 'the matrix exponential. For one state it is the ordinary exponential, and it is exact rather than an approximation of the step'},
+    {symbol: 'the A = 0 case', meaning: 'when A is zero the state does not decay at all, so the input simply accumulates: B\u0394t. The general formula would divide by zero, hence the split'},
+  ]}
+/>
+
+The $A=0$ branch is the finite limit, not a special physical plant. Change $v$, $V$, and measured
+$\Delta t$ below; the first readout computes $v_{k+1}=A_dv_k+B_dV_k$. The second applies an illustrative
+feedback gain and clips the voltage to $\pm12$ V before taking the same exact step.
+
+<ScalarStateStepExplorer />
+
+:::tip[Predict, change, observe]
+**Predict:** whether a longer measured loop step moves the same state farther under a fixed voltage.
+**Change:** adjust $v$, $V$, and $\Delta t$, then enable the illustrative feedback command. **Observe:**
+compare the exact open-loop step with the clamped feedback step and identify when the voltage limit wins.
+:::
+
+### State feedback: u = K(r − x)
+
+The control law is one line:
+
+$$
+\mathbf{u} = K(\mathbf{r} - \mathbf{x}) + u_{ff}
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'r', meaning: 'the reference: the state you WANT, as a vector. r \u2212 x is therefore the state error'},
+    {symbol: 'K', meaning: 'the feedback gain solved from the model. This is state-feedback K, not the Kalman gain from the estimation lessons'},
+    {symbol: 'u_ff', meaning: 'feedforward added outside the loop, such as a gravity hold. The feedback then only has to correct what the model missed'},
+  ]}
+/>
+
+For one state, $K$ is one gain. The $u_{ff}$ term is the plant-inversion feedforward you already know:
+$k_Vr$ holds a flywheel reference, so feedback only cleans up the remaining error.
+
+### Core state-feedback checkpoint
+
+If you can calculate one sampled update, form `requestedVolts = K * (reference - state) + feedforward`,
+and clamp it to the available voltage, you have the required artifact. The rest shows how the same idea
+expands to multiple states and how designers interpret the resulting dynamics.
+
+### Optional continuation: multiple states, poles, and observers
 
 An elevator needs two states, position and velocity, so $A$ and $B$ grow into matrices:
 
@@ -69,54 +147,34 @@ A = \begin{bmatrix} 0 & 1 \\ 0 & -k_V/k_A \end{bmatrix},
 B = \begin{bmatrix} 0 \\ 1/k_A \end{bmatrix}
 $$
 
-Read the rows: the first says $\dot{p} = v$ (position changes at the velocity — pure bookkeeping), and
-the second is the same motor equation as the flywheel. Most FTC mechanisms fit in one or two states.
+<EquationLegend
+  items={[
+    {symbol: 'p', meaning: 'position, the first state of the elevator'},
+    {symbol: 'the 1 in A', meaning: 'this row says "the rate of change of position IS velocity". It is not a tuned number, it is a definition'},
+    {symbol: 'the 0 in B', meaning: 'voltage cannot change position directly, only velocity. Position moves only as a consequence'},
+  ]}
+/>
 
-### Discretize for the loop
+Read the rows: the first says $\dot{p}=v$; the second is the same motor equation as the flywheel. The
+matrix form lets one input respond to both state errors. Now $K$ has a position gain and a velocity
+gain; structurally, that resembles PD control.
 
-The robot runs a loop, not a differential equation, so the model gets converted once into a
-step-ahead form (the same move as everywhere in
-[From Math to a Loop](../software-architecture/discretization.mdx)):
-
-$$
-\mathbf{x}_{k+1} = A_d\,\mathbf{x}_k + B_d\,\mathbf{u}_k
-$$
-
-WPILib does this conversion internally from your loop period. If you do it by hand for a one-state
-system, $A_d = e^{A\Delta t}$ and $B_d = (A_d - 1)B/A$ — two constants you compute once.
-
-### State feedback: u = K(r − x)
-
-The control law is one line:
+Substitute the law into the model and the closed-loop system becomes
 
 $$
-\mathbf{u} = K(\mathbf{r} - \mathbf{x}) + u_{ff}
+\dot{\mathbf{x}}=(A-BK)\mathbf{x}+BK\mathbf{r}+B u_{ff}
 $$
 
-$K$ has one entry per state. For the elevator that is a gain on position error and a gain on velocity
-error. If that smells like PD control, good — it is, structurally. The difference is what happens
-next: substitute the law into the model and the closed-loop system becomes
+<EquationLegend
+  items={[
+    {symbol: 'A \u2212 BK', meaning: 'the CLOSED-LOOP dynamics. Choosing K reshapes this matrix, and its eigenvalues decide whether the mechanism settles smoothly, oscillates, or diverges'},
+  ]}
+/>
 
-$$
-\dot{\mathbf{x}}
-=
-(A - BK)\,\mathbf{x}
-+ BK\,\mathbf{r}
-+ B\,u_{ff}
-$$
-
-The reference and feedforward terms do not disappear from the raw state equation. For a constant
-reference, define $\mathbf e=\mathbf x-\mathbf r$ and choose the equilibrium feedforward so
-$A\mathbf r+B u_{ff}=0$. Then the error dynamics reduce to
-$\dot{\mathbf e}=(A-BK)\mathbf e$. Choosing $K$ literally chooses those error dynamics — how fast they converge, whether
-it overshoots. Control theory calls the eigenvalues of $A - BK$ the *poles*, and picking $K$ to put
-them somewhere deliberate is *pole placement*. Which raises the obvious question: where should they
-go? Faster costs voltage; slower wastes match time. Guessing pole locations is no better than
-guessing PID gains. The [next lesson](./lqr.mdx) replaces the guess with a cost function.
-
-The $u_{ff}$ term is the plant-inversion feedforward you already know: the voltage that holds the
-reference by itself ($k_V r$ for a flywheel, $k_G$ for the elevator), so the feedback only works on
-the error.
+For a constant reference, choose the equilibrium feedforward so $A\mathbf r+B u_{ff}=0$ and define
+$\mathbf e=\mathbf x-\mathbf r$. Then $\dot{\mathbf e}=(A-BK)\mathbf e$. The eigenvalues of $A-BK$ are
+the closed-loop *poles*: they describe convergence and overshoot. Picking them directly is pole placement;
+the [next lesson](./lqr.mdx) instead derives $K$ from an error-versus-effort cost.
 
 ### When you can't measure a state
 
@@ -144,14 +202,38 @@ LinearSystem<N2, N1, N1> elevator =
 FTC has no such library, and for one or two states you do not need it. Compute the gains offline (next
 lesson), then the runtime controller is plain arithmetic:
 
-<JavaCode league="FTC" label="Two-state elevator feedback, gains precomputed offline">{`// K = {kPos, kVel} computed offline. velocity comes from your localizer or a
-// filtered encoder derivative — see the signal-processing module.
-public double update(double targetPos, double pos, double vel) {
-    double volts = K_POS * (targetPos - pos)
-                 + K_VEL * (0.0 - vel)          // reference velocity at hold is zero
-                 + kG;                           // gravity feedforward, as always
-    return volts / battery.getVoltage();         // volts -> [-1, 1]
-}`}</JavaCode>
+<Pseudocode label="Two-state elevator feedback, gains precomputed offline">{`TWO-STATE ELEVATOR
+  K = {K_POS, K_VEL}, computed offline.
+  velocity is a FILTERED encoder derivative, not a raw difference.
+
+  update(target_position, position, velocity):
+      vbat <- read the battery voltage
+      if vbat is not finite or vbat < MIN_VALID_BATTERY_VOLTS:
+          return 0
+
+      requested <- K_POS * (target_position - position)
+                 + K_VEL * (0 - velocity)      # reference velocity is zero:
+                                               # we want it to arrive STOPPED
+                 + kG                          # gravity feedforward, always on
+
+      available <- min(12, vbat)
+      volts     <- clamp(requested, -available, +available)
+      return clamp(volts / vbat, -1, +1)
+
+# The velocity term is what makes this state feedback rather than a P
+# controller with a D term bolted on. Work out the difference: a PD
+# controller differentiates the ERROR, while this multiplies a measured
+# STATE by its own gain, chosen jointly with K_POS from the model. What is
+# the reference velocity here, and why is zero the right choice for a hold?
+#
+# Work out why kG is added outside the feedback entirely. Gravity is a known,
+# constant disturbance - what would the feedback have to do to cancel it on
+# its own, and what steady-state error would remain?
+#
+# Work out what "filtered encoder derivative" is doing for you here, then go
+# implement it from the low-pass lesson. Differencing raw ticks and
+# multiplying by K_VEL feeds quantization noise straight to the motor.
+`}</Pseudocode>
 
 <Callout type="idea" title="You have been doing scalar state feedback all along.">
 A P controller on velocity with a kV feedforward is state feedback on a one-state system. The
