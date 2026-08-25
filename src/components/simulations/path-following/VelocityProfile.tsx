@@ -2,11 +2,12 @@ import {useRef, useState} from 'react';
 import {Demo, Stage, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {threePointCurvature} from '@site/src/lib/domain/curvature';
+import {planPathSpeeds} from '@site/src/lib/domain/purePursuit';
 
 /* Adaptive pure pursuit velocity planning, made live. Drag the waypoints to
    reshape the path; the demo densifies it (Catmull-Rom), measures curvature at
-   every point, caps speed where it bends (k / curvature), then runs the BACKWARD
-   braking pass so the robot can always stop at the end. The path is tinted by the
+   every point, caps speed from a lateral-acceleration budget, then runs forward
+   acceleration and backward braking passes. The path is tinted by the
    final planned speed (green fast -> red slow); the right plot shows the raw cap
    (blue) versus the braking-limited profile (orange). Pure React + SVG, SSR-safe. */
 
@@ -54,7 +55,7 @@ export function VelocityProfile() {
   const drag = useRef<number | null>(null);
   const [wp, setWp] = useState<Pt[]>(INIT);
   const [vPath, setVPath] = useState(60);
-  const [kCurv, setKCurv] = useState(3);
+  const [aLatMax, setALatMax] = useState(45);
   const [aMax, setAMax] = useState(55);
 
   const toSvg = (e: React.PointerEvent): Pt => {
@@ -96,17 +97,12 @@ export function VelocityProfile() {
   const cap = new Array(n).fill(vPath);
   for (let i = g; i < n - g; i++) {
     const k = threePointCurvature(inch[i - g], inch[i], inch[i + g]);
-    cap[i] = k < 1e-5 ? vPath : Math.min(vPath, kCurv / k);
+    cap[i] = k < 1e-5 ? vPath : Math.min(vPath, Math.sqrt(aLatMax / k));
   }
-  // backward braking pass: v_i <= sqrt(v_{i+1}^2 + 2 a d)
-  const v = cap.slice();
-  v[n - 1] = 0;
-  for (let i = n - 2; i >= 0; i--) {
-    const d = s[i + 1] - s[i];
-    v[i] = Math.min(v[i], Math.sqrt(v[i + 1] * v[i + 1] + 2 * aMax * d));
-  }
+  // Forward acceleration from rest, then backward braking to a zero end speed.
+  const v = planPathSpeeds(inch, cap, aMax, 0, 0);
 
-  const minV = Math.min(...v.slice(0, n - 1));
+  const minV = Math.min(...v.slice(1, n - 1));
 
   // path tinted by final speed
   const speedColor = (val: number) => `hsl(${clamp((val / vPath) * 135, 0, 135)}, 78%, 58%)`;
@@ -186,7 +182,7 @@ export function VelocityProfile() {
 
       <Controls>
         <Slider label="Path max speed v_path" min={20} max={80} step={5} value={vPath} onChange={setVPath} format={(x) => `${x.toFixed(0)} in/s`} />
-        <Slider label="Turn caution k" min={1} max={5} step={0.25} value={kCurv} onChange={setKCurv} format={(x) => x.toFixed(2)} />
+        <Slider label="Max lateral accel" min={10} max={100} step={5} value={aLatMax} onChange={setALatMax} format={(x) => `${x.toFixed(0)} in/s²`} />
         <Slider label="Max decel a" min={20} max={120} step={5} value={aMax} onChange={setAMax} format={(x) => `${x.toFixed(0)} in/s²`} />
       </Controls>
       <Buttons>
@@ -196,13 +192,13 @@ export function VelocityProfile() {
         items={[
           ['path length', `${total.toFixed(0)} in`],
           ['slowest point', `${minV.toFixed(1)} in/s`],
-          ['ends at', '0 in/s (backward pass)'],
+          ['endpoints', '0 in/s (forward + backward passes)'],
         ]}
       />
       <Legend
         items={[
-          {color: '#6f8bff', label: 'curvature speed cap'},
-          {color: '#ffc24d', label: 'after backward braking pass'},
+          {color: '#6f8bff', label: 'physical lateral-acceleration cap'},
+          {color: '#ffc24d', label: 'after acceleration + braking passes'},
           {color: '#5ce08a', label: 'path: fast (drag a tight turn to see red)'},
         ]}
       />

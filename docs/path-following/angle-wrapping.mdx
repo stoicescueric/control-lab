@@ -1,6 +1,6 @@
 ---
 title: Angle Wrapping
-description: Why a heading controller sometimes spins the long way around — and the small fix that wraps every angle error into (−π, π].
+description: Why a heading controller sometimes spins the long way around — and the small fix that wraps every angle error into [−π, π).
 sidebar_position: 2
 tags: [angle-wrapping, heading, atan2, control, autonomous]
 ---
@@ -15,7 +15,7 @@ import AngleWrap from '@site/src/components/simulations/path-following/AngleWrap
 <Abstract>
 Headings live on a circle, so the same direction has infinitely many numeric labels and two angles can
 be numerically far apart while being physically adjacent. Wrapping every angle difference back into the
-range $(-\pi, \pi]$ is the small, mandatory step that stops a heading controller from taking the long
+range $[-\pi, \pi)$ is the small, mandatory step that stops a heading controller from taking the long
 way around.
 </Abstract>
 
@@ -48,49 +48,64 @@ wrong; we just forgot to read the answer *on the circle*, taking the shorter of 
 
 <AngleWrap />
 
-The fix is to **wrap** any angle (or angle difference) into the half-open interval $(-\pi, \pi]$. Feeding
-the sine and cosine to $\operatorname{atan2}$ reconstructs the angle modulo $2\pi$ and lands it directly
-in that interval — $\operatorname{atan2}$'s own range excludes $-\pi$ and includes $+\pi$, so the seam
-sits exactly at $\pm 180°$ with $+\pi$ as the canonical boundary value, no extra correction needed:
+The fix is to **wrap** any angle (or angle difference) into the half-open interval $[-\pi, \pi)$. Explicit
+modulo normalization enforces that endpoint even at the signed-zero branch cut where raw
+$\operatorname{atan2}(\sin e,\cos e)$ can return either signed representation of $\pi$:
 
 $$
-\operatorname{wrap}(e) = \operatorname{atan2}\big(\sin e,\ \cos e\big)
+\operatorname{wrap}(e) = ((e+\pi) \bmod 2\pi + 2\pi) \bmod 2\pi - \pi
 $$
 
 <EquationLegend
   items={[
     {symbol: 'e', meaning: 'the raw heading error before wrapping, computed as target minus current heading', unit: 'rad'},
-    {symbol: 'sin(e), cos(e)', meaning: 'periodic functions that erase the extra full rotations hidden inside the raw error'},
-    {symbol: 'atan2(y, x)', meaning: 'the quadrant-aware inverse tangent; here it reconstructs the shortest signed angle from sine and cosine'},
+    {symbol: 'a mod b', meaning: 'the non-negative modulo operation after the second normalization'},
     {symbol: 'wrap(e)', meaning: 'the shortest signed rotation the controller should command', unit: 'rad'},
   ]}
 />
 
-Because $\sin$ and $\cos$ are themselves periodic, the $\pm 360°$ ambiguity is erased before
-$\operatorname{atan2}$ ever runs, so the result is always the shortest signed rotation. (This is the
-same [atan2](../localization-odometry/odometry.mdx) that recovers a bearing from a displacement — here
-it is recovering the shortest angle from a raw difference.)
+Adding $\pi$, reducing by one full turn, then subtracting $\pi$ produces the shortest signed rotation.
+Exactly $+\pi$ and $-\pi$ describe the same physical turn; this convention chooses $-\pi$, giving a
+controller one deterministic direction at that otherwise unavoidable tie.
 
 <Callout type="warn" title="Wrap the error, not just the setpoint.">
 It is the *difference* that has to be wrapped, every loop, right before it enters the controller.
 Wrapping only the target or only the measurement still leaves a difference that can land outside
-(−π, π].
+[-π, π).
 </Callout>
 
 </Theory>
 
 <Deploy title="One helper, used everywhere a heading appears">
 
-<JavaCode league="FTC" label="Angle wrapping and a heading-hold controller">{`/** Wraps any angle (radians) into the canonical range (-pi, pi]. */
-public static double wrap(double radians) {
-    return Math.atan2(Math.sin(radians), Math.cos(radians));
-}
+<Pseudocode label="Angle wrapping and a heading hold">{`wrap(a)  ->  the angle in [-pi, pi) pointing the same way as a
 
-/** Proportional heading hold. Always turns the short way to the target. */
-public double headingPower(double targetRad, double headingRad) {
-    double error = wrap(targetRad - headingRad);   // <-- the whole lesson
-    return Range.clip(kP * error, -1.0, 1.0);
-}`}</JavaCode>
+    turn <- 2*pi
+    return ((a + pi)  mod turn  +  turn)  mod turn  -  pi
+
+# Read that line right to left and work out what each step buys you:
+#   (a + pi)        shift so the target range starts at 0 instead of -pi
+#   mod turn        collapse to one revolution ... but may be NEGATIVE
+#   + turn, mod turn   force it positive, whatever your language did
+#   - pi            shift back
+#
+# Look up: how your language's mod handles a negative left operand. The
+#          doubled mod exists only because Java, C and JavaScript return a
+#          negative remainder while Python does not. Test -3.0 rad by hand.
+
+
+HEADING HOLD    turn toward a target heading, always the short way
+
+    heading_power(target, heading):
+        error <- wrap(target - heading)     # <-- this is the entire lesson
+        return clamp(kP * error, -1, +1)
+
+# Work out both cases with real numbers before coding:
+#   target 170 deg, heading -170 deg.  What is target - heading?
+#   What does wrap turn it into? Which way does the robot spin, and how far?
+# Then delete the wrap and answer again. That difference is a 340-degree
+# spin in a match.
+`}</Pseudocode>
 
 The same `wrap` call belongs anywhere two headings are compared: the rotation term of a go-to-pose
 controller, a `turnTo` action, or the heading feedback of a path follower. Make it a static utility and
@@ -100,7 +115,7 @@ never subtract two angles without it again.
 
 <Admonition type="note" title="Wrapping vs. unwrapping">
 
-Wrapping keeps an angle in $(-\pi, \pi]$ — correct for *control error*. The opposite operation,
+Wrapping keeps an angle in $[-\pi, \pi)$ — correct for *control error*. The opposite operation,
 *unwrapping*, removes the jumps to make a continuous signal — what you want before
 **differentiating** heading for an angular-velocity estimate, since a $2\pi$ jump at the seam would
 otherwise read as an enormous spike in $\dot\theta$.
@@ -120,7 +135,7 @@ sensor already did it.
 - [WPILib: Pose and geometry](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/geometry/pose.html) -
   competition-robotics geometry reference for representing headings and poses.
 - E. Eade, *Lie Groups for 2D and 3D Transformations* - background for angle, rotation, and pose
-  representations used later in the pose-exponential lesson.
+  representations used in 2-D robotics.
 - [Mecanum Kinematics](./mecanum-kinematics.mdx) - Control Lab's main downstream use case for wrapped
   heading error.
 

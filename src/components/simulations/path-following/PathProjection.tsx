@@ -7,6 +7,7 @@ const H = 360;
 const FIELD_WIDTH_IN = 144;
 const IN_PER_PX = FIELD_WIDTH_IN / W;
 const NUDGE = 6; // px per keyboard arrow-key nudge
+const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 type Point = {x: number; y: number};
 type Projection = {
@@ -58,7 +59,7 @@ function Arrow({
   const side = {x: -dir.y, y: dir.x};
   const back = {x: to.x - dir.x * 9, y: to.y - dir.y * 9};
   return (
-    <g>
+    <g pointerEvents="none" aria-hidden="true">
       <line
         x1={from.x}
         y1={from.y}
@@ -135,6 +136,12 @@ export function PathProjection() {
     else if (event.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); event.preventDefault(); }
     else if (event.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); event.preventDefault(); }
   };
+  const endDrag = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    drag.current = null;
+  };
 
   return (
     <Demo title="Closest-point projection: drag the robot and watch psi(p) move">
@@ -142,18 +149,19 @@ export function PathProjection() {
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
-        role="img"
+        role="group"
         aria-label="A cubic Bezier path with a draggable robot, closest projection point, tangent, normal, and distance error"
         onPointerMove={onMove}
-        onPointerUp={() => (drag.current = null)}
-        onPointerLeave={() => (drag.current = null)}>
-        <path d={path} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}>
+        <path d={path} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />
         <polyline
           points={points.map((point) => `${point.x},${point.y}`).join(' ')}
           fill="none"
           stroke="#2a3656"
           strokeWidth="1.5"
           strokeDasharray="5 6"
+          pointerEvents="none"
         />
 
         <line
@@ -165,39 +173,27 @@ export function PathProjection() {
           strokeWidth="3"
           strokeDasharray="8 6"
           strokeLinecap="round"
+          pointerEvents="none"
         />
         <Arrow from={projection.point} dir={projection.tangent} length={56} color="#ffc24d" />
         <Arrow from={projection.point} dir={projection.normal} length={42} color="#6f8bff" dashed />
 
-        <circle cx={projection.point.x} cy={projection.point.y} r="8" fill="#0b1120" stroke="#5ce08a" strokeWidth="3" />
+        <circle cx={projection.point.x} cy={projection.point.y} r="8" fill="#0b1120" stroke="#5ce08a" strokeWidth="3" pointerEvents="none" />
         <text
           x={projection.point.x + 12}
           y={projection.point.y - 12}
           fontFamily="JetBrains Mono, monospace"
           fontSize="13"
-          fill="#b8f7d0">
+          fill="#b8f7d0"
+          pointerEvents="none">
           phi(psi(p))
         </text>
 
-        <circle
-          cx={robot.x}
-          cy={robot.y}
-          r="12"
-          fill="#ff6f9c"
-          stroke="#fff"
-          strokeWidth="2.5"
-          style={{cursor: 'grab'}}
-          tabIndex={0}
-          role="slider"
-          aria-label={`Robot position (${Math.round(robot.x)}, ${Math.round(robot.y)}). Use arrow keys to move; hold Shift to move faster.`}
-          aria-valuetext={`x ${Math.round(robot.x)}, y ${Math.round(robot.y)}`}
-          onKeyDown={onRobotKeyDown}
-          onPointerDown={(event) => {
-            drag.current = 'robot';
-            (event.target as Element).setPointerCapture(event.pointerId);
-          }}
-        />
         <Arrow from={projection.point} dir={errorDir} length={Math.min(errorMag, 90)} color="#ff6f9c" dashed />
+
+        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8" pointerEvents="none">
+          drag the pink robot or blue Bezier handles
+        </text>
 
         {points.map((point, index) => (
           <circle
@@ -209,22 +205,45 @@ export function PathProjection() {
             stroke="#8ea2ff"
             strokeWidth="2.5"
             style={{cursor: 'grab'}}
+            className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
             tabIndex={0}
-            role="slider"
-            aria-label={`Bezier control point ${index + 1}, position (${Math.round(point.x)}, ${Math.round(point.y)}). Use arrow keys to move.`}
-            aria-valuetext={`x ${Math.round(point.x)}, y ${Math.round(point.y)}`}
+            role="application"
+            aria-label={`Bezier control point ${index + 1} at x ${Math.round(point.x)}, y ${Math.round(point.y)}. Use arrow keys to move; hold Shift to move faster.`}
+            aria-keyshortcuts={SPATIAL_KEYS}
             onKeyDown={onControlPointKeyDown(index)}
             onPointerDown={(event) => {
               drag.current = String(index);
-              (event.target as Element).setPointerCapture(event.pointerId);
+              svgRef.current?.setPointerCapture(event.pointerId);
+              event.preventDefault();
             }}
           />
         ))}
 
-        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8">
-          drag the pink robot or blue Bezier handles
-        </text>
+        <circle
+          cx={robot.x}
+          cy={robot.y}
+          r="12"
+          fill="#ff6f9c"
+          stroke="#fff"
+          strokeWidth="2.5"
+          style={{cursor: 'grab'}}
+          className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
+          tabIndex={0}
+          role="application"
+          aria-label={`Robot position at x ${Math.round(robot.x)}, y ${Math.round(robot.y)}. Use arrow keys to move; hold Shift to move faster.`}
+          aria-keyshortcuts={SPATIAL_KEYS}
+          onKeyDown={onRobotKeyDown}
+          onPointerDown={(event) => {
+            drag.current = 'robot';
+            svgRef.current?.setPointerCapture(event.pointerId);
+            event.preventDefault();
+          }}
+        />
       </svg>
+
+      <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
+        Drag a handle, or focus it and use the arrow keys; hold Shift for a larger step.
+      </p>
 
       <Buttons>
         <Button onClick={() => setRobot({x: 150, y: 145})}>Reset robot</Button>

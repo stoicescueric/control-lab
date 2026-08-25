@@ -97,14 +97,15 @@ The current curriculum is organized as a filesystem-driven Docusaurus sidebar:
 
 - Preface: Why Math Matters
 - Module 1: Software Architecture & Loop Optimization
-- Module 2: Signal Processing
-- Module 3: Localization & Odometry
-- Module 4: Motor Dynamics & Control Theory
-- Module 5: Path Following & Kinematics
-- Module 7: Trajectory Generation & Implementation
+- Module 2: Motor Dynamics & Control Theory
+- Module 3: Signal Processing
+- Module 4: Path Following & Kinematics
+- Module 5: State-Space Control
+- Elective case study: Drag-Aware Launcher
+- Advanced Topics & Misc
 - References & Resources
 
-Core topics include calculus, linear algebra, differential equations, state space, state machines, command-based programming, filtering, Kalman and Extended Kalman filters, odometry, pose exponentials, DC motor modeling, feedforward, PID/PDFL, voltage compensation, motion profiling, mecanum kinematics, pure pursuit, splines, guided vector fields, RK4 integration, air drag, and trajectory simulation.
+Core topics include calculus, linear algebra, differential equations, state space, state machines, command-based programming, filtering, Kalman and Extended Kalman filters, DC motor modeling, feedforward, PID/PDFL, voltage compensation, motion profiling, mecanum kinematics, pure pursuit, splines, guided vector fields, RK4 integration, air drag, and trajectory simulation.
 
 ## Lesson Standard
 

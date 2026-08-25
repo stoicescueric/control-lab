@@ -148,6 +148,13 @@ $$
 \qquad w_i \leftarrow \frac{w_i}{\text{scale}}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'w_i', meaning: 'stands for any one of the four wheel powers. The subscript i means "each of them in turn", which is the point: all four are divided by the SAME scale'},
+    {symbol: 'scale', meaning: 'the largest wheel magnitude, or 1 if none exceeds 1. Taking the max with 1 is what stops the rule from amplifying a command that already fits'},
+  ]}
+/>
+
 Small commands pass through untouched; oversized ones shrink while **keeping their ratios**, so the
 direction of travel is preserved. (gm0's tutorial does the same job with a single divisor
 $\,\max(|v_x| + |v_y| + |\omega|,\ 1)\,$ — a slightly more conservative version of the same idea.) In the
@@ -188,6 +195,16 @@ $$
 \end{cases}
 $$
 
+<EquationLegend
+  title="Symbols in the shaping function"
+  items={[
+    {symbol: 's', meaning: 'the raw stick value coming in, from \u22121 to +1'},
+    {symbol: 'd', meaning: 'the dead zone half-width: below this the stick is treated as centred. Typically around 0.06'},
+    {symbol: 'k', meaning: 'the response curve exponent. Here k is an exponent, not the loop index used elsewhere on the site. k = 1 is linear; k = 2 gives fine control near centre'},
+    {symbol: '(|s| \u2212 d)/(1 \u2212 d)', meaning: 'the re-expansion. Without it the output would jump from 0 straight to d at the edge of the dead zone'},
+  ]}
+/>
+
 Drag the input below: the flat red band is the dead zone (output stays $0$), and past it the blue curve
 is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills drift without you feeling it.
 
@@ -199,57 +216,77 @@ is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills d
 
 The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
 
-<JavaCode league="FTC" label="Field-centric mecanum with dead zone, response curve, and desaturation">{`/** Dead zone + response curve in one step: 0 inside the dead zone, then a
- *  smoothly re-expanded, curved response out to full stick. */
-private double shape(double s) {
-    double a = Math.abs(s);
-    if (a < DEADZONE) return 0;                          // ignore stick drift
-    double scaled = (a - DEADZONE) / (1 - DEADZONE);     // re-expand: 0 at the edge, 1 at full
-    return Math.signum(s) * Math.pow(scaled, DRIVE_CURVE);  // DEADZONE~0.06, DRIVE_CURVE~2.0
-}
+<Pseudocode label="Field-centric mecanum with dead zone, response curve, and desaturation">{`STICK SHAPING     dead zone and response curve in one step
 
-/** Drives a mecanum chassis from field-relative stick input.
- *  @param fwd     forward command, +1 away from the driver  [-1, 1]
- *  @param strafe  strafe command,  +1 to the left           [-1, 1]
- *  @param turn    turn command,    +1 counter-clockwise      [-1, 1]
- *  @param heading robot heading from the IMU, radians (field frame)
- */
-public void driveFieldCentric(double fwd, double strafe, double turn, double heading) {
-    // 1) dead zone + response curve on the translation MAGNITUDE (direction preserved)
-    double mag = Math.min(1.0, Math.hypot(fwd, strafe));
-    double dir = Math.atan2(strafe, fwd);
-    double m   = shape(mag);
-    double fwdC = m * Math.cos(dir);
-    double strC = m * Math.sin(dir);
-    double w    = shape(turn);                 // same shaping on the turn stick
+  shape(s):                            # s in [-1, 1]
+      a <- | s |
+      if a < DEADZONE: return 0        # ignore stick drift at rest
 
-    // 2) rotate the field command into the robot frame (rotate by -heading)
-    double cos = Math.cos(heading), sin = Math.sin(heading);
-    double vx =  fwdC * cos + strC * sin;
-    double vy = -fwdC * sin + strC * cos;
+      scaled <- (a - DEADZONE) / (1 - DEADZONE)
+      # ^ re-expand: 0 at the edge of the dead zone, 1 at full stick.
+      #   Without this the output would JUMP from 0 to DEADZONE.
+      #   Work out the jump size for DEADZONE = 0.06 and decide if you would
+      #   feel it.
 
-    // 3) wheel-mixing: add the three things you want
-    double fl = vx - vy - w;
-    double fr = vx + vy + w;
-    double bl = vx + vy - w;
-    double br = vx - vy + w;
+      return sign(s) * scaled^DRIVE_CURVE     # DEADZONE ~ 0.06, CURVE ~ 2.0
 
-    // 4) desaturate: scale all four down together if any exceeds 1.0
-    double scale = Math.max(1.0,
-        Math.max(Math.abs(fl), Math.max(Math.abs(fr),
-        Math.max(Math.abs(bl), Math.abs(br)))));
-    frontLeft.setPower(fl / scale);
-    frontRight.setPower(fr / scale);
-    backLeft.setPower(bl / scale);
-    backRight.setPower(br / scale);
-}`}</JavaCode>
+  # Work out what the exponent does. Tabulate scaled^1 and scaled^2 at
+  # 0.25, 0.5, 0.75, 1.0. Where did the driver gain fine control, and what
+  # did they give up?
+
+
+FIELD-CENTRIC DRIVE
+  in:   fwd      +1 away from the driver      [-1, 1]
+        strafe   +1 to the driver's left      [-1, 1]
+        turn     +1 counter-clockwise         [-1, 1]
+        heading  robot heading from the IMU, radians, field frame
+
+  # 1. shape the translation MAGNITUDE, so the direction survives
+  mag  <- min(1, sqrt(fwd^2 + strafe^2))
+  dir  <- atan2(strafe, fwd)
+  m    <- shape(mag)
+  fwd_c    <- m * cos(dir)
+  strafe_c <- m * sin(dir)
+  w        <- shape(turn)
+
+  # Work out why the magnitude is shaped and not fwd and strafe separately.
+  # Push the stick to a perfect 45 degrees and shape each axis with a square
+  # curve. What angle does the robot actually drive at?
+
+  # 2. rotate the field command into the robot frame (by -heading)
+  c, s <- cos(heading), sin(heading)
+  vx <-  fwd_c*c + strafe_c*s
+  vy <- -fwd_c*s + strafe_c*c
+
+  # 3. mix the wheels: add the three motions you asked for
+  fl <- vx - vy - w
+  fr <- vx + vy + w
+  bl <- vx + vy - w
+  br <- vx - vy + w
+
+  # Those signs ARE the lesson. Derive them: a mecanum roller at 45 degrees
+  # turns wheel spin into a force at 45 degrees. Draw all four rollers from
+  # above, add the force vectors for "all wheels forward", then for
+  # "left pair forward, right pair backward". Look up: "mecanum wheel force
+  # decomposition".
+
+  # 4. desaturate: if any wheel exceeds 1, scale ALL FOUR by the same factor
+  scale <- max(1, |fl|, |fr|, |bl|, |br|)
+  set the four wheel powers to fl/scale, fr/scale, bl/scale, br/scale
+
+  # Work out why they must scale together. Take (fl,fr,bl,br) =
+  # (1.4, 0.6, 0.6, 1.4) and clamp each to 1.0 individually. Compare the
+  # ratio fl:fr before and after. The robot no longer drives where it was
+  # told - it curves.
+`}</Pseudocode>
 
 In an FTC `OpMode` the sticks map in like this (the Y axis is inverted on the gamepad, so negate it):
 
 <JavaCode league="FTC" label="Reading the gamepad">{`double fwd    = -gamepad1.left_stick_y;   // up on the stick = forward
 double strafe = -gamepad1.left_stick_x;   // left on the stick = +left (our convention)
 double turn   = -gamepad1.right_stick_x;  // left = counter-clockwise
-driveFieldCentric(fwd, strafe, turn, imu.getHeading());`}</JavaCode>
+double heading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
+driveFieldCentric(fwd, strafe, turn, heading);`}</JavaCode>
 
 With teleop solid, the same chassis command becomes the *output* of an autonomous controller. The
 simplest one drives straight at a target pose — that is [**PID-to-point**](./pid-to-point.mdx), the next
@@ -265,11 +302,13 @@ forward at the same power. The common fix (straight from gm0) is to multiply the
 
 </Admonition>
 
-<Admonition type="warning" title="Hardware reality: don't navigate from mecanum encoders">
+<Admonition type="warning" title="Hardware reality: drive encoders slip">
 
-The same sideways slip means wheel encoders on a mecanum drive over-report strafe distance and drift
-fast. Use the drive for *motion*, but localize from dedicated dead-wheel pods or fused vision — see
-[Odometry & Pose](../localization-odometry/odometry.mdx).
+Mecanum wheel encoders can contribute to a pose estimate, but sideways roller slip makes strafe scale and
+heading coupling less accurate than the ideal mixer predicts; drift grows with aggressive motion and
+contact. Before an autonomous follower consumes that estimate, adapt whichever maintained localization
+stack you selected through the [Pose Estimation Contract](./pose-estimation-contract.mdx) and measure its
+forward, left, turn, and return-to-start errors on your actual robot.
 
 </Admonition>
 

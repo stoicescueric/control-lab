@@ -110,6 +110,12 @@ $$
 u = C(e)
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'C(\u00b7)', meaning: 'the CONTROLLER, written as a function. Every controller in this curriculum, from bang-bang to LQR, is a different choice of C'},
+  ]}
+/>
+
 Here, $u$ is the actuator command and $C(\cdot)$ is the controller rule. That rule could be as simple
 as proportional control or as advanced as a model-based controller.
 
@@ -118,6 +124,14 @@ The robot mechanism then responds:
 $$
 y_{k+1} = P(y_k, u_k, d_k)
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'P(\u00b7)', meaning: 'the PLANT: the mechanism itself, the thing being controlled. You do not get to choose this one; physics does'},
+    {symbol: 'y_k, u_k', meaning: 'the measured output and the command at loop k'},
+    {symbol: 'd_k', meaning: 'DISTURBANCE: everything acting on the mechanism that you neither commanded nor modelled. A defending robot, a battery sag, a wheel on a seam'},
+  ]}
+/>
 
 Here, $k$ is the current loop number, $k+1$ is the next loop, $P(\cdot)$ represents the physical plant
 or mechanism, and $d_k$ is a disturbance such as battery sag, friction, defense contact, gravity, or a
@@ -152,19 +166,37 @@ u_\text{down}, & e < -\epsilon \\
 \end{cases}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: '\u03b5 (epsilon)', meaning: 'the tolerance half-width: how close counts as close enough. Inside this band the controller does nothing, which is exactly what stops it buzzing back and forth across the target'},
+    {symbol: 'u_up, u_down', meaning: 'the two fixed outputs. They usually differ in magnitude, because gravity resists one direction and helps the other'},
+  ]}
+/>
+
 Here, $\epsilon$ is a tolerance band. Without a tolerance, a real robot may wait forever for the
 measurement to equal the setpoint exactly, which almost never happens.
 
-<JavaCode league="FTC" label="Bang-bang arm hold with tolerance">{`double error = targetTicks - armMotor.getCurrentPosition();
-double toleranceTicks = 20.0;
+<Pseudocode label="Bang-bang arm hold with tolerance">{`error     <- target - measured_position
+TOLERANCE <- 20 ticks
 
-if (error > toleranceTicks) {
-    armMotor.setPower(0.45);
-} else if (error < -toleranceTicks) {
-    armMotor.setPower(-0.25);
-} else {
-    armMotor.setPower(0.0);
-}`}</JavaCode>
+if error >  TOLERANCE:   drive up   at 0.45
+if error < -TOLERANCE:   drive down at 0.25
+otherwise:               power off
+
+# Two things here are worth stopping on.
+#
+# 1. The powers differ, and up is larger. Work out why. Which direction is
+#    gravity helping, and what would happen with 0.45 in both?
+#
+# 2. TOLERANCE is what makes this usable at all. Work out what the arm does
+#    with a tolerance of zero: the error crosses back and forth by one tick,
+#    and the motor is commanded full-up, full-down, full-up. Describe the
+#    sound, then say what it costs the battery.
+#
+# Work out the limitation you cannot fix by tuning: this controller has only
+# three outputs. Whether the arm is 5 ticks or 500 ticks away, it applies
+# exactly the same power. What does that do to the approach?
+`}</Pseudocode>
 
 Bang-bang is easy to understand, but it often oscillates because the command changes abruptly. A
 proportional controller is the next step:
@@ -176,10 +208,26 @@ $$
 Here, $k_P$ is the proportional gain. A larger error creates a larger command; a smaller error creates
 a smaller command.
 
-<JavaCode league="FTC" label="Proportional arm controller">{`double error = targetTicks - armMotor.getCurrentPosition();
-double command = kP * error;
+<Pseudocode label="Proportional arm controller">{`error   <- target - measured_position
+command <- kP * error
 
-armMotor.setPower(Range.clip(command, -1.0, 1.0));`}</JavaCode>
+apply clamp(command, -1, +1)
+
+# Three lines, and it fixes the bang-bang problem completely: the further
+# away the arm is, the harder it pushes. Near the target it eases off by
+# itself, with no tolerance band to tune.
+#
+# Work out kP's units before guessing a value. error is in ticks, command is
+# in [-1, 1]. So kP is "power per tick" - if the arm is 500 ticks away and
+# you want roughly half power, what is kP? That estimate is your starting
+# point, not a number copied from a lesson.
+#
+# Then work out where this one still fails, because it does:
+#   the arm stops slightly short and stays there. what is missing?
+#   the arm sags under gravity at every angle. what is missing?
+#   the arm overshoots and oscillates. what is missing?
+# Each answer is a later lesson in this module.
+`}</Pseudocode>
 
 This proportional rule is the first piece of PID. Later, the PID lesson adds memory of past error and
 reaction to changing error, but the core feedback idea is already here.
@@ -226,74 +274,43 @@ reaction to changing error, but the core feedback idea is already here.
 Production robot code should make the feedback loop explicit. Sensors read. Controllers compute.
 Actuators write. Telemetry records what happened.
 
-<JavaCode league="FTC" label="A small feedback-control architecture">{`/**
- * Reads the current value controlled by a feedback loop.
- */
-public interface FeedbackSensor {
-    /**
-     * @return measured process value in real engineering units.
-     */
-    double getMeasurement();
-}
+<Pseudocode label="A small feedback-control architecture">{`Three roles, kept apart on purpose.
 
-/**
- * Applies a normalized command to hardware.
- */
-public interface Actuator {
-    /**
-     * @param command normalized actuator command in the range [-1.0, 1.0].
-     */
-    void setCommand(double command);
-}
+  FEEDBACK SENSOR
+      get_measurement()  -> the measured value, in real engineering units
 
-/**
- * Converts setpoint and measurement into an actuator command.
- */
-public interface FeedbackController {
-    /**
-     * @param setpoint desired value in the same units as measurement.
-     * @param measurement current measured value.
-     * @param dtSeconds elapsed loop time in seconds.
-     * @return normalized actuator command before final safety clamping.
-     */
-    double calculate(double setpoint, double measurement, double dtSeconds);
-}
+  ACTUATOR
+      set_command(c)     -> apply c, normalized to [-1, 1]
 
-public final class FeedbackLoop {
-    private final FeedbackSensor sensor;
-    private final Actuator actuator;
-    private final FeedbackController controller;
-    private double setpoint;
+  FEEDBACK CONTROLLER
+      calculate(setpoint, measurement, dt)  -> a command, before clamping
 
-    public FeedbackLoop(
-            FeedbackSensor sensor,
-            Actuator actuator,
-            FeedbackController controller) {
-        this.sensor = sensor;
-        this.actuator = actuator;
-        this.controller = controller;
-    }
 
-    public void setSetpoint(double setpoint) {
-        this.setpoint = setpoint;
-    }
+  FEEDBACK LOOP        holds one of each, plus a setpoint
 
-    /**
-     * Runs one control iteration. Call this exactly once per OpMode loop.
-     */
-    public void update(double dtSeconds, Telemetry telemetry) {
-        double measurement = sensor.getMeasurement();
-        double command = controller.calculate(setpoint, measurement, dtSeconds);
-        double safeCommand = Range.clip(command, -1.0, 1.0);
+      update(dt):                    # exactly once per OpMode loop
+          measurement  <- sensor.get_measurement()
+          command      <- controller.calculate(setpoint, measurement, dt)
+          safe_command <- clamp(command, -1, +1)
+          actuator.set_command(safe_command)
 
-        actuator.setCommand(safeCommand);
+          log setpoint, measurement, error, and safe_command
 
-        telemetry.addData("setpoint", setpoint);
-        telemetry.addData("measurement", measurement);
-        telemetry.addData("error", setpoint - measurement);
-        telemetry.addData("command", safeCommand);
-    }
-}`}</JavaCode>
+# That update() is the block diagram from the top of this lesson, written
+# out. Read it next to the diagram and match each line to an arrow.
+#
+# The split is the point. Work out what each boundary buys:
+#   swap the CONTROLLER      -> bang-bang becomes P becomes PID, unchanged loop
+#   swap the SENSOR          -> encoder becomes potentiometer becomes camera
+#   swap the ACTUATOR        -> test the whole loop with no hardware attached
+#
+# Work out why the clamp lives in the loop rather than inside each
+# controller. How many places would have to remember it otherwise?
+#
+# Work out why all four values are logged, not just the command. You are
+# tuning, the arm oscillates, and you have one graph. Which of the four
+# tells you whether the problem is the sensor or the controller?
+`}</Pseudocode>
 
 This style makes later lessons easier to plug in. A proportional controller, PID controller,
 feedforward-plus-PID controller, or motion-profiled controller can all implement the same

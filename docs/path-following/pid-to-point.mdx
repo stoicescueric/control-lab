@@ -1,7 +1,7 @@
 ---
 title: PID-to-Point
 description: Run a PID loop on the error to a target pose, rotate it into the robot frame, beat stiction with kStatic, and brake on time with predictive deceleration — the smallest complete autonomous follower.
-sidebar_position: 3
+sidebar_position: 5
 tags: [pid-to-point, go-to-pose, predictive-deceleration, braking, autonomous, control, mecanum]
 ---
 
@@ -20,8 +20,9 @@ and **predictive deceleration** to brake on time, leaving only the "aim at one p
 and pure pursuit remove.
 </Abstract>
 
-You now have the three pieces autonomous needs: a [pose estimate](../localization-odometry/odometry.mdx)
-that says where the robot is, a [mecanum mixer](./mecanum-kinematics.mdx) that turns a chassis command
+You now have the three pieces autonomous needs: a pose source verified against the
+[Pose Estimation Contract](./pose-estimation-contract.mdx),
+a [mecanum mixer](./mecanum-kinematics.mdx) that turns a chassis command
 into wheel powers, and [angle wrapping](./angle-wrapping.mdx) so heading errors behave. PID-to-point is
 the loop that connects them.
 
@@ -45,6 +46,14 @@ $$
 e_x = x^* - x, \qquad e_y = y^* - y, \qquad e_\theta = \operatorname{wrap}(\theta^* - \theta)
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'x*, y*, \u03b8*', meaning: 'the TARGET pose. A star always marks the value you want, never the one you measured'},
+    {symbol: 'e_x, e_y', meaning: 'position error in the field frame: how far the target sits from the robot along each field axis', unit: 'in'},
+    {symbol: 'e_\u03b8', meaning: 'heading error, wrapped so the robot always turns the short way', unit: 'rad'},
+  ]}
+/>
+
 The heading error is wrapped into $[-\pi, \pi)$ so the robot always turns the short way — exactly the
 [angle-wrapping](./angle-wrapping.mdx) lesson. But the drivetrain does not take field commands; it takes
 forward/strafe in the **robot frame**. So rotate the translational error by $-\theta$, the same rotation
@@ -56,6 +65,14 @@ $$
 \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix}
 \begin{bmatrix} e_x \\ e_y \end{bmatrix}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'e_x^robot', meaning: 'the same error expressed FORWARD of the robot rather than along the field axis'},
+    {symbol: 'e_y^robot', meaning: 'the same error expressed to the robot\u2019s LEFT'},
+    {symbol: '\u2212\u03b8', meaning: 'the rotation is by minus the heading. The robot sits at +\u03b8 in the field, so undoing that puts a field vector into its frame'},
+  ]}
+/>
 
 <PidToPointIllustration />
 
@@ -70,6 +87,14 @@ v_y = k_p^{xy}\, e_y^\text{robot}, \qquad
 \omega = k_p^{\theta}\, e_\theta
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'k_p^xy', meaning: 'one proportional gain shared by both translation axes, so forward and sideways respond identically'},
+    {symbol: 'k_p^\u03b8', meaning: 'a SEPARATE gain for heading, because its error is in radians and its actuator authority differs'},
+    {symbol: 'v_x, v_y, \u03c9', meaning: 'the chassis command handed to the mecanum mixer: forward, left, and counter-clockwise'},
+  ]}
+/>
+
 If a plain proportional term leaves the robot drifting short of the goal or overshooting, promote each
 axis to a full discrete PID — proportional on the error, integral on its running sum, derivative on its
 change per loop:
@@ -77,6 +102,17 @@ change per loop:
 $$
 u_k = k_p\, e_k \;+\; k_i \sum_{j=0}^{k} e_j\,\Delta t \;+\; k_d\,\frac{e_k - e_{k-1}}{\Delta t}
 $$
+
+<EquationLegend
+  title="Symbols in the discrete PID"
+  items={[
+    {symbol: 'u_k', meaning: 'the command this loop. Lowercase k gains here are the same PID gains written as k_P, k_I, k_D elsewhere'},
+    {symbol: 'e_k, e_{k-1}', meaning: 'the error this loop and the error last loop'},
+    {symbol: 'j', meaning: 'a summation counter running over every past loop from 0 to now. It is not a separate quantity'},
+    {symbol: '\u03a3 e_j \u0394t', meaning: 'the integral, approximated as a stack of rectangles: each loop contributes its own error times its own measured \u0394t'},
+    {symbol: '(e_k \u2212 e_{k-1}) / \u0394t', meaning: 'the derivative, approximated as the change in error across one loop'},
+  ]}
+/>
 
 where $\Delta t$ is the measured loop time. In practice the derivative term damps the approach, while a
 small, clamped integral defeats the static friction that strands a proportional-only controller just
@@ -127,6 +163,14 @@ $$
 v^2 = 2 a d \quad\Longrightarrow\quad v_\text{cap} = \sqrt{2 a d}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'd', meaning: 'the distance still to travel', unit: 'in'},
+    {symbol: 'a', meaning: 'the braking deceleration, taken as a positive magnitude', unit: 'in/s\u00b2'},
+    {symbol: 'v_cap', meaning: 'the fastest you may currently be going and still stop within d'},
+  ]}
+/>
+
 That is the fastest speed from which you can still stop on the point. Make the commanded speed the
 smallest of three limits — the braking cap, the robot's top speed, and the proportional term for a soft
 final approach:
@@ -138,9 +182,9 @@ $$
 <BrakingProfileIllustration />
 
 Far out the square-root cap exceeds $v_\text{max}$, so the robot cruises; as it nears the point the cap
-drops below $v_\text{max}$ and throttles it smoothly to zero right at the target — a planned,
-overshoot-free stop computed from geometry. Notice the cap is *concave*: gentle braking at first, harder
-as the distance runs out — the opposite of the proportional line that stays too high until the end.
+drops below $v_\text{max}$ and throttles it smoothly to zero at the target in the ideal model. Once the
+cap is active, following it corresponds to a constant-magnitude deceleration; it is the maximum speed
+compatible with stopping over the remaining distance, not a command whose braking grows near the end.
 
 <Callout type="idea" title="This is motion profiling, lazily.">
 A full motion profile precomputes position, velocity, and acceleration for every instant. The
@@ -165,6 +209,15 @@ $$
 \mathbf{p}_\text{predicted} = \mathbf{p}_\text{now} + \frac{\mathbf{v}\,\lVert\mathbf{v}\rVert}{2 a}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'p_now', meaning: 'the measured pose right now, as a vector'},
+    {symbol: 'v', meaning: 'measured field velocity. Filter this: raw velocity is noisy, and it is squared below'},
+    {symbol: 'v \u2016v\u2016 / 2a', meaning: 'the glide vector. Its LENGTH is the braking distance \u2016v\u2016\u00b2/2a and its DIRECTION is the way the robot is travelling'},
+    {symbol: 'p_predicted', meaning: 'where the robot would coast to a stop if you cut power now'},
+  ]}
+/>
+
 While the robot races in, the predicted pose sits ahead of it; as it slows, the prediction pulls back onto
 the target. Going too fast, the predicted pose overshoots the goal, the error flips sign, and the
 controller brakes — automatically, with no separate cap. This is how Cyliis's `Odo` computes its
@@ -186,6 +239,13 @@ $$
 \ \text{ and not last } \Rightarrow\ i \leftarrow i + 1
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'superscript (i)', meaning: 'which point in the target list, counting along the path'},
+    {symbol: 'r_advance', meaning: 'the advance radius: get this close and move on. It is deliberately looser than the settle tolerance, so the robot never stops mid-path', unit: 'in'},
+  ]}
+/>
+
 Because the robot switches targets while still moving, it flows through the intermediate points and only
 brakes for the last — turning a list of stop-and-go moves into one continuous motion. This is exactly how
 SimplicityFTC's `PidToPointFollower` (`pointAdvanceRadius`) and FTCclueless's drivetrain (`pathRadius`)
@@ -203,102 +263,171 @@ instead of chasing a point.
 
 <Deploy title="A go-to-pose loop">
 
-<JavaCode league="FTC" label="PID-to-point (proportional core)">{`/** One loop of driving toward a target pose. Returns true once settled. */
-public boolean goToPose(Pose2d target) {
-    Pose2d robot = localizer.getPose();
+### Core checkpoint
 
-    // 1) field-frame error; heading wrapped to the short way
-    double ex = target.x() - robot.x();
-    double ey = target.y() - robot.y();
-    double eh = wrap(target.heading() - robot.heading());
+This is the required artifact: one pose sample becomes wrapped field error, robot-frame P commands, a
+mecanum command, and an explicit `MoveStatus`. Length is inches, speed is inches per second, heading is
+radians, and the mixer input is normalized power.
 
-    // 2) rotate translational error into the robot frame (rotate by -heading)
-    double c = Math.cos(robot.heading()), s = Math.sin(robot.heading());
-    double exR =  ex * c + ey * s;
-    double eyR = -ex * s + ey * c;
+<Pseudocode label="PID-to-point (proportional core)">{`PID TO POINT
 
-    // 3) proportional commands + kStatic nudge once inside the threshold
-    double vx = kPxy * exR + kStatic(exR);
-    double vy = kPxy * eyR + kStatic(eyR);
-    double w  = kPheading * eh;
+  start_move(target):            # ONCE, when a new move begins
+      active_target <- target
+      reset the move timer       # never reset this inside update()
 
-    // 4) hand off to the mecanum mixer (it desaturates internally)
-    drive(vx, vy, w);
+  update_move():                 # once per loop, after pose_source.update()
+      require active_target exists
+      sample <- pose_source.get_sample()
+      status <- moveStatus(sample, active_target, timer)
 
-    // 5) done? one shared check: at the pose AND slow, with a timeout backstop
-    return atTarget(robot, target, timer);   // defined once in Common Implementation
-}
+      if status is not RUNNING:
+          drive(0, 0, 0)         # both REACHED and TIMED_OUT stop the robot
+          return status
 
-/** A constant push toward the target, applied only near it, to beat static friction.
- *  Far away kP is strong enough; very close (settled) we stop pushing. */
-private double kStatic(double errorRobotFrame) {
-    double e = Math.abs(errorRobotFrame);
-    if (e > K_STATIC_RANGE || e < POS_TOL) return 0;   // only nudge in the "stranded" band
-    return K_STATIC * Math.signum(errorRobotFrame);
-}`}</JavaCode>
+      command_toward(active_target, sample.pose)
+      return RUNNING
+
+
+  command_toward(target, pose_for_error):
+      # 1. error in the FIELD frame; heading takes the short way round
+      ex <- target.x - pose_for_error.x
+      ey <- target.y - pose_for_error.y
+      eh <- wrap(target.heading - pose_for_error.heading)
+
+      # 2. rotate the translation error into the ROBOT frame (by -heading)
+      c, s   <- cos(pose_for_error.heading), sin(pose_for_error.heading)
+      ex_bot <-  ex*c + ey*s
+      ey_bot <- -ex*s + ey*c
+
+      # Work out why the rotation is by MINUS the heading. The robot is at
+      # +heading in the field; expressing a field vector in its frame undoes
+      # that. Check it: robot facing +90 degrees, target straight ahead of it
+      # in the field (+y). What must ex_bot and ey_bot be?
+
+      # 3. proportional command, plus the friction nudge near the goal
+      vx <- kP_xy * ex_bot + kStatic(ex_bot)
+      vy <- kP_xy * ey_bot + kStatic(ey_bot)
+      w  <- kP_heading * eh
+
+      # 4. hand the chassis command to the mixer, which desaturates
+      drive(vx, vy, w)
+
+# Note the signature: the DESIRED target and the pose that SUPPLIES the error
+# are separate arguments. They are the same thing here. The predictive
+# version below is exactly this function with a different second argument -
+# which is the whole reason it is written this way.
+`}</Pseudocode>
 
 The settle test matters as much as the controller: check position **and** heading **and** that the robot
 is actually slow, or an action will report "done" while the robot is still coasting through the point. Add
 a **timeout** as a backstop so a stuck move — jammed on a wall, or a bad pose estimate — still yields the
 field instead of hanging the routine. That trio (pose tolerance, low velocity, timeout) is exactly the
-shared [`atTarget` check](./common-implementation.mdx) every follower in this module calls — defined once,
-so they all terminate the same way.
+shared [`MoveStatus` outcome](./common-implementation.mdx) every follower in this module calls. A reached
+move and a timed-out move both stop, but only the reached move is success.
 
 To follow a *list* of poses continuously, wrap that loop in point-advance sequencing:
 
-<JavaCode league="FTC" label="Following a list of poses (point-advance)">{`private final List<Pose2d> points = new ArrayList<>();
-private int index = 0;
+<Pseudocode label="Following a list of poses (point-advance)">{`FOLLOW A LIST OF POSES
 
-/** Drive the list; returns true only when the LAST point is fully settled. */
-public boolean follow() {
-    Pose2d robot = localizer.getPose();
-    boolean last = index == points.size() - 1;
+  start_path(new_points):        # ONCE per list
+      points <- a copy of new_points
+      index  <- 0
+      reset the move timer
 
-    // advance early through intermediate points so the robot never stops mid-path
-    if (!last && robot.vec().minus(points.get(index).vec()).norm() < ADVANCE_RADIUS) {
-        index++;
-        last = index == points.size() - 1;
-    }
+  follow():
+      if points is empty:
+          drive(0, 0, 0)
+          return REACHED         # nothing to do is not a failure
 
-    boolean settled = goToPose(points.get(index));   // the single-target loop above
-    return last && settled;                          // only the final point uses the strict test
-}`}</JavaCode>
+      sample <- pose_source.get_sample()
+      robot  <- sample.pose
+      last   <- (index is the final point)
+
+      # advance EARLY through intermediate points, so the robot never has to
+      # come to a stop in the middle of the path
+      if not last and robot is within ADVANCE_RADIUS of points[index]:
+          index <- index + 1
+          reset the move timer   # each leg gets its own deadline
+          last  <- (index is the final point)
+
+      status <- command toward points[index], as in update_move above
+
+      if status is TIMED_OUT: return TIMED_OUT
+      if last:                return status      # only the last leg may say REACHED
+      return RUNNING
+
+# Work out: ADVANCE_RADIUS is looser than POS_TOL. Why must it be? Trace a
+# robot that has to settle inside POS_TOL at every intermediate point and
+# describe how the path looks and sounds.
+`}</Pseudocode>
 
 For an overshoot-free approach, shape the command's *magnitude* by the braking cap before the mixer:
 
-<JavaCode league="FTC" label="Distance-capped approach speed">{`/** Fastest approach speed (normalized) that can still stop at the target. */
-private double brakingCap(double distance) {
-    double vStop = Math.sqrt(2.0 * MAX_DECEL * distance);   // m/s
-    double vProportional = kPxy * distance * MAX_SPEED;      // normalized P gain -> m/s
-    return Math.min(Math.min(vStop, MAX_SPEED), vProportional) / MAX_SPEED;
-}
+<Pseudocode label="Distance-capped approach speed">{`BRAKING CAP    never approach faster than you can still stop
 
-/** Drive toward a robot-frame error, but never faster than we can still stop. */
-private void driveCapped(double exR, double eyR, double w) {
-    double dist = Math.hypot(exR, eyR);
-    double cap  = brakingCap(dist);                         // planned speed limit
-    double dir  = Math.atan2(eyR, exR);
-    drive(cap * Math.cos(dir), cap * Math.sin(dir), w);     // mixer desaturates
-}`}</JavaCode>
+  MAX_SPEED   inches/second
+  MAX_DECEL   inches/second^2, a positive magnitude
 
-The predicted-pose variant is even less code — feed an existing PID-to-point its target as if the robot
-were already at its stopping point:
+  braking_cap(distance):
+      v_stop         <- sqrt(2 * MAX_DECEL * distance)   # inches/second
+      v_proportional <- kP_xy * distance * MAX_SPEED     # what P alone wanted
+      return min(v_stop, MAX_SPEED, v_proportional) / MAX_SPEED   # normalized
 
-<JavaCode league="FTC" label="Glide-distance predicted pose (Cyliis-style)">{`/** Where the robot coasts to a stop if it braked now, in field coordinates. */
-public Pose2d predictedPose() {
-    Pose2d p = localizer.getPose();
-    Vector2d v = localizer.getVelocity();              // filter this — velocity is noisy
-    double speed = v.norm();
-    if (speed < 1e-6) return p;
-    double glide = speed * speed / (2.0 * MAX_DECEL);  // braking distance
-    return new Pose2d(
-        p.x() + v.x() / speed * glide,
-        p.y() + v.y() / speed * glide,
-        p.heading());
-}
+  drive_capped(ex_bot, ey_bot, w):
+      dist <- sqrt(ex_bot^2 + ey_bot^2)
+      cap  <- braking_cap(dist)
+      dir  <- atan2(ey_bot, ex_bot)
+      drive(cap*cos(dir), cap*sin(dir), w)    # the mixer desaturates
 
-// then run goToPose against predictedPose() instead of the live pose: it brakes early, automatically.
-`}</JavaCode>
+# v_stop is v^2 = 2*a*s solved for v. Derive it: a robot at speed v braking
+# at MAX_DECEL needs v^2/(2*a) inches to stop. Invert that for "the fastest
+# I may be going, given I am this far out".
+#
+# Work out why the direction is computed once and the SPEED is capped, rather
+# than capping ex_bot and ey_bot separately. Take ex_bot = 30, ey_bot = 40
+# and clamp each to 20. Which way is the robot now pointing?
+`}</Pseudocode>
+
+### Production extension: predictive stopping
+
+The predicted-pose variant changes the **robot state used to calculate error**, never the desired target:
+
+<Pseudocode label="Glide-distance predicted pose">{`PREDICTED POSE    where this sample says the robot will coast to a stop
+
+  predicted_pose(sample):
+      p     <- sample.pose
+      v     <- sample.fieldVelocity      # filter this. raw velocity is noisy.
+      speed <- v.norm()
+      if speed ~ 0: return p             # standing still: no glide
+
+      glide <- speed^2 / (2 * MAX_DECEL) # the braking distance again
+      return a pose at
+            p.x + (v.x / speed) * glide
+            p.y + (v.y / speed) * glide
+            p.heading unchanged          # only translation is predicted
+
+      # (v / speed) is the unit vector along travel. Work out why dividing by
+      # speed is necessary, and what happens to the prediction if you forget.
+
+  update_predictive_move():
+      require active_target exists
+      sample <- pose_source.get_sample()
+      status <- moveStatus(sample, active_target, timer)
+      if status is not RUNNING:
+          drive(0, 0, 0)
+          return status
+
+      command_toward(active_target, predicted_pose(sample))
+      return RUNNING
+
+# Read that last call carefully. The TARGET is unchanged; only the pose
+# supplying the error is predicted. Worked example: target x = 10, actual
+# robot x = 2 but predicted x = 8. The error becomes +2, not +8, so the
+# robot eases off early instead of charging the target and overshooting.
+#
+# Work out: what does this controller do if fieldVelocity is noisy and
+# briefly reads twice its true value? This is why the filter note matters.
+`}</Pseudocode>
 
 </Deploy>
 
@@ -321,8 +450,8 @@ Get $k_p^{\theta}$ holding heading cleanly, then tune the translational gain.
 <Admonition type="warning" title="Hardware reality: your real decel is smaller than you think">
 
 `MAX_DECEL` is limited by traction, battery voltage, and weight transfer, not the motors. Measure it,
-then use **70–80%** of the measured value so a worn battery or slick tile doesn't turn your computed stop
-into a slide. And **filter the velocity** before computing glide — it is squared, so encoder noise gets
+then choose and validate a conservative margin on the actual surface so changing traction does not turn
+your computed stop into a slide. **Filter the velocity** before computing glide — it is squared, so encoder noise gets
 amplified into a jittery predicted pose (Cyliis low-pass-filters the pod velocity first).
 
 </Admonition>

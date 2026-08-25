@@ -1,11 +1,11 @@
 ---
-title: "Module 6 - State-Space Control"
+title: "Module 5 - State-Space Control"
 description: "Modern control for FTC and FRC: write the mechanism's physics as a state-space model, control every state at once with state feedback, and let LQR pick the gains from a cost you choose."
 sidebar_position: 0
 tags: [state-space, lqr, wpilib, modern-control]
 ---
 
-# Module 6 · State-Space Control
+# Module 5 · State-Space Control
 
 <Abstract>
 Everything so far tunes a controller against symptoms: raise kP until it oscillates, back off, add kD.
@@ -15,14 +15,17 @@ care about — how much error you can stand versus how many volts you have. This
 state-space classes work, and the math ports to FTC in a handful of lines.
 </Abstract>
 
-By this point in the curriculum you already own every ingredient:
+This is an **optional modern-controls track**, not a prerequisite for PID, feedforward, or path following.
+Start it when you can check off these concrete artifacts:
 
-- The [state-space preface](../preface/why-math-matters/state-space.mdx) gave you the vocabulary:
-  states, inputs, outputs, and the update equations.
-- [System identification](../control-theory/system-identification.mdx) gave you $k_V$ and $k_A$ — and it
-  turns out those two numbers *are* the state-space model of a velocity mechanism.
-- The [Kalman filter](../signal-processing/kalman.mdx) gave you the observer that estimates states you
-  cannot measure directly.
+- From the [state-space preface](../preface/why-math-matters/state-space.mdx), you can label the state,
+  input, output, and units of a one-state mechanism.
+- From [system identification](../control-theory/system-identification.mdx), you have validated $k_V$ and
+  $k_A$ in consistent physical units on a held-out run.
+- From [From Math to a Loop](../software-architecture/discretization.mdx), your code measures loop time,
+  converts encoder units once, and handles the first sample/long pauses.
+- If a state is not measured directly, you can run the persistent scalar
+  [Kalman predict/correct loop](../signal-processing/kalman.mdx) before attempting a matrix observer.
 
 This module snaps them together:
 
@@ -41,8 +44,8 @@ For a plain flywheel, a well-tuned PIDF and an LQR land in nearly the same place
 the mechanism: two states, coupled states, states you estimate instead of measure. Learn it on the
 flywheel, where you can check every number by hand, and the harder mechanisms stop being special cases.
 The clearest payoff in this curriculum is the
-[shoot-on-the-move turret](../advanced-research/shoot-on-the-move.mdx) in the
-Trajectory Generation & Implementation module: its target sweeps
-across the field as the robot drives, and only a full-state reference — position *and* velocity — can
-track it without lag.
+[shoot-on-the-move turret](../advanced-research/shoot-on-the-move.mdx) in the elective drag-aware launcher
+case study: its target sweeps across the field as the robot drives. A full-state
+reference — position *and* velocity — removes the ideal steady ramp lag, while real latency, saturation,
+and model error still have to be measured.
 </Admonition>

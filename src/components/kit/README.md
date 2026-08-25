@@ -13,7 +13,10 @@ simulations. It must stay independent of any one robotics topic.
 - `Difficulty`: lesson difficulty metadata.
 - `EquationLegend`: definitions for variables introduced by an equation.
 - `Formula`: styled inline formula emphasis.
-- `JavaCode`: consistent FTC/FRC Java presentation.
+- `Pseudocode`: language-neutral algorithm sketches. The default for anything a
+  reader is meant to implement themselves.
+- `JavaCode`: literal FTC/FRC Java. Reserved for anti-patterns being criticized
+  and bare SDK surface, where there is nothing for the reader to derive.
 - `Slider`: accessible numeric control.
 - `Steps`: neutral titled lesson sections.
 - `VideoEmbed`: consent-aware, click-to-load external video.

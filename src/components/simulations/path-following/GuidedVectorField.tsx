@@ -8,9 +8,9 @@ import {guidedVectorField, type Point as Pt} from '@site/src/lib/domain/guidedVe
    control points) induces a field of arrows: at every point the field is the
    path tangent MINUS a pull toward the path proportional to the signed
    cross-track error -- chi = t_hat - kN * e * n_hat, normalized. Drag the robot
-   anywhere and its flow line (integrate the field forward) curves onto the path
-   and rides it to the end, from any start and any side. That is the convergence
-   guarantee, drawn. The field math lives in src/lib/domain/guidedVectorField.ts;
+   within the demonstrated region and its sampled flow line curves onto the path.
+   This illustrates local recovery on either side; it is not a global convergence
+   guarantee for arbitrary paths. The field math lives in src/lib/domain/guidedVectorField.ts;
    this component only handles layout, dragging, and drawing. SSR-safe (pointers
    read only in handlers). */
 
@@ -19,12 +19,14 @@ const H = 380;
 const FIELD = 144; // canvas width = 12 ft (144 in) field
 const SCALE = FIELD / W; // inches per pixel
 const NUDGE = 6; // px per keyboard arrow-key nudge
+const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 // guiding-vector-field direction (unit) at q, plus the signed cross-track error in inches
 function field(P: Pt[], q: Pt, kN: number) {
-  const result = guidedVectorField(q, P, kN);
+  // Geometry is in pixels: (1/in) * (in/pixel) = 1/pixel.
+  const result = guidedVectorField(q, P, kN * SCALE);
   return {x: result.direction.x, y: result.direction.y, e: result.signedError * SCALE};
 }
 
@@ -79,6 +81,10 @@ export function GuidedVectorField() {
     else if (e.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); e.preventDefault(); }
     else if (e.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); e.preventDefault(); }
   };
+  const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    drag.current = null;
+  };
 
   const pathStr = `M ${P[0].x} ${P[0].y} C ${P[1].x} ${P[1].y}, ${P[2].x} ${P[2].y}, ${P[3].x} ${P[3].y}`;
 
@@ -114,16 +120,16 @@ export function GuidedVectorField() {
   };
 
   return (
-    <Demo title="The guiding vector field: drag the robot, watch it flow onto the path">
+    <Demo title="The guiding vector field: test local recovery on either side">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         className="block h-auto w-full touch-none rounded-xl bg-[#0b1120]"
-        role="img"
+        role="group"
         aria-label="A cubic path with a field of arrows; a draggable robot whose flow line curves onto the path"
         onPointerMove={onMove}
-        onPointerUp={() => (drag.current = null)}
-        onPointerLeave={() => (drag.current = null)}>
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}>
         {/* field arrows */}
         {arrows.map((a, i) => {
           const L = 15;
@@ -133,7 +139,7 @@ export function GuidedVectorField() {
           const py = a.dx;
           const col = arrowColor(a.e);
           return (
-            <g key={i} opacity="0.7">
+            <g key={i} opacity="0.7" pointerEvents="none" aria-hidden="true">
               <line x1={a.x} y1={a.y} x2={ex} y2={ey} stroke={col} strokeWidth="1.6" />
               <path d={`M ${ex} ${ey} L ${ex - a.dx * 5 + px * 3} ${ey - a.dy * 5 + py * 3} L ${ex - a.dx * 5 - px * 3} ${ey - a.dy * 5 - py * 3} Z`} fill={col} />
             </g>
@@ -141,16 +147,21 @@ export function GuidedVectorField() {
         })}
 
         {/* the path */}
-        <path d={pathStr} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" opacity="0.95" />
+        <path d={pathStr} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" opacity="0.95" pointerEvents="none" />
         {/* start / end markers */}
-        <circle cx={P[0].x} cy={P[0].y} r="5" fill="#5ce08a" />
-        <circle cx={P[3].x} cy={P[3].y} r="7" fill="none" stroke="#5ce08a" strokeWidth="2.5" />
+        <circle cx={P[0].x} cy={P[0].y} r="5" fill="#5ce08a" pointerEvents="none" />
+        <circle cx={P[3].x} cy={P[3].y} r="7" fill="none" stroke="#5ce08a" strokeWidth="2.5" pointerEvents="none" />
 
         {/* robot flow line */}
-        <path d={flowStr} fill="none" stroke="#ffc24d" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 7" opacity="0.95" />
+        <path d={flowStr} fill="none" stroke="#ffc24d" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 7" opacity="0.95" pointerEvents="none" />
 
         {/* control-point polygon + handles */}
-        <polyline points={P.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="1.5" strokeDasharray="4 5" />
+        <polyline points={P.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="1.5" strokeDasharray="4 5" pointerEvents="none" />
+
+        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8" pointerEvents="none">
+          drag the robot or blue path handles
+        </text>
+
         {P.map((p, i) => (
           <circle
             key={i}
@@ -161,14 +172,16 @@ export function GuidedVectorField() {
             stroke="#6f8bff"
             strokeWidth="2.5"
             style={{cursor: 'grab'}}
+            className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
             tabIndex={0}
-            role="slider"
-            aria-label={`Bézier control point ${i + 1}, position (${Math.round(p.x)}, ${Math.round(p.y)}). Use arrow keys to move.`}
-            aria-valuetext={`x ${Math.round(p.x)}, y ${Math.round(p.y)}`}
+            role="application"
+            aria-label={`Bézier control point ${i + 1} at x ${Math.round(p.x)}, y ${Math.round(p.y)}. Use arrow keys to move; hold Shift to move faster.`}
+            aria-keyshortcuts={SPATIAL_KEYS}
             onKeyDown={onControlPointKeyDown(i)}
             onPointerDown={(e) => {
               drag.current = String(i);
-              (e.target as Element).setPointerCapture(e.pointerId);
+              svgRef.current?.setPointerCapture(e.pointerId);
+              e.preventDefault();
             }}
           />
         ))}
@@ -182,20 +195,23 @@ export function GuidedVectorField() {
           stroke="#fff"
           strokeWidth="2.5"
           style={{cursor: 'grab'}}
+          className="focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
           tabIndex={0}
-          role="slider"
-          aria-label={`Robot position (${Math.round(robot.x)}, ${Math.round(robot.y)}). Use arrow keys to move; hold Shift to move faster.`}
-          aria-valuetext={`x ${Math.round(robot.x)}, y ${Math.round(robot.y)}`}
+          role="application"
+          aria-label={`Robot position at x ${Math.round(robot.x)}, y ${Math.round(robot.y)}. Use arrow keys to move; hold Shift to move faster.`}
+          aria-keyshortcuts={SPATIAL_KEYS}
           onKeyDown={onRobotKeyDown}
           onPointerDown={(e) => {
             drag.current = 'robot';
-            (e.target as Element).setPointerCapture(e.pointerId);
+            svgRef.current?.setPointerCapture(e.pointerId);
+            e.preventDefault();
           }}
         />
-        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8">
-          drag the robot (pink) anywhere
-        </text>
       </svg>
+
+      <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
+        Drag the robot or a path handle, or focus one and use the arrow keys; hold Shift for a larger step.
+      </p>
 
       <Controls>
         <Slider label="Convergence gain kN" min={0.1} max={1.5} step={0.05} value={kN} onChange={setKN} format={(x) => `${x.toFixed(2)} /in`} />

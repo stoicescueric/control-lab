@@ -66,6 +66,15 @@ export default function TagPoseUncertainty() {
     haveSample: false,
   });
 
+  function clearSamples() {
+    const s = st.current;
+    s.dots = [];
+    s.spawnAcc = 0;
+    s.lastU = 0;
+    s.lastS = 0;
+    s.haveSample = false;
+  }
+
   function step(dt: number) {
     const s = st.current;
     const {lateral, depth, sigma} = ctrl.current;
@@ -284,9 +293,9 @@ export default function TagPoseUncertainty() {
         ]}
       />
       <Controls>
-        <Slider label="Lateral offset" min={-1.5} max={1.5} step={0.05} value={lateral} onChange={setLateral} format={(v) => `${v.toFixed(2)} m`} />
-        <Slider label="Distance to wall" min={0.6} max={4.2} step={0.05} value={depth} onChange={setDepth} format={(v) => `${v.toFixed(2)} m`} />
-        <Slider label="Pixel noise σ" min={0.3} max={3} step={0.1} value={sigma} onChange={setSigma} format={(v) => `±${v.toFixed(1)} px`} />
+        <Slider label="Lateral offset" min={-1.5} max={1.5} step={0.05} value={lateral} onChange={(v) => { clearSamples(); setLateral(v); }} format={(v) => `${v.toFixed(2)} m`} />
+        <Slider label="Distance to wall" min={0.6} max={4.2} step={0.05} value={depth} onChange={(v) => { clearSamples(); setDepth(v); }} format={(v) => `${v.toFixed(2)} m`} />
+        <Slider label="Pixel noise σ" min={0.3} max={3} step={0.1} value={sigma} onChange={(v) => { clearSamples(); setSigma(v); }} format={(v) => `±${v.toFixed(1)} px`} />
       </Controls>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>lateral ±2σ: <b className="text-white">{lat2s.toFixed(1)} cm</b></span>

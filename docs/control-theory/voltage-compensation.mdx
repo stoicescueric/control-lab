@@ -72,18 +72,32 @@ on," which is never the voltage you compete on.
 Apply it at the very end, after the controller has produced a voltage. Read the battery once per loop
 (reading it is not free) and clamp the result to the legal power range.
 
-<JavaCode league="FTC" label="Voltage-compensated output">{`private final VoltageSensor battery = hardwareMap.voltageSensor.iterator().next();
+<Pseudocode label="Voltage-compensated output">{`MIN_VALID_BATTERY_VOLTS   6.0     # a telemetry sanity floor, NOT a battery cutoff
 
-/** Send a desired VOLTAGE to a motor, compensated for the live battery voltage. */
-public void setVoltage(DcMotorEx motor, double desiredVolts) {
-    double vbat = battery.getVoltage();              // measured this loop
-    double power = desiredVolts / vbat;              // volts -> [-1, 1]
-    motor.setPower(Math.max(-1.0, Math.min(1.0, power)));
-}
+loop():
+    vbat <- read the battery voltage       # ONCE per loop, shared by every motor
+    set_voltage(left_motor,  left_desired_volts(),  vbat)
+    set_voltage(right_motor, right_desired_volts(), vbat)
 
-// every controller in this module ends the same way:
-//   double volts = kS*Math.signum(v) + kV*v + kA*a + pid.calculate(meas, target);
-//   setVoltage(motor, volts);`}</JavaCode>
+set_voltage(motor, desired_volts, vbat):
+    if vbat or desired_volts is not finite, or vbat < MIN_VALID_BATTERY_VOLTS:
+        command the motor to zero          # reject a disconnected sensor
+        return
+
+    power <- desired_volts / vbat          # volts -> the [-1, 1] the SDK wants
+    command the motor to clamp(power, -1, +1)
+
+# Every mechanism computes what it wants in VOLTS. This is the single place
+# volts become motor power, and the same cached vbat reaches all of them.
+#
+# Work out why one reading is shared instead of each motor reading for
+# itself. Two motors reading a sagging rail milliseconds apart get different
+# divisors for the same commanded voltage.
+#
+# Work out the sign of the effect with real numbers: you want 6 volts. At a
+# fresh 13.0 V the power is 0.46. At a sagging 11.0 V it is 0.55. Explain
+# why commanding a LARGER number is the correct response to a weaker battery.
+`}</Pseudocode>
 
 In FRC, the motor controllers do it for you with `enableVoltageCompensation(nominalVolts)` — set it once
 and command in volts with `setVoltage(...)` thereafter. The idea is identical: stop thinking in
@@ -98,11 +112,13 @@ living too near stall), not here.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: filter the voltage reading">
+<Admonition type="warning" title="Hardware reality: validate the voltage reading">
 
 Battery voltage spikes downward sharply under sudden load (a drivetrain slamming to full power), so a raw
-reading can momentarily read very low and make your compensation over-command. Run the voltage through a
-light [low-pass filter](../signal-processing/low-pass.mdx), and read it once per loop rather than per
+reading can momentarily read very low and make your compensation over-command. Reject nonfinite or
+physically implausible readings as the snippet does. If measurement noise requires it, use only a very
+light [low-pass filter](../signal-processing/low-pass.mdx): genuine bus sag is the value the command must
+respect, so heavy smoothing would hide the condition. Read voltage once per loop rather than per
 motor — the sensor call has real latency.
 
 </Admonition>

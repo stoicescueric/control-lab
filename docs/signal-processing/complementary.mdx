@@ -16,8 +16,8 @@ import {ComplementarySplitExplorer} from '@site/src/components/simulations/signa
 This is where the module switches from filtering to fusion. A filter cleans one sensor; fusion
 combines two sensors whose failures point in opposite directions. The complementary filter is the
 simplest fusion there is — one blending constant — shown here on a real FTC pairing: a motor encoder
-that is fast but slips away from the truth, and an absolute encoder that stays honest forever but is
-noisy and slow.
+that is fast but slips away from the truth, and an absolute encoder that does not accumulate relative
+motion error but still needs calibration and can be biased, noisy, and slow.
 </Abstract>
 
 The previous filters cleaned a *single* sensor, and they all paid the same price: smoothing fights
@@ -33,9 +33,9 @@ Put an arm on a robot and you usually have two ways to measure its angle:
   *the motor*, not the joint. Every bit of belt slip, chain skip, and gear backlash between the two
   accumulates, so the angle you compute from ticks drifts away from the true arm angle over a match.
   Excellent short-term, wrong in the long run.
-- **Absolute encoder on the joint**: reads the joint angle itself, so it *cannot* drift. But the
-  reading is noisy, and it often updates slower than your loop runs. True in the long run, rough
-  right now.
+- **Absolute encoder on the joint**: reads the joint angle itself, so relative-motion error does not
+  accumulate. It still needs calibration and can carry a fixed bias; it is noisy and may update slower
+  than your loop. Anchored in the long run, rough right now.
 
 Run on the motor encoder alone and the arm slowly forgets where it is. Run on the absolute encoder
 alone and your control loop chews on noise. The two failures are opposites — *complementary* — which
@@ -43,47 +43,75 @@ is the whole trick.
 
 </Problem>
 
-<Theory title="High-pass the fast sensor, low-pass the honest one, add them">
+<Theory title="Predict, then correct on the angle circle">
 
-Pass the motor encoder through a *high-pass* (keep its fast, accurate motion, block its slow drift)
-and the absolute encoder through a *low-pass* (keep its slow, honest average, reject its jitter).
-Their **complex transfer functions** are complementary and sum to one, so a common input is
-reconstructed without a gap. Their plotted magnitudes do not sum to one because the two paths have
-different phase. In code, all of that collapses into a single recursive line:
+First predict from the motor encoder's relative motion. Then correct toward the absolute sensor through
+the shortest angular innovation:
 
 $$
-\hat{\theta}_k = \alpha\,(\hat{\theta}_{k-1} + \Delta\theta_{\text{motor}}) + (1 - \alpha)\,\theta_{\text{abs}}
+\begin{aligned}
+\theta^-_k &= \operatorname{wrap}(\hat\theta_{k-1}+\Delta\theta_{\text{motor}}),\\
+r_k &= \operatorname{wrap}(\theta_{\text{abs}}-\theta^-_k),\\
+\hat\theta_k &= \operatorname{wrap}\!\left(\theta^-_k+(1-\alpha)r_k\right).
+\end{aligned}
 $$
+
+<EquationLegend
+  title="Symbols in the fusion step"
+  items={[
+    {symbol: '\u03b8\u207b_k', meaning: 'the PREDICTION: last loop\u2019s estimate advanced by the motor encoder\u2019s increment. The minus superscript means "before correction"'},
+    {symbol: '\u0394\u03b8_motor', meaning: 'how far the motor encoder says the joint turned during this loop. Fast and smooth, but it accumulates drift from slip and backlash'},
+    {symbol: '\u03b8_abs', meaning: 'the absolute encoder\u2019s reading. Honest over the long run, but noisy loop to loop'},
+    {symbol: 'r_k', meaning: 'the INNOVATION: how far the prediction has drifted from the absolute reading. Wrapping it is what makes the correction take the short way round'},
+    {symbol: '\u03b1', meaning: 'the trust split. \u03b1 = 1 uses only the motor encoder, \u03b1 = 0 only the absolute one'},
+  ]}
+/>
 
 <Formula>
-  angle = <Amber>α</Amber>·(angle + <Teal>Δmotor</Teal>) + (1 − <Amber>α</Amber>)·<Rose>absolute</Rose>
+  estimate = prediction + (1 − <Amber>α</Amber>)·wrapped innovation
 </Formula>
 
-The first term advances the estimate by however far the motor encoder moved this loop — smooth and
-immediate. The second term gently pulls the estimate toward the absolute reading, bleeding off
-whatever drift has crept in. $\alpha$ sits close to 1 (≈ 0.98): mostly ride the motor encoder, sip
-just enough of the absolute sensor to stay anchored.
+The prediction advances by the motor motion immediately. The correction gently pulls it toward the
+absolute reading. Without the inner wrap, a prediction of $359°$ and a measurement of $1°$ would blend
+through the long $358°$ route. $\alpha$ sits close to 1: mostly ride the motor encoder while the absolute
+sensor slowly removes accumulated relative error.
 
-<ComplementarySplitExplorer />
-
-This Desmos-style graph is the "complements" claim, drawn. The rose curve is the absolute encoder's
-**low-pass**: it passes the slow, honest angle and rejects the fast noise. The teal curve is the
-motor encoder's **high-pass**: it passes fast motion and blocks the slow drift. They cross at the
-cutoff $f_c = 1/(2\pi\tau)$, where $\tau$ comes directly from $\alpha$ and the loop time. At crossover,
-each magnitude is $1/\sqrt{2}$; it is the **complex responses**, including phase, that sum to one.
-Push $\alpha$
-toward 1 and the crossover slides left — you trust the motor encoder deeper into the slow band and
-sip even less of the absolute sensor; the cost is that slip takes longer to cancel.
-
-The demo below runs the filter on a moving arm: a motor-encoder-only estimate (smooth but sliding off
-the truth), an absolute-only estimate (anchored but noisy and stepped — it updates slower than the
-loop), and the fusion. Crank the slip drift to see why neither raw sensor is acceptable.
+The live experiment below uses that exact update. Increase slip, then absolute-sensor noise, and decide
+which source each failure should make you trust less.
 
 <Complementary />
 
+### Optional derivation: why the frequency paths complement
+
+Away from the angle-wrap seam, small perturbations follow a linear sampled model. In that local,
+small-signal regime, the equivalent filters are
+
+$$
+H_\text{abs}(z)=\frac{1-\alpha}{1-\alpha z^{-1}},\qquad
+H_\text{rel}(z)=\frac{\alpha(1-z^{-1})}{1-\alpha z^{-1}}.
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'z\u207b\u00b9', meaning: 'a one loop delay, the standard notation of the z-transform. It is not a sensor measurement z, and not a reciprocal'},
+    {symbol: 'H_abs(z)', meaning: 'how much of the absolute sensor reaches the output at each frequency. It passes SLOW changes and blocks fast ones'},
+    {symbol: 'H_rel(z)', meaning: 'the same for the relative sensor, and the exact mirror image: it passes FAST changes and blocks slow ones. The two sum to 1 at every frequency, which is what "complementary" names'},
+  ]}
+/>
+
+<ComplementarySplitExplorer />
+
+This graph evaluates those exact discrete responses for that linearized behavior; a discontinuous wrap
+at the seam is intentionally outside a frequency-response model. The rose curve is the absolute encoder's
+**low-pass**: it passes the slow, honest angle and rejects the fast noise. The teal curve is the
+motor encoder's **high-pass**: it passes fast motion and blocks slow drift. Their **complex** values sum
+to one; their magnitudes generally do not because the paths carry phase. The sweep stops at the sampled
+system's Nyquist frequency $1/(2\Delta t)$ and computes the discrete crossover directly.
+
 <Callout type="tip" title="Two wrongs make a right.">
 Let it run: the motor-encoder line slides off the truth while the absolute line is fuzzy — yet the
-fusion stays smooth <em>and</em> locked on. The compute cost is one multiply-add per loop.
+fusion stays smooth <em>and</em> locked on. The compute cost is only a few arithmetic operations and
+three angle wraps per loop.
 </Callout>
 
 </Theory>
@@ -93,23 +121,47 @@ fusion stays smooth <em>and</em> locked on. The compute cost is one multiply-add
 The fast source enters as a *delta* (ticks moved since last loop), the honest source as an *absolute*
 reading. Seed the estimate from the absolute sensor so the filter starts true:
 
-<JavaCode league="FTC" label="Fuse a motor encoder with an absolute encoder">{`double angle = absEncoder.getAngleDeg();      // seed from the honest sensor
-final double TAU = 0.50;                      // fusion time constant, seconds
-int lastTicks = motor.getCurrentPosition();
+<Pseudocode label="Fuse a motor encoder with an absolute encoder">{`COMPLEMENTARY FUSION
+  Two sensors with opposite weaknesses:
+     motor encoder    fast and smooth, but DRIFTS (slip, backlash)
+     absolute encoder honest long-term, but noisy loop to loop
+  radians throughout. TAU is the fusion time constant, in seconds.
 
-while (opModeIsActive()) {
-    double dt = timer.seconds();
-    timer.reset();
-    double alpha = Math.exp(-dt / TAU);        // exact, loop-rate-independent blend
+  state:  angle      <- the absolute encoder's current reading   # seed honestly
+          last_ticks <- the motor encoder's current ticks
 
-    int ticks = motor.getCurrentPosition();
-    double deltaDeg = (ticks - lastTicks) * DEG_PER_TICK;
-    lastTicks = ticks;
+  each loop:
+      dt    <- measured seconds since the last loop
+      alpha <- exp(-dt / TAU)          # loop-rate independent
 
-    double absDeg = absEncoder.getAngleDeg();  // honest but noisy
+      ticks     <- read the motor encoder
+      delta     <- (ticks - last_ticks) * RAD_PER_TICK
+      last_ticks <- ticks
 
-    angle = alpha * (angle + deltaDeg) + (1 - alpha) * absDeg;
-}`}</JavaCode>
+      abs_rad <- read the absolute encoder      # honest, but noisy
+
+      prediction <- wrap(angle + delta)              # trust the increment
+      innovation <- wrap(abs_rad - prediction)       # how wrong were we?
+      angle      <- wrap(prediction + (1 - alpha) * innovation)
+
+# Read the last three lines as a sentence: assume the relative sensor was
+# right, measure how far that has drifted from the absolute one, then walk
+# back a fraction of the way. Fast motion rides on the encoder; slow drift
+# gets pulled out by the absolute reading.
+#
+# Work out both extremes before choosing TAU. With alpha = 1 the innovation
+# is ignored entirely - which sensor are you now using? With alpha = 0 the
+# prediction is discarded - which one now? TAU picks where between those you
+# sit, in seconds rather than in loops.
+#
+# Work out why EVERY line wraps. The three quantities are angles, and the
+# absolute encoder rolls over. Trace a fusion across the wrap point with the
+# wraps removed and find the exact loop where the estimate jumps by 2*pi.
+#
+# This is fusion, not filtering: neither sensor is being cleaned up on its
+# own. Look up: "complementary filter", and work out how it relates to the
+# Kalman gain in the next lesson.
+`}</Pseudocode>
 
 :::note[The drone-textbook version]
 Most textbooks teach this filter on a gyro + accelerometer pair: integrate the gyro's rate (fast,

@@ -90,6 +90,14 @@ c.\texttt{execute}()
 c.\texttt{isFinished}()
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'C_k', meaning: 'the SET of commands scheduled at loop k. A set, not a count: order is not what matters, membership is'},
+    {symbol: 'c', meaning: 'any one command drawn from that set'},
+    {symbol: '\u2200', meaning: '"for every". The scheduler touches each active command exactly once per loop, which is why no command may block'},
+  ]}
+/>
+
 Here, $c$ is one command object, and $C_k$ is the active command set during the current robot loop.
 
 The scheduler also enforces subsystem requirements. If command $a$ and command $b$ both require the
@@ -98,6 +106,14 @@ same subsystem, they cannot safely run together:
 $$
 \operatorname{req}(a) \cap \operatorname{req}(b) \ne \varnothing
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'req(a)', meaning: 'the set of subsystems command a needs exclusive control of'},
+    {symbol: '\u2229', meaning: 'set intersection: the subsystems the two commands have in COMMON'},
+    {symbol: '\u2260 \u2205', meaning: '"is not empty". If they share even one subsystem, two commands would be writing to the same motor in the same loop, and the scheduler must choose between them'},
+  ]}
+/>
 
 Here, $\operatorname{req}(a)$ means "the set of subsystems required by command $a$." If the
 intersection is not empty, both commands want at least one of the same subsystems.
@@ -113,7 +129,8 @@ The powerful part is that command groups share the same lifecycle as ordinary co
 |---|---|---|
 | Sequential | run command A, then B, then C | drive, score, park |
 | Parallel | run A and B at the same time | drive while raising lift |
-| Race/deadline | end a group when one condition finishes | drive until pose reached or timeout |
+| Race | the first child to finish ends the group and interrupts every unfinished child | drive or timeout, whichever finishes first |
+| Deadline | one designated child ends the group and interrupts the rest; other children may finish early without ending it | drive to pose while running intake |
 
 Because groups are commands, groups can contain groups. That is how a full autonomous routine becomes
 readable without becoming one huge class.
@@ -123,93 +140,97 @@ readable without becoming one huge class.
 A minimal command interface is small. The complexity belongs in the scheduler and the reusable command
 objects, not in a giant OpMode.
 
-<JavaCode league="FTC" label="Command interface">{`public interface Command {
-    default void initialize() {}
+<Pseudocode label="The Command interface">{`A COMMAND is four methods and a declaration of what it needs.
 
-    /**
-     * Runs one loop of work. This method must return quickly.
-     */
-    default void execute() {}
+    initialize()          called ONCE when the command starts
+    execute()             one loop of work. must return quickly.
+    is_finished()  -> bool    true when the goal is met
+    end(interrupted)      called once, whether it finished or was cancelled
+                          interrupted says which
+    requirements() -> the subsystems this command needs exclusively
 
-    /**
-     * @return true when this command has completed its goal.
-     */
-    default boolean isFinished() {
-        return false;
-    }
-
-    /**
-     * @param interrupted true if another command or cancellation stopped this command.
-     */
-    default void end(boolean interrupted) {}
-
-    /**
-     * @return subsystems this command needs exclusive control over.
-     */
-    Set<Subsystem> getRequirements();
-}`}</JavaCode>
+# Every one of the five has a reason. Work out what breaks without each:
+#
+#   no initialize()   -> where does one-time setup go, and what happens if
+#                        you put it at the top of execute()?
+#   no is_finished()  -> how does anything ever move on?
+#   no end()          -> a command is cancelled halfway. Who stops the motor?
+#   no requirements() -> two commands both want the lift. What happens?
+#
+# The interrupted flag is the subtle one. Work out a case where a command
+# should clean up differently after being cancelled than after succeeding.
+#
+# Look up: "command-based programming", and read WPILib's Command interface
+#          alongside this. It has these same five ideas.
+`}</Pseudocode>
 
 A command should do one job and expose its requirement clearly:
 
-<JavaCode league="FTC" label="Reusable lift command">{`public final class RaiseLift implements Command {
-    private final Lift lift;
-    private final double targetInches;
+<Pseudocode label="A reusable lift command">{`RAISE LIFT      built with a lift and a target height
 
-    public RaiseLift(Lift lift, double targetInches) {
-        this.lift = lift;
-        this.targetInches = targetInches;
-    }
+    initialize():        tell the lift its new target height
+    execute():           run the lift's controller for one loop
+    is_finished():       return whether the lift reports it is at target
+    end(interrupted):    tell the lift to hold its current position
+    requirements():      the lift
 
-    @Override
-    public void initialize() {
-        lift.setTargetHeight(targetInches);
-    }
-
-    @Override
-    public void execute() {
-        lift.updateController();
-    }
-
-    @Override
-    public boolean isFinished() {
-        return lift.atTarget();
-    }
-
-    @Override
-    public void end(boolean interrupted) {
-        lift.holdCurrentPosition();
-    }
-
-    @Override
-    public Set<Subsystem> getRequirements() {
-        return Set.of(lift);
-    }
-}`}</JavaCode>
+# Notice what this command does NOT contain: no PID math, no motor calls, no
+# encoder conversion. It sequences a subsystem that already knows how to
+# control itself. Work out where the boundary sits - which of these belongs
+# in the command and which in the Lift?
+#     the target height for the high junction
+#     kP for the lift controller
+#     the decision to raise now
+#     converting inches to encoder ticks
+#
+# Work out why end() holds position rather than cutting power. Trace a lift
+# that is interrupted at full extension with power set to zero.
+#
+# Then work out what "reusable" bought you: the same class raises to a low
+# junction, a high junction, or back to the floor. What made that possible?
+`}</Pseudocode>
 
 Now autonomous can be written as composition:
 
-<JavaCode league="FTC" label="Autonomous as composed commands">{`Command scorePreload = new SequentialCommandGroup(
-        new ParallelCommandGroup(
-                new DriveToPose(drive, scoringPose),
-                new RaiseLift(lift, HIGH_JUNCTION)),
-        new ScoreGameElement(claw),
-        new ParallelCommandGroup(
-                new RetractLift(lift),
-                new DriveToPose(drive, parkPose)));
+<Pseudocode label="Autonomous as composed commands">{`SCORE PRELOAD  <-  in sequence:
+                       in parallel:  drive to the scoring pose
+                                     raise the lift to HIGH
+                       score the game element
+                       in parallel:  retract the lift
+                                     drive to the park pose
 
-scheduler.schedule(scorePreload);
+schedule(score_preload)
 
-while (opModeIsActive()) {
-    drive.updatePoseEstimate();
-    scheduler.run();
-    telemetry.update();
-}`}</JavaCode>
+each loop while the OpMode is active:
+    update the pose estimate
+    run the scheduler          # advances whatever commands are active
+    push telemetry
+
+# Compare this against the step counter at the top of the lesson. Driving
+# and lifting AT THE SAME TIME is one word here. Work out what it took in
+# the switch: which case does it live in, and what is that case now named?
+#
+# Two composition rules do all the work:
+#   SEQUENCE  runs each in turn; starts the next when the previous finishes
+#   PARALLEL  runs all at once; finishes when... when what, exactly?
+#
+# That last question is real. Work out at least two defensible answers for
+# when a parallel group is done, find a case where each is the one you want,
+# then look up what WPILib actually offers. You should find more than two.
+#
+# Work out what the scheduler must do about requirements(): two scheduled
+# commands both require the lift. What are its options, and which would you
+# want mid-match?
+`}</Pseudocode>
 
 That routine says what the robot should do without hiding the timing inside a pile of step numbers.
 Drive and lift overlap because they require different subsystems. Scoring waits because it comes after
 the parallel group.
 
-## FTC command frameworks worth knowing
+The composed preload above is the beginner endpoint: lifecycle, requirements, sequential composition,
+and parallel composition are enough to build a non-blocking autonomous routine.
+
+## Optional reference: FTC command frameworks
 
 You can write a scheduler yourself, but most serious teams should at least study the existing FTC
 frameworks. They encode the same architecture this lesson has been building: commands, subsystem

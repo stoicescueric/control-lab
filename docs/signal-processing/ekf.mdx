@@ -27,9 +27,21 @@ Kalman machinery work on the curved models real robots actually have.
 This lesson uses Kou and Haggenmiller's FTC paper,
 [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459),
 as its applied anchor. They frame the FTC localisation problem as fusing three imperfect sources:
-frequent odometry velocity measurements, less frequent computer-vision landmark position
+frequent motion measurements from a source verified against the
+[Pose Estimation Contract](../path-following/pose-estimation-contract.mdx), less frequent computer-vision landmark position
 measurements, and a physics-model prediction. This lesson's AprilTag model is an FTC-specific
 landmark example built from the same EKF idea: each source is useful, but none of them is trustworthy alone.
+
+<Admonition type="note" title="Readiness and concept stop">
+
+Before implementing an EKF, be comfortable with partial derivatives/Jacobians, the matrix Kalman
+predict-correct equations, a calibrated camera model, and an external source satisfying the
+[Pose Estimation Contract](../path-following/pose-estimation-contract.mdx). The builder-level endpoint is
+smaller: explain **linearize near the current estimate, reject an impossible measurement, then reuse
+predict/correct**. You may stop there and use a maintained pose-estimator library; the camera derivation
+below is optional audit depth.
+
+</Admonition>
 
 <Problem title="Drift and nonlinear vision corrupt field coordinates">
 
@@ -64,7 +76,7 @@ centimeters in the other, and that exchange rate — different at every pose, di
 direction — is exactly what the Jacobian carries into the filter. It is why an EKF automatically
 trusts a distant tag's bearing more than its range, with no special case written anywhere.
 
-<Theory title="Linearise about the current mean with a Jacobian">
+<Theory title="Optional derivation: linearise about the current mean">
 
 The EKF keeps the Kalman predict-update heartbeat but, at each step, **linearises the nonlinear
 motion and measurement models around the current mean estimate** using their *Jacobians* — matrices
@@ -123,9 +135,23 @@ y_T - y_R
 \end{bmatrix}
 $$
 
+<EquationLegend
+  title="Symbols in the camera transform"
+  items={[
+    {symbol: 'x_R, y_R', meaning: 'the ROBOT\u2019s position in field coordinates: what the filter is trying to estimate'},
+    {symbol: 'x_T, y_T', meaning: 'the TAG\u2019s position in field coordinates: known exactly, because tags do not move'},
+    {symbol: 'X_c, Y_c', meaning: 'the same tag expressed in CAMERA coordinates. Capital letters and the c subscript mark the camera frame. X_c is depth in front of the lens, Y_c is sideways offset'},
+    {symbol: 'the rotation by \u2212\u03b8', meaning: 'undoes the robot\u2019s heading, exactly as when converting a field command into the robot frame'},
+  ]}
+/>
+
 Here $X_c$ is forward depth in the camera frame: bigger $X_c$ means the tag is farther in front of
 the camera. $Y_c$ is sideways offset in the camera frame: positive or negative depending on whether
 the tag appears to one side. A simplified pinhole camera then predicts two visual measurements:
+
+Before evaluating either division, require a finite calibrated detection and $X_c>X_{\min}>0$. A tag
+behind the camera or too close to the pinhole singularity is a **rejected measurement**, not an extreme
+correction. The same validity gate must run before the $1/X_c^2$ Jacobian terms.
 
 $$
 h(\mathbf{x}) =
@@ -139,6 +165,18 @@ f\dfrac{Y_c}{X_c} \\
 f\dfrac{L}{X_c}
 \end{bmatrix}
 $$
+
+<EquationLegend
+  title="Symbols in the pinhole projection"
+  items={[
+    {symbol: 'h(x)', meaning: 'the MEASUREMENT MODEL: what the camera should see if the state really were x. Comparing it against what the camera did see is what corrects the filter'},
+    {symbol: 'u', meaning: 'the tag\u2019s horizontal position in the IMAGE, in pixels. This is not the control input u used elsewhere on the site'},
+    {symbol: 's', meaning: 'the tag\u2019s apparent SIZE in the image, in pixels. A tag looks smaller the further away it is'},
+    {symbol: 'f', meaning: 'the camera\u2019s focal length, in pixels. A fixed calibration constant', unit: 'px'},
+    {symbol: 'L', meaning: 'the tag\u2019s real physical width, measured with a ruler once', unit: 'm'},
+    {symbol: 'dividing by X_c', meaning: 'the pinhole rule: apparent size falls off with depth. It is also why X_c must be gated away from zero before this is ever evaluated'},
+  ]}
+/>
 
 Here $u$ is the tag's horizontal image offset, $s$ is its apparent image size, $f$ is focal length in
 pixel-like units, and $L$ is the physical tag width. This is a simplified model, not a replacement
@@ -168,6 +206,18 @@ The paper replaces the linear Kalman model with two nonlinear functions:
 $$
 x_{a,t} = f(x_{a,t-1}, u_t) + q_t, \qquad z_t = h(x_{a,t}) + r_t
 $$
+
+<EquationLegend
+  title="Symbols in the general nonlinear model"
+  items={[
+    {symbol: 'subscript t', meaning: 'the time step, playing the same role k does elsewhere on the site. This equation follows the source paper\u2019s notation'},
+    {symbol: 'f(\u00b7)', meaning: 'the MOTION model: where the state goes next, given the input'},
+    {symbol: 'h(\u00b7)', meaning: 'the MEASUREMENT model: what a sensor should report from a given state'},
+    {symbol: 'u_t', meaning: 'the control input applied over this step, such as the wheel deltas'},
+    {symbol: 'q_t', meaning: 'process noise: everything the motion model failed to predict, like wheel slip'},
+    {symbol: 'r_t', meaning: 'measurement noise: the sensor\u2019s own error. Q and R are the covariances of these two'},
+  ]}
+/>
 
 Here $x_{a,t}$ is the actual robot state at time step $t$; $u_t$ is the commanded motion or control
 input; $f$ is the nonlinear state-transition function; $z_t$ is the measurement vector; $h$ maps a
@@ -218,9 +268,23 @@ H = \frac{\partial h}{\partial x}\bigg|_{\hat{x}}, \qquad
 K = P^- H^\top (H P^- H^\top + R)^{-1}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'the superscript minus', meaning: 'a PRIOR: the value after prediction but before any measurement has corrected it. P\u207b is the covariance we carry into the update'},
+    {symbol: 'the bar with \u0125', meaning: '"evaluated at the current estimate". A Jacobian is only valid near the point it was linearized about, and this says which point that is'},
+    {symbol: 'S = HP\u207bH\u1d40 + R', meaning: 'the denominator: how uncertain the PREDICTED measurement is, model doubt and sensor noise added together'},
+  ]}
+/>
+
 $$
 \hat{x} = \hat{x}^- + K\,\big(z - h(\hat{x}^-)\big)
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'z \u2212 h(x\u0302\u207b)', meaning: 'the INNOVATION: what the sensor reported minus what the model expected. Note it uses the true nonlinear h, not the linear H, because this is an honest prediction rather than a covariance approximation'},
+  ]}
+/>
 
 In that equation, $H$ is the measurement Jacobian, $\hat{x}^-$ is the predicted state before the
 sensor update, $K$ is the Kalman gain, $P^-$ is predicted covariance, and $R$ is measurement-noise
@@ -240,6 +304,9 @@ gets large, Jacobian approximations and odometry accuracy both degrade.
 
 <Deploy title="Where this runs on a robot">
 
+This estimator assumes an external motion/pose source; first verify its frame, units, cadence, and
+freshness with the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx).
+
 This predict → linearise → update loop is the pattern behind fusing drifting odometry with intermittent
 vision landmarks. In the AprilTag-style example here, odometry advances the state (predict), a detected
 tag provides a nonlinear camera measurement (update), and the Jacobian maps pixel-level uncertainty into
@@ -247,21 +314,74 @@ pose-level uncertainty. In Kou and Haggenmiller's mecanum simulation, the state 
 heading, and body velocity, while the measurement function combines landmark pose information with
 odometry-derived encoder measurements. The matrix algebra is the same `linalg` used in the site demos.
 
-<JavaCode league="FTC" label="EKF update structure (per loop, when a tag is seen)">{`// predict: advance pose with odometry, grow covariance P
-x = motionModel(x, wheelDeltas);
-P = add(mul(mul(F, P), transpose(F)), Q);     // F = motion Jacobian
+<Pseudocode label="EKF update structure with a camera-domain gate">{`EXTENDED KALMAN FILTER      x is the state, P its covariance
 
-// update: a tag gives nonlinear camera measurement z = h(x)
-double[][] H  = aprilTagMeasurementJacobian(x, tag);  // partials of h at current x
-double[][] yk = sub(z, h(x, tag));                    // residual uses true nonlinear projection
-double[][] S  = add(mul(mul(H, P), transpose(H)), R);
-double[][] K  = mul(mul(P, transpose(H)), inv(S));
-x = add(x, mul(K, yk));
-P = mul(sub(identity(n), mul(K, H)), P);`}</JavaCode>
+  PREDICT      every loop, tag or no tag
+      F <- the motion Jacobian, linearized at the CURRENT x
+      x <- motion_model(x, wheel_deltas)
+      P <- F * P * transpose(F) + Q
+
+      # Order matters: F is evaluated BEFORE x is advanced. Work out why -
+      # F is the derivative of the motion model at the point you are
+      # leaving, not the one you are arriving at.
+
+  CORRECT WITH A TAG    ->  APPLIED or REJECTED
+
+      # ---- the gate comes FIRST, before any arithmetic ----
+      camera <- the tag's position in camera coordinates
+                # computes Xc and Yc, but performs NO division yet
+
+      valid <- the detection is valid
+           and the camera calibration is valid
+           and the measurement z is finite
+           and Xc and Yc are finite
+           and Xc > MIN_DEPTH            # strictly in FRONT of the camera
+
+      if not valid:
+          log "tag update REJECTED"
+          return REJECTED                # never evaluate 1/Xc or 1/Xc^2
+
+      # This gate is the point of the whole block. The measurement Jacobian
+      # divides by Xc and by Xc squared. Work out what those become for a
+      # tag detected at Xc = 0.001 m, or at a NEGATIVE Xc (behind the
+      # camera). Then work out what a single such update does to P, and how
+      # many good frames it takes to recover. This is why the check happens
+      # before the division, not after.
+
+      # ---- the standard EKF update ----
+      H  <- the measurement Jacobian: partials of h evaluated at x
+      y  <- z - h(x)                     # residual, via the TRUE nonlinear h
+      S  <- H * P * transpose(H) + R     # innovation covariance
+      K  <- P * transpose(H) * inverse(S)    # Kalman gain
+
+      x  <- x + K * y
+      P  <- (I - K*H) * P
+      return APPLIED
+
+# Note where the linear H is used and where it is not. The residual y uses
+# the real nonlinear projection h(x), because that is the honest prediction
+# of what the camera should have seen. H is only used to propagate
+# COVARIANCE, where a linear approximation is all that is available.
+# Work out what breaks if you compute the residual as z - H*x instead.
+#
+# Compare against the scalar Kalman filter you already implemented. The five
+# update lines are the same five ideas: gain from covariances, correct by
+# gain times innovation, shrink the covariance. Everything else here is
+# bookkeeping for the fact that the state is a vector and the measurement
+# model is curved.
+# Look up: "extended Kalman filter", "Jacobian linearization",
+#          "AprilTag pinhole projection model".
+`}</Pseudocode>
+
+For production, prefer the maintained pose-estimator/localization API in your chosen stack instead of
+copying this matrix sketch: use [Road Runner's tuning/setup path](https://rr.brott.dev/docs/v1-0/tuning),
+[Pedro Pathing localization](https://pedropathing.com/docs/pathing/tuning/localization), or WPILib's
+official state observers and pose estimators on FRC. Adapt one stack at the contract boundary.
 
 That closes the **filter** track — turning noisy measurements into a trustworthy state estimate.
-The curriculum's other half, *deciding what to do* with that estimate, is the controllers; the whole
-stack is then synthesised in the capstone.
+The curriculum's other half, *deciding what to do* with that estimate, is the controller track. The
+elective launcher case study later shows one way those pieces can work together; it is not a required
+universal capstone.
 
 </Deploy>
 

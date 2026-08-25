@@ -1,6 +1,6 @@
 /* Complementary filter: fuse a motor encoder (fast, but slips away from the
-   joint over time — high-pass) with an absolute encoder on the joint (never
-   drifts, but noisy and slow to update — low-pass) into one arm-angle
+   joint over time — high-pass) with an absolute encoder on the joint (does not
+   accumulate relative-motion error, but can be biased/noisy — low-pass) into one arm-angle
    estimate. */
 
 import {useRef, useState} from 'react';
@@ -8,6 +8,7 @@ import {Trace} from '@site/src/lib/visualization/plot';
 import {useDprCanvas, usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Stage, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {circularComplementaryStepDegrees} from '@site/src/lib/domain/complementary';
 
 function randn(): number {
   let u = 0;
@@ -68,7 +69,7 @@ export default function Complementary() {
       s.absAge = 0;
     }
     s.estGyro += motorRate * dt;
-    s.estComp = alpha * (s.estComp + motorRate * dt) + (1 - alpha) * s.absHold;
+    s.estComp = circularComplementaryStepDegrees(s.estComp, motorRate * dt, s.absHold, alpha);
     s.T_true.push(s.t, s.trueA);
     s.T_gyro.push(s.t, s.estGyro);
     s.T_acc.push(s.t, s.absHold);

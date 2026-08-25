@@ -54,6 +54,14 @@ $$
 \frac{dx}{dt} = k(x_\infty - x)
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'x_\u221e', meaning: 'the value x eventually settles at, if you wait long enough. The infinity subscript means "at the end", not an infinitely large number'},
+    {symbol: 'k', meaning: 'how quickly it closes the gap. Here k is a rate constant, not the loop index used elsewhere', unit: '1/s'},
+    {symbol: '(x_\u221e \u2212 x)', meaning: 'the remaining gap. Because the rate is proportional to it, big gaps close fast and the approach slows as you arrive'},
+  ]}
+/>
+
 Here, $x$ is the current state, $x_\infty$ is the value the system approaches if nothing changes, and
 $k$ controls how quickly the system moves toward that value.
 
@@ -67,6 +75,15 @@ A more physical motor model writes angular acceleration as the result of torque 
 $$
 J\frac{d\omega}{dt} = \tau_\text{motor} - \tau_\text{load}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'J', meaning: 'rotational INERTIA: how hard the mechanism is to spin up. The rotational counterpart of mass', unit: 'kg\u00b7m\u00b2'},
+    {symbol: 'd\u03c9/dt', meaning: 'angular acceleration: how fast the spin rate is changing', unit: 'rad/s\u00b2'},
+    {symbol: '\u03c4_motor', meaning: 'the twisting force the motor produces', unit: 'N\u00b7m'},
+    {symbol: '\u03c4_load', meaning: 'the opposing torque from the mechanism, gravity, or a game element. Only the DIFFERENCE accelerates anything'},
+  ]}
+/>
 
 Here, $J$ is rotational inertia, $\omega$ is angular velocity, $\tau_\text{motor}$ is the torque
 produced by the motor, and $\tau_\text{load}$ is the opposing torque from the mechanism or game

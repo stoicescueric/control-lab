@@ -34,25 +34,39 @@ tool that converts exactly those two sentences into a gain.
 
 <Theory title="Price the error, price the effort, minimize the bill">
 
-LQR (the **l**inear-**q**uadratic **r**egulator) scores every possible controller by a running cost:
+LQR (the **l**inear-**q**uadratic **r**egulator) scores every possible controller by a running cost. This
+page designs directly for the robot's 20 ms sampled loop:
 
 $$
-J = \sum_k \left( \mathbf{x}_k^\top Q\, \mathbf{x}_k + \mathbf{u}_k^\top R\, \mathbf{u}_k \right)
+J_d = \sum_{k=0}^{\infty}\left(\mathbf{x}_k^\top Q\,\mathbf{x}_k
++ \mathbf{u}_k^\top R\,\mathbf{u}_k\right)
 $$
 
 <EquationLegend
+  title="Symbols in the cost function"
   items={[
-    {symbol: 'x', meaning: 'the state error at each loop (distance from the reference)'},
-    {symbol: 'u', meaning: 'the control effort at each loop, in volts'},
+    {symbol: 'J_d', meaning: 'the total cost of a whole run: the number LQR minimizes. The subscript d marks it as the discrete, sampled version'},
+    {symbol: 'Q', meaning: 'the price of state ERROR. Raise it and the controller works harder to stay on target'},
+    {symbol: 'R', meaning: 'the price of CONTROL EFFORT. Raise it and the controller becomes gentler. Only the ratio Q/R matters, not either alone'},
+    {symbol: 'x\u1d40Qx', meaning: 'the quadratic form: squares the error so that sign does not matter and large errors cost disproportionately more'},
+    {symbol: 'the sum to infinity', meaning: 'the cost is charged over all future loops, which is why the resulting gain is a single constant rather than a schedule'},
+  ]}
+/>
+
+<EquationLegend
+  items={[
+    {symbol: 'x_k', meaning: 'the state error at sampled loop k (distance from the reference)'},
+    {symbol: 'u_k', meaning: 'the feedback-correction effort at sampled loop k, in volts'},
     {symbol: 'Q', meaning: 'how much you are charged for error, per state'},
     {symbol: 'R', meaning: 'how much you are charged for effort, per input'},
-    {symbol: 'J', meaning: 'the total bill; LQR finds the K that minimizes it'},
+    {symbol: 'J_d', meaning: 'the sampled total bill; discrete LQR finds the K that minimizes it'},
   ]}
 />
 
 Squaring does two jobs: big errors cost disproportionately more than small ones, and sign stops
-mattering. The controller that minimizes $J$ over all time turns out to be plain state feedback,
-$u = K(r - x)$, with $K$ computed from $A$, $B$, $Q$, and $R$ by solving the Riccati equation. You
+mattering. The controller that minimizes $J_d$ over all time turns out to be plain state feedback,
+$u_k = K(r_k - x_k)$, with $K$ computed from $A_d$, $B_d$, $Q$, and $R$ by solving the discrete Riccati
+equation. You
 will never solve it by hand for real systems; WPILib and every controls library does it in one call.
 The design work is choosing $Q$ and $R$.
 
@@ -73,13 +87,54 @@ lazier response. Only the *ratio* $Q/R$ matters — double both and the same $K$
 
 <LqrExplorer />
 
-This explorer runs the whole pipeline on a one-state flywheel ($k_V = 0.02$, $k_A = 0.005$, so
-$A = -4$, $B = 200$). For one state the Riccati equation collapses to a quadratic and the gain has a
-closed form, computed live as you drag:
+The explorer starts from the one-state flywheel model ($k_V = 0.02$, $k_A = 0.005$, so $A=-4$,
+$B=200$) and exactly discretizes it at $\Delta t=0.020$ s:
 
 $$
-K = \frac{A + \sqrt{A^2 + B^2\,Q/R}}{B}
+A_d=e^{A\Delta t}=0.9231163,\qquad
+B_d=\frac{e^{A\Delta t}-1}{A}B=3.8441827.
 $$
+
+For the scalar discrete Riccati equation, define
+$c=R(1-A_d^2)-QB_d^2$. Its stabilizing positive solution and feedback gain are
+
+$$
+P=\frac{-c+\sqrt{c^2+4B_d^2QR}}{2B_d^2},
+\qquad
+K=\frac{A_dB_dP}{R+B_d^2P}.
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'P', meaning: 'the solution of the Riccati equation, an intermediate quantity on the way to K. This is not the covariance P from the Kalman lessons'},
+    {symbol: 'c', meaning: 'a grouping defined just above purely to keep the formula readable. It carries no physical meaning'},
+    {symbol: 'K', meaning: 'the resulting feedback gain, in volts per unit of state error. This is the one number the robot actually needs'},
+  ]}
+/>
+
+The default is reproducible without the widget: tolerance $8$ rad/s gives $Q=1/64$, and budget $12$ V
+gives $R=1/144$. Substitution yields $P\approx0.0160140$ and
+
+$$
+K\approx0.2332876\ \frac{\mathrm V}{\mathrm{rad/s}},
+\qquad A_d-B_dK\approx0.0263163.
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'A_d \u2212 B_dK', meaning: 'the closed-loop pole. In discrete time a magnitude below 1 means errors shrink every loop; above 1 means they grow. At 0.026 an error is almost gone in a single 20 ms sample'},
+  ]}
+/>
+
+The closed-loop sampled pole has magnitude below one, so the unsaturated linear error decays. This $Q/R$
+is explicitly the per-sample cost above. A library that discretizes a continuous cost more exactly may
+report a different gain; keep its model, cost convention, and runtime gain together.
+
+The 12 V Bryson number is the scale used to penalize the **feedback correction**; it is not 12 V of extra
+headroom on top of feedforward. At the 300 rad/s target, the model-inversion hold term is
+$k_Vr=6$ V. The widget and FTC loop add that hold term to feedback and then clamp the **total** request to
+the available rail. Positive correction therefore has about 6 V of nominal headroom at that operating
+point, and saturation is part of the result you must inspect.
 
 A shot steals 60 rad/s at the dashed line; the green trace is the recovery under the LQR gain, and
 the amber trace is what it costs in volts. Drag the error tolerance down and watch the gain grow, the
@@ -87,6 +142,12 @@ recovery sharpen, and the voltage slam into the 12 V ceiling. That ceiling is th
 whole method: LQR assumed the actuator can deliver what it asks for, and while the command is pinned
 at 12 V the controller is no longer optimal, just saturated. If your "optimal" design lives on the
 ceiling, you asked for more than the motor has — relax $Q$ or admit you need a bigger motor.
+
+<Callout type="warn" title="Do not paste a continuous gain into this loop.">
+For the same $A$, $B$, $Q$, and $R$, the continuous Riccati formula gives $K\approx1.4801$. At 20 ms that
+would produce the sampled pole $A_d-B_dK\approx-4.77$, outside the stable interval $(-1,1)$. The earlier
+number is not a faster version of this controller; it is a different design that is unsafe at this period.
+</Callout>
 
 <Callout type="warn" title="Optimal for the model, not for the robot.">
 LQR minimizes the cost <em>for the A and B you gave it</em>. A sloppy
@@ -127,18 +188,57 @@ loop.correct(VecBuilder.fill(encoder.getRate()));  // fold in the measurement
 loop.predict(0.020);                               // advance model + compute u
 flywheelMotor.setVoltage(loop.getU(0));`}</JavaCode>
 
-On FTC there is no library, and the one-state case does not need one. Compute $K$ offline — the
-explorer above, or WPILib run on a laptop — and the runtime controller is a single line plus the
-[voltage compensation](../control-theory/voltage-compensation.mdx) you always do:
+WPILib performs the sampled design internally from the period and its own cost-discretization convention;
+use the gain produced by that complete library configuration. On FTC, the scalar per-sample design derived
+above needs no runtime matrix library. Its controller is one line plus measured-loop guarding and
+[voltage compensation](../control-theory/voltage-compensation.mdx):
 
-<JavaCode league="FTC" label="The same controller, gains precomputed">{`// K computed offline from your kV/kA and your two tolerances.
-public static double K = 0.15;   // volts per rad/s of velocity error
+<Pseudocode label="The same 20 ms discrete controller, gain precomputed">{`FLYWHEEL LQR ON A 20 ms LOOP
+  K is computed OFFLINE from the exact-ZOH model, the per-sample Q and R,
+  and a 20 ms design period. On the robot it is a single number.
 
-public void run(double targetVel) {
-    double measured = motor.getVelocity(AngleUnit.RADIANS);
-    double volts = K * (targetVel - measured) + kV * targetVel;  // feedback + hold voltage
-    motor.setPower(volts / battery.getVoltage());
-}`}</JavaCode>
+    K                       0.2332876  volts per (rad/s) of velocity error
+    DESIGN_PERIOD           0.020 s    what K was designed for
+    MAX_VALID_LOOP_SECONDS  0.030 s    a chosen margin below instability
+
+  start():
+      reset the loop timer               # once, before the first update
+
+  run(target_velocity):
+      dt <- measured seconds since the last call
+
+      if dt is not finite, or dt <= 0, or dt > MAX_VALID_LOOP_SECONDS:
+          command the motor to zero      # the timing contract is broken
+          return
+
+      # ^ This guard is the entire reason the block exists. A gain computed
+      #   for a 20 ms sample is NOT valid at 45 ms. Work out what happens to
+      #   a discrete controller when the real period drifts past its design
+      #   point, and why refusing to act beats applying a stale design.
+      #   Look up: "discrete-time stability", "sample rate and gain margin".
+
+      measured  <- motor velocity, radians/second
+      requested <- K * (target_velocity - measured)   # the LQR feedback term
+                 + kV * target_velocity               # feedforward for cruise
+
+      vbat <- read the battery voltage
+      if vbat is not finite or vbat < MIN_VALID_BATTERY_VOLTS:
+          command the motor to zero
+          return
+
+      available <- min(12, vbat)         # never claim more than the rail has
+      volts     <- clamp(requested, -available, +available)
+      command the motor with clamp(volts / vbat, -1, +1)
+
+# Work out why K is precomputed rather than solved on the robot. Solving the
+# LQR problem means solving a Riccati equation - look up what that involves
+# and estimate how it would fit in a 20 ms budget on a Control Hub.
+#
+# Then work out what this collapses to. For a single-state system the whole
+# LQR is one multiplication. What distinguishes it from a P controller is
+# not the RUNTIME form but where the gain came from: solved from a model and
+# a stated cost, rather than turned up until it looked right.
+`}</Pseudocode>
 
 <Callout type="idea" title="So how is this different from the PF controller you already had?">
 Structurally it isn't: gain times error, plus feedforward. What changed is the origin story. The PF
@@ -150,12 +250,13 @@ you both gains at once, which hand-tuning genuinely cannot.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: the loop period is part of the design">
+<Admonition type="warning" title="Hardware reality: the sample period is part of the design">
 
-The discretized gain is computed *for a loop period*. WPILib assumes the 20 ms you passed in; an FTC
-loop wanders between 20 and 50 ms. For a slow one-state flywheel the mismatch is tolerable. For fast
-or multi-state systems, measure your real loop time and compute the gain for it — the same discipline
-as [everywhere else on this site](../software-architecture/discretization.mdx).
+The derivation, widget, test, and FTC constant all use the same exact-ZOH **20 ms discrete design**. Measure
+your loop distribution, reset timing state once at controller start, and stop or redesign when the loop
+exceeds its validated bound. Never carry this gain to another period or plant without recomputing the
+discrete model and Riccati solution — the same timing discipline as
+[everywhere else on this site](../software-architecture/discretization.mdx).
 
 </Admonition>
 

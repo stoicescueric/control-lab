@@ -19,7 +19,13 @@ The simulator answers "what should the shot be?" The robot has a harder question
 
 <DynamicTargetingDashboard />
 
-## Step 1: Taming the flywheel
+## Core checkpoint: three transferable ideas
+
+The dashboard's first three tabs form the implementable core: recover a disturbed flywheel, interpolate
+measured commands without overshoot, and cancel velocity inherited from the chassis. Build and log those
+three pieces before considering the research extensions later on this page.
+
+### 1. Recover the flywheel after a shot
 
 A flywheel shot is a disturbance. The projectile leaves with energy that used to be stored in the wheel, so the measured velocity drops. A basic velocity controller tries to recover with error feedback:
 
@@ -40,7 +46,7 @@ $$
 
 The research controller adds an asymmetric recovery mode: if the wheel is below the ready band after a shot, command aggressively upward; if it is above target, do not kick downward with the same violence. That asymmetry matters because a flywheel below target causes a short shot, while a small overspeed can often be absorbed by the calibration margin.
 
-## Step 2: Lookup tables can lie between points
+### 2. Keep calibrated lookup tables monotone
 
 Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the match it needs values between those distances. A lookup table stores the measured shots and *interpolates* to fill the gaps — and the choice of interpolant decides whether those in-between values are safe.
 
@@ -54,6 +60,14 @@ $$
 
 <EquationLegend
   items={[
+    {symbol: '\u03b1_k, \u03b2_k', meaning: 'the two tangent ratios at interval k, each the interval\u2019s end tangent divided by its secant slope. They are not the filter blend \u03b1 used elsewhere on the site'},
+    {symbol: 'the secant', meaning: 'the straight line between two consecutive data points. Matching its sign is what keeps the interpolant from overshooting between them'},
+    {symbol: '\u2264 9', meaning: 'the Fritsch-Carlson circle. Staying inside it is exactly the condition for the spline to remain MONOTONE, which for a flight-time lookup means further can never mean sooner'},
+  ]}
+/>
+
+<EquationLegend
+  items={[
     {symbol: 'alpha_k', meaning: 'left endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
     {symbol: 'beta_k', meaning: 'right endpoint tangent normalized by the interval secant slope', unit: 'unitless'},
     {symbol: '9', meaning: 'radius-squared boundary for the Fritsch-Carlson monotonicity projection', unit: 'unitless'},
@@ -62,7 +76,7 @@ $$
 
 The dashboard lets you drag calibration knots. The red curve shows what a natural spline can do in a dangerous flat region. The blue curve shows the monotone Hermite alternative staying inside the behavior implied by the data.
 
-## Step 3: Shoot-on-the-move is a fixed-point problem
+### 3. Cancel inherited chassis velocity with a bounded fixed point
 
 When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim at the real target; it should aim at a virtual target shifted opposite the robot motion during the launch delay and projectile flight. With $\mathbf v_R$ defined as the robot's field-frame chassis velocity, the projectile already inherits $+\mathbf v_R$, so the aim displacement must cancel it:
 
@@ -73,6 +87,18 @@ $$
 -
 G\mathbf{v}_{R}\left(t_d + t_f^{(i)}\right)
 $$
+
+<EquationLegend
+  title="Symbols in the virtual target"
+  items={[
+    {symbol: 'superscript (i)', meaning: 'the ITERATION number of the fixed-point loop, not a time step. Each pass refines the previous guess'},
+    {symbol: 'p_virtual', meaning: 'the fictitious point to aim at, offset from the real target so the shot lands correctly despite the robot\u2019s motion'},
+    {symbol: 'v_R', meaning: 'the ROBOT\u2019s field-frame velocity. The projectile leaves already carrying this, which is exactly what the offset has to cancel'},
+    {symbol: 't_d', meaning: 'feeder delay: dead time between the command to fire and the projectile actually leaving', unit: 's'},
+    {symbol: 't_f', meaning: 'flight time for this iteration\u2019s geometry. It depends on the distance, which depends on the aim point, which is why this must iterate', unit: 's'},
+    {symbol: 'G', meaning: 'the motion gain, a scale from 0 to 1 on how much of the robot\u2019s velocity to compensate. Set below 1 when the model overcorrects in practice'},
+  ]}
+/>
 
 <EquationLegend
   items={[
@@ -94,7 +120,54 @@ the last, and the dashboard usually converges in two or three rounds. At very hi
 an abrupt table slope, or with impossible geometry, that bound can fail even if the table is otherwise
 valid. The hard iteration cap therefore protects the real-time loop from non-convergence as well as bad data.
 
-## Step 4: The robot is braking while the shot happens
+### Core implementation: bound the deployed solver
+
+On the robot the fixed-point loop is explicit and bounded. It runs inside the autonomous control loop, so
+even bad data or impossible geometry must return in predictable time.
+
+<Pseudocode label="The bounded fixed-point aim solver">{`solve_virtual_target(shooter, target, robot_velocity):
+    flight_time <- lookup_flight_time( distance(shooter, target) )
+    if flight_time is not finite and positive: return INVALID_LOOKUP
+
+    repeat at most MAX_ITERATIONS times:
+        compensation_time <- feeder_delay + flight_time
+        virtual   <- target - motion_gain * robot_velocity * compensation_time
+
+        next_time <- lookup_flight_time( distance(shooter, virtual) )
+        if next_time is not finite and positive: return INVALID_LOOKUP
+        if | next_time - flight_time | < tolerance:
+            return (virtual, CONVERGED)
+        flight_time <- next_time
+
+    return (virtual, NOT_CONVERGED)
+
+solution <- solve_virtual_target(shooter, target, robot_velocity)
+if solution.status != CONVERGED:
+    inhibit_feeder()
+    hold_last_validated_aim_or_stop_turret()
+`}</Pseudocode>
+
+The convergence `tolerance` decides when "close enough" is reached. `MAX_ITERATIONS` guarantees only
+that computation terminates; it does **not** make the last iterate a valid aim. The monotone table from
+idea 2 helps keep the slope condition above true, while the explicit status safely handles invalid or
+non-contractive cases.
+
+<Admonition type="warning" title="Hardware reality: ready is a band, not one number">
+
+Do not wait for an encoder reading to equal the target exactly. A match robot should use a readiness band,
+because encoder quantization, loop timing, shot disturbance, and battery sag make exact equality a trap.
+
+</Admonition>
+
+:::tip[Elective checkpoint]
+At this point you can implement and test the three transferable ideas. The nonlinear coast and full-state
+turret material below is a research extension; it is not required to use the dashboard or the bounded
+virtual-target solver.
+:::
+
+## Research extensions: nonlinear coast and full-state turret tracking
+
+### The robot is braking while the shot happens
 
 The virtual-target math above quietly assumes the robot holds a constant velocity through the feeder
 delay and the flight. It usually doesn't. A driver who decides to shoot tends to release the sticks,
@@ -120,21 +193,62 @@ $$
 \dot{v} = -\frac{v}{2av + b}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'v\u0307', meaning: 'the deceleration implied by the measured braking curve, rather than assumed to be constant', unit: 'in/s\u00b2'},
+    {symbol: 'a, b', meaning: 'the same two fitted coefficients from D(v) above: a is the ideal constant-deceleration part, b the viscous drag part'},
+  ]}
+/>
+
 Separate the variables and the messy right side turns into something integrable:
 
 $$
-2a\,v + b\ln v = 2a\,v_0 + b\ln v_0 - t
+2a\,(v-v_0) + b\ln\!\left(\frac{v}{v_0}\right) = -t
 $$
 
-The left side decreases linearly in time. Solving that for $v$ needs the **Lambert W function** (the
-inverse of $u e^u$ — the standard tool whenever a variable appears both bare and inside a logarithm):
+<EquationLegend
+  items={[
+    {symbol: 'v_0', meaning: 'the entry speed: how fast the robot was going when the coast began', unit: 'in/s'},
+    {symbol: 'ln', meaning: 'the natural logarithm, appearing because separating the variables leaves a 1/v term to integrate'},
+    {symbol: 'the minus t', meaning: 'time enters with a negative sign because the robot is slowing. Solving this relation for v given t is what the branches below do'},
+  ]}
+/>
+
+The logarithm now receives the dimensionless speed ratio $v/v_0$. Before evaluating a special function,
+validate that $a$, $b$, and $v_0$ are finite and nonnegative and that the query time $t$ is finite and
+nonnegative. Then handle the limiting branches directly:
+
+$$
+\begin{array}{ll}
+v_0=0: & v(t)=0,\quad x(t)=0,\\[2pt]
+a=0,\ b>0: & v(t)=v_0e^{-t/b},\quad x(t)=bv_0\left(1-e^{-t/b}\right),\\[2pt]
+b=0,\ a>0: & v(t)=\max\!\left(v_0-\dfrac{t}{2a},0\right),\quad
+x(t)=a\left(v_0^2-v(t)^2\right).
+\end{array}
+$$
+
+If $v_0>0$ and $a=b=0$, the fitted stopping model supplies no valid coast dynamics, so reject it. Reject
+negative fitted coefficients rather than sending them into a formula outside its physical domain.
+
+Only the general branch $a>0$, $b>0$, $v_0>0$ needs the **Lambert W function** (the inverse of $u e^u$):
 
 $$
 v(t) = \frac{b}{2a}\,W\!\left(\frac{2a v_0}{b}\,
 \exp\!\left(\frac{2a v_0 - t}{b}\right)\right)
 $$
 
-and the distance covered comes for free, no second integral needed. The robot's remaining stopping
+<EquationLegend
+  items={[
+    {symbol: 'W(\u00b7)', meaning: 'the LAMBERT W function: the inverse of u\u00b7e\u1d58. It exists because v appears both inside a logarithm and outside it, and no rearrangement separates them'},
+    {symbol: 'why it is needed', meaning: 'the previous line mixes v linearly and logarithmically. Lambert W is the standard tool for exactly that shape; look it up before assuming the algebra was botched'},
+  ]}
+/>
+
+Both $2av_0/b$ and $(2av_0-t)/b$ are dimensionless, so the exponential and Lambert-W arguments are
+well-defined. This closed form is a derivation for the research model, not a request to add Lambert W to
+the robot runtime.
+
+The distance covered comes for free, with no second integral. The robot's remaining stopping
 distance is always $D$ of its current speed, so the ground it has covered is the difference:
 
 $$
@@ -152,7 +266,7 @@ $$
 
 With $v(t)$ and $x(t)$ in closed form, the deployed controller projects the robot's pose and velocity
 about half a second into the future — scalar coast applied along the current velocity direction — and
-hands that *projected* state to the fixed-point solver from Step 3. That one projection buys three
+hands that *projected* state to core idea 3's fixed-point solver. That one projection buys three
 things at once:
 
 1. **The deceleration is priced in.** The virtual target is computed from where the robot will be,
@@ -170,7 +284,7 @@ These coefficients are for a zero-power coast — hands off the sticks. A follow
 the numbers do not transfer. Fit each behavior separately.
 :::
 
-## Step 5: The turret has to arrive with the right velocity
+### The turret has to arrive with the right velocity and acceleration
 
 Everything so far computes *where* to aim. But while the robot moves, that answer keeps changing:
 the virtual target sweeps across the field, so the turret angle that hits it is a moving reference
@@ -182,6 +296,14 @@ $$
 e_{ss} = \frac{\omega^*}{k_P}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'e_ss', meaning: 'the STEADY-STATE error: the lag that remains forever once transients have died out. Not an error that decays'},
+    {symbol: '\u03c9* = d\u03b8*/dt', meaning: 'how fast the target heading itself is moving. A star marks a reference throughout this page'},
+    {symbol: 'the whole result', meaning: 'a P controller tracking a ramp always lags by exactly this much. Raising k_P shrinks it but never removes it, which is the argument for the velocity feedforward below'},
+  ]}
+/>
+
 For a real turret, the coefficient depends on the motor and mechanism dynamics, but the same structural
 lag remains: a position-only controller produces the command only after error exists. Raising $k_P$
 usually shrinks that lag at the cost of noise sensitivity and reduced stability margin; it does not
@@ -192,17 +314,31 @@ The clean fix is the full-state reference from
 mechanism, $\mathbf{x} = [\theta, \omega]$, and the solver should hand it *both* states:
 
 $$
-\mathbf{u} = K(\mathbf{r} - \mathbf{x}) + k_V\,\omega^*,
+u = K(\mathbf{r} - \mathbf{x})
+  + k_S\operatorname{sign}(\omega^*)
+  + k_V\omega^*
+  + k_A\alpha^*,
 \qquad
 \mathbf{r} = \begin{bmatrix} \theta^* \\ \omega^* \end{bmatrix}
 $$
 
 <EquationLegend
   items={[
+    {symbol: '\u03b8*, \u03c9*, \u03b1*', meaning: 'the reference heading, angular velocity and angular acceleration the aim solver produced, all three of them'},
+    {symbol: 'r', meaning: 'the reference VECTOR: both states at once, which is what lets K correct position and rate together'},
+    {symbol: 'K', meaning: 'the state-feedback gain, a row of two numbers here: one for heading error and one for rate error'},
+  ]}
+/>
+
+<EquationLegend
+  items={[
     {symbol: 'theta*', meaning: 'aim angle from the fixed-point solver, evaluated at the projected pose', unit: 'rad'},
     {symbol: 'omega*', meaning: 'how fast the aim angle is sweeping — the reference velocity', unit: 'rad/s'},
+    {symbol: 'alpha*', meaning: 'reference angular acceleration, d omega*/dt', unit: 'rad/s²'},
     {symbol: 'K', meaning: 'state-feedback gain, one entry per state (from LQR or pole placement)', unit: 'V per error'},
-    {symbol: 'k_V omega*', meaning: 'plant-inversion feedforward: the voltage that rides the moving reference by itself', unit: 'V'},
+    {symbol: 'k_S sign(omega*)', meaning: 'identified static-friction feedforward', unit: 'V'},
+    {symbol: 'k_V omega*', meaning: 'identified velocity feedforward', unit: 'V'},
+    {symbol: 'k_A alpha*', meaning: 'identified acceleration feedforward', unit: 'V'},
   ]}
 />
 
@@ -212,58 +348,75 @@ it*, so it stays correct through the whole release window instead of being right
 That is the physical meaning of a full-state reference, and it is exactly what WPILib's
 `loop.setNextR(thetaStar, omegaStar)` exists to accept.
 
-The best part: $\omega^*$ is already lying around. Step 4 projects the robot's pose forward in
-closed form, so run the Step 3 solver at two nearby times and difference the aim angles:
+For constant-velocity tracking, $\alpha^*=0$, so the static and velocity terms remain. An accelerating
+reference additionally needs $k_A\alpha^*$. Estimate both derivatives with seam-safe angle differences:
 
-<JavaCode league="FTC" label="Turret tracking with a full-state reference">{`// Aim angles now and DT ahead, both from the Step 4 coast projection.
-double thetaNow  = aimAngle(solveVirtual(poseAt(0.0)),  poseAt(0.0));
-double thetaNext = aimAngle(solveVirtual(poseAt(DT)),   poseAt(DT));
-double omegaStar = wrap(thetaNext - thetaNow) / DT;    // seam-safe reference velocity
+<Pseudocode label="Turret tracking with velocity and acceleration feedforward">{`TURRET TRACKING
+  The turret must not merely point where the target IS - it must move at the
+  rate the aim point is moving. So solve the aim three times, at three
+  nearby instants, and difference the answers.
 
-double volts = K_POS * (thetaNow  - turretAngle)
-             + K_VEL * (omegaStar - turretVel)
-             + kV * omegaStar;                          // feedforward does the tracking
-turret.setPower(volts / battery.getVoltage());`}</JavaCode>
+  aim0 <- solve_virtual_target(pose_at(0))
+  aim1 <- solve_virtual_target(pose_at(DT))
+  aim2 <- solve_virtual_target(pose_at(2*DT))
+  # pose_at(t) is the COAST-projected robot state at t seconds from now
 
-This also reframes the turret-lead trick from Step 4. A servo turret has a position-only interface —
+  if any of the three did not converge:
+      inhibit the feeder                # never fire an unvalidated solution
+      stop the turret, or hold the last validated aim
+      return
+
+  theta0 <- aim_angle(aim0, pose_at(0))
+  theta1 <- aim_angle(aim1, pose_at(DT))
+  theta2 <- aim_angle(aim2, pose_at(2*DT))
+
+  # ---- differentiate the aim angle, wrapping every difference ----
+  omega_star <- wrap(theta1 - theta0) / DT          # radians/second
+  omega_next <- wrap(theta2 - theta1) / DT
+  alpha_star <- (omega_next - omega_star) / DT      # radians/second^2
+
+  # Work out why each difference is wrapped. The three angles are absolute
+  # bearings; two of them can straddle the +/-pi discontinuity. Construct
+  # such a case and compute omega_star with and without the wrap.
+  #
+  # Work out why THREE solutions and not two. Two give you a rate. What does
+  # the third buy, and which term below would be missing without it?
+
+  # ---- feedforward from the aim's own motion ----
+  feedforward <- kS*sign(omega_star) + kV*omega_star + kA*alpha_star
+
+  volts <- K_POS * (theta0 - measured_turret_angle)      # position error
+         + K_VEL * (omega_star - measured_turret_rate)   # rate error
+         + feedforward
+
+  # Note K_VEL closes the loop on RATE, not position. A turret that only
+  # tracks position always lags a moving target by however long it takes
+  # position error to build up. Work out that lag for a target sweeping at
+  # 1 rad/s with a position-only loop.
+
+  vbat <- read the battery voltage
+  if vbat is not finite or vbat <= MIN_VALID_BATTERY_VOLTS:
+      stop the turret                    # sensor or sanity fault
+      return
+
+  command the turret with clamp(volts / vbat, -1, +1)
+`}</Pseudocode>
+
+`MIN_VALID_BATTERY_VOLTS` is a team-validated sensor-sanity threshold, not a universal FTC cutoff.
+
+This also reframes the turret-lead trick from the coast projection. A servo turret has a position-only interface —
 there is nowhere to put $\omega^*$ — so aiming it at the *projected* pose is the poor man's velocity
 reference. A motor-driven turret under state feedback consumes $[\theta^*, \omega^*]$ directly and
-needs no lead to cover its own lag; the projection's remaining job is the flight time.
+removes the ideal steady ramp lag without an extra empirical lead. Real sensing and command latency,
+model error, saturation, and the finite-difference estimate remain, so projection or measured lead may
+still be necessary on hardware.
 
 :::warning[A spinning turret changes the shot]
 While tracking, the turret adds a tangential component to the exit velocity — roughly
 $\omega^* \cdot r_{\text{exit}}$, the sweep rate times the distance from the turret axis to the
-release point. Keep the release radius small by design, or fold the term into the Step 3 solve as
+release point. Keep the release radius small by design, or fold the term into the core fixed-point solve as
 extra launcher velocity. Measure it before deciding it is negligible.
 :::
-
-## How the deployed solver is structured
-
-On the robot the fixed-point loop is made explicit and *bounded*. It runs inside the autonomous control loop, so it is given a hard iteration cap: even if a bad table or impossible geometry breaks convergence, the loop must still return in predictable time rather than spin.
-
-```text
-solve_virtual_target(shooter, target, robot_velocity):
-    flight_time <- lookup_flight_time( distance(shooter, target) )
-
-    repeat at most MAX_ITERATIONS times:
-        compensation_time <- feeder_delay + flight_time
-        virtual   <- target - motion_gain * robot_velocity * compensation_time
-
-        next_time <- lookup_flight_time( distance(shooter, virtual) )
-        if | next_time - flight_time | < tolerance:
-            stop        # flight time stopped moving: converged
-        flight_time <- next_time
-
-    return virtual
-```
-
-Two parameters carry the whole behaviour: the convergence `tolerance` decides when "close enough" is reached, and `MAX_ITERATIONS` guarantees the loop terminates regardless. The flight-time lookup is the calibrated table from Step 2, which is exactly why it must be monotone — a table that overshoots between points could break the contraction this loop relies on.
-
-<Admonition type="warning" title="Hardware reality: ready is a band, not one number">
-
-Do not wait for an encoder reading to equal the target exactly. A match robot should use a readiness band, because encoder quantization, loop timing, shot disturbance, and battery sag make exact equality a trap.
-
-</Admonition>
 
 <Admonition type="info" title="Source trail">
 
@@ -271,7 +424,7 @@ This lesson references Eric Stoicescu's July 2026
 [*Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic Launcher*](./index.mdx#research-paper),
 the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the
 [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator. The coasting
-model in Step 4 — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick —
+model in the research extension — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick —
 is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance data behind the fit was
 collected by Jacob Ophoven.
 

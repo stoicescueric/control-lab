@@ -51,12 +51,24 @@ if (!existsSync(buildDir)) {
   fail('build/ is missing; run npm run build before npm run security');
 } else {
   const indexHtml = readFileSync(path.join(buildDir, 'index.html'), 'utf8');
-  if (
-    !/<meta\b(?=[^>]*http-equiv=(?:["']Content-Security-Policy["']|Content-Security-Policy))(?=[^>]*content=)[^>]*>/i.test(
-      indexHtml,
-    )
-  ) {
+  const cspTag = indexHtml.match(
+    /<meta\b(?=[^>]*http-equiv=(?:["']Content-Security-Policy["']|Content-Security-Policy))(?=[^>]*content=)[^>]*>/i,
+  )?.[0];
+  if (!cspTag) {
     fail('production build is missing its meta Content Security Policy');
+  } else {
+    const encodedPolicy = cspTag.match(/\bcontent=(["'])(.*?)\1/i)?.[2];
+    const policy = encodedPolicy
+      ?.replace(/&#(?:x27|39);/gi, "'")
+      .replace(/&quot;/gi, '"')
+      .replace(/&amp;/gi, '&');
+    const fontDirective = policy
+      ?.split(';')
+      .map((directive) => directive.trim())
+      .find((directive) => directive.startsWith('font-src'));
+    if (fontDirective !== "font-src 'self' data:") {
+      fail("production CSP must contain exactly: font-src 'self' data:");
+    }
   }
 
   const sourceMaps = walk(buildDir, (file) => file.endsWith('.map'));

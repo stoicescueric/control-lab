@@ -73,6 +73,15 @@ $$
 \dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'x\u0307 (x with a dot)', meaning: 'the rate of change of the whole state vector: how fast each entry of x is changing right now'},
+    {symbol: 'A', meaning: 'how the state changes on its OWN, with no command. A coasting robot slowing down lives here'},
+    {symbol: 'B', meaning: 'how your command pushes the state'},
+    {symbol: 'u', meaning: 'the input you get to choose: the motor commands'},
+  ]}
+/>
+
 Here, $\dot{\mathbf{x}}$ means "the rate of change of the state." $A$ describes how the current state
 affects future motion, $B$ describes how inputs affect the state, and $\mathbf{u}$ is the input vector.
 
@@ -93,6 +102,13 @@ $$
 \mathbf{y}_k = C\mathbf{x}_k
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'y_k', meaning: 'what the sensors report at loop k, which is usually less than the whole state'},
+    {symbol: 'C', meaning: 'which parts of the state a sensor can actually SEE. An encoder measures position but not heading, and C is where that fact is written down'},
+  ]}
+/>
+
 Here, $\mathbf{y}_k$ is the sensor output at loop $k$, and $C$ maps the hidden full state into the
 specific quantities the sensors can observe.
 
@@ -110,11 +126,31 @@ $$
 \mathbf{x}_{k+1} = f(\mathbf{x}_k, \Delta s, \Delta\theta)
 $$
 
+<EquationLegend
+  title="Reading this equation"
+  items={[
+    {symbol: 'x_{k+1}', meaning: 'the pose at the NEXT loop: what we are solving for'},
+    {symbol: 'x_k', meaning: 'the pose at THIS loop: where we currently believe we are'},
+    {symbol: 'f(\u00b7)', meaning: 'some function. Naming it f rather than writing it out says "the details are elsewhere; what matters here is what goes in and what comes out"'},
+    {symbol: '\u0394s', meaning: 'how far the robot travelled during this one loop, from the wheel encoders', unit: 'm'},
+    {symbol: '\u0394\u03b8', meaning: 'how much it turned during that same loop', unit: 'rad'},
+    {symbol: 'the whole line', meaning: 'where we will be next equals where we are now, combined with how far we moved and turned in between. Odometry is that sentence, repeated fifty times a second'},
+  ]}
+/>
+
 But odometry drifts. A camera or AprilTag observation gives a measurement:
 
 $$
 \mathbf{z}_k = h(\mathbf{x}_k) + \text{noise}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'z_k', meaning: 'a MEASUREMENT at loop k, such as a pose computed from an AprilTag. Distinct from y above only by convention: z is the reading a filter will correct against'},
+    {symbol: 'h(\u00b7)', meaning: 'the measurement model: what the camera SHOULD report if the state really were x_k'},
+    {symbol: 'noise', meaning: 'the sensor\u2019s error, written explicitly because a filter\u2019s whole job is deciding how much of z to believe'},
+  ]}
+/>
 
 A Kalman filter is state-space thinking with uncertainty attached. It predicts the next state from the
 model, compares the predicted sensor reading to the real one, and corrects the state estimate by the

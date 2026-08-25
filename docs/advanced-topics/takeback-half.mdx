@@ -41,6 +41,15 @@ $$
 \end{gathered}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'drive', meaning: 'the running output, from 0 to 1. It is pure integrator: nothing resets it except the take-back rule'},
+    {symbol: 'g', meaning: 'the single tuning gain. TBH exists because one gain is easier to get right than three', unit: 'power per (error \u00b7 s)'},
+    {symbol: 'drive_last-cross', meaning: 'the value drive held the PREVIOUS time the error changed sign. Averaging against it is what brackets the true holding value'},
+    {symbol: 'a sign change of e', meaning: 'the moment the mechanism crosses its target. Each crossing halves the remaining oscillation, which is why successive crossings converge'},
+  ]}
+/>
+
 The result (green below) recovers nearly as fast as bang-bang on the first approach, then quickly stops
 oscillating and holds the speed flat. One gain $g$, no derivative, no windup to manage. Run the demo:
 bang-bang chatters around the line forever; TBH locks on.
@@ -57,26 +66,45 @@ converges geometrically. It is the cheapest possible way to find the steady comm
 
 <Deploy title="Take-back-half on the Control Hub">
 
-<JavaCode league="FTC" label="Takeback-half velocity controller">{`public class TakeBackHalf {
-    public static double gain = 0.0009;   // power / (RPM·s), @Config-tunable
-    private double drive = 0, driveAtZero = 0;
-    private double lastNonzeroError = Double.NaN;
+<Pseudocode label="Takeback-half velocity controller">{`TAKE-BACK-HALF      a velocity controller with ONE gain
 
-    public double update(double measuredRpm, double targetRpm, double dtSeconds) {
-        double error = targetRpm - measuredRpm;
-        drive += gain * error * Math.max(0.0, dtSeconds); // integrate error over time
-        drive = Math.max(0, Math.min(1, drive));     // clamp to valid power
-        if (Math.signum(error) != 0.0) {
-            if (!Double.isNaN(lastNonzeroError)
-                    && Math.signum(error) != Math.signum(lastNonzeroError)) {
-                drive = 0.5 * (drive + driveAtZero); // take back half
-                driveAtZero = drive;                 // remember this crossing
-            }
-            lastNonzeroError = error;                // zero cannot cause a double crossing
-        }
-        return drive;
-    }
-}`}</JavaCode>
+  state:  drive           <- 0     the current output
+          drive_at_zero   <- 0     the output at the last error sign change
+          last_error      <- none
+
+  update(measured, target, dt):
+      error <- target - measured
+
+      drive <- drive + GAIN * error * max(0, dt)      # integrate
+      clamp drive into [0, 1]
+
+      if error is not exactly zero:
+          if last_error exists and sign(error) differs from sign(last_error):
+              # we just crossed the target. take back half.
+              drive         <- (drive + drive_at_zero) / 2
+              drive_at_zero <- drive
+          last_error <- error
+          # a zero error is skipped so it cannot fake a second crossing
+
+      return drive
+
+# TBH is a pure integrator with one trick: whenever the error changes sign,
+# it jumps the output halfway back toward whatever it was at the PREVIOUS
+# crossing. Work out why that converges. Sketch a flywheel overshooting,
+# crossing, undershooting, crossing again, and mark drive at each crossing.
+# The oscillation halves each time.
+#
+# Work out why this suits a flywheel where a PID struggles. A flywheel has
+# huge inertia and asymmetric authority: the motor can push hard but can
+# only coast down. What does an integrator with anti-windup do here, and how
+# many gains did you have to tune to get it right? TBH has one.
+#
+# Work out why drive is clamped to [0, 1] rather than [-1, 1].
+#
+# Look up: "take back half controller", originally from VEX flywheel
+#          control. Compare its step response to a tuned PI on the same
+#          mechanism.
+`}</Pseudocode>
 
 Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate ($k_V \cdot v_\text{target}$)
 and TBH converges in a single oscillation instead of several — the two techniques compose nicely.

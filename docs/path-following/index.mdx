@@ -4,7 +4,7 @@ description: How autonomous movement actually works — the pipeline from pose e
 tags: [kinematics, mecanum, pure-pursuit, splines, path-following, autonomous]
 ---
 
-# Module 5 · Path Following & Kinematics
+# Module 4 · Path Following & Kinematics
 
 Autonomous movement is where localization and control finally pay off. A great autonomous routine does
 two things well: it can **drive to any pose on the field**, and it can **follow a smooth path** through
@@ -15,8 +15,8 @@ capabilities.
 
 This module *composes* the two before it, so have them in hand first:
 
-- **[Localization & Odometry](../localization-odometry/odometry.mdx)**: every follower here assumes a
-  trustworthy pose $(x, y, \theta)$ updated each loop.
+- **[Pose Estimation Contract](./pose-estimation-contract.mdx)**: configure one maintained external
+  localization stack, then verify its frame, units, freshness, and once-per-loop update boundary.
 - **[Control Theory](../control-theory/index.mdx)**: the [PID](../control-theory/pid.mdx) and
   [feedforward](../control-theory/feedforward.mdx) loops that turn an error into a motor command.
 
@@ -32,22 +32,22 @@ steps run every loop. The methods differ only in *how* they do steps 2 and 3.
 
 | Step | What happens | Where it lives |
 |---|---|---|
-| 1. **Localize** | read the current pose from odometry / vision | [Module 3](../localization-odometry/odometry.mdx) |
+| 1. **Update pose** | update one external pose source once, then read one coherent field pose/velocity sample | [Pose Estimation Contract](./pose-estimation-contract.mdx) |
 | 2. **Plan the target** | pick where to go next — a target pose, a lookahead point, or a field vector | this module |
 | 3. **Control** | turn the error into a chassis command $(v_x, v_y, \omega)$ with PID + feedforward | this module + [Module 2](../control-theory/index.mdx) |
 | 4. **Mix & correct** | convert the chassis command to wheel powers, desaturate, re-run next loop | [Mecanum kinematics](./mecanum-kinematics.mdx) |
-| 5. **Terminate** | stop when within a pose tolerance *and* slow — or when a timeout fires | every follower |
+| 5. **Resolve outcome** | stop on `REACHED` or `TIMED_OUT`, then advance or recover explicitly | [Common Implementation](./common-implementation.mdx) |
 
 <Admonition type="tip" title="Step 5 is not optional">
 
 A follower that never decides it is "done" will wander around the target forever, and one that trusts only
 position will report done while still coasting. Always gate completion on **pose tolerance AND low
-velocity**, with a **timeout** as a backstop so a stuck routine yields the field.
+velocity**. A **timeout** is a distinct failure/recovery outcome, never a successful arrival.
 
 </Admonition>
 
 Every follower below shares a small set of primitives — the `Pose2d`/`Vector2d` geometry types, `wrap`,
-the `atTarget` completion check (that Step-5 rule, in one place), `kStatic`, and the `drive` entry point.
+the `MoveStatus` completion outcome, `kStatic`, and the `drive` entry point.
 They are defined once in [**Common Implementation**](./common-implementation.mdx); each lesson links there
 rather than repeating them, so the code blocks show only what is new to that technique.
 
@@ -74,24 +74,26 @@ only add machinery when a real limitation forces you to.
    of the pipeline; build it first so every later method has a drivetrain to command.*
 2. **[Angle wrapping](./angle-wrapping.mdx)** *(Easy)* — the small, mandatory fix that stops the robot
    spinning the long way around. Do it before any pose controller, since they all act on a heading error.
-3. **[Inverse kinematics](./inverse-kinematics.mdx)** *(Medium)* — the geometry translator that turns a
-   desired arm, claw, or chassis motion into joint angles or wheel commands. Read it here because
-   kinematics is the shared language behind both mechanisms and drivetrains.
-4. **[PID-to-point](./pid-to-point.mdx)** *(Medium)* — the simplest complete follower: three PID loops
+3. **[Pose Estimation Contract](./pose-estimation-contract.mdx)** *(Easy)* — configure one supported
+   external localizer and verify the frame, units, freshness, and loop boundary its consumers require.
+4. **[Common Implementation](./common-implementation.mdx)** *(Medium)* — adopt the geometry, angle,
+   drivetrain, and explicit completion contracts used by every follower.
+5. **[PID-to-point](./pid-to-point.mdx)** *(Medium)* — the simplest complete follower: three PID loops
    drive the robot to a single target pose, hardened with a kStatic nudge and **predictive deceleration**
    so it eases on without overshooting. Most autonomous routines are just a list of these.
-5. **[Splines](./quintic-splines.mdx)** *(Hard)* — the ways to *describe* a smooth, curvature-continuous
+6. **[Splines](./quintic-splines.mdx)** *(Hard)* — the ways to *describe* a smooth, curvature-continuous
    path: Bézier control points (approximation), quintic Hermite waypoints, and natural cubic interpolation.
-6. **[Pure pursuit](./pure-pursuit.mdx)** *(Hard)* — chase a lookahead "carrot" along a path, with the
+7. **[Pure pursuit](./pure-pursuit.mdx)** *(Hard)* — chase a lookahead "carrot" along a path, with the
    adaptive curvature-based speed plan and the spline-following velocity planning (resample, curvature
    speed cap, centripetal feedforward); fixed versus dynamic lookahead.
-7. **[Guided vector fields](./guided-vector-fields.mdx)** *(Hard)* — follow a path as a flow that
+8. **[Guided vector fields](./guided-vector-fields.mdx)** *(Hard)* — follow a path as a flow that
    converges onto the path, rather than chasing a moving point.
 
-Steps 1–4 give you a reliable autonomous today; 5–7 make it fast and smooth. Read them in order —
-kinematics gives you a drivetrain you can command, angle wrapping prevents heading bugs, inverse
-kinematics explains the geometry translation, PID-to-point turns one target into clean motion, and the
-last three follow whole paths at speed.
+Steps 1–5 give you a debuggable autonomous checkpoint today; 6–8 add continuous paths and speed.
+
+**Optional mechanism branch:** [Inverse Kinematics](./inverse-kinematics.mdx) translates claw targets
+into arm-joint angles. It shares geometry vocabulary with drivetrains but is not a prerequisite for the
+follower chain.
 
 The heavier mathematics is split out into the optional **[Advanced Topics](../advanced-topics/index.mdx)**
 section — the guided-vector-field convergence proof, take-back-half, and the full natural-cubic spline

@@ -5,18 +5,15 @@ export interface MecanumWheelPowers {
   br: number;
 }
 
-export interface PoseDelta {
-  x: number;
-  y: number;
-  theta: number;
-}
-
 export function wrapRadians(radians: number): number {
-  return Math.atan2(Math.sin(radians), Math.cos(radians));
+  const turn = 2 * Math.PI;
+  const wrapped = ((radians + Math.PI) % turn + turn) % turn - Math.PI;
+  return Object.is(wrapped, -0) ? 0 : wrapped;
 }
 
 export function wrapDegrees(degrees: number): number {
-  return (wrapRadians((degrees * Math.PI) / 180) * 180) / Math.PI;
+  const wrapped = ((degrees + 180) % 360 + 360) % 360 - 180;
+  return Object.is(wrapped, -0) ? 0 : wrapped;
 }
 
 export function mecanumMix(vx: number, vy: number, omega: number): MecanumWheelPowers {
@@ -66,18 +63,5 @@ export function scalarKalmanUpdate(
     innovation,
     estimate: estimate + gain * innovation,
     variance: (1 - gain) * predictedVariance,
-  };
-}
-
-export function poseExponential(dx: number, dy: number, dtheta: number): PoseDelta {
-  if (Math.abs(dtheta) < 1e-9) {
-    return {x: dx, y: dy, theta: dtheta};
-  }
-  const sinOverTheta = Math.sin(dtheta) / dtheta;
-  const oneMinusCosOverTheta = (1 - Math.cos(dtheta)) / dtheta;
-  return {
-    x: sinOverTheta * dx - oneMinusCosOverTheta * dy,
-    y: oneMinusCosOverTheta * dx + sinOverTheta * dy,
-    theta: dtheta,
   };
 }

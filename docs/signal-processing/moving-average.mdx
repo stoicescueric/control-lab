@@ -45,6 +45,14 @@ $$
 \hat{x}_k = \frac{1}{N}\sum_{i=0}^{N-1} z_{k-i}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'N', meaning: 'the WINDOW LENGTH: how many recent readings to average. Larger N smooths harder and lags more'},
+    {symbol: 'i', meaning: 'a counter walking backwards through the window, so z_{k-i} runs from this loop\u2019s reading back to the oldest one still inside it'},
+    {symbol: 'the 1/N', meaning: 'every reading in the window gets exactly the same weight, and everything older gets zero. This is the sharp contrast with the exponential filter, which never fully forgets'},
+  ]}
+/>
+
 <figure className="my-7 text-center">
   <svg viewBox="0 0 640 130" className="mx-auto h-auto w-full" role="img" aria-label="A sliding window over a row of readings">
     <defs>
@@ -113,19 +121,38 @@ filter (two lessons ahead) is dramatically better.
 On a Control Hub, implement the window as a ring buffer with a running sum, so each update is O(1)
 regardless of N. The cost to weigh against the low-pass is the N-value memory.
 
-<JavaCode league="FTC" label="O(1) moving average">{`final int N = 12;
-double[] buf = new double[N];
-int idx = 0, count = 0;
-double sum = 0;
+<Pseudocode label="Moving average in constant time">{`MOVING AVERAGE over the last N samples
+  the naive version re-adds N numbers every loop. this one does 2 operations.
 
-double update(double reading) {
-    sum -= buf[idx];          // drop the oldest sample in this slot
-    buf[idx] = reading;        // store the newest
-    sum += reading;
-    idx = (idx + 1) % N;
-    count = Math.min(count + 1, N);
-    return sum / count;        // average of the current window
-}`}</JavaCode>
+  state:  buffer of N slots, all zero
+          index <- 0
+          count <- 0
+          sum   <- 0
+
+  update(reading):
+      sum          <- sum - buffer[index]      # drop whatever occupied this slot
+      buffer[index] <- reading                 # overwrite it with the newest
+      sum          <- sum + reading
+
+      index <- (index + 1) mod N               # wrap around the ring
+      count <- min(count + 1, N)
+
+      return sum / count
+
+# The trick is that the slot you are about to overwrite holds exactly the
+# sample that is now N loops old - so one subtraction and one addition keep
+# the running sum exact. Work through N = 4 with readings 1,2,3,4,5,6 and
+# write down buffer, index, sum and the returned average at every step.
+#
+# Work out why it divides by count rather than N. What does the average
+# read on loop 2 if you divide by N, and where did those zeros come from?
+#
+# Look up: "circular buffer", "sliding window". Then compare against the
+# low-pass filter in the previous lesson: this one forgets a sample
+# completely after N loops, while the exponential filter never entirely
+# forgets anything. Work out which behaviour you want after a single wild
+# outlier.
+`}</Pseudocode>
 
 Both filters here assume a *single* noisy sensor, and both share its hard limit: they cannot fix
 drift. The rest of the module switches to *fusion* — combining two imperfect sensors into one

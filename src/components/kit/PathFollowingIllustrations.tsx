@@ -1,7 +1,7 @@
 import type {ReactNode} from 'react';
 
-/* Static figures for the Path Following module. Same dark treatment as the
-   odometry figures; imported directly by the lessons that use them. */
+/* Static figures for the Path Following module, imported directly by the
+   lessons that use them. */
 
 const MUTED = '#8294b8';
 const GRID = '#31405f';
@@ -128,7 +128,7 @@ export function AngleWrapIllustration() {
   return (
     <Figure
       title="The ±180° seam: short way vs. long way"
-      caption="Current heading 179° and target −179° are 2° apart across the seam (green). Subtracting them naively gives −358°, sending the controller the long way around (red). Wrapping the error into [−π, π] fixes it.">
+      caption="Current heading 179° and target −179° are 2° apart across the seam (green). Subtracting them naively gives −358°, sending the controller the long way around (red). Modulo wrapping into [−π, π) fixes it; the exact tie is represented as −π.">
       <svg viewBox="0 0 720 350" role="img" aria-label="Heading circle showing the angle-wrap seam" className="h-auto w-full">
         <rect width="720" height="350" rx="16" fill="#0b1120" />
         <defs>
@@ -150,7 +150,7 @@ export function AngleWrapIllustration() {
             <g key={d}>
               <line x1={inn[0]} y1={inn[1]} x2={o[0]} y2={o[1]} stroke={MUTED} strokeWidth="2" />
               <text x={lab[0]} y={lab[1] + 4} fill={MUTED} fontFamily={MONO} fontSize="13" textAnchor="middle">
-                {d === 180 ? '±180°' : `${d}°`}
+                {d === 180 ? '−180° seam' : `${d}°`}
               </text>
             </g>
           );
@@ -180,8 +180,8 @@ export function AngleWrapIllustration() {
           <text x={492} y={181} fill={GREEN}>wrapped error = +2°</text>
           <line x1={458} y1={212} x2={484} y2={212} stroke={ROSE} strokeWidth="4" strokeLinecap="round" />
           <text x={492} y={217} fill={ROSE}>naive error = −358°</text>
-          <text x={458} y={262} fill={MUTED} fontSize="14">wrap with</text>
-          <text x={458} y={286} fill="#e8eefc" fontSize="15">atan2(sin e, cos e)</text>
+          <text x={458} y={262} fill={MUTED} fontSize="14">canonical result</text>
+          <text x={458} y={286} fill="#e8eefc" fontSize="15">((e + π) mod 2π) − π</text>
         </g>
       </svg>
     </Figure>

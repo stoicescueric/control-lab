@@ -1,0 +1,111 @@
+---
+title: Pose Estimation Contract
+description: Verify the frame, units, update timing, and freshness of a library localizer before connecting it to a path follower.
+sidebar_position: 3
+tags: [pose-estimation, localization, coordinate-frames, units, autonomous]
+---
+
+# Pose Estimation Contract
+
+<Difficulty level="Easy" />
+
+<Abstract>
+Given a library localizer, you will verify its frame and units, then adapt its current pose and velocity
+to the contract every follower on this site consumes once per loop. This page defines that boundary;
+building an odometry or state-estimation algorithm is intentionally outside Control Lab's current scope.
+</Abstract>
+
+## The follower needs a trustworthy input
+
+A path follower can correct only the error it is shown. If the pose source swaps axes, reports degrees
+where the controller expects radians, or is one loop stale, a correct controller will confidently drive
+the wrong way.
+
+Choose one maintained localization stack, configure and tune it using its own documentation, then adapt
+it once at your code boundary:
+
+- [Road Runner tuning](https://rr.brott.dev/docs/v1-0/tuning)
+- [Pedro Pathing localization](https://pedropathing.com/docs/pathing/tuning/localization)
+
+Do not combine both stacks. Each owns its own coordinate conventions and update lifecycle; convert one
+stack's output into the contract below.
+
+## The contract
+
+At the **start of every OpMode loop**, call `update()` exactly once. Every controller in that loop then
+reads the same immutable `PoseSample`, so pose, velocity, and timestamp cannot come from different sensor
+updates:
+
+<Pseudocode label="The boundary a follower consumes">{`POSE SOURCE     the only interface a follower is allowed to see
+
+    update()        refresh the sensors and the estimate.
+                    called exactly ONCE at the top of the OpMode loop.
+
+    get_sample()    ->  one coherent PoseSample:
+                            pose               field frame
+                            fieldVelocity      field frame, inches/second
+                            timestampSeconds   monotonic
+
+# Two methods, deliberately. Work out why refreshing is separate from
+# reading: how many times per loop is update() called, and how many times
+# might several followers, telemetry, and a logger each call get_sample()?
+`}</Pseudocode>
+
+Select **one** length unit for the adapter, such as metres or inches, and name it in the adapter and
+telemetry. Do not mix the two inside a calculation. The spatial convention is the one used throughout
+Control Lab:
+
+- field $+x$ points toward the far wall;
+- field $+y$ points left;
+- heading is radians, counter-clockwise positive, with errors wrapped to $[-\pi,\pi)$;
+- velocity is field-frame length per second;
+- an origin reset defines the pose at a physically marked start location.
+
+`sample.timestampSeconds()` must advance after `update()`. Log its age; if the estimate is stale, stop or use
+an explicitly designed fallback instead of feeding old state into the follower.
+
+## Five-motion contract check
+
+Mark the robot's start pose on the field, raise it safely if the selected setup requires that, and log
+pose plus velocity while performing these checks slowly:
+
+1. **Stationary:** pose and velocity remain nearly still; noise is visible but does not steadily run away.
+2. **Forward:** driving through the robot's front increases field $x$ when it begins at heading zero.
+3. **Left:** translating left increases field $y$.
+4. **Counter-clockwise:** turning left increases heading before it wraps at the seam.
+5. **Return:** returning to the marked start reveals accumulated position and heading drift.
+
+Some slip and drift are expected. Record them rather than hiding them: a follower cannot repair a pose
+source whose axes, scale, freshness, or drift are wrong.
+
+:::warning[What this page does not implement]
+Encoder geometry, device wiring, wheel-delta integration, pose exponential integration, and estimator
+derivation are outside Control Lab's current scope. Follow the chosen library's maintained setup guide,
+then test only the adapter contract here.
+:::
+
+## Connect it to the loop
+
+<Pseudocode label="One update, one coherent sample">{`loop():
+    pose_source.update()                     # ONCE, at the top
+    sample <- pose_source.get_sample()
+
+    log (loop_clock_now - sample.timestampSeconds)    # the age of the estimate
+    follower.update(sample)                  # every consumer gets THIS sample
+
+# Work out what breaks if each consumer calls get_sample() for itself. Two
+# followers in the same loop would act on poses taken at different instants,
+# and the disagreement grows with robot speed. Compute it: at 60 inches/s,
+# how far apart are two readings 12 ms apart?
+`}</Pseudocode>
+
+Next, adopt the shared [`Pose2d`, `Vector2d`, and completion outcome](./common-implementation.mdx), then
+build the basic [PID-to-Point](./pid-to-point.mdx) follower.
+
+## Sources and further reading
+
+- [Road Runner tuning](https://rr.brott.dev/docs/v1-0/tuning): maintained setup and tuning sequence for
+  the Road Runner stack.
+- [Pedro Pathing localization](https://pedropathing.com/docs/pathing/tuning/localization): maintained
+  localization setup for Pedro Pathing.
+- [Conventions & Notation](../notation.mdx): Control Lab's frame, angle, and unit conventions.

@@ -3,7 +3,6 @@ import {
   desaturate,
   kalmanGain,
   mecanumMix,
-  poseExponential,
   scalarKalmanUpdate,
   wrapDegrees,
   wrapRadians,
@@ -18,6 +17,29 @@ describe('angle wrapping', () => {
   it('wraps radians into the shortest signed error', () => {
     expect(wrapRadians((3 * Math.PI) / 2)).toBeCloseTo(-Math.PI / 2, 10);
     expect(wrapRadians(-Math.PI / 2)).toBeCloseTo(-Math.PI / 2, 10);
+  });
+
+  it('uses the canonical [-pi, pi) endpoints and normalizes signed zero', () => {
+    const inputs = [0, -0, Math.PI, -Math.PI, 3 * Math.PI, -3 * Math.PI];
+    const expected = [0, 0, -Math.PI, -Math.PI, -Math.PI, -Math.PI];
+
+    inputs.forEach((input, index) => {
+      const result = wrapRadians(input);
+      expect(result).toBeCloseTo(expected[index], 12);
+      expect(result).toBeGreaterThanOrEqual(-Math.PI);
+      expect(result).toBeLessThan(Math.PI);
+      expect(Object.is(result, -0)).toBe(false);
+    });
+  });
+
+  it('keeps every representative angle in range', () => {
+    for (let turns = -8; turns <= 8; turns += 1) {
+      for (const offset of [-Math.PI, -1.2, 0, 1.2, Math.PI]) {
+        const result = wrapRadians(turns * 2 * Math.PI + offset);
+        expect(result).toBeGreaterThanOrEqual(-Math.PI);
+        expect(result).toBeLessThan(Math.PI);
+      }
+    }
   });
 });
 
@@ -57,20 +79,19 @@ describe('scalar Kalman update', () => {
     expect(out.variance).toBeCloseTo(0.8, 10);
   });
 
+  it('matches the three-loop scalar lesson sequence with persistent state', () => {
+    let estimate = 0;
+    let variance = 4;
+    for (const measurement of [1.2, 2.1, 2.9]) {
+      estimate += 1;
+      variance += 1;
+      ({estimate, variance} = scalarKalmanUpdate(estimate, variance, measurement, 4));
+    }
+    expect(estimate).toBeCloseTo(3.02154195, 7);
+    expect(variance).toBeCloseTo(1.64172336, 7);
+  });
+
   it('rejects negative variances', () => {
     expect(() => kalmanGain(-1, 1)).toThrow(/non-negative/);
-  });
-});
-
-describe('pose exponential', () => {
-  it('uses the straight-line limit for tiny heading changes', () => {
-    expect(poseExponential(3, -2, 0)).toEqual({x: 3, y: -2, theta: 0});
-  });
-
-  it('maps a forward arc into the SE(2) closed form', () => {
-    const delta = poseExponential(10, 0, Math.PI / 2);
-    expect(delta.x).toBeCloseTo(20 / Math.PI, 10);
-    expect(delta.y).toBeCloseTo(20 / Math.PI, 10);
-    expect(delta.theta).toBeCloseTo(Math.PI / 2, 10);
   });
 });

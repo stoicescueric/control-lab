@@ -25,8 +25,9 @@ get back to speed fast after each shot. For that, the simplest possible controll
 
 <Problem title="A flywheel is easy to spin and impossible to stop quickly">
 
-A flywheel's inertia is a blessing and a curse. It coasts through small disturbances, but it also means
-you cannot brake it — you can only stop pushing and let drag slow it. After firing a game element, the
+A flywheel's inertia is a blessing and a curse. It coasts through small disturbances, and this simple
+coast-only implementation cannot actively brake it — it only stops pushing and lets drag slow it. Reverse
+or electrical braking exists, but is outside the two-output controller shown here. After firing a game element, the
 speed dips, and you need to recover *now* before the next shot. A gentle PID crawls back; you want
 something that puts full power on the moment the speed drops and stops pushing the moment it
 recovers. That is literally bang-bang. The problem is what it does once it gets there.
@@ -79,15 +80,22 @@ converges onto the holding drive instead of bouncing across it.
 
 <Deploy title="Bang-bang on the Control Hub">
 
-<JavaCode league="FTC" label="Bang-bang with a hysteresis band">{`/** Full power below the target, off above it — with a small dead band so the
- *  motor doesn't switch every single loop. Good for high-inertia flywheels. */
-public void bangBang(DcMotorEx motor, double measuredRpm, double targetRpm) {
-    double power;
-    if (measuredRpm < targetRpm - HYSTERESIS) power = 1.0;
-    else if (measuredRpm > targetRpm + HYSTERESIS) power = 0.0;
-    else power = motor.getPower();   // inside the band: hold
-    motor.setPower(power);
-}`}</JavaCode>
+<Pseudocode label="Bang-bang with a hysteresis band">{`BANG-BANG with hysteresis      for high-inertia mechanisms like a flywheel
+
+  bang_bang(measured, target):
+      if measured < target - HYSTERESIS:  return FULL POWER
+      if measured > target + HYSTERESIS:  return OFF
+      return whatever power is already commanded      # inside the band: hold
+
+# The band is the entire point. Work out what happens without it: the
+# measurement sits near the target and noise pushes it across on alternate
+# loops. Count the switches per second at a 50 Hz loop, then say what that
+# does to the motor and to the battery rail.
+#
+# Work out how to size HYSTERESIS. Too narrow and it still chatters; too wide
+# and the speed visibly sags between kicks. What measurement would you log
+# for one match to choose it?
+`}</Pseudocode>
 
 </Deploy>
 

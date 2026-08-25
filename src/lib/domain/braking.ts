@@ -14,6 +14,9 @@
  * a slider minimum) or the result is +/-Infinity or NaN.
  */
 export function predictedStoppingDistance(velocity: number, deceleration: number): number {
+  if (!Number.isFinite(velocity) || !Number.isFinite(deceleration) || deceleration <= 0) {
+    throw new Error('Velocity must be finite and deceleration must be finite and positive');
+  }
   return (velocity * Math.abs(velocity)) / (2 * deceleration);
 }
 
@@ -26,5 +29,11 @@ export function predictedStoppingDistance(velocity: number, deceleration: number
  * speed brakes you to a point behind where you already are).
  */
 export function brakingVelocityForDistance(distance: number, deceleration: number): number {
+  if (!Number.isFinite(distance) || distance < 0) {
+    throw new Error('Distance must be finite and non-negative');
+  }
+  if (!Number.isFinite(deceleration) || deceleration <= 0) {
+    throw new Error('Deceleration must be finite and positive');
+  }
   return Math.sqrt(2 * deceleration * distance);
 }

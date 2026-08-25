@@ -65,7 +65,13 @@ inertia, $\tau = J\alpha$ (that is $k_A a$).
 | **kV**: velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
 | **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
 
-## Mechanism feedforward: add gravity
+## Core checkpoint: calculate one velocity command
+
+Given identified $k_S$, $k_V$, and $k_A$, calculate the voltage for one target velocity and acceleration,
+then clamp it to the available battery voltage. That model-plus-limit is the reusable core; gravity terms
+below extend it for mechanisms whose load changes with pose.
+
+## Production extension: add mechanism gravity
 
 The flywheel model is missing one thing many FTC mechanisms care about: **weight**. A flywheel does not
 need voltage to hold still against gravity. A vertical slide does. An arm definitely does, and the amount
@@ -124,6 +130,16 @@ k_{G,i}
 }
 $$
 
+<EquationLegend
+  title="Symbols in the gravity interpolation"
+  items={[
+    {symbol: 'h', meaning: 'the slide height you are asking about right now', unit: 'in'},
+    {symbol: 'h_i, h_{i+1}', meaning: 'the two measured heights that BRACKET h. The subscript numbers a calibration point, not a loop'},
+    {symbol: 'k_G,i', meaning: 'the hold voltage you measured at height h_i: the smallest command that kept the slide still there', unit: 'V'},
+    {symbol: '(h \u2212 h_i)/(h_{i+1} \u2212 h_i)', meaning: 'how far between the two calibration points h sits, as a fraction from 0 to 1. This is ordinary linear interpolation'},
+  ]}
+/>
+
 where $h$ is the current or target slide height, $h_i$ and $h_{i+1}$ are the two measured heights around
 it, and $k_{G,i}$ / $k_{G,i+1}$ are the measured hold voltages at those heights.
 
@@ -149,11 +165,26 @@ k_S\,\operatorname{sign}(\omega)
 }
 $$
 
+<EquationLegend
+  items={[
+    {symbol: '\u03b8', meaning: 'the arm angle measured FROM HORIZONTAL, so cos\u03b8 is 1 when the arm sticks straight out and 0 when it points straight up'},
+    {symbol: '\u03c9, \u03b1', meaning: 'the arm\u2019s angular velocity and angular acceleration. For a rotating joint these replace the linear v and a', unit: 'rad/s, rad/s\u00b2'},
+    {symbol: 'k_G cos\u03b8', meaning: 'only the component of the arm\u2019s weight PERPENDICULAR to the link produces torque about the pivot, and that component scales with cos\u03b8'},
+  ]}
+/>
+
 This convention matters. If your encoder reads zero somewhere else, convert it first:
 
 $$
 \theta_{horizontal} = \theta_{encoder} + \theta_{offset}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: '\u03b8_encoder', meaning: 'what the sensor reads, zeroed wherever the mechanism happened to be'},
+    {symbol: '\u03b8_offset', meaning: 'the fixed constant that moves that zero to horizontal. Measure it once and it never changes unless the arm is re-mounted'},
+  ]}
+/>
 
 Then use $\cos(\theta_{horizontal})$. If the sign is wrong, do not randomly negate the whole controller;
 fix the angle convention and motor direction until a horizontal arm receives the expected upward holding
@@ -192,129 +223,105 @@ FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *me
 voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
 [voltage compensation](./voltage-compensation.mdx).
 
-<JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`public class Flywheel {
-    public static double kS = 0.7, kV = 2.4, kA = 0.0, kP = 2.0;   // @Config-tunable
+<Pseudocode label="Feedforward + feedback, battery-compensated">{`FLYWHEEL      predict first, then correct what the prediction missed
 
-    private final DcMotorEx motor;
-    private final VoltageSensor battery;
+  gains:  kS, kV, kA      the feedforward model
+          kP              the feedback that cleans up after it
 
-    public Flywheel(HardwareMap hw) {
-        motor   = hw.get(DcMotorEx.class, "flywheel");
-        battery = hw.voltageSensor.iterator().next();
-        // This class closes its own velocity loop; do not stack the hub's velocity loop under it.
-        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-    }
+  setup():
+      take the flywheel motor
+      put it in open-loop mode
+      # This class closes its OWN velocity loop. Work out what happens if
+      # the hub's built-in velocity loop is also running underneath it.
 
-    public void run(double goalVel, double goalAccel) {        // real units, e.g. m/s
-        double measVel = motor.getVelocity() * METERS_PER_TICK;
+  run(goal_velocity, goal_accel):          # real units, e.g. metres/second
+      measured <- motor velocity * UNITS_PER_TICK
 
-        double predict = kS * Math.signum(goalVel) + kV * goalVel + kA * goalAccel;
-        double correct = kP * (goalVel - measVel);
+      predict <- kS*sign(goal_velocity) + kV*goal_velocity + kA*goal_accel
+      correct <- kP * (goal_velocity - measured)
 
-        motor.setPower((predict + correct) / battery.getVoltage());   // volts -> -1..1
-    }
-}`}</JavaCode>
+      command the motor with (predict + correct) / battery_voltage
 
-<JavaCode league="FTC" label="Arm feedforward with kG * cos(theta)">{`/**
- * Feedforward model for a single-joint arm.
- *
- * <p>Angle convention: angleRad = 0 means the arm is horizontal.
- * If your encoder zero is elsewhere, add an offset before calling calculate().</p>
- */
-public final class ArmFeedforward {
-    private final double kS;
-    private final double kG;
-    private final double kV;
-    private final double kA;
+# Read the two lines against each other. predict is computed entirely from
+# the GOAL - it never looks at the sensor, so it can act the instant you ask
+# for a new speed. correct is computed from the ERROR, so by definition it
+# can only act after the mechanism is already wrong.
+#
+# Work out the consequence for tuning: with a good feedforward, what is left
+# for kP to do, and why does that let you run a smaller kP than you could
+# with feedback alone?
+#
+# Work out each term's job by deleting it on paper:
+#   no kS: the flywheel never quite starts from rest. why?
+#   no kV: the command does not scale with the speed you asked for.
+#   no kA: it tracks steady speeds fine but lags whenever the goal changes.
+`}</Pseudocode>
 
-    public ArmFeedforward(double kS, double kG, double kV, double kA) {
-        this.kS = kS;
-        this.kG = kG;
-        this.kV = kV;
-        this.kA = kA;
-    }
+<Pseudocode label="Arm feedforward with a gravity term">{`ARM FEEDFORWARD      output is volts
+  angle convention: 0 means the arm is HORIZONTAL.
+  if your encoder zero is elsewhere, add the offset before calling this.
 
-    /**
-     * @param angleRad arm angle from horizontal, radians
-     * @param velocityRadPerSec target angular velocity
-     * @param accelRadPerSecSq target angular acceleration
-     * @return predicted motor voltage
-     */
-    public double calculate(double angleRad, double velocityRadPerSec, double accelRadPerSecSq) {
-        double staticVolts = Math.abs(velocityRadPerSec) < 1e-4
-            ? 0.0
-            : kS * Math.signum(velocityRadPerSec);
+  calculate(angle, velocity, acceleration):
+      static_volts <- 0                       if | velocity | ~ 0
+                      kS * sign(velocity)     otherwise
 
-        return staticVolts
-            + kG * Math.cos(angleRad)
-            + kV * velocityRadPerSec
-            + kA * accelRadPerSecSq;
-    }
-}`}</JavaCode>
+      return static_volts
+           + kG * cos(angle)                  # <-- the gravity term
+           + kV * velocity
+           + kA * acceleration
 
-<JavaCode league="FTC" label="Slide feedforward with interpolated gravity">{`/**
- * Feedforward model for a vertical slide/elevator.
- *
- * <p>The gravity term is interpolated from measured hold voltages at known
- * heights. Use this when one constant kG is not accurate across the full travel.</p>
- */
-public final class InterpolatedSlideFeedforward {
-    private final double kS;
-    private final double kV;
-    private final double kA;
-    private final double[] heights;
-    private final double[] holdVolts;
+# The cos(angle) is the whole difference from a flywheel's feedforward.
+# Derive it: gravity pulls straight down with force m*g, but only the
+# component PERPENDICULAR to the arm produces torque about the pivot. Draw
+# the arm at some angle from horizontal, resolve the weight into components
+# along and across the arm, and read off which one turns the joint.
+#
+# Then check the formula at angles you can verify by eye:
+#   arm horizontal (0)          -> cos = 1,  maximum hold voltage. correct?
+#   arm straight up (90 deg)    -> cos = 0,  no hold voltage. correct?
+#   arm hanging down (-90 deg)  -> cos = 0.  is that right, and why?
+#
+# Work out why static_volts is zeroed at ~zero velocity instead of just
+# using sign(velocity). What is sign(0), and what would a stationary arm do
+# with that term flickering?
+`}</Pseudocode>
 
-    public InterpolatedSlideFeedforward(
-            double kS,
-            double kV,
-            double kA,
-            double[] heights,
-            double[] holdVolts) {
-        if (heights.length != holdVolts.length || heights.length < 2) {
-            throw new IllegalArgumentException("Need matching height and hold-voltage samples.");
-        }
-        this.kS = kS;
-        this.kV = kV;
-        this.kA = kA;
-        this.heights = heights.clone();
-        this.holdVolts = holdVolts.clone();
-    }
+<Pseudocode label="Slide feedforward with interpolated gravity">{`INTERPOLATED SLIDE FEEDFORWARD
+  For a vertical slide where ONE constant kG is not accurate across the
+  whole travel - rigging friction and stage engagement change with height.
 
-    /**
-     * @param height slide height in your chosen real unit
-     * @param velocity target slide velocity, positive upward
-     * @param acceleration target slide acceleration, positive upward
-     * @return predicted motor voltage
-     */
-    public double calculate(double height, double velocity, double acceleration) {
-        double staticVolts = Math.abs(velocity) < 1e-4
-            ? 0.0
-            : kS * Math.signum(velocity);
+  built from measured data:
+      heights[]     the heights you tested at
+      hold_volts[]  the voltage that held the slide still at each height
+      require the two arrays match in length, and have at least 2 entries
 
-        return staticVolts
-            + interpolateHoldVolts(height)
-            + kV * velocity
-            + kA * acceleration;
-    }
+  calculate(height, velocity, acceleration):
+      static_volts <- 0 if | velocity | ~ 0, else kS * sign(velocity)
 
-    private double interpolateHoldVolts(double height) {
-        if (height <= heights[0]) {
-            return holdVolts[0];
-        }
+      return static_volts
+           + interpolate_hold_volts(height)   # instead of a constant kG
+           + kV * velocity
+           + kA * acceleration
 
-        for (int i = 0; i < heights.length - 1; i++) {
-            double leftH = heights[i];
-            double rightH = heights[i + 1];
-            if (height <= rightH) {
-                double t = (height - leftH) / (rightH - leftH);
-                return holdVolts[i] + t * (holdVolts[i + 1] - holdVolts[i]);
-            }
-        }
+  interpolate_hold_volts(height):
+      if height is below the first sample:  return the first hold voltage
+      find the bracketing pair i, i+1 with height <= heights[i+1]
+          t <- (height - heights[i]) / (heights[i+1] - heights[i])
+          return hold_volts[i] + t * (hold_volts[i+1] - hold_volts[i])
+      if height is above the last sample:   return the last hold voltage
 
-        return holdVolts[holdVolts.length - 1];
-    }
-}`}</JavaCode>
+# That is linear interpolation, and the clamping at both ends is deliberate:
+# work out what extrapolating past your measured range would command, and
+# why holding the endpoint value is the safer wrong answer.
+#
+# Collect the table yourself rather than deriving it. Drive the slide to
+# each height, find the smallest voltage that holds it stationary, and write
+# the pair down. Five or six heights across the travel is plenty.
+#
+# Work out when this is worth the complexity. Measure hold voltage at the
+# bottom, middle and top of YOUR slide. If they agree within a few percent,
+# a single kG is fine and this whole class is over-engineering.
+`}</Pseudocode>
 
 The identical recipe in FRC is one line, because WPILib bundles it:
 

@@ -24,6 +24,7 @@ import {Problem, Theory, Deploy} from '@site/src/components/kit/Steps';
 import {Callout, Analogy} from '@site/src/components/kit/Callout';
 import {Formula, Blue, Teal, Amber, Rose, Faint} from '@site/src/components/kit/Formula';
 import {JavaCode} from '@site/src/components/kit/JavaCode';
+import {Pseudocode} from '@site/src/components/kit/Pseudocode';
 import {
   Demo,
   Stage,
@@ -63,6 +64,8 @@ export default {
   Amber,
   Rose,
   Faint,
+  // algorithm sketches (the default); JavaCode only for anti-patterns and SDK surface
+  Pseudocode,
   JavaCode,
   // interactive demo kit
   Demo,

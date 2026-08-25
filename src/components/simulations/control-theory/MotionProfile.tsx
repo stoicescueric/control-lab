@@ -9,50 +9,7 @@ import {useRef, useState} from 'react';
 import {useDprCanvas, usePlot, useRaf} from '@site/src/lib/visualization/canvas';
 import {Demo, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-
-type Profile = {
-  T: number;
-  tAcc: number;
-  tFlat: number;
-  vPeak: number;
-  triangle: boolean;
-  v: (t: number) => number;
-  x: (t: number) => number;
-};
-
-function build(d: number, vMax: number, aMax: number): Profile {
-  const tRamp = vMax / aMax;
-  const dRamp = 0.5 * aMax * tRamp * tRamp;
-  let triangle = false;
-  let vPeak = vMax;
-  let tAcc: number;
-  let tFlat: number;
-  if (2 * dRamp >= d) {
-    triangle = true;
-    tAcc = Math.sqrt(d / aMax);
-    vPeak = aMax * tAcc;
-    tFlat = 0;
-  } else {
-    tAcc = tRamp;
-    tFlat = (d - 2 * dRamp) / vMax;
-  }
-  const T = 2 * tAcc + tFlat;
-  const v = (t: number) => {
-    if (t < tAcc) return aMax * t;
-    if (t < tAcc + tFlat) return vPeak;
-    if (t <= T) return Math.max(0, vPeak - aMax * (t - tAcc - tFlat));
-    return 0;
-  };
-  const x = (t: number) => {
-    if (t < tAcc) return 0.5 * aMax * t * t;
-    const xAcc = 0.5 * aMax * tAcc * tAcc;
-    if (t < tAcc + tFlat) return xAcc + vPeak * (t - tAcc);
-    const xFlat = xAcc + vPeak * tFlat;
-    const td = Math.min(t, T) - tAcc - tFlat;
-    return xFlat + vPeak * td - 0.5 * aMax * td * td;
-  };
-  return {T, tAcc, tFlat, vPeak, triangle, v, x};
-}
+import {buildTrapezoidalProfile, type TrapezoidalProfile} from '@site/src/lib/domain/motionProfile';
 
 const PAUSE = 0.7; // seconds to rest at the target before replaying
 
@@ -78,9 +35,9 @@ export default function MotionProfile() {
 
   const st = useRef({t: 0});
 
-  const p = build(d, vMax, aMax);
+  const p = buildTrapezoidalProfile(d, vMax, aMax);
 
-  function drawRail(prof: Profile, t: number) {
+  function drawRail(prof: TrapezoidalProfile, t: number) {
     const canvas = railCanvas.current;
     const c = canvas?.getContext('2d');
     if (!canvas || !c) return;
@@ -96,8 +53,9 @@ export default function MotionProfile() {
     const x0 = 36;
     const x1 = w - 36;
     const railY = h - 40;
-    const pos = x0 + (Math.min(prof.x(t), d) / d) * (x1 - x0);
-    const vel = prof.v(t);
+    const state = prof.sample(t);
+    const pos = x0 + (Math.min(state.position, d) / d) * (x1 - x0);
+    const vel = state.velocity;
 
     // rail + tick marks
     c.strokeStyle = '#2a3656';
@@ -131,7 +89,7 @@ export default function MotionProfile() {
     c.setLineDash([]);
 
     // speed streaks behind the carriage
-    const streak = (vel / Math.max(1, prof.vPeak)) * 46;
+    const streak = (vel / Math.max(1, prof.peakSpeed)) * 46;
     if (streak > 3) {
       const sg = c.createLinearGradient(pos - streak, 0, pos, 0);
       sg.addColorStop(0, 'rgba(255,194,77,0)');
@@ -168,12 +126,12 @@ export default function MotionProfile() {
     c.fillText(`${vel.toFixed(0)} in/s`, pos, railY - 34);
   }
 
-  function drawPlot(prof: Profile, t: number) {
+  function drawPlot(prof: TrapezoidalProfile, t: number) {
     const plot = plotRef.current;
     if (!plot) return;
     const {d} = ctrl.current;
-    const vAxis = prof.vPeak * 1.18;
-    plot.setX(0, prof.T);
+    const vAxis = prof.peakSpeed * 1.18;
+    plot.setX(0, prof.duration);
     plot.setY(0, vAxis);
     plot.clear();
     plot.grid();
@@ -182,59 +140,62 @@ export default function MotionProfile() {
       plot.band(
         [
           [0, 0, vAxis],
-          [prof.tAcc, 0, vAxis],
+          [prof.accelerationTime, 0, vAxis],
         ],
         'rgba(47,211,192,0.06)',
       );
-      if (prof.tFlat > 0) {
+      if (prof.cruiseTime > 0) {
         plot.band(
           [
-            [prof.tAcc, 0, vAxis],
-            [prof.tAcc + prof.tFlat, 0, vAxis],
+            [prof.accelerationTime, 0, vAxis],
+            [prof.accelerationTime + prof.cruiseTime, 0, vAxis],
           ],
           'rgba(111,139,255,0.05)',
         );
       }
       plot.band(
         [
-          [prof.tAcc + prof.tFlat, 0, vAxis],
-          [prof.T, 0, vAxis],
+          [prof.accelerationTime + prof.cruiseTime, 0, vAxis],
+          [prof.duration, 0, vAxis],
         ],
         'rgba(255,111,156,0.06)',
       );
-      if (!prof.triangle) plot.hline(ctrl.current.vMax, {color: '#8294b8', width: 1.2, dash: [2, 8]});
+      if (!prof.triangular) plot.hline(ctrl.current.vMax, {color: '#8294b8', width: 1.2, dash: [2, 8]});
 
       const N = 140;
       const vPts: [number, number][] = [];
       const xPts: [number, number][] = [];
       for (let i = 0; i <= N; i++) {
-        const tt = (i / N) * prof.T;
-        vPts.push([tt, prof.v(tt)]);
-        xPts.push([tt, (prof.x(tt) / d) * vAxis]); // position on its own normalized axis
+        const tt = (i / N) * prof.duration;
+        const state = prof.sample(tt);
+        vPts.push([tt, state.velocity]);
+        xPts.push([tt, (state.position / d) * vAxis]);
       }
       plot.line(xPts, {color: '#6f8bff', width: 2.5, alpha: 0.85});
       plot.line(vPts, {color: '#ffc24d', width: 3.5});
 
       // synced cursor + live setpoints
-      const tc = Math.min(t, prof.T);
+      const tc = Math.min(t, prof.duration);
+      const state = prof.sample(tc);
       plot.vline(tc, {color: 'rgba(255,255,255,0.35)', width: 1, dash: [4, 4]});
-      plot.dot(tc, prof.v(tc), {color: '#ffc24d', r: 5, ring: '#0b1120', ringW: 2});
-      plot.dot(tc, (prof.x(tc) / d) * vAxis, {color: '#6f8bff', r: 5, ring: '#0b1120', ringW: 2});
+      plot.dot(tc, state.velocity, {color: '#ffc24d', r: 5, ring: '#0b1120', ringW: 2});
+      plot.dot(tc, (state.position / d) * vAxis, {color: '#6f8bff', r: 5, ring: '#0b1120', ringW: 2});
     });
     const labelY = vAxis * 0.94;
-    plot.text(prof.tAcc / 2, labelY, 'accel', {color: '#2fd3c0', align: 'center', font: '10px ui-monospace, monospace'});
-    if (prof.tFlat > 0.15) {
-      plot.text(prof.tAcc + prof.tFlat / 2, labelY, 'cruise', {color: '#8fa3ff', align: 'center', font: '10px ui-monospace, monospace'});
+    plot.text(prof.accelerationTime / 2, labelY, 'accel', {color: '#2fd3c0', align: 'center', font: '10px ui-monospace, monospace'});
+    if (prof.cruiseTime > 0.15) {
+      plot.text(prof.accelerationTime + prof.cruiseTime / 2, labelY, 'cruise', {color: '#8fa3ff', align: 'center', font: '10px ui-monospace, monospace'});
     }
-    plot.text(prof.T - prof.tAcc / 2, labelY, 'decel', {color: '#ff6f9c', align: 'center', font: '10px ui-monospace, monospace'});
+    plot.text(prof.duration - prof.accelerationTime / 2, labelY, 'decel', {color: '#ff6f9c', align: 'center', font: '10px ui-monospace, monospace'});
+    plot.text(prof.duration * 0.82, vAxis * 0.12, 'blue: normalized x/d (0–100%)', {color: '#6f8bff', align: 'center', font: '10px ui-monospace, monospace'});
   }
 
   useRaf((frameDt: number) => {
     const {d, vMax, aMax} = ctrl.current;
-    const prof = build(d, vMax, aMax);
+    const prof = buildTrapezoidalProfile(d, vMax, aMax);
     const s = st.current;
     s.t += Math.min(frameDt, 0.1);
-    if (s.t > prof.T + PAUSE) s.t = 0;
+    if (s.t > prof.duration + PAUSE) s.t = 0;
     drawRail(prof, s.t);
     drawPlot(prof, s.t);
   }, railCanvas);
@@ -258,7 +219,7 @@ export default function MotionProfile() {
       <Legend
         items={[
           {color: '#ffc24d', label: 'velocity setpoint'},
-          {color: '#6f8bff', label: 'position setpoint'},
+          {color: '#6f8bff', label: 'normalized progress x/d (0–100%)'},
           {color: '#8294b8', label: 'cruise-speed cap'},
         ]}
       />
@@ -282,9 +243,9 @@ export default function MotionProfile() {
       </Buttons>
       <Readout
         items={[
-          ['total time', `${p.T.toFixed(2)} s`],
-          ['peak speed', `${p.vPeak.toFixed(0)} in/s`],
-          ['shape', p.triangle ? 'triangle (too short for vMax)' : 'trapezoid'],
+          ['total time', `${p.duration.toFixed(2)} s`],
+          ['peak speed', `${p.peakSpeed.toFixed(0)} in/s`],
+          ['shape', p.triangular ? 'triangle (no cruise segment)' : 'trapezoid'],
         ]}
       />
     </Demo>

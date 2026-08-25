@@ -5,7 +5,8 @@
    must aim at a VIRTUAL target shifted to cancel that lead. But the shift
    depends on flight time, flight time depends on distance, and distance
    depends on the shifted target — a loop with no closed form. A fixed-point
-   iteration solves it in 2–3 rounds (Stoicescu §7.4–7.6):
+   iteration usually solves it in 2–3 rounds when the map is contractive
+   (Stoicescu §7.4–7.6):
 
        p_v⁽⁰⁾ = p_goal
        p_v⁽ᵏ⁾ = p_goal − G · v_R · (t_d + t_f⁽ᵏ⁻¹⁾)      (G = 0.9, t_d = 0.05 s)
@@ -13,7 +14,7 @@
 
    Drag the robot (or click it and use WASD / arrows) and drag the cyan
    velocity arrow. Watch the green virtual target shift opposite the orange real one,
-   and watch the solver converge in the debug panel. Distances are in inches
+   and watch the solver's convergence status in the debug panel. Distances are in inches
    to match the paper's deployed constants. Pure React + SVG (SSR-safe). */
 
 import {useRef, useState} from 'react';
@@ -37,6 +38,7 @@ export default function ShootOnTheMove() {
   const speed = Math.hypot(vR.x, vR.y);
   const headingDeg = ((Math.atan2(vR.y, vR.x) * 180) / Math.PI + 360) % 360;
   const heading = Math.atan2(sol.pv.y - pshooter.y, sol.pv.x - pshooter.x); // turret aim
+  const solutionColor = sol.converged ? '#5ce08a' : '#ff6f9c';
 
   function setSpeedMps(speedMps: number) {
     const angle = Math.atan2(vR.y, vR.x);
@@ -132,7 +134,7 @@ export default function ShootOnTheMove() {
           tabIndex={0}
           className="block h-auto w-full touch-none rounded-xl bg-[#0b1120] outline-none focus:ring-2 focus:ring-[#6f8bff]"
           role="img"
-          aria-label="Top-down field: a moving robot, the real target, and the offset virtual target the turret aims at."
+          aria-label={`Top-down field with a moving robot, real target, and ${sol.converged ? 'converged virtual aim target' : 'nonconverged candidate; shot inhibited'}.`}
           onPointerDown={onDown}
           onPointerMove={onMove}
           onPointerUp={() => (drag.current = null)}
@@ -150,9 +152,9 @@ export default function ShootOnTheMove() {
           {/* line of sight to the REAL target (where a naive turret points) */}
           <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(pgoal.x)} y2={SY(pgoal.y)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="6 6" />
           {/* cancellation offset: real → virtual, opposite chassis velocity */}
-          <line x1={SX(pgoal.x)} y1={SY(pgoal.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke="#5ce08a" strokeWidth="1.5" strokeDasharray="3 4" />
-          {/* line of sight the turret ACTUALLY uses (robot → virtual) */}
-          <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke="#ffc24d" strokeWidth="2" />
+          <line x1={SX(pgoal.x)} y1={SY(pgoal.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke={solutionColor} strokeWidth="1.5" strokeDasharray="3 4" />
+          {/* A nonconverged line is a candidate visualization, never a fire command. */}
+          <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke={sol.converged ? '#ffc24d' : solutionColor} strokeWidth="2" strokeDasharray={sol.converged ? undefined : '5 5'} />
 
           {/* real target */}
           <circle cx={SX(pgoal.x)} cy={SY(pgoal.y)} r="10" fill="none" stroke="#ff9a3d" strokeWidth="3" />
@@ -160,8 +162,8 @@ export default function ShootOnTheMove() {
           <text x={SX(pgoal.x) + 14} y={SY(pgoal.y) + 4} fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#ffb066">real target</text>
 
           {/* virtual target (where the turret aims) */}
-          <circle cx={SX(sol.pv.x)} cy={SY(sol.pv.y)} r="9" fill="#5ce08a" opacity="0.9" />
-          <text x={SX(sol.pv.x) + 13} y={SY(sol.pv.y) + 4} fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#5ce08a">virtual target</text>
+          <circle cx={SX(sol.pv.x)} cy={SY(sol.pv.y)} r="9" fill={solutionColor} opacity="0.9" />
+          <text x={SX(sol.pv.x) + 13} y={SY(sol.pv.y) + 4} fontFamily="JetBrains Mono, monospace" fontSize="11" fill={solutionColor}>{sol.converged ? 'virtual target' : 'candidate only'}</text>
 
           {/* robot body, oriented to its turret heading */}
           <g transform={`translate(${SX(pshooter.x)},${SY(pshooter.y)}) rotate(${(-heading * 180) / Math.PI})`}>
@@ -185,6 +187,13 @@ export default function ShootOnTheMove() {
           <div className="mb-2 text-[#8294b8]">
             speed |v_R| = {speed.toFixed(0)} in/s ({(speed / 39.37).toFixed(2)} m/s)
           </div>
+          <div
+            role="status"
+            className={`mb-2 font-semibold ${sol.converged ? 'text-[#5ce08a]' : 'text-[#ff6f9c]'}`}>
+            {sol.converged
+              ? 'CONVERGED — aim candidate is valid'
+              : 'NOT CONVERGED — inhibit the shot and keep the last validated aim'}
+          </div>
           {sol.iters.map((it) => (
             <div key={it.k} className="mb-1.5">
               <span className="text-[#6f8bff]">iter {it.k}</span>
@@ -207,7 +216,7 @@ export default function ShootOnTheMove() {
             </div>
           ))}
           <div className="mt-2 border-t border-white/10 pt-2 text-white">
-            aim offset = {dist(sol.pv, pgoal).toFixed(1)} in opposite motion
+            {sol.converged ? 'aim' : 'unusable candidate'} offset = {dist(sol.pv, pgoal).toFixed(1)} in opposite motion
           </div>
         </div>
       </div>
@@ -238,8 +247,8 @@ export default function ShootOnTheMove() {
           {color: '#6f8bff', label: 'robot (turret heading)'},
           {color: '#37d6e0', label: 'velocity v_R (drag tip)'},
           {color: '#ff9a3d', label: 'real target'},
-          {color: '#5ce08a', label: 'virtual target (turret aims here)'},
-          {color: '#ffc24d', label: 'actual line of sight'},
+          {color: solutionColor, label: sol.converged ? 'validated virtual target' : 'nonconverged candidate'},
+          {color: sol.converged ? '#ffc24d' : solutionColor, label: sol.converged ? 'commanded line of sight' : 'shot inhibited'},
         ]}
       />
     </Demo>

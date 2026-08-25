@@ -19,6 +19,15 @@ Control Lab is built on open FTC/FRC documentation, control-theory literature, p
 carefully cited community writing. If a technique in a lesson helped you, the original source below is
 usually the best place to go deeper.
 
+## External prerequisite: choose one localization stack
+
+Control Lab defines the follower-facing [Pose Estimation Contract](./path-following/pose-estimation-contract.mdx)
+but does not implement encoder geometry or pose integration. Choose one maintained stack and follow its
+complete setup path; adapt its output at the boundary instead of combining stacks:
+
+- [Road Runner tuning](https://rr.brott.dev/docs/v1-0/tuning)
+- [Pedro Pathing localization](https://pedropathing.com/docs/pathing/tuning/localization)
+
 ## Start here: community guides
 
 - **[Game Manual 0](https://gm0.org/en/latest/)** - FTC hardware and software reference. Used for motor,
@@ -47,8 +56,8 @@ usually the best place to go deeper.
   FTC teams using lambda-style command composition.
 - **[Ivy by Pedro Pathing](https://pedropathing.com/docs/ivy)** - lightweight command-based control flow
   for composing Pedro paths with mechanism actions.
-- **[Road Runner](https://rr.brott.dev/)** - FTC motion-planning library; its `Pose2d.exp` and spline
-  material support the pose-exponential and spline lessons.
+- **[Road Runner](https://rr.brott.dev/)** - FTC motion-planning library whose path-building and spline
+  material supports the path-following lessons.
 - **[Pedro Pathing](https://pedropathing.com/)** - reactive FTC path follower, visualizer, and Ivy command
   framework.
 - **[goBILDA](https://www.gobilda.com/)** and **[REV Robotics](https://www.revrobotics.com/)** - vendor
@@ -72,7 +81,6 @@ usually the best place to go deeper.
   natural cubic spline continuity conditions and tridiagonal solve.
 - Vikramaditya Nishant, **[Introducing Torque-Current Control for FTC](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)** -
   current, voltage, back-EMF, and current-limiting discussion.
-- E. Eade, *Lie Groups for 2D and 3D Transformations* - background for the $SE(2)$ exponential/log maps.
 - Kou, E. & Haggenmiller, A., **[Extended Kalman Filter State Estimation for Autonomous Competition Robots](https://arxiv.org/abs/2310.04459)** -
   FTC-oriented EKF paper used by the [Kalman](./signal-processing/kalman.mdx) and
   [EKF](./signal-processing/ekf.mdx) lessons.

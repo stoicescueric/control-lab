@@ -1,5 +1,10 @@
 import {describe, expect, it} from 'vitest';
-import {fitVelocityModel, type VelocitySample} from './systemId';
+import {
+  fitVelocityModel,
+  QUASISTATIC_SIM,
+  simulateQuasistaticRamp,
+  type VelocitySample,
+} from './systemId';
 
 describe('fitVelocityModel', () => {
   it('recovers known kS/kV from a noiseless linear dataset', () => {
@@ -54,5 +59,21 @@ describe('fitVelocityModel', () => {
     expect(fit!.kS).toBeLessThan(1.3);
     expect(fit!.kV).toBeGreaterThan(0.03);
     expect(fit!.kV).toBeLessThan(0.04);
+  });
+});
+
+describe('quasistatic ramp experiment', () => {
+  it('recovers the actual plant constants within the disclosed lag tolerance', () => {
+    const fit = fitVelocityModel(simulateQuasistaticRamp());
+    expect(fit).not.toBeNull();
+    expect(fit!.kS).toBeCloseTo(QUASISTATIC_SIM.kS, 1);
+    expect(Math.abs(fit!.kS - QUASISTATIC_SIM.kS)).toBeLessThan(0.05);
+    expect(Math.abs(fit!.kV - QUASISTATIC_SIM.kV)).toBeLessThan(0.001);
+  });
+
+  it('would expose the old 1.35 V/s ramp as non-quasistatic', () => {
+    const fit = fitVelocityModel(simulateQuasistaticRamp(1.35));
+    expect(fit).not.toBeNull();
+    expect(Math.abs(fit!.kS - QUASISTATIC_SIM.kS)).toBeGreaterThan(0.2);
   });
 });

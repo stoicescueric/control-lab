@@ -58,6 +58,13 @@ $$
 \text{meters} = \text{ticks} \times \frac{2\pi r}{N_{\text{out}}}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'r', meaning: 'the wheel RADIUS here, not a setpoint. So 2\u03c0r is the distance covered by one full wheel revolution', unit: 'm'},
+    {symbol: 'N_out', meaning: 'encoder ticks per revolution of the OUTPUT shaft: the one that actually turns the wheel'},
+  ]}
+/>
+
 where $r$ is the wheel radius and $N_{\text{out}}$ is encoder counts per output-shaft revolution.
 If your datasheet gives encoder counts per motor revolution instead, multiply by the gearbox ratio
 first:
@@ -66,7 +73,16 @@ $$
 N_{\text{out}} = N_{\text{motor}}G
 $$
 
-where $N_{\text{motor}}$ is counts per motor revolution and $G$ is the gear ratio from motor shaft to output shaft.
+<EquationLegend
+  items={[
+    {symbol: 'N_motor', meaning: 'ticks per revolution of the MOTOR shaft, which is what a datasheet usually quotes'},
+    {symbol: 'G', meaning: 'the gearbox reduction. The motor turns G times for one turn of the output, so the output shaft sees G times as many ticks'},
+  ]}
+/>
+
+where $N_{\text{motor}}$ is counts per motor revolution and this lesson defines
+$G$ as **motor turns per one output-shaft turn**. For a 20:1 reduction, $G=20$, so the output needs
+20 motor revolutions' worth of ticks. If a vendor publishes the inverse convention, invert it once here.
 
 <Callout type="math" title="Worked example (motor configuration)">
 Suppose your selected motor configuration or datasheet gives <strong>537.7 encoder counts per output revolution</strong>
@@ -103,25 +119,53 @@ of how well its gains are tuned.
 Read the true loop time every iteration, and centralize the tick conversion so every downstream
 controller speaks real units.
 
-<JavaCode league="FTC" label="Real loop time + a single source of units">{`// --- units: define once, use everywhere ---
-static final double WHEEL_R = 0.048;          // meters
-static final double TICKS_PER_OUTPUT_REV = 537.7;
-static final double METERS_PER_TICK = 2 * Math.PI * WHEEL_R / TICKS_PER_OUTPUT_REV;
+<Pseudocode label="Real loop time + a single source of units">{`UNITS - defined ONCE, as constants, never recomputed inline
+    WHEEL_R                0.048 m
+    TICKS_PER_OUTPUT_REV   537.7
+    METERS_PER_TICK        <- 2*pi*WHEEL_R / TICKS_PER_OUTPUT_REV
+    MAX_VALID_DT           0.25 s     # beyond this, something stalled
 
-ElapsedTime timer = new ElapsedTime();
+state kept between loops:
+    have_previous_sample <- false
+    last_meters, integral, distance_from_velocity, derivative
 
-while (opModeIsActive()) {
-    double dt = timer.seconds();
-    timer.reset();
-    if (dt <= 0) dt = 1e-3;                   // guard the first loop
+update(error):
+    meters <- encoder position * METERS_PER_TICK
 
-    double meters = motor.getCurrentPosition() * METERS_PER_TICK;
-    double metersPerSecond = motor.getVelocity() * METERS_PER_TICK;  // ticks/s -> m/s
+    # ---- SEED before differentiating anything ----
+    if not have_previous_sample:
+        last_meters <- meters
+        reset the loop timer
+        have_previous_sample <- true
+        return                        # no dt yet, so no derivative yet
 
-    // every time-based term now uses the measured dt:
-    integral += error * dt;
-    derivative = (meters - lastMeters) / dt;
-}`}</JavaCode>
+    # Work out what the first derivative would be without this. last_meters
+    # starts at 0 and the encoder might read 4000 ticks. What velocity does
+    # that imply, and what does the controller do with it?
+
+    dt <- measured seconds since the last call
+    reset the loop timer
+
+    if dt is not finite, or dt <= 0, or dt > MAX_VALID_DT:
+        last_meters <- meters         # RE-SEED, do not just skip
+        derivative  <- 0
+        return
+
+    # ^ A debugger pause or a stalled loop makes one enormous difference
+    #   quotient that is physically meaningless. Work out the implied
+    #   velocity after a 2-second pause, and why re-seeding beats both
+    #   using it and ignoring it while leaving last_meters stale.
+
+    derivative             <- (meters - last_meters) / dt   # m/s over THIS interval
+    integral               <- integral + error * dt         # this rectangle's own dt
+    distance_from_velocity <- distance_from_velocity + derivative * dt
+    last_meters            <- meters
+
+# Every dt above is MEASURED. Work out the error from assuming a constant
+# 20 ms when the loop actually runs at 24 ms: after 5 seconds of
+# integration, how far off is the integral term? Then work out why the
+# integral cannot simply use an average dt computed at the end.
+`}</Pseudocode>
 
 <Callout type="warn" title="Hard-coding dt is a classic, invisible bug.">
 If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the integral accumulates

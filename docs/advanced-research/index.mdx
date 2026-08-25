@@ -1,18 +1,27 @@
 ---
-title: Trajectory Generation & Implementation
-description: "Generate drag-aware projectile trajectories, calibrate a real launcher, and implement flywheel and shoot-on-the-move control on an FTC robot."
+title: "Elective Case Study: Drag-Aware Launcher"
+description: "An optional case study in drag-aware projectile simulation, launcher calibration, and shoot-on-the-move control."
 tags: [trajectory-generation, implementation, rk4, air-drag, flywheel, shoot-on-the-move]
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';
 
-# Module 7 - Trajectory Generation & Implementation
+# Elective Case Study: Drag-Aware Launcher
 
-This capstone follows one model all the way from a desktop trajectory solver to a competition robot.
+This optional research track follows one model all the way from a desktop trajectory solver to a
+competition robot. It is one worked launcher case study, not a universal curriculum capstone.
 The engineering question is precise:
 
 > How can a robot generate and execute a projectile trajectory in real time while the projectile loses
 > energy to drag, the launcher loses energy to contact, and the chassis is still moving?
+
+## Readiness
+
+Start this elective after you can use differential equations, measured-loop
+[discretization](../software-architecture/discretization.mdx),
+[feedforward and PID](../control-theory/feedforward.mdx), interpolation, and
+[state feedback](../state-space-control/state-feedback.mdx). You do not need to derive Lambert W to use
+the first three on-robot ideas; the lesson marks where that research extension begins.
 
 The implementation pipeline is:
 

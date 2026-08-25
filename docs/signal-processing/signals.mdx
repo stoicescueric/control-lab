@@ -89,21 +89,47 @@ lines of code.
 Good filtering starts with knowing how noisy a sensor actually is. Sample it while the mechanism is
 held still and compute the standard deviation — that number sizes every filter that follows.
 
-<JavaCode league="FTC" label="Characterise a sensor's noise">{`// Hold the mechanism still, collect N samples, report the population spread.
-int N = 200, count = 0;
-double mean = 0.0, m2 = 0.0;              // Welford's numerically stable update
-for (int i = 0; i < N; i++) {
-    double x = sensor.getDistance(DistanceUnit.CM);
-    count++;
-    double delta = x - mean;
-    mean += delta / count;
-    double delta2 = x - mean;
-    m2 += delta * delta2;
-    sleep(5);
-}
-double std = Math.sqrt(m2 / count);          // population std for this characterization run
-telemetry.addData("mean", mean);
-telemetry.addData("noise (std)", std);              // use this to tune your filter`}</JavaCode>
+<Pseudocode label="Characterise a sensor's noise without blocking the loop">{`NOISE CHARACTERIZATION
+  Hold the mechanism perfectly still and call this once per loop. Anything
+  the sensor reports now is noise, because the truth is not moving.
+
+  N <- 200          # samples to collect
+  state:  count <- 0,  mean <- 0,  m2 <- 0
+
+  update():
+      if count >= N: return              # done; never block waiting for more
+
+      x     <- read the sensor
+      count <- count + 1
+
+      delta  <- x - mean
+      mean   <- mean + delta / count     # running mean
+      delta2 <- x - mean                 # note: recomputed AFTER the update
+      m2     <- m2 + delta * delta2
+
+      if count = N:
+          std <- sqrt(m2 / count)
+          report mean and std
+
+# That is Welford's algorithm. The obvious alternative - accumulate sum and
+# sum-of-squares, then use variance = E[x^2] - E[x]^2 - is numerically awful
+# when the mean is large relative to the spread: you subtract two big
+# similar numbers and the answer is mostly rounding error. Work out what
+# happens for readings around 3000 with a spread of 0.5.
+# Look up: "Welford's online algorithm", "catastrophic cancellation".
+#
+# Note the two deltas use the mean from BEFORE and AFTER the update. That
+# asymmetry is not a typo - it is what makes the recurrence exact. Verify it
+# on three samples by hand against the textbook variance formula.
+#
+# What to do with the answer: the std you measure here is what your filter
+# or Kalman R has to be sized against. Measure it once per sensor, per
+# mounting. Do not copy a number out of a lesson.
+`}</Pseudocode>
+
+For five stationary readings `49.8, 50.1, 50.0, 50.2, 49.9 cm`, the mean is `50.0 cm` and the population
+standard deviation is about `0.14 cm`. That small hand check tells you what the running code's two
+numbers mean before you collect 200 samples.
 
 A large `std` means aggressive smoothing (or a Kalman filter) is justified; a small one means a light
 touch will do. With the noise quantified, the simplest effective filter is next: the low-pass.

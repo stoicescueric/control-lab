@@ -38,6 +38,12 @@ function unitTangentAt(controlPoints: Point[], t: number): Point {
   return {x: d.x / m, y: d.y / m};
 }
 
+function validateGeometry(point: Point, controlPoints: Point[]): void {
+  if (controlPoints.length !== 4) throw new Error('A cubic Bezier path requires four control points');
+  const values = [point.x, point.y, ...controlPoints.flatMap((p) => [p.x, p.y])];
+  if (!values.every(Number.isFinite)) throw new Error('Path geometry must be finite');
+}
+
 /**
  * Closest point on a cubic Bézier path to `point`, found by a coarse dense
  * scan followed by ternary-search refinement (distance-to-a-point along a
@@ -46,6 +52,10 @@ function unitTangentAt(controlPoints: Point[], t: number): Point {
  * resolution; the default (260) matches the widgets' original precision.
  */
 export function closestPointOnPath(point: Point, controlPoints: Point[], samples = 260): PathProjection {
+  validateGeometry(point, controlPoints);
+  if (!Number.isInteger(samples) || samples <= 0) {
+    throw new Error('Projection sample count must be a positive integer');
+  }
   const distSq = (t: number): number => {
     const p = bezierPoint(controlPoints, t);
     const dx = p.x - point.x;
@@ -110,6 +120,7 @@ export interface GuidedVectorFieldResult extends PathProjection {
  * widgets used inline.
  */
 export function guidedVectorField(position: Point, controlPoints: Point[], kN: number): GuidedVectorFieldResult {
+  if (!Number.isFinite(kN) || kN < 0) throw new Error('GVF gain must be finite and non-negative');
   const proj = closestPointOnPath(position, controlPoints);
   const vx = proj.tangent.x - kN * proj.signedError * proj.normal.x;
   const vy = proj.tangent.y - kN * proj.signedError * proj.normal.y;

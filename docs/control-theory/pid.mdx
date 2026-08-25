@@ -49,6 +49,15 @@ $$
 u(t) = K_p\,e(t) + K_i \int_0^t e(\tau)\,d\tau + K_d \frac{de(t)}{dt}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'u(t)', meaning: 'the command at time t, in continuous time. The next equation is the version a robot can actually run'},
+    {symbol: 'e(t)', meaning: 'the error: target minus measurement'},
+    {symbol: '\u03c4 (in the integral)', meaning: 'a dummy variable of integration, sweeping from 0 to now. It is not the filter time constant \u03c4 used in the signal-processing lessons'},
+    {symbol: 'de(t)/dt', meaning: 'how fast the error is changing right now'},
+  ]}
+/>
+
 <Callout type="idea" title="What the three terms really are: a mass on a spring.">
 <ul>
 <li><strong>P is the spring.</strong> It pulls toward the target with a force proportional to how far off
@@ -96,6 +105,12 @@ remains.
 | Slow drift, sluggish wobble | `kI` too high (windup) | lower `kI` |
 | Jittery, twitchy | `kD` too high (noise) | lower `kD`, filter the input |
 
+### Core checkpoint: tune and log one feedback loop
+
+Stop here only after you can define `error = target - measurement`, tune P then D, add I only for a
+measured persistent bias, and log each term plus the saturated output. The deploy block turns that
+artifact into measured-loop Java.
+
 </Theory>
 
 <Deploy title="A discrete PID loop, hardened for the Control Hub">
@@ -104,8 +119,21 @@ The hub can't integrate or differentiate, so discretise: the integral becomes a 
 derivative a difference over the measured $\Delta t$.
 
 $$
-u_k = K_p e_k + K_i \sum_{j} e_j \Delta t + K_d \frac{e_k - e_{k-1}}{\Delta t}
+u_k = K_p e_k + K_i \sum_{j} e_j \Delta t
+- K_d \frac{m_k - m_{k-1}}{\Delta t}
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'u_k, e_k', meaning: 'the command and the error at loop k'},
+    {symbol: 'j', meaning: 'a counter over past loops for the running sum. Not a physical quantity'},
+    {symbol: 'm_k, m_{k-1}', meaning: 'the MEASUREMENT this loop and last loop. The derivative is taken on m rather than on e, which is why a minus sign appears in front of K_d'},
+    {symbol: 'the minus sign', meaning: 'a rising measurement means the mechanism is approaching, so the term must subtract. Differentiating the error instead would spike every time the target moves'},
+  ]}
+/>
+
+Here $m_k$ is the measurement. This is derivative-on-measurement, so a setpoint step does not create a
+derivative kick.
 
 Two refinements are mandatory on real hardware:
 
@@ -120,24 +148,29 @@ FTCLib provides a convenient baseline controller, and FTC Dashboard tunes the ga
 Treat the refinements above as production requirements: verify whether your library implements them
 the way your mechanism needs, or use the explicit anti-windup controller in the next lesson.
 
-<JavaCode league="FTC" label="FTCLib + Dashboard baseline PID">{`@Config            // exposes the gains to FTC Dashboard for live tuning
-public class ArmController {
-    public static double kP = 0.012, kI = 0.0, kD = 0.0006;
+<Pseudocode label="A baseline PID loop for an arm">{`ARM CONTROLLER      the smallest thing that works
 
-    private final DcMotorEx motor;
-    private final PIDController pid = new PIDController(kP, kI, kD);
+  gains:  kP, kI, kD           expose these for live tuning, not as constants
+                               buried in the file
 
-    public ArmController(HardwareMap hw) {
-        motor = hw.get(DcMotorEx.class, "arm");
-        motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
-    }
+  setup():
+      take the arm motor
+      put it in open-loop mode          # YOU are the controller now, not the
+                                        # motor firmware's built-in one
 
-    public void update(int targetTicks) {
-        pid.setPID(kP, kI, kD);                       // pick up Dashboard edits
-        double power = pid.calculate(motor.getCurrentPosition(), targetTicks);
-        motor.setPower(Math.max(-1, Math.min(1, power)));   // saturate safely
-    }
-}`}</JavaCode>
+  update(target_ticks):
+      refresh the gains                 # so a tuning edit takes effect this loop
+      power <- pid(measured_position, target_ticks)
+      command the motor with clamp(power, -1, +1)
+
+# The clamp is not decoration. Work out what a PID output of 3.7 means and
+# what the SDK does with it, then read the anti-windup lesson for what the
+# integrator was doing while the output sat pinned at 1.0.
+#
+# Work out why the motor must be in open-loop mode. If the firmware is also
+# running a position loop, how many controllers are fighting over the same
+# motor, and what does that look like on a graph?
+`}</Pseudocode>
 
 <Callout type="tip" title="Filters and controllers are a team.">
 The derivative term amplifies sensor noise. Production controllers run the measurement through a
@@ -145,7 +178,7 @@ low-pass filter first — a noisy encoder or distance sensor will ruin a D term.
 then control it.
 </Callout>
 
-### Beyond textbook PID: the PDFL controller
+### Production extension: the PDFL controller
 
 Notice the arm problem never actually needed an *integral*. The steady push gravity demands is
 *predictable*, so you can supply it directly and skip the slow, windup-prone I term. That is the idea
@@ -164,9 +197,19 @@ an **L**ower-limit (static-friction) term, with **no integral at all**:
   mechanism from buzzing.
 
 $$
-u = \underbrace{k_P\,e}_{P} + \underbrace{k_D\,\dot e_\text{filtered}}_{D}
+u = \underbrace{k_P\,e}_{P} - \underbrace{k_D\,\dot m_\text{filtered}}_{D}
   + \underbrace{k_F}_{F} + \underbrace{k_L\,\operatorname{sign}(e)}_{L\ \text{(outside the dead zone)}}
 $$
+
+<EquationLegend
+  title="Symbols in PDFL"
+  items={[
+    {symbol: 'P, D, F, L', meaning: 'the braces name the four terms, they are not variables. PDFL is Proportional, Derivative, Feedforward, Lower-limit'},
+    {symbol: 'k_F', meaning: 'a constant feedforward that holds the mechanism against gravity, the same job k_G does elsewhere', unit: 'power or V'},
+    {symbol: 'k_L', meaning: 'a static-friction floor: a constant push in the direction of the error, applied only outside the dead zone'},
+    {symbol: 'ṁ_filtered', meaning: 'the low-pass filtered rate of change of the measurement, not of the error'},
+  ]}
+/>
 
 <Callout type="idea" title="How to actually find F and L.">
 $k_F$ is the term you'd like to tune first, but it is hard to read off directly. The method: slowly raise the
@@ -177,6 +220,13 @@ friction still resists ($u_\text{down} = k_F - k_L$). Solve the pair:
 $$
 k_F = \frac{u_\text{up} + u_\text{down}}{2}, \qquad k_L = \frac{u_\text{up} - u_\text{down}}{2}.
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'u_up', meaning: 'the smallest command that just moves the mechanism UP, found by experiment. Gravity and friction both oppose you here'},
+    {symbol: 'u_down', meaning: 'the smallest command that just moves it DOWN. Now gravity helps while friction still resists, which is why the two differ'},
+  ]}
+/>
 The <strong>average</strong> is the gravity hold; <strong>half the difference</strong> is the friction.
 Two measurements give you both gains.
 </Callout>
@@ -186,41 +236,59 @@ A walkthrough of these exact upgrades — swapping the integral for feedforward,
 measurement, and low-pass-filtering the derivative — and why they beat a textbook PID on FTC mechanisms.
 </VideoEmbed>
 
-<JavaCode league="FTC" label="PDFL: P + filtered D + constant F + static-friction L (no integral)">{`@Config
-public class PDFL {                       // Proportional · Derivative · Feedforward · Lower-limit
-    public static double kP, kD, kF, kL;  // tune F & L from the up/down break-away powers
-    public static double deadzone = 5;    // inside this band (ticks), drop the L term
+<Pseudocode label="PDFL: P, filtered D, constant F, static-friction L">{`PDFL      Proportional, Derivative, Feedforward, Lower-limit
+          note there is NO integral term - F and L do that job explicitly
 
-    private double filteredD = 0;
-    public static double derivativeTau = 0.05; // derivative-filter time constant, seconds
-    private double lastMeasurement = 0, lastTime = 0;
-    private boolean firstLoop = true;
-    private final ElapsedTime timer = new ElapsedTime();
+  gains:     kP, kD, kF, kL
+  DEADZONE   ~5 ticks      inside this band, drop the L term
+  TAU        ~0.05 s       derivative filter time constant
 
-    /** One loop. Returns motor power. */
-    public double run(double target, double measurement) {
-        double t  = timer.seconds();
-        double dt = Math.max(1e-3, t - lastTime);
-        double error = target - measurement;
+  run(target, measurement):
+      dt    <- max(MIN_DT, seconds since the last call)   # measured, never assumed
+      error <- target - measurement
 
-        double p = kP * error;
+      # ---- P ----
+      p <- kP * error
 
-        // Derivative on measurement: damps motion without a kick when target steps.
-        double rawD = firstLoop ? 0.0 : -(measurement - lastMeasurement) / dt;
-        double alpha = 1.0 - Math.exp(-dt / Math.max(1e-3, derivativeTau));
-        filteredD += alpha * (rawD - filteredD);
-        double d = kD * filteredD;
-        firstLoop = false;
-        lastMeasurement = measurement;
-        lastTime = t;
+      # ---- D, taken on the MEASUREMENT and low-pass filtered ----
+      raw_d <- 0 on the very first loop,
+               otherwise  -(measurement - last_measurement) / dt
 
-        double f = kF;                                      // constant: holds against gravity
-        double l = kL * Math.signum(error);                 // static-friction floor
+      alpha      <- 1 - exp(-dt / TAU)
+      filtered_d <- filtered_d + alpha * (raw_d - filtered_d)
+      d          <- kD * filtered_d
 
-        // near the target, sign(error) flips each loop -> drop L so it can't buzz
-        return (Math.abs(error) < deadzone) ? p + d + f : p + d + f + l;
-    }
-}`}</JavaCode>
+      remember measurement and the time for next loop
+
+      # Two separate ideas hide in those lines, and both are worth deriving:
+      #
+      # 1. Why the derivative is taken on the measurement and NEGATED, rather
+      #    than on the error. Step the target from 0 to 500 in one loop and
+      #    compute d(error)/dt. What does that spike do to the motor? Look
+      #    up: "derivative kick", "derivative on measurement".
+      #
+      # 2. Why raw_d is filtered at all. Differencing a quantized encoder
+      #    over a short dt amplifies noise: work out the velocity implied by
+      #    a one-tick jitter at dt = 0.02 s. Look up: "exponential moving
+      #    average", and confirm alpha -> 1 as dt grows past TAU.
+
+      # ---- F: a constant that holds against gravity ----
+      f <- kF
+
+      # ---- L: a static-friction floor, in the direction of the error ----
+      l <- kL * sign(error)
+
+      if | error | < DEADZONE:  return p + d + f          # drop L near target
+      else:                     return p + d + f + l
+
+# Work out why L is dropped near the target. sign(error) flips every time the
+# arm crosses the setpoint. Trace three loops with the arm oscillating one
+# tick either side, and describe the noise the mechanism makes.
+#
+# Tune kF and kL by measurement, not by guessing: find the smallest power
+# that holds the arm still (that is kF), then the smallest power that makes
+# it just break away and move (the difference is kL).
+`}</Pseudocode>
 
 This mirrors the widely shared FTC `PDFL` controller. There is no integral term at all: $k_F$ holds the
 steady load and $k_L$ breaks friction, so there is nothing to wind up.

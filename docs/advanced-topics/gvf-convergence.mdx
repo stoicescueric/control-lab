@@ -17,11 +17,13 @@ gradient, and <em>proves</em> convergence with a Lyapunov argument. Read the cor
 "why it provably works."
 </Abstract>
 
-<Admonition type="note" title="Prerequisite">
+<Admonition type="note" title="Readiness and stopping point">
 
 This page extends [**Guided Vector Fields**](../path-following/guided-vector-fields.mdx). It assumes you
 already know the closest-point field $\boldsymbol{\chi} = \hat{\mathbf{t}} - k_N\,e\,\hat{\mathbf{n}}$ and
-the cross-track error $e$ from that lesson.
+the cross-track error $e$ from that lesson, plus multivariable gradients, differential equations, and the
+idea of a Lyapunov function. A builder who only needs to tune and deploy the follower may stop at the core
+lesson's projection, speed cap, endpoint handoff, and symptom table.
 
 </Admonition>
 
@@ -43,6 +45,15 @@ $$
 E = \begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: '\u03c6 (varphi)', meaning: 'the IMPLICIT function describing the path: it is zero exactly on the path, and its sign says which side you are on'},
+    {symbol: '\u2207\u03c6', meaning: 'the gradient: it points perpendicular to the path, in the direction \u03c6 grows fastest'},
+    {symbol: 'E', meaning: 'a 90\u00b0 rotation matrix. Applying it to the normal gradient turns it into a TANGENT, which is how one function supplies both directions'},
+    {symbol: 'k', meaning: 'the converge gain, written k_N in the main GVF lesson'},
+  ]}
+/>
+
 $E$ is a 90° rotation, so $E\nabla\varphi$ is **tangent** to the level curve (it propagates the robot along
 the path) and $-k\,\varphi\,\nabla\varphi$ points down the gradient toward $\varphi = 0$ (it converges). This
 has the same propagation-plus-convergence structure as the closest-point form:
@@ -58,7 +69,12 @@ about and prove convergence — it needs no closest-point search. Use the **clos
 spline, where you don't have a tidy $\varphi$ but you can always project onto the curve.
 </Callout>
 
-## Why it provably converges
+## Why it converges under the model assumptions
+
+Assume the path is regular, the robot remains in a local tubular neighborhood with a unique smooth
+closest-point projection, $k_N>0$, and the commanded field is followed without actuator saturation. For
+the implicit proof, also assume $\varphi$ is smooth and has no off-path critical point in the region of
+interest. These hypotheses are what make the following local argument valid.
 
 Take the cross-track error as an energy $V = \tfrac{1}{2}e^2 \ge 0$. Moving along the normalized field, the
 rate of change of $e$ is set by the normal component of the velocity, which the converging term makes
@@ -67,6 +83,13 @@ proportional to $-e$: $\dot e \propto -k_N\,e$. So
 $$
 \dot V = e\,\dot e \;\propto\; -k_N\,e^2 \;\le\; 0
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'V', meaning: 'a LYAPUNOV function: an energy-like score, here proportional to e\u00b2, that is zero only on the path and positive everywhere else'},
+    {symbol: 'V\u0307 \u2264 0', meaning: 'the whole proof. If that score can never increase, the robot can never drift further from the path, so it must converge. Look up "Lyapunov stability"'},
+  ]}
+/>
 
 The energy is nonincreasing. If the field is followed exactly and there are no off-path critical points
 where $\nabla\varphi=0$, the invariant set with $\dot V=0$ reduces to the path; LaSalle's invariance
@@ -82,11 +105,11 @@ term drives that distance to zero.
 
 <Admonition type="warning" title="Where the guarantee bends in practice">
 
-The proof assumes the field is followed exactly and the path's $\varphi$ (or its closest point) is known
-everywhere. On a real robot, finite loop time, the closest-point search, actuator limits, and
+The proof assumes the field is followed exactly and the path's $\varphi$ (or a locally unique closest
+point) is available in the region of operation. On a real robot, finite loop time, projection error, actuator limits, and
 singular points where $\nabla\varphi = 0$ all chip at it — which is why the
-[core lesson](../path-following/guided-vector-fields.mdx) clamps the converge
-gain and keeps a minimum along-track speed. The Lyapunov result is the *ideal* the implementation
+[core lesson](../path-following/guided-vector-fields.mdx) constrains projection, caps speed, rejects
+degenerate tangents, and slows into a terminal controller. The Lyapunov result is the *ideal* the implementation
 approximates, not a free lunch.
 
 </Admonition>

@@ -1,7 +1,7 @@
 ---
 title: Splines
 description: The ways to describe a smooth FTC path — Bézier curves shaped by control points (approximation), quintic Hermite splines pinned to waypoints and derivatives (interpolation), and natural cubic interpolation — and the continuous curvature a follower needs.
-sidebar_position: 4
+sidebar_position: 7
 tags: [splines, bezier, quintic, natural-cubic, curvature, c2-continuity, trajectory]
 ---
 
@@ -19,7 +19,7 @@ This lesson is about *describing* a smooth path. Three families do it: a Bézier
 control points that pull the curve toward them; a quintic Hermite spline, pinned to waypoints with specified
 velocity and acceleration; and a natural cubic spline, which threads every point and solves for the slopes
 itself. Béziers are intuitive to author by feel; quintic and natural-cubic splines pass exactly through your
-points and reach continuous curvature. Here we build the curves; *following* them at speed (resampling,
+points and, when their tangent stays nonzero, can provide continuous curvature. Here we build the curves; *following* them at speed (resampling,
 speed planning, centripetal feedforward) is covered in [Pure Pursuit](./pure-pursuit.mdx).
 </Abstract>
 
@@ -48,12 +48,21 @@ opposite philosophies.
 |---|---|---|---|
 | C⁰ | position | the path connects | a corner — a kink |
 | C¹ | + first derivative | heading (tangent direction) | a sudden curvature change — a jerk |
-| C² | + second derivative | curvature | smooth, followable steering |
+| C² | + second derivative | second derivative; curvature on a regular curve | smooth, followable steering |
 
-C² is the target: continuous curvature means the follower never has to change steering instantly. Now the
-two ways to get there.
+C² means that position, first derivative, and second derivative match across each join. If the path is
+**regular** there (its tangent is nonzero), the curvature formula has a nonzero denominator and curvature
+is continuous, so the follower never has to change steering instantly. The path families below offer
+different authoring trade-offs.
 
-### Bézier curves — shape by control points (approximation)
+### Core checkpoint: choose a regular quintic Hermite path
+
+For a first follower, use the **quintic Hermite** representation below: each segment is pinned to its
+endpoint poses and shares first and second derivatives at joins. Verify that its tangent never becomes
+zero, then resample it for the follower. Bézier authoring and the natural-cubic solve are useful optional
+comparisons, not prerequisites for that artifact.
+
+### Optional comparison: Bézier control-point paths
 
 A cubic Bézier is built from four **control points** $P_0, P_1, P_2, P_3$ and a weighted blend called
 the Bernstein basis:
@@ -63,6 +72,15 @@ $$
 \qquad t \in [0,1]
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'P_0 \u2026 P_3', meaning: 'the four control points. Here the subscript numbers a control point, not a loop or a path sample'},
+    {symbol: 't', meaning: 'the curve parameter, running 0 to 1 along ONE segment. It is not time, and it is not distance along the curve'},
+    {symbol: 'B(t)', meaning: 'the point on the curve at parameter t'},
+    {symbol: '(1\u2212t) and t powers', meaning: 'the Bernstein weights. At any t the four of them sum to exactly 1, which is what keeps the curve inside its control points'},
+  ]}
+/>
+
 The weights always sum to $1$, so the curve stays inside the control polygon's hull. It passes through
 **only the endpoints** $P_0$ and $P_3$; the interior points $P_1, P_2$ are *handles* that pull the curve
 without touching it. They set the endpoint tangents directly:
@@ -70,6 +88,12 @@ without touching it. They set the endpoint tangents directly:
 $$
 \mathbf{B}'(0) = 3(P_1 - P_0), \qquad \mathbf{B}'(1) = 3(P_3 - P_2)
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'B\u2032(0), B\u2032(1)', meaning: 'the derivative of the curve with respect to t at each end: the tangent direction there, scaled by 3'},
+  ]}
+/>
 
 That is why Béziers feel good to author — drag a handle and the curve leans that way. The point on the
 curve at any $t$ is found by **de Casteljau's algorithm**: repeatedly interpolate along the control
@@ -82,7 +106,7 @@ segment's first handle to mirror the previous one, $Q_1 - Q_0 = P_3 - P_2$; dema
 handle too ($Q_2 = P_1 - 4P_2 + 4P_3$). So in a Bézier *chain*, continuity steals exactly the handles
 that made Béziers convenient — you no longer get to place them freely.
 
-### Quintic Hermite — pin waypoints and derivatives (interpolation)
+### Core representation: Quintic Hermite waypoints and derivatives
 
 The other philosophy: instead of points that pull the curve, specify the curve's own state at each
 **waypoint**: position, velocity, and acceleration — and let one polynomial satisfy all of it. Because
@@ -101,12 +125,27 @@ $$
 x(t) = c_5 t^5 + c_4 t^4 + c_3 t^3 + c_2 t^2 + c_1 t + c_0
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'c_0 \u2026 c_5', meaning: 'the six polynomial coefficients being solved for, one per power of t. Six unknowns is exactly what six constraints can pin down'},
+    {symbol: 'x(t)', meaning: 'ONE coordinate of the curve. A 2-D path runs this whole construction twice, once for x and once for y'},
+  ]}
+/>
+
 Evaluating it and its derivatives at $t = 0$ fixes the low coefficients straight from the start
 conditions:
 
 $$
 c_0 = x(0), \qquad c_1 = x'(0), \qquad c_2 = \tfrac{1}{2}x''(0)
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'x(0)', meaning: 'the position at the start of the segment'},
+    {symbol: 'x\u2032(0)', meaning: 'the velocity there: the first derivative with respect to t'},
+    {symbol: 'x\u2032\u2032(0)', meaning: 'the acceleration there. The one-half appears because differentiating c\u2082t\u00b2 twice gives 2c\u2082'},
+  ]}
+/>
 
 and the endpoint-at-$t{=}1$ conditions give the top three:
 
@@ -127,15 +166,17 @@ $$
 
 Now the C² join is automatic: set each interior waypoint's ending acceleration equal to the next
 segment's starting acceleration, $x''_\text{seg}|_{t=1} = x''_\text{next}|_{t=0}$, and the curvature is
-continuous through the whole spline — no handles sacrificed.
+continuous through every regular join — no handles sacrificed. Apply the same position/first/second-
+derivative matching to both $x(t)$ and $y(t)$.
 
-### Natural cubic splines — interpolate every point, solve for the slopes
+### Optional alternative: natural cubic interpolation
 
 Quintic Hermite asks *you* for the velocity and acceleration at each waypoint. What if you only have the
 points and want the smoothest curve through them? A **natural cubic spline** keeps one cubic per interval
 but, instead of being handed the slopes, *solves for them* by demanding curvature match everywhere: C⁰ at
 the endpoints, and C¹ **and** C² across every interior knot. That is two conditions short of unique, and the
-**natural** boundary closes the gap by setting curvature to zero at the two ends ($S''(x_0) = S''(x_n) = 0$)
+**natural** boundary closes the gap by setting the component second derivatives to zero at the two ends
+($S''(x_0) = S''(x_n) = 0$)
 — the spline leaves the path straight, like a drafting spline released at its tips.
 
 Demanding C² everywhere collapses into a single **tridiagonal** system in the knots' second derivatives,
@@ -143,15 +184,16 @@ which the **Thomas algorithm** solves in $O(n)$ — no general matrix inversion.
 Java are in
 [Advanced Topics → Natural cubic splines: the derivation](../advanced-topics/natural-cubic-derivation.mdx).
 
-Drag the waypoints below: the spline always threads through every point, the curvature comb stays smooth
-across each knot (that is the C²), and it flattens to nothing at the two ends — the natural boundary in
-action.
+Drag the waypoints below: the spline always threads through every point. Where the 2-D tangent remains
+nonzero, its C² joins make the curvature comb continuous, and zero component second derivatives make the
+comb approach zero at the ends.
 
 <NaturalCubicSpline />
 
-The trade against quintic Hermite: a natural cubic is **already C²**: curvature is continuous across every
-interior knot — with the *fewest* degrees of freedom and no slope input required. What you give up is
-control of the ends: the natural boundary *pins* the endpoint curvature to zero rather than letting you
+The trade against quintic Hermite: a natural cubic is **already C²**. On regular portions, curvature is
+continuous across every interior knot — with the *fewest* degrees of freedom and no slope input required.
+What you give up is control of the ends: the natural boundary pins component second derivatives to zero
+(and therefore zero endpoint curvature when the tangent is nonzero) rather than letting you
 choose it. A quintic's two extra coefficients per segment let you **prescribe** velocity and acceleration
 (hence curvature) at every waypoint. Both are C²; the quintic just gives you the boundary controls. (And since
 $S(x)$ needs $x$ monotonic, a path that doubles back is fit as **two** splines $x(t), y(t)$ — see the
@@ -166,12 +208,21 @@ $$
 \kappa(t) = \frac{x'y'' - y'x''}{\left(x'^2 + y'^2\right)^{3/2}}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: '\u03ba(t)', meaning: 'curvature at parameter t: 1 divided by the radius of the circle that best fits the curve there', unit: '1/in'},
+    {symbol: 'x\u2032, y\u2032', meaning: 'first derivatives of each coordinate with respect to t'},
+    {symbol: 'x\u2032\u2032, y\u2032\u2032', meaning: 'second derivatives with respect to t'},
+    {symbol: 'the 3/2 power', meaning: 'this is what makes curvature independent of how fast t sweeps the curve. Reparameterize the same shape and \u03ba is unchanged'},
+  ]}
+/>
+
 <Callout type="idea" title="Which one should you use?">
 **Bézier** when a human authors the path by eye — the handles are a great editor, and the Road Runner /
 Pedro Pathing-style tools expose them. **Quintic Hermite** when you have exact poses to hit (Road
 Runner's `splineTo` is quintic internally) and want C² for free. **Natural cubic** when you have only
-points (no slopes) and want the cheapest C² interpolation — one tridiagonal solve, at the cost of pinned
-(zero) end curvature. Bézier and Hermite are convertible: a cubic Bézier *is* a cubic Hermite with
+points (no slopes) and want the cheapest C² interpolation — one tridiagonal solve, at the cost of zero
+component second derivatives at the ends. Bézier and Hermite are convertible: a cubic Bézier *is* a cubic Hermite with
 $m_0 = 3(P_1-P_0)$, $m_1 = 3(P_3-P_2)$ — so editors can show handles while the math runs on Hermite
 coefficients.
 </Callout>
@@ -182,32 +233,54 @@ coefficients.
 
 Both reduce to evaluating a polynomial (and its derivatives) per coordinate each loop.
 
-<JavaCode league="FTC" label="Cubic Bézier and quintic Hermite segments">{`/** Cubic Bézier in one coordinate: 4 control points, t in [0,1]. */
-public static double bezier(double p0, double p1, double p2, double p3, double t) {
-    double u = 1 - t;
-    return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
-}
+<Pseudocode label="Cubic Bezier and quintic Hermite segments">{`CUBIC BEZIER, one coordinate at a time
+    4 control points, t running 0 -> 1
 
-/** Quintic Hermite segment: pinned position/velocity/accel at both ends. */
-public final class Quintic {
-    private final double c0, c1, c2, c3, c4, c5;
+    bezier(p0, p1, p2, p3, t):
+        u <- 1 - t
+        return u^3*p0  +  3*u^2*t*p1  +  3*u*t^2*p2  +  t^3*p3
 
-    public Quintic(double p0, double v0, double a0, double p1, double v1, double a1) {
-        c0 = p0;
-        c1 = v0;
-        c2 = 0.5 * a0;
-        double d0 = p1 - c0 - c1 - c2;   // residuals the top coeffs must absorb
-        double d1 = v1 - c1 - 2 * c2;
-        double d2 = a1 - 2 * c2;
-        c3 =  10 * d0 - 4 * d1 + 0.5 * d2;
-        c4 = -15 * d0 + 7 * d1 - 1.0 * d2;
-        c5 =   6 * d0 - 3 * d1 + 0.5 * d2;
-    }
+    # Those four weights are the binomial coefficients 1,3,3,1 with powers of
+    # u and t that always sum to 3. Check the identity: at any t the four
+    # weights add to exactly 1. Try t = 0, t = 1, t = 0.5 by hand.
+    # Look up: "Bernstein polynomial", "de Casteljau's algorithm".
 
-    public double pos(double t) { return ((((c5*t + c4)*t + c3)*t + c2)*t + c1)*t + c0; }
-    public double vel(double t) { return (((5*c5*t + 4*c4)*t + 3*c3)*t + 2*c2)*t + c1; }
-    public double acc(double t) { return ((20*c5*t + 12*c4)*t + 6*c3)*t + 2*c2; }
-}`}</JavaCode>
+
+QUINTIC HERMITE SEGMENT
+    pins position, velocity AND acceleration at both ends
+    -> 6 constraints, so 6 coefficients c0..c5
+
+    build(p0, v0, a0, p1, v1, a1):
+        # the start conditions fall straight out at t = 0
+        c0 <- p0
+        c1 <- v0
+        c2 <- a0 / 2
+
+        # what the top three coefficients still have to absorb at t = 1
+        d0 <- p1 - c0 - c1 - c2
+        d1 <- v1 - c1 - 2*c2
+        d2 <- a1 - 2*c2
+
+        c3 <-  10*d0 -  4*d1 + 0.5*d2
+        c4 <- -15*d0 +  7*d1 - 1.0*d2
+        c5 <-   6*d0 -  3*d1 + 0.5*d2
+
+    pos(t) <- c0 + c1*t + c2*t^2 + c3*t^3 + c4*t^4 + c5*t^5
+    vel(t) <- the derivative of pos
+    acc(t) <- the derivative of vel
+
+# Derive c0, c1, c2 yourself first - they are easy. Write pos(t), vel(t),
+# acc(t) as general polynomials, substitute t = 0, and read them off.
+#
+# Then the hard half: substitute t = 1 into all three, which gives three
+# equations in c3, c4, c5. Solving that 3x3 system is where the 10, -15, 6
+# come from. Do it once by hand; you will never mistrust the numbers again.
+# Look up: "Hermite interpolation", "quintic Hermite basis functions".
+#
+# Work out: why quintic and not cubic? Count the constraints. A cubic pins
+# position and velocity at both ends (4), which leaves acceleration free to
+# jump at every junction. What does a jump in acceleration feel like?
+`}</Pseudocode>
 
 Build one curve for $x$ and one for $y$ per segment. For a quintic chain, sharing endpoint velocity and
 acceleration between adjacent segments is what makes the whole path C².

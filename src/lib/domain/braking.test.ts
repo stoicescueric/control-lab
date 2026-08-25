@@ -16,6 +16,12 @@ describe('predictedStoppingDistance', () => {
   it('returns zero at zero velocity', () => {
     expect(predictedStoppingDistance(0, 5)).toBe(0);
   });
+
+  it('rejects nonpositive or nonfinite deceleration', () => {
+    expect(() => predictedStoppingDistance(1, 0)).toThrow(/positive/);
+    expect(() => predictedStoppingDistance(1, -1)).toThrow(/positive/);
+    expect(() => predictedStoppingDistance(1, Number.NaN)).toThrow(/finite/);
+  });
 });
 
 describe('brakingVelocityForDistance', () => {
@@ -33,5 +39,10 @@ describe('brakingVelocityForDistance', () => {
       const v = brakingVelocityForDistance(d, decel);
       expect(predictedStoppingDistance(v, decel)).toBeCloseTo(d, 8);
     }
+  });
+
+  it('rejects invalid distances and deceleration', () => {
+    expect(() => brakingVelocityForDistance(-1, 2)).toThrow(/non-negative/);
+    expect(() => brakingVelocityForDistance(1, 0)).toThrow(/positive/);
   });
 });

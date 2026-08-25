@@ -109,7 +109,7 @@ $$
 
 $k_t$ (the **torque constant**, N·m per amp) is just the proportionality — how much twist you get per amp,
 set by the magnets and the number of wire turns. **Torque is current.** That single fact is what
-[current control](#controlling-the-motor) below is built on.
+[current control](#production-extensions-feedback-and-current-control) below is built on.
 
 **2 — Speed creates a voltage that fights you.** Here is the part that surprises people: a spinning motor
 is *also a generator*. **Angular velocity** $\omega$ is how fast the shaft turns, in radians per second
@@ -174,6 +174,10 @@ A straight line: maximum torque at zero speed, zero torque at top speed. Drive i
 and the load, and the green dot shows where the motor actually settles (where its line meets the load).
 Watch **current**, **efficiency**, and **heat** as you push toward stall.
 
+The interactive model shows only the first quadrant: positive voltage, positive speed, and motoring
+torque with current clamped nonnegative. Reverse rotation, electrical braking, and regenerative operation
+need a signed four-quadrant model and are intentionally not represented by this plot.
+
 <MotorCurve />
 
 Read off the two ends — the only points most datasheets list:
@@ -205,7 +209,11 @@ they describe the same electromechanical coupling. (Data:
 <a href="https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html">gm0's motor guide</a>.)
 </Callout>
 
-### A worked example
+### Core checkpoint: calculate one loaded operating point
+
+The minimum useful artifact is a load-line calculation you can defend: convert the mechanism load through
+the gear ratio, find the motor's speed/current operating point, and reject a choice that lives too close
+to stall. The worked example below does exactly that before the control options continue.
 
 Say this motor drives a mechanism at 12 V against a steady **0.05 N·m** load. Where does it settle?
 
@@ -228,11 +236,20 @@ P_\text{in} = VI \approx 34.7\ \text{W}, \quad
 P_\text{heat} = I^2 R \approx 9\ \text{W}
 $$
 
+<EquationLegend
+  items={[
+    {symbol: 'P_out', meaning: 'mechanical power actually delivered to the mechanism: torque times speed', unit: 'W'},
+    {symbol: 'P_in', meaning: 'electrical power drawn from the battery: voltage times current', unit: 'W'},
+    {symbol: '\u03b7 (eta)', meaning: 'efficiency, the fraction of what you drew that became motion. The rest became heat'},
+    {symbol: 'P_heat', meaning: 'power lost in the windings, I\u00b2R. Note it grows with the SQUARE of current, which is why a stalled motor cooks so quickly', unit: 'W'},
+  ]}
+/>
+
 A healthy operating point: fast, efficient, modest current. Now push the load to stall (0.19 N·m): speed
 → 0, current → 11 A, output power → 0, and **all** 130 W of input becomes heat. That is the lift that
 "works empty." Set the demo's load slider to 0.05 and then to 0.19 and watch these exact numbers.
 
-### Controlling the motor
+### Production extensions: feedback and current control
 
 You never command torque or current directly — you command **voltage** (the Control Hub does it by PWM:
 switching 12 V on and off fast, so `setPower(0.5)` delivers ~6 V on average). Three levels of control build
@@ -250,6 +267,13 @@ on the model above:
 $$
 V_\text{cmd} = k_e\,\omega + I^*\,R
 $$
+
+<EquationLegend
+  items={[
+    {symbol: 'I*', meaning: 'the current you WANT to draw. The star marks a target, matching the convention used for target poses elsewhere', unit: 'A'},
+    {symbol: 'V_cmd', meaning: 'the voltage to command so that I* actually flows at the present speed \u03c9. It is the motor equation solved for V rather than for I'},
+  ]}
+/>
 
    You read $\omega$ from the encoder, predict the back-EMF, add the bit of voltage that pushes your
    target current, and send it. Be precise about what this is: it is **open-loop, model-based** current
@@ -278,7 +302,7 @@ Learn the motor and the controllers stop being magic.
 
 </Theory>
 
-<Deploy title="Gearing, current, and what your code commands">
+<Deploy title="Production extension: gearing, current, and code">
 
 You bolt a gearbox to the motor to *move the useful part of the curve* to where your mechanism lives. A
 reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (minus losses):
@@ -287,40 +311,58 @@ reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (m
   output speed = <Blue>ω_free / G</Blue> &nbsp;·&nbsp; output torque = <Rose>τ_stall · G · η</Rose>
 </Formula>
 
-<JavaCode league="FTC" label="Motor specs -> geared output (use your datasheet numbers)">{`/** The three numbers every brushed DC motor publishes at 12 V. */
-public record MotorSpec(
-        double freeSpeedRpm,    // RPM at no load
-        double stallTorqueNm,   // N·m at zero speed
-        double stallCurrentA) { // A at zero speed (the heat budget)
+<Pseudocode label="Motor specs -> geared output (use your datasheet numbers)">{`MOTOR SPEC      the three numbers every brushed DC motor publishes at 12 V
 
-    public double gearedFreeSpeedRpm(double gearReduction) {
-        return freeSpeedRpm / gearReduction;             // speed divides down
-    }
-    public double gearedStallTorqueNm(double gearReduction, double efficiency) {
-        return stallTorqueNm * gearReduction * efficiency; // torque multiplies up
-    }
-}`}</JavaCode>
+    free_speed_rpm      RPM with nothing attached
+    stall_torque_Nm     torque at zero speed
+    stall_current_A     current at zero speed  <- this is your heat budget
+
+GEARING     a reduction G, with efficiency eta
+
+    geared_free_speed  <- free_speed_rpm / G          # speed divides DOWN
+    geared_stall_torque <- stall_torque_Nm * G * eta  # torque multiplies UP
+
+# Work out why one divides and the other multiplies, then check that the
+# product still makes sense: speed times torque is power, and gears cannot
+# create power. Where did the missing power go, and what is eta doing there?
+#
+# Work out the number that is NOT affected by gearing: stall current. Gears
+# change the trade between speed and torque at the output shaft, but the
+# motor still draws what it draws. This is why a heavily geared mechanism
+# can quietly cook a motor while barely moving.
+`}</Pseudocode>
 
 At runtime, a motor near stall is the fastest way to overheat a mechanism and brown out the robot. The hub can
 read current, so guard it — or, better, command current directly using the model.
 
-<JavaCode league="FTC" label="Feedforward (model-based) current control, and a measured-current limiter">{`/** FEEDFORWARD / model-based (OPEN-LOOP) current control: command the voltage the
- *  model predicts will yield targetAmps, via V = ke*omega + I*R, then voltage-
- *  compensate. It never reads the actual current, so it is only as good as ke/R.
- *  For a TRUE closed loop, run a controller on the getCurrent() error instead. */
-public void setCurrent(DcMotorEx motor, double targetAmps) {
-    double omega = motor.getVelocity(AngleUnit.RADIANS);  // rad/s from the encoder
-    double vCmd  = KE * omega + targetAmps * R;           // predicted back-EMF + IR
-    motor.setPower(vCmd / battery.getVoltage());          // volts -> [-1, 1]
-}
+<Pseudocode label="Model-based current command, and a measured-current limiter">{`# ---- FEEDFORWARD current command: OPEN loop. Never reads actual current. ----
+set_current(motor, target_amps):
+    omega <- motor velocity in radians/second      # from the encoder
+    v_cmd <- KE * omega  +  target_amps * R        # back-EMF, plus I*R
+    command the motor with  v_cmd / battery_voltage
 
-/** Closed-loop safety net: MEASURE the current and scale the command down if it
- *  exceeds the budget. This is feedback (it reads getCurrent), unlike setCurrent. */
-public void driveSafely(DcMotorEx motor, double command, double maxCurrentA) {
-    double current = motor.getCurrent(CurrentUnit.AMPS);
-    if (current > maxCurrentA) command *= maxCurrentA / current;
-    motor.setPower(command);
-}`}</JavaCode>
+# That line is the motor equation  V = ke*omega + I*R  solved for V. Derive
+# it: a spinning motor generates a back-EMF proportional to speed, and the
+# rest of the applied voltage is what pushes current through the winding
+# resistance. Look up: "DC motor back-EMF", "motor voltage equation".
+#
+# This is only as accurate as your KE and R. It commands the voltage that
+# SHOULD produce target_amps, and never checks. For a real closed loop, run
+# a controller on the error between measured and target current instead.
+
+
+# ---- MEASURED limiter: CLOSED loop. This one reads the sensor. ----
+drive_safely(motor, command, max_amps):
+    current <- the motor's measured current
+    if current > max_amps:
+        command <- command * (max_amps / current)   # scale back proportionally
+    apply command
+
+# Work out why the scale factor is a ratio rather than a fixed step down.
+# At 1.5x the budget, what fraction of the command survives? Then work out
+# why this is a safety net and not a controller: what does it do when the
+# current is comfortably UNDER the budget?
+`}</Pseudocode>
 
 <Callout type="warn" title="Stall is a thermal event, not just a slow one.">
 A motor held near stall draws stall current <em>continuously</em>, and almost all of it becomes heat
