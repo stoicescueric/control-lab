@@ -21,6 +21,8 @@ A filter takes a single noisy stream and smooths it, trading a little lag for a 
   will reach for most.
 - **[Moving average](./moving-average.mdx)**: the windowed alternative, and when its latency is
   worth its smoothness.
+- **[Savitzky-Golay](./savitzky-golay.mdx)**: fit a small polynomial to the window instead of a flat
+  line, so smoothing stops flattening the peaks, and read velocity off the same fit.
 
 Filtering has a hard limit: it fights *jitter*, not *drift*. If a sensor's center is walking away
 from the truth, no amount of smoothing brings it back — you need a second opinion.

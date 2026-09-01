@@ -168,9 +168,10 @@ reads through a gap in the field wall?
 
 </Exercise>
 
-Both filters here assume a *single* noisy sensor, and both share its hard limit: they cannot fix
-drift. The rest of the module switches to *fusion* — combining two imperfect sensors into one
-estimate that beats either alone — starting with the complementary filter.
+There is a second limit hiding in that equal weighting, and it is not about noise at all. Averaging a
+window asks which flat value best explains it, so on a signal that curves, the answer sits below the
+peak even with a perfect sensor. The [Savitzky-Golay filter](./savitzky-golay.mdx) keeps the window
+and fits a curve to it instead, for the same cost per loop.
 
 </Deploy>
 
