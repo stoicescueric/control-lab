@@ -12,17 +12,18 @@ import {DifferentialEquationsLiveDemo} from '@site/src/components/simulations/fo
 <Difficulty level="Medium" />
 
 <Abstract>
-Differential equations describe systems by relating a quantity to its own rate of change.
-In robotics, they explain why mechanisms do not respond instantly: motors spin up, arms fall under gravity, flywheels coast down, and projectiles slow under drag.
+Cut power to a flywheel at full speed and it does not stop; it coasts for several seconds, quickly at first and then more and more slowly. Nothing in the code changed, so the behaviour is coming from the mechanism itself.
+Differential equations are how you write that down: the speed the wheel has right now is what sets how fast it is losing speed.
 </Abstract>
 
-A differential equation sounds intimidating until you translate the phrase:
+Every differential equation on this page says one thing:
 
 > The current state tells you how the state is about to change.
 
-That is exactly how physical mechanisms behave.
+Flywheel speed sets how much back-EMF opposes the applied voltage, which sets how hard the wheel is
+still accelerating. Arm angle sets the gravity torque, which sets how fast the arm is falling back down.
 
-## FTC example: the same motor command behaves differently under load
+## The same motor command behaves differently under load
 
 Your intake spins quickly in the air. Then it touches a game element and slows down. The code did not
 change, but the mechanism did.
@@ -30,22 +31,7 @@ change, but the mechanism did.
 That is not a software mystery. The motor is a dynamic system. Voltage, back-EMF, friction, inertia,
 and load determine acceleration, and acceleration changes speed.
 
-## Visual intuition
-
-Differential equations are often easier to understand as arrows showing "where the system wants to go
-next." That is why phase-space pictures are so useful.
-
-<DifferentialEquationsLiveDemo />
-
-<VideoEmbed
-  title="3Blue1Brown: Differential Equations"
-  src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6"
-  href="https://www.youtube.com/playlist?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6">
-  This series builds the visual idea of a system evolving according to local arrows, which maps well
-  onto motors and mechanisms.
-</VideoEmbed>
-
-## The basics
+## Writing a mechanism as a rate
 
 The simplest differential equation says a quantity changes in proportion to the gap between where it is
 and where it wants to settle:
@@ -109,21 +95,37 @@ $$
 
 That equation is the motor lesson in dynamic form.
 
-## Engineering use case: flywheel recovery
+## Arrows toward equilibrium
+
+Both equations above are easier to read as arrows showing where the system wants to go next. The demo
+draws the response over time and marks, at several states, how hard the equation is pushing from there:
+the arrows are long while the gap is wide, and they shrink as the gap closes.
+
+<DifferentialEquationsLiveDemo />
+
+<VideoEmbed
+  title="3Blue1Brown: Differential Equations"
+  src="https://www.youtube.com/embed/videoseries?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6"
+  href="https://www.youtube.com/playlist?list=PLZHQObOWTQDNPOjrT6KVlfJuKtYTftqH6">
+  This series builds the visual idea of a system evolving according to local arrows, which maps well
+  onto motors and mechanisms.
+</VideoEmbed>
+
+## Flywheel recovery
 
 A flywheel shooter needs more than a target speed. It needs to recover after a game element steals
-energy from the wheel. A differential-equation view tells you why recovery time depends on motor
-voltage, motor constants, flywheel inertia, contact load, and battery sag.
+energy from the wheel. A differential-equation view tells you that recovery time is set mostly by two
+things: the flywheel's inertia, and how much voltage headroom is left above the speed you are holding.
 
-If the wheel is too light, it loses speed quickly. If it is too heavy, it recovers slowly. The best
-design is a tradeoff, and differential equations are how you reason about that tradeoff instead of
-guessing.
+If the wheel is too light, it loses speed quickly. If it is too heavy, it recovers slowly. Most FTC
+shooters take the heavier wheel, because a shot that leaves at the wrong speed is a miss while a longer
+recovery is only a slower cycle.
 
 <Admonition type="warning" title="Hardware reality: models bend near limits">
 
-The equations above are idealized. Real FTC mechanisms add gearbox friction, belt compliance, voltage
-sag, current limiting, wheel slip, and sensor delay. The model is still useful because it tells you
-which physical effect to look for when behavior changes.
+The equations above are idealized. Real FTC mechanisms add gearbox friction and voltage sag on top.
+The model is still useful because it tells you which physical effect to look for when behavior
+changes.
 
 </Admonition>
 

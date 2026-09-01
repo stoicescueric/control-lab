@@ -110,8 +110,10 @@ smoothness, then run the step test to feel the lag a large window costs.
 
 <Callout type="warn" title="The two failure modes.">
 With a large window the step test ramps up slowly instead of snapping — pure lag. And a single wild
-spike shifts the average for the full N samples. For fast-moving or spike-prone data, the Kalman
-filter (two lessons ahead) is dramatically better.
+spike shifts the average for the full N samples. For fast-moving data, the Kalman filter (two lessons
+ahead) is dramatically better. Spikes are a different problem: no linear filter rejects them — a settled
+Kalman filter would swing further on the first sample than this average does, just for fewer samples —
+so they get gated out before the filter ever sees them, as in the EKF lesson's validity check.
 </Callout>
 
 </Theory>
@@ -147,8 +149,9 @@ answer the second question: what does the average read on loop 2 if you divide b
 
 <Solution>
 
-The averages are `1, 1.5, 2, 2.5, 3.5, 4.5`. On loop 5 the reading `1` leaves the window and the sum
-jumps from 10 to 14 in one subtraction. Dividing by `N` on loop 2 gives `0.75` instead of `1.5`: the
+The averages are `1, 1.5, 2, 2.5, 3.5, 4.5`. On loop 5 the reading `1` leaves the window and the `5`
+enters, so the sum goes from 10 to 14 — one subtraction to evict the `1`, one addition to admit the `5`,
+and no re-walk of the buffer. Dividing by `N` on loop 2 gives `0.75` instead of `1.5`: the
 two untouched slots still hold their initial zeros, and those zeros are not measurements. `count`
 exists so the filter is honest before the window has filled.
 

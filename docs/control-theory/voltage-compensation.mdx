@@ -127,9 +127,21 @@ every gain you tuned would quietly drift over the match.
 
 </Exercise>
 
-In FRC, the motor controllers do it for you with `enableVoltageCompensation(nominalVolts)` — set it once
-and command in volts with `setVoltage(...)` thereafter. The idea is identical: stop thinking in
-unitless "power" and start thinking in volts the battery may or may not be able to supply.
+In FRC you do not write the division yourself: `setVoltage(...)` divides by the measured bus voltage for
+you, and modern vendor APIs (Phoenix 6's `VoltageOut`, for instance) take a voltage request natively.
+Pick **one** mechanism — the roboRIO-side `setVoltage`, or the controller's own
+`enableVoltageCompensation(nominalVolts)` mode — never both. They compose multiplicatively: `setVoltage`
+emits a percent $V_\text{cmd}/V_\text{bus}$, the controller then interprets that percent against
+$V_\text{nom}$, and the mechanism actually receives
+
+$$
+V_\text{delivered} = V_\text{cmd}\,\frac{V_\text{nom}}{V_\text{bus}}
+$$
+
+On a **sagging** pack that **over**-commands: ask for 6 V at $V_\text{bus} = 11$ V and 6.55 V arrives, 9%
+high — and sag is exactly the condition this lesson exists for. On a fresh pack above nominal it
+under-commands instead. The idea is identical either way: stop thinking in unitless "power" and start
+thinking in volts the battery may or may not be able to supply.
 
 <Callout type="tip" title="Compensation is not a brownout cure.">
 Holding the *command* constant as voltage drops means drawing *more current* to do it — which sags the

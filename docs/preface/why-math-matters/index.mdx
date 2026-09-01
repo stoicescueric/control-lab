@@ -10,8 +10,8 @@ tags: [preface, calculus, linear-algebra, differential-equations, state-space]
 <Difficulty level="Easy" />
 
 <Abstract>
-Mathematics is not decoration on top of robotics; it is the compression language for cause and effect.
-This preface shows how four tools--calculus, linear algebra, differential equations, and state space--turn robot behavior from mystery into something you can predict, debug, and improve.
+Every robot bug hands you one symptom and a dozen candidate causes. Math narrows that list by naming the quantities involved and stating how each one depends on the others.
+This preface shows how four tools — calculus, linear algebra, differential equations, and state space — turn robot behavior from mystery into something you can predict and debug.
 </Abstract>
 
 You can write a working autonomous without naming a derivative, a matrix, or a state vector. Many teams
@@ -28,7 +28,8 @@ Math matters because it gives you a sharper question:
 - **Differential equations** ask: how does the system evolve from one instant to the next?
 - **State space** asks: what variables fully describe the robot right now, and how do they update?
 
-These are not four school subjects to memorize. They are four lenses for seeing the same robot.
+A single mechanism answers all four questions at once, and a stubborn bug usually needs more than one
+of the answers.
 
 ## A robot failure, seen four ways
 
@@ -44,8 +45,8 @@ Each math tool exposes a different piece of the failure:
 | **Differential equations** | A motor's speed changes according to voltage, back-EMF, friction, inertia, and load. | The same power command produces different motion as the lift gets heavier or the battery sags. |
 | **State space** | A robot is a vector of variables: pose, velocity, heading, lift height, flywheel speed. | A controller must update the whole estimate, not patch one sensor reading at a time. |
 
-The goal of this mini-module is not to turn you into a mathematician before you write robot code. It is
-to build enough intuition that the later lessons stop feeling like formulas dropped from the sky.
+These pages carry just enough intuition for the later lessons to read as descriptions of hardware you
+have already touched. Each tool comes back in more detail when a controller actually needs it.
 
 ## The four sub-lessons
 
@@ -60,7 +61,7 @@ Read next: [Calculus](./calculus.mdx).
 ### Linear algebra
 
 Linear algebra is the language of *many numbers moving together*. A mecanum drivetrain does not have
-one speed--it has four wheel speeds produced by a matrix acting on a desired chassis velocity.
+one speed — it has four wheel speeds produced by a matrix acting on a desired chassis velocity.
 
 Read next: [Linear Algebra](./linear-algebra.mdx).
 

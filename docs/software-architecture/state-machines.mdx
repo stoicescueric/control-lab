@@ -201,13 +201,6 @@ recoverable robot mode, and every arrow represents a condition that can be check
   </figcaption>
 </figure>
 
-:::note[Source status]
-This case study comes from unpublished correspondence with the WolfPackMachina team rather than a
-public repository or write-up, so it has not been independently verified the way this doc's other
-sources have. Before treating it as a citable source, the maintainer should confirm that permission
-and licensing to reproduce it are on record.
-:::
-
 ### Engineering implementation
 
 The deployable FTC pattern is an `enum`, a `switch`, and a timer, but a real autonomous machine
@@ -243,11 +236,13 @@ now?" Everything else is bookkeeping the handlers lean on.
 // The one authoritative field.
 private State currentState = State.WAIT_FOR_PICKUP;
 
-// Bookkeeping the handlers read. Reset by the gate, never by a handler.
-private ScoringState scoringState;
+// Reset by the gate on every transition, never by a handler.
 private final ElapsedTime timeInState = new ElapsedTime();
 private final ElapsedTime timeSinceSettled = new ElapsedTime();
 private boolean pathComplete, parking, contracting, robotSettled;
+
+// Deliberately persistent ACROSS states: the cycle counter and the entry snapshot.
+private ScoringState scoringState;
 private double slidesPositionAtEntry;`}</JavaCode>
 
 Notice what is absent: no step counter, no `sleep()`, no `phase2b` boolean. One field answers the
@@ -376,8 +371,8 @@ $$
 
 but now the event $e_k$ is not only a button press. It can be "path finished," "650 ms elapsed,"
 "robot was interfered with," "slides are below a safe threshold," or "parking has been requested."
-That is why autonomous FSMs are so powerful: they turn a linear script into a policy that can react
-to the field.
+That is what an autonomous FSM buys you: a linear script only ever runs forward, while a transition
+function can also route the robot into a recovery or parking state when the match stops cooperating.
 
 ## Hardware reality
 

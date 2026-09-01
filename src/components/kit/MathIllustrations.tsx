@@ -14,9 +14,9 @@ function MathFigure({title, caption, children}: {title: string; caption: string;
 export function CalculusIllustration() {
   return (
     <MathFigure
-      title="Derivative and integral on one motion curve"
-      caption="The tangent is velocity at one instant; the shaded area is accumulated distance over time.">
-      <svg viewBox="0 0 760 330" role="img" aria-label="Position curve with tangent line and shaded area" className="h-auto w-full">
+      title="The derivative and the integral relate two curves"
+      caption="The tangent on the position curve is velocity at one instant; the shaded area under the velocity curve is displacement over that interval.">
+      <svg viewBox="0 0 760 440" role="img" aria-label="A position curve with its tangent line above a velocity curve with shaded area beneath it" className="h-auto w-full">
         <defs>
           <linearGradient id="calcArea" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#2f52e0" stopOpacity="0.35" />
@@ -26,17 +26,29 @@ export function CalculusIllustration() {
             <path d="M0 0 L8 4 L0 8 Z" fill="#ffc24d" />
           </marker>
         </defs>
-        <rect width="760" height="330" rx="16" fill="#0b1120" />
-        <line x1="74" x2="710" y1="262" y2="262" stroke="#31405f" strokeWidth="2" />
-        <line x1="74" x2="74" y1="44" y2="262" stroke="#31405f" strokeWidth="2" />
-        <text x="700" y="292" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="13">time</text>
-        <text x="24" y="56" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="13">position</text>
-        <path d="M98 242 C170 230 204 204 254 176 C330 132 390 104 466 126 C548 150 602 205 682 218 L682 262 L98 262 Z" fill="url(#calcArea)" />
-        <path d="M98 242 C170 230 204 204 254 176 C330 132 390 104 466 126 C548 150 602 205 682 218" fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
-        <circle cx="354" cy="122" r="7" fill="#fff" />
-        <line x1="258" x2="470" y1="174" y2="80" stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" markerEnd="url(#calcArrow)" />
-        <text x="468" y="76" fill="#ffc24d" fontFamily="JetBrains Mono, monospace" fontSize="14">slope = velocity</text>
-        <text x="350" y="245" fill="#93a7ff" fontFamily="JetBrains Mono, monospace" fontSize="14" textAnchor="middle">area under velocity = distance</text>
+        <rect width="760" height="440" rx="16" fill="#0b1120" />
+
+        {/* the instant the two panels share */}
+        <line x1="390" x2="390" y1="118" y2="392" stroke="#3d4d6e" strokeWidth="2" strokeDasharray="5 6" />
+
+        {/* top panel: position */}
+        <line x1="74" x2="710" y1="196" y2="196" stroke="#31405f" strokeWidth="2" />
+        <line x1="74" x2="74" y1="40" y2="196" stroke="#31405f" strokeWidth="2" />
+        <text x="24" y="52" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="13">position</text>
+        <path d="M98 180 C200 177 260 158 390 118 C520 78 580 58 682 55" fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
+        <line x1="316" x2="472" y1="141" y2="92" stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" markerEnd="url(#calcArrow)" />
+        <circle cx="390" cy="118" r="7" fill="#fff" />
+        <text x="486" y="92" fill="#ffc24d" fontFamily="JetBrains Mono, monospace" fontSize="14">slope = velocity</text>
+
+        {/* bottom panel: velocity, the derivative of the curve above */}
+        <line x1="74" x2="710" y1="392" y2="392" stroke="#31405f" strokeWidth="2" />
+        <line x1="74" x2="74" y1="240" y2="392" stroke="#31405f" strokeWidth="2" />
+        <text x="24" y="252" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="13">velocity</text>
+        <text x="700" y="422" fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="13">time</text>
+        <path d="M98 372 C200 368 300 278 390 268 C480 278 580 368 682 372 L682 392 L98 392 Z" fill="url(#calcArea)" />
+        <path d="M98 372 C200 368 300 278 390 268 C480 278 580 368 682 372" fill="none" stroke="#6ea8ff" strokeWidth="4" strokeLinecap="round" />
+        <circle cx="390" cy="268" r="7" fill="#fff" />
+        <text x="390" y="356" fill="#93a7ff" fontFamily="JetBrains Mono, monospace" fontSize="14" textAnchor="middle">signed area = x(t) - x(0)</text>
       </svg>
     </MathFigure>
   );

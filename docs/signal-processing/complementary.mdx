@@ -72,8 +72,9 @@ $$
 </Formula>
 
 The prediction advances by the motor motion immediately. The correction gently pulls it toward the
-absolute reading. Without the inner wrap, a prediction of $359°$ and a measurement of $1°$ would blend
-through the long $358°$ route. $\alpha$ sits close to 1: mostly ride the motor encoder while the absolute
+absolute reading. Without the inner wrap, a prediction just below $+\pi$ and a measurement just above
+$-\pi$ — physically a hair apart — would differ by nearly $2\pi$, and the filter would blend the long way
+round. $\alpha$ sits close to 1: mostly ride the motor encoder while the absolute
 sensor slowly removes accumulated relative error.
 
 The live experiment below uses that exact update. Increase slip, then absolute-sensor noise, and decide
@@ -126,9 +127,18 @@ private static final double RAD_PER_TICK = 2 * Math.PI / TICKS_PER_REV;
 
 private double angle;        // seed from the absolute encoder, not from zero
 private double lastTicks;
+private boolean seeded;
 
 double update(double ticks, double absRad, double dt) {
+    // NOTE: here alpha weights the PREDICTION, so it is 1 - the low-pass alpha.
     double alpha = Math.exp(-dt / TAU);        // loop-rate independent
+
+    if (!seeded) {                             // never difference against a zero we never read
+        angle = wrap(absRad);
+        lastTicks = ticks;
+        seeded = true;
+        return angle;
+    }
 
     double delta = (ticks - lastTicks) * RAD_PER_TICK;
     lastTicks = ticks;

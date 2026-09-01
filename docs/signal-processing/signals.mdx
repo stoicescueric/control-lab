@@ -34,11 +34,14 @@ transition, a slow bias steers odometry off the field.
   <Amber>measurement</Amber> = <Teal>true value</Teal> + <Rose>noise</Rose>
 </Formula>
 
-Three distinct corruptions, each demanding a different defence:
+Four distinct corruptions, each demanding a different defence:
 
 - **Jitter**: fast, small, random wobble around the truth. The common case.
 - **Spikes (outliers)**: occasional wild readings: a loose connector, a reflection, a glitch.
-- **Drift / bias**: a slow, systematic lean away from the truth that accumulates.
+- **Bias**: a fixed offset, present in full from the first sample and constant thereafter. Averaging
+  never sees it; only calibration removes it.
+- **Drift**: an error that *grows* over time as small relative errors accumulate. No amount of averaging
+  removes it either — you need a second, absolute reference, and that reference had better not be biased.
 
 :::tip[Which sensors actually need this?]
 Quadrature-encoder position is often cleaner than an analog reading, but it is quantized and can still

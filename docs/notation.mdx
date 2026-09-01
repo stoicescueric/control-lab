@@ -121,8 +121,9 @@ the next loop is some function of the state now, plus how far the robot moved an
 | $Q, R$ | process-noise and measurement-noise covariance — the two tuning knobs |
 | $K$ | Kalman gain: how much of the innovation to believe |
 | $H$ | measurement matrix/Jacobian: state space → sensor space |
-| $\alpha$ | a filter blend factor in $(0, 1)$ — low-pass smoothing or complementary trust |
-| $\tau$ | a filter time constant; exact EMA relation $\alpha = 1-e^{-\Delta t/\tau}$ |
+| $\alpha$ (low-pass / EMA) | weight on the **new reading**; exact relation $\alpha = 1-e^{-\Delta t/\tau}$ |
+| $\alpha$ (complementary) | weight on the **prediction** — the complement of the row above, $\alpha = e^{-\Delta t/\tau}$. Check which one a lesson means |
+| $\tau$ | a filter time constant |
 
 ### State space
 

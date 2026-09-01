@@ -46,6 +46,8 @@ flywheel, where you can check every number by hand, and the harder mechanisms st
 The clearest payoff in this curriculum is the
 [shoot-on-the-move turret](../advanced-research/shoot-on-the-move.mdx) in the elective drag-aware launcher
 case study: its target sweeps across the field as the robot drives. A full-state
-reference — position *and* velocity — removes the ideal steady ramp lag, while real latency, saturation,
-and model error still have to be measured.
+reference — position *and* velocity — together with the matching feedforward removes the ideal steady
+ramp lag, while real latency, saturation, and model error still have to be measured. The reference alone
+is not enough: feedback needs an error to produce output, so something has to supply the sustaining
+command without one.
 </Admonition>

@@ -12,8 +12,8 @@ import {LinearAlgebraLiveDemo} from '@site/src/components/simulations/foundation
 <Difficulty level="Medium" />
 
 <Abstract>
-Linear algebra studies vectors, matrices, and transformations, which makes it the language of robot geometry.
-In FTC, it explains pose, field-centric driving, mecanum wheel mixing, odometry updates, and the measurement models used by estimators.
+Push the stick forward on a robot that happens to be facing sideways and, with no rotation applied, it strafes instead. That bug and the four wheel powers a mecanum chassis needs come out of the same operation: a grid of numbers turning one driver intent into commands the hardware can execute.
+This page builds that grid, starting from a rotation and ending at the wheel-mixing matrix and what to do when it asks a motor for more than the motor has.
 </Abstract>
 
 Linear algebra starts with a simple idea: some quantities only make sense as a package. A robot pose is
@@ -31,7 +31,7 @@ $$
 That package is a **vector**. Here, $x$ and $y$ are field position coordinates, and $\theta$ is the
 robot's heading angle.
 
-## FTC example: field-centric drive feels rotated
+## When field-centric drive feels rotated
 
 Your driver pushes the joystick away from the alliance wall and expects the robot to move upfield. But
 the robot is turned 90 degrees, so robot-forward is now sideways. Without coordinate transforms, the
@@ -39,9 +39,9 @@ same joystick command means different things depending on heading.
 
 The driver says, "field-centric is broken." Linear algebra says, "you forgot to rotate a vector."
 
-## Visual intuition
+## Arrows, and the grids that move them
 
-Vectors are arrows; matrices are transformations that move, rotate, stretch, or combine those arrows.
+Vectors are arrows; matrices are the transformations that rotate or stretch those arrows.
 
 <LinearAlgebraLiveDemo />
 
@@ -53,7 +53,7 @@ Vectors are arrows; matrices are transformations that move, rotate, stretch, or 
   tables of numbers.
 </VideoEmbed>
 
-## The basics
+## Vectors, matrices, and one rotation
 
 A vector stores related components:
 
@@ -104,7 +104,7 @@ That is field-centric drive in one equation. Here, $v_x^\text{field}$ and $v_y^\
 driver's desired field-relative velocity components, while $v_x^\text{robot}$ and $v_y^\text{robot}$
 are the commands after converting them into the robot's own forward/strafe frame.
 
-## Engineering use case: FTC mecanum wheel mixing
+## Mecanum wheel mixing
 
 In FTC, mecanum drive is usually the first place where linear algebra stops feeling optional. A driver
 moves two joysticks and a trigger: forward/back, strafe, and turn. The robot has to convert that one
@@ -176,12 +176,24 @@ largest magnitude, and scales all four together if any command is outside the le
 $$
 \mathbf{w}_\text{normalized}
 =
-\frac{\mathbf{w}}{\max(1, |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|)}
+\frac{\mathbf{w}}{\max\!\left(1,\ \dfrac{|w_{FL}|}{\omega_\text{max}},\ \dfrac{|w_{FR}|}{\omega_\text{max}},\ \dfrac{|w_{BL}|}{\omega_\text{max}},\ \dfrac{|w_{BR}|}{\omega_\text{max}}\right)}
 $$
 
-Here, $\mathbf{w}_\text{normalized}$ is the motor command vector after desaturation. The denominator is
-at least $1$, so small commands are not amplified, but large commands are compressed while preserving
-the requested drive direction.
+Here $\omega_\text{max}$ is the wheel's free-speed rate in rad/s, and dividing by it is what makes each
+term a *fraction of what the motor can do* — a plain number — so it can be compared against $1$. The
+denominator is at least $1$, so small commands are not amplified, but large commands are compressed
+while preserving the requested drive direction.
+
+:::warning[Divide by the maximum, not by 1]
+The bare form $\mathbf{w}/\max(1, |w_i|)$ appears in a lot of sample code, and it is only correct when
+$\mathbf{w}$ is *already* a normalized motor power in $[-1, 1]$. The matrix above is the physical one —
+the $\tfrac1r$ factor means every $w_i$ is in rad/s, which cannot be compared to a dimensionless $1$.
+With a typical $r = 0.048$ m wheel, a gentle $v_x = 0.1$ m/s creep gives $w_i = 2.08$ rad/s on all four
+wheels, and the bare form would scale that to full power. The
+[mecanum kinematics](../../path-following/mecanum-kinematics.mdx) lesson takes the other route: it drops
+$\tfrac1r$ and $(L+W)$ entirely and mixes in normalized power from the start, which is why it can
+compare against $1$ directly.
+:::
 
 For a visual sanity check, open this Desmos graph: [Mecanum wheel-mixing visual](https://www.desmos.com/calculator/x39el6adbw).
 Use its chassis and wheel vectors to connect the abstract vector $\mathbf{u}$ to the way an FTC robot

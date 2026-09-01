@@ -63,7 +63,7 @@ inertia, $\tau = J\alpha$ (that is $k_A a$).
 |---|---|---|
 | **kS**: static | friction / stiction | the minimum voltage to start motion |
 | **kV**: velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
-| **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target moves |
+| **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target's velocity is changing — zero during cruise |
 
 ## Core checkpoint: calculate one velocity command
 
@@ -135,7 +135,7 @@ $$
   items={[
     {symbol: 'h', meaning: 'the slide height you are asking about right now', unit: 'in'},
     {symbol: 'h_i, h_{i+1}', meaning: 'the two measured heights that BRACKET h. The subscript numbers a calibration point, not a loop'},
-    {symbol: 'k_G,i', meaning: 'the hold voltage you measured at height h_i: the smallest command that kept the slide still there', unit: 'V'},
+    {symbol: 'k_G,i', meaning: 'the gravity hold at height h_i: the AVERAGE of the up-break and down-break commands, not the smallest command that holds. Stiction makes "holds still" a band, and its bottom edge is short by k_S', unit: 'V'},
     {symbol: '(h \u2212 h_i)/(h_{i+1} \u2212 h_i)', meaning: 'how far between the two calibration points h sits, as a fraction from 0 to 1. This is ordinary linear interpolation'},
   ]}
 />
@@ -299,10 +299,10 @@ $\cos\theta$.
 
 Horizontal ($\theta = 0$): $\cos = 1$, maximum hold voltage — correct, this is the worst case.
 Straight up ($90°$): $\cos = 0$, no hold voltage — correct, the weight is straight down through the
-pivot. Hanging down ($-90°$): $\cos = 0$ again, and also correct for the same reason — but note that
-this is an unstable-feeling result in the other direction: the arm is *resting* there, and it takes no
-torque to keep it. The two zeros are physically very different situations that happen to need the same
-voltage.
+pivot. Hanging down ($-90°$): $\cos = 0$ again, for the same reason. The two zeros are physically very
+different situations that happen to need the same voltage: straight up is an **unstable** equilibrium —
+nudge it and the gravity torque grows and pulls the arm over — while hanging down is the **stable** one,
+where gravity restores it. The feedforward is blind to that difference. Only feedback is not.
 
 </Solution>
 
@@ -354,9 +354,13 @@ double interpolateHoldVolts(double height) {
     return holdVolts[holdVolts.length - 1];   // clamp above the last sample
 }`}</JavaCode>
 
-Collect the table by measurement rather than derivation: drive the slide to each height, find the
-smallest voltage that holds it stationary, and write the pair down. Five or six heights across the
-travel is plenty.
+Collect the table by measurement rather than derivation: drive the slide to each height and take **two**
+readings — the smallest voltage that just moves it up, and the largest at which it still creeps down.
+The **average** is $k_{G,i}$; half the difference is $k_S$ at that height. Do not use "the smallest
+voltage that holds it stationary": stiction means it holds anywhere in a band, and the bottom edge of
+that band is $k_G - k_S$, so the whole table comes out low and the separate $k_S$ term then
+double-counts. This is the same two-reading method the [PID lesson](./pid.mdx) uses for `kF` and `kL`.
+Five or six heights across the travel is plenty.
 
 <Exercise title="Why clamp at both ends">
 

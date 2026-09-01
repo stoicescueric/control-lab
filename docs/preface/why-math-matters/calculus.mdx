@@ -12,12 +12,12 @@ import {CalculusLiveDemo} from '@site/src/components/simulations/foundations/Mat
 <Difficulty level="Medium" />
 
 <Abstract>
-Calculus studies quantities that change continuously, which makes it the natural language of robot motion.
-In FTC, derivatives explain velocity and damping, while integrals explain distance, accumulated error, and energy over time.
+A lift that slams into its target and an odometry pose that has drifted twenty centimetres by the end of auto are two versions of one problem: a rate and a running total, both computed from the same encoder ticks.
+Derivatives are the rate, integrals are the total, and on a Control Hub both come out of finite differences over a loop time you have to measure rather than assume.
 </Abstract>
 
 You already use calculus whenever you say "the lift is moving too fast" or "the robot has driven far
-enough." The word can sound academic, but the core idea is friendly:
+enough." Both sentences report something derived from position rather than position itself:
 
 > Calculus is how we talk about a thing changing, and about the total effect of that change.
 
@@ -126,8 +126,9 @@ $$
 \text{target} = \big(x(t), v(t), a(t)\big)
 $$
 
-The target is not a single number. It is a package containing desired position, desired velocity, and
-desired acceleration at the current instant.
+The profile is sampled once per loop and returns all three numbers for that instant, which is why it
+has to be generated from the mechanism's measured velocity and acceleration limits rather than from a
+target height alone.
 
 Then feedforward can ask for the voltage needed to produce the target velocity and acceleration, while
 feedback cleans up the remaining error:
@@ -148,7 +149,8 @@ $$
 Here, $u$ is the motor command, $k_S$ fights static friction, $k_V$ scales with velocity, $k_A$ scales
 with acceleration, and $k_P$ corrects position error.
 
-That equation explains why a profiled lift feels calm: the controller is no longer surprised by motion.
+Because the first three terms already supply most of the voltage the motion needs, the last term is
+left correcting tens of encoder ticks instead of hundreds, so $k_P$ can be small enough not to ring.
 
 <Admonition type="warning" title="Hardware reality: derivatives amplify noise">
 

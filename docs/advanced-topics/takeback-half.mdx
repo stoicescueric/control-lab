@@ -46,7 +46,7 @@ $$
     {symbol: 'drive', meaning: 'the running output, from 0 to 1. It is pure integrator: nothing resets it except the take-back rule'},
     {symbol: 'g', meaning: 'the single tuning gain. TBH exists because one gain is easier to get right than three', unit: 'power per (error \u00b7 s)'},
     {symbol: 'drive_last-cross', meaning: 'the value drive held the PREVIOUS time the error changed sign. Averaging against it is what brackets the true holding value'},
-    {symbol: 'a sign change of e', meaning: 'the moment the mechanism crosses its target. Each crossing halves the remaining oscillation, which is why successive crossings converge'},
+    {symbol: 'a sign change of e', meaning: 'the moment the mechanism crosses its target. Each crossing shrinks the remaining oscillation by at least half, which is why successive crossings converge'},
   ]}
 />
 
@@ -97,8 +97,9 @@ undershooting, crossing again, and mark `drive` at each crossing.
 
 Each crossing brackets the true holding voltage — one crossing happens with the output too high, the
 next with it too low. Halving between consecutive crossings is a bisection search on that bracket, so
-the oscillation amplitude halves every time and the output converges geometrically on the command that
-holds the target speed. No model, no second gain.
+the oscillation shrinks by at least half at every crossing — often by much more, since the plant is also
+damping it between crossings — and the output converges geometrically on the command that holds the
+target speed. No model, no second gain.
 
 </Solution>
 
@@ -126,8 +127,12 @@ response to a tuned PI on the same mechanism.
 
 </Exercise>
 
-Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate ($k_V \cdot v_\text{target}$)
-and TBH converges in a single oscillation instead of several — the two techniques compose nicely.
+Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate and TBH converges in
+a single oscillation instead of several — the two techniques compose nicely. Mind the units when you do:
+$k_V$ is defined in **volts** per unit speed, while `drive` here is normalized power in $[0, 1]$, so the
+seed is $k_V \cdot v_\text{target} / V_\text{bat}$. Skip that division and the seed lands far outside the
+variable's range — for a flywheel with $k_V = 0.02$ at 300 rad/s it evaluates to 6.0, six times full
+power, and TBH starts pinned at the ceiling instead of near the answer.
 
 </Deploy>
 
@@ -144,8 +149,9 @@ you need both tight holding *and* controlled acceleration, or the mechanism isn'
 
 - [Purdue SIGBots (BLRS) wiki - Take-Back-Half (TBH) controller](https://wiki.purduesigbots.com/software/control-algorithms/take-back-half-tbh-controller) -
   description source for this lesson; credits Pearman, J. (2015), "Flywheel velocity control," VexForum,
-  and Harper, C. S. (2011), master's thesis, Mississippi State University, for the algorithm as applied to
-  FRC/VEX flywheel control.
+  for the VEX flywheel application, and Harper, C. S. (2011), *Application of the Take-Back-Half algorithm
+  to voltage source converter current control*, master's thesis, Mississippi State University, for an
+  academic treatment of the algorithm outside robotics.
 - Woodward, S. (2005), "Take-back-half technique tempers temperature-control-loop overshoot," EDN
   ("Design Ideas") - the original bisection technique, developed for temperature control and later adapted
   by the FRC/VEX community for flywheel speed control.

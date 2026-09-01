@@ -270,6 +270,12 @@ P_\text{in} = VI \approx 34.7\ \text{W}, \quad
 P_\text{heat} = I^2 R \approx 9\ \text{W}
 $$
 
+Check the bookkeeping and you will find it does not quite close: $22.8 + 9.0 = 31.8\ \mathrm{W}$, about
+$3\ \mathrm{W}$ short of the $34.7\ \mathrm{W}$ going in. That gap is not an arithmetic slip — it is the
+price of the endpoint-fitted constants. An ideal motor has $k_t = k_e$ exactly; here they differ by 11%
+because friction depresses the measured free speed, and those missing watts are roughly that friction.
+The $66\%$ is therefore an efficiency *including* a loss the stated model does not contain.
+
 <EquationLegend
   items={[
     {symbol: 'P_out', meaning: 'mechanical power actually delivered to the mechanism: torque times speed', unit: 'W'},
@@ -362,8 +368,8 @@ that second line?
 
 <Solution>
 
-A reduction trades revolutions for turns of the output shaft: the output turns $G$ times slower and
-each turn carries $G$ times the torque, so the *product* is unchanged. That is the ideal case. Real
+A reduction trades revolutions for torque: the output shaft turns $G$ times slower and delivers $G$
+times the torque, so the *product* — power — is unchanged. That is the ideal case. Real
 gears lose some of it to friction and meshing, which is `eta` — typically 0.8 to 0.95 per stage, and
 it compounds, so a three-stage box can be under 0.7. The missing power leaves as heat in the gearbox.
 
@@ -437,11 +443,25 @@ does it do when the current is comfortably under the budget?
 
 <Solution>
 
-The ratio lands on the budget in one loop regardless of how far over you are — at 1.5× the budget,
-`maxAmps / current` is 0.67, so two-thirds of the command survives and the current comes back to the
-cap immediately. A fixed step would take a different number of loops depending on the overshoot, and
-would oscillate around the cap. Under the budget it does nothing at all — it has no notion of a
-target, only of a ceiling, which is exactly what makes it a net rather than a loop.
+At 1.5× the budget, `maxAmps / current` is 0.67, so two-thirds of the command survives. A fixed step
+would take a different number of loops depending on the overshoot; the ratio scales its response to the
+size of the problem. Under the budget it does nothing at all — it has no notion of a target, only of a
+ceiling, which is exactly what makes it a net rather than a loop.
+
+**It only lands exactly on the budget at stall.** That is the case the limiter is really for — a
+pushing match, where $\omega \approx 0$, back-EMF is zero, and current genuinely is proportional to
+voltage. At speed it *undershoots*, because $I = (V - k_e\omega)/R$ is affine, not proportional:
+scaling $V$ by $s$ leaves
+
+$$
+I_\text{new} = \frac{sV - k_e\omega}{R} = s\,I - (1-s)\frac{k_e\omega}{R} \;<\; s\,I = I_\text{max}.
+$$
+
+On the motor from this lesson at $\omega = 300\ \mathrm{rad/s}$, a command scaled by 0.67 lands near
+$2\ \mathrm{A}$ against a $3.77\ \mathrm{A}$ cap — roughly half the budget, not on it. That is the safe
+direction to be wrong, but it means the limiter really does hunt: next loop the current reads under the
+cap, the full command returns, and it cuts again. Anything better closes the loop on measured current
+error instead of scaling the command open-loop.
 
 </Solution>
 

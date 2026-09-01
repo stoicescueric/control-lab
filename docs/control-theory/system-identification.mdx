@@ -157,8 +157,19 @@ would show if you ramped too fast.
 
 Slow enough that $k_A a$ is small next to $k_V v$ — in practice, slow enough that the mechanism reaches
 its top speed over tens of seconds rather than one. Ramp too fast and the extra volts spent on
-acceleration get absorbed into the line: the fitted slope comes out too steep, so $k_V$ is
-overestimated, and every downstream feedforward will command more voltage than the mechanism needs.
+acceleration never leave the fit, but watch *where* they land. Once the initial transient dies, a ramp
+at $c$ volts per second accelerates at a nearly constant $a \approx c/k_V$, so the unmodeled $k_A a$
+term is a **constant offset** — and a constant offset moves the line's **intercept**, not its slope:
+
+$$
+V = \underbrace{\left(k_S + \frac{k_A c}{k_V}\right)}_{\text{intercept, inflated by } c\,\tau} + k_V\,v
+$$
+
+So the symptom of a too-fast ramp is an inflated $k_S$, too large by roughly the ramp rate times the
+mechanism's time constant — the same $0.035\ \mathrm{V}$ the widget above quantifies. Every downstream
+feedforward then commands more voltage than the mechanism needs. The slope $k_V$ is barely affected,
+which is exactly why this bug is easy to miss: the number you would think to check looks fine. If your
+fitted $k_S$ comes out implausibly large, slow the ramp before you go hunting for friction.
 
 </Solution>
 

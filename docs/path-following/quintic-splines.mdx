@@ -86,11 +86,12 @@ $$
     {symbol: 'P_0 \u2026 P_3', meaning: 'the four control points. Here the subscript numbers a control point, not a loop or a path sample'},
     {symbol: 't', meaning: 'the curve parameter, running 0 to 1 along ONE segment. It is not time, and it is not distance along the curve'},
     {symbol: 'B(t)', meaning: 'the point on the curve at parameter t'},
-    {symbol: '(1\u2212t) and t powers', meaning: 'the Bernstein weights. At any t the four of them sum to exactly 1, which is what keeps the curve inside its control points'},
+    {symbol: '(1\u2212t) and t powers', meaning: 'the Bernstein weights. At any t the four of them are non-negative and sum to exactly 1, which together are what keep the curve inside its control points'},
   ]}
 />
 
-The weights always sum to $1$, so the curve stays inside the control polygon's hull. It passes through
+The weights are never negative and always sum to $1$, so the curve stays inside the control polygon's
+convex hull. It passes through
 **only the endpoints** $P_0$ and $P_3$; the interior points $P_1, P_2$ are *handles* that pull the curve
 without touching it. They set the endpoint tangents directly:
 
@@ -128,7 +129,7 @@ The green curve hits all four points; the blue one only the ends. A drivetrain r
 green behavior: "go through these poses," not "go near them."
 
 How many degrees of freedom does it take? Matching position, velocity, and acceleration at *both* ends of
-a segment is six conditions, so you need a degree-5 — **quintic**: polynomial per coordinate:
+a segment is six conditions, so you need a degree-5 — **quintic** — polynomial per coordinate:
 
 $$
 x(t) = c_5 t^5 + c_4 t^4 + c_3 t^3 + c_2 t^2 + c_1 t + c_0
@@ -175,8 +176,8 @@ $$
 
 Now the C² join is automatic: set each interior waypoint's ending acceleration equal to the next
 segment's starting acceleration, $x''_\text{seg}|_{t=1} = x''_\text{next}|_{t=0}$, and the curvature is
-continuous through every regular join — no handles sacrificed. Apply the same position/first/second-
-derivative matching to both $x(t)$ and $y(t)$.
+continuous through every regular join — no handles sacrificed. Apply the same matching of position,
+first derivative, and second derivative to both $x(t)$ and $y(t)$.
 
 ### Optional alternative: natural cubic interpolation
 
@@ -202,9 +203,9 @@ continuous across every interior knot — with the *fewest* degrees of freedom a
 What you give up is control of the ends: the natural boundary pins component second derivatives to zero
 (and therefore zero endpoint curvature when the tangent is nonzero) rather than letting you
 choose it. A quintic's two extra coefficients per segment let you **prescribe** velocity and acceleration
-(hence curvature) at every waypoint. Both are C²; the quintic just gives you the boundary controls. (And since
-$S(x)$ needs $x$ monotonic, a path that doubles back is fit as **two** splines $x(t), y(t)$ — see the
-derivation page.)
+(hence curvature) at every waypoint. Both are C²; the quintic just gives you the boundary controls. (And since a spline written as a
+function $S(x)$ needs $x$ strictly increasing, a path that doubles back is fit as **two** splines
+$x(t)$ and $y(t)$, each against the parameter $t$.)
 
 <SplineContinuityIllustration />
 
@@ -225,8 +226,8 @@ $$
 />
 
 <Callout type="idea" title="Which one should you use?">
-**Bézier** when a human authors the path by eye — the handles are a great editor, and the Road Runner /
-Pedro Pathing-style tools expose them. **Quintic Hermite** when you have exact poses to hit (Road
+**Bézier** when a human authors the path by eye — the handles are a great editor, and Pedro
+Pathing-style tools expose them directly. **Quintic Hermite** when you have exact poses to hit (Road
 Runner's `splineTo` is quintic internally) and want C² for free. **Natural cubic** when you have only
 points (no slopes) and want the cheapest C² interpolation — one tridiagonal solve, at the cost of zero
 component second derivatives at the ends. Bézier and Hermite are convertible: a cubic Bézier *is* a cubic Hermite with
@@ -327,8 +328,10 @@ basis functions."
 Build one curve for $x$ and one for $y$ per segment. For a quintic chain, sharing endpoint velocity and
 acceleration between adjacent segments is what makes the whole path C².
 
-For a **natural cubic**, solve the tridiagonal moment system once and evaluate each piece with the $S_i(x)$
-formula — twice, for $x(t)$ and $y(t)$, on a 2-D path.
+For a **natural cubic**, solve the tridiagonal moment system once, then evaluate whichever piece $i$ the
+parameter falls in with its own cubic
+$S_i(t) = a_i + b_i(t - t_i) + c_i(t - t_i)^2 + d_i(t - t_i)^3$ — twice, for $x(t)$ and $y(t)$, on a 2-D
+path.
 
 Once you have a curve you don't follow it as a continuous function — you **resample it into a list of
 points** by arc length (the warning below) and feed that to a follower. Doing that *at speed* — tagging each

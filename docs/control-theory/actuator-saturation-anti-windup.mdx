@@ -136,7 +136,7 @@ Start with **conditional integration**. The failure and repair are compact:
 <JavaCode league="FTC" label="Conditional integration: the failure and the repair">{`// THE FAILURE: integrates regardless of whether the actuator can obey.
 integral += error * dt;
 
-// THE REPAIR: only keep the update if it helps us LEAVE saturation.
+// THE REPAIR: discard the update only if it would push FARTHER into saturation.
 double candidate = integral + error * dt;
 double candidateRaw = nonIntegralVolts + kI * candidate;
 

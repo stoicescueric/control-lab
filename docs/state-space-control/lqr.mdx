@@ -55,7 +55,7 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'x_k', meaning: 'the state error at sampled loop k (distance from the reference)'},
+    {symbol: 'x_k', meaning: 'the state at sampled loop k. The cost is written about the origin; for tracking, apply the same K to the error r_k - x_k and supply the equilibrium input as feedforward'},
     {symbol: 'u_k', meaning: 'the feedback-correction effort at sampled loop k, in volts'},
     {symbol: 'Q', meaning: 'how much you are charged for error, per state'},
     {symbol: 'R', meaning: 'how much you are charged for effort, per input'},

@@ -20,8 +20,8 @@ A state machine is excellent when one subsystem has clear modes. Command-based p
 useful when the robot needs to coordinate several subsystems at once.
 
 The key difference is composition. A command is not "the whole autonomous." A command is one reusable
-action: drive to a pose, raise the lift, aim the turret, score, retract, wait until a sensor trips.
-The autonomous routine is built by combining those actions.
+action: drive to a pose, or raise the lift. The autonomous routine is built by combining those
+actions.
 
 ## FTC example: the step-counter autonomous
 
@@ -56,7 +56,8 @@ to:
 
 > "Which commands are currently scheduled, and which subsystems do they require?"
 
-That is a better question for an FTC robot.
+The second question survives the case the step counter cannot: two things happening at once, on
+different subsystems, finishing at different times.
 
 ## Visual intuition
 
@@ -123,7 +124,8 @@ the same loop.
 
 ### Groups are commands too
 
-The powerful part is that command groups share the same lifecycle as ordinary commands.
+Groups share the same lifecycle as ordinary commands, so a group can be scheduled, interrupted, and
+checked for subsystem conflicts exactly like a single action.
 
 | Group | Behavior | FTC use case |
 |---|---|---|
@@ -148,7 +150,8 @@ objects, not in a giant OpMode.
     Set<Subsystem> getRequirements();   // subsystems it needs exclusively
 }`}</JavaCode>
 
-Read WPILib's `Command` interface alongside this one; it carries the same five ideas.
+Read WPILib's abstract `Command` class alongside this interface; it carries the same five ideas. (WPILib
+made `Command` a class rather than an interface in 2024 so it could ship the decorator methods on it.)
 
 <Exercise title="What breaks without each of the five">
 
@@ -278,7 +281,8 @@ and which would you want mid-match?
 
 "All of them finish" is the safe default; "the first one finishes" is what you want when a drive should
 cancel a lift that is merely opportunistic; "one designated command finishes" is what you want when the
-drive is the real task and the lift is along for the ride. WPILib ships all three, plus a race variant.
+drive is the real task and the lift is along for the ride. WPILib ships exactly these three:
+`ParallelCommandGroup`, `ParallelRaceGroup`, and `ParallelDeadlineGroup`.
 
 For the conflict, the scheduler can refuse the new command or cancel the old one. Mid-match you almost
 always want the newest to win, because it reflects what the driver just asked for — but then a command

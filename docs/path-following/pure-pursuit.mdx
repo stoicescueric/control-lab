@@ -313,7 +313,7 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'd_i', meaning: 'the straight-line distance between path points i and i+1, so the arrow assignment reads "lower this point\u2019s speed if the previous point cannot accelerate to it"', unit: 'in'},
+    {symbol: 'd_i', meaning: 'the straight-line distance across the gap this pass steps over: from point i-1 to i in the forward pass, and from i to i+1 in the backward pass. Each pass pairs a speed with the gap it must change speed across', unit: 'in'},
     {symbol: 'a_max', meaning: 'the forward acceleration and braking limit, a positive magnitude in both passes', unit: 'in/s\u00b2'},
   ]}
 />
@@ -374,8 +374,13 @@ $$
 />
 
 with $b$ near $0.75$–$0.98$ (larger = smoother), $a = 1 - b$, repeated until the total change drops below
-a tolerance. It is a cheap alternative to fitting a spline — no overshoot, though it does pull slightly
-away from your original waypoints.
+a tolerance. Update the points **in place**, so that each sweep already sees the new $P_{i-1}$ while it
+is still reading the old $P_{i+1}$. That detail is load-bearing: copying the array and updating every
+point simultaneously diverges for any $b > 1/3$, so at the weights recommended here the "smoothed" path
+blows up to infinity within a few dozen sweeps. In place, it converges for any $b < 1$.
+
+It is a cheap alternative to fitting a spline — no overshoot, though it does pull slightly away from
+your original waypoints.
 
 ### Following a spline at speed
 
@@ -397,7 +402,7 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'k_c', meaning: 'centripetal feedforward gain: how much strafe to add per unit of v\u00b2/R', unit: 's\u00b2/in'},
+    {symbol: 'k_c', meaning: 'centripetal feedforward gain: how many seconds of centripetal acceleration to fold into the strafe velocity. It multiplies an acceleration (in/s\u00b2) and the result is added to a velocity (in/s), so it carries seconds', unit: 's'},
     {symbol: 'u_strafe', meaning: 'the sideways component of the chassis command, the one this term adds to'},
     {symbol: 'v\u00b2 / R', meaning: 'the centripetal acceleration a turn of radius R at speed v demands', unit: 'in/s\u00b2'},
   ]}
@@ -455,7 +460,7 @@ MoveStatus update(List<Vector2d> path, Pose2d endPose) {
     double curvature = 2 * yLocal / (L * L);
     double v = CRUISE;                 // inches/second
     double omega = curvature * v;      // radians/second
-    drive(v, 0, omega);
+    drive(v / MAX_SPEED, 0, omega / MAX_TURN);   // normalize at the mixer boundary
     return RUNNING;
 }
 `}</JavaCode>
@@ -662,7 +667,8 @@ MoveStatus update() {
     double vy = speed * Math.sin(dir);
     vy += K_CENTRIPETAL * speed * speed / p.radius();   // lean into the corner
 
-    drive(vx, vy, headingController(p.heading()));
+    // headingController already returns normalized power; vx and vy are in/s.
+    drive(vx / MAX_SPEED, vy / MAX_SPEED, headingController(p.heading()));
     return RUNNING;
 }
 `}</JavaCode>
@@ -703,9 +709,11 @@ carries seconds — it is effectively how far ahead in time the feedforward is l
 
 </Exercise>
 
-The velocity-facing adapter explicitly consumes inches per second and radians per second; it converts to
-wheel control at one boundary. Physical speed is never passed into the normalized-power `drive(...)`
-helper. Near the endpoint, the follower hands off to the shared terminal pose controller and distinguishes
+The speed plan is computed entirely in inches per second and radians per second, and is converted to
+motor units at exactly one boundary: the `drive(...)` call. That helper consumes **normalized power**,
+so every physical speed is divided by `MAX_SPEED` or `MAX_TURN` on the way in — pass raw inches per
+second and the desaturator inside `drive` compares them against `1.0` and pins all four wheels to full
+power. Near the endpoint, the follower hands off to the shared terminal pose controller and distinguishes
 `REACHED` from `TIMED_OUT`.
 
 <Admonition type="tip" title="Why C² matters for the speed plan">

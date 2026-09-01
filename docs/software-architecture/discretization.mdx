@@ -208,9 +208,12 @@ needs the integral *this* loop, not after the match.
 </Exercise>
 
 <Callout type="warn" title="Hard-coding dt is a classic, invisible bug.">
-If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the integral accumulates
-about 1.75 times too fast and the derivative is off by the same factor, with no error message. Measuring it
-costs almost nothing.
+If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the two time-dependent terms
+break by the same factor of 1.75 — in <strong>opposite directions</strong>. The integral accumulates
+about 1.75 times too <em>slowly</em>, because you add 0.02 s of area every 0.035 s of real time. The
+derivative reads about 1.75 times too <em>large</em>, because you divide a 35 ms change by a 20 ms
+interval. Neither produces an error message, and the pair is easy to misread as integral windup when it
+is the opposite. Measuring <code>dt</code> costs almost nothing.
 </Callout>
 
 With the bridge built - discrete time, real units, adequate rate - the rest of the curriculum is

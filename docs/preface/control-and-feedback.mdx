@@ -239,8 +239,10 @@ double command = kP * error;
 arm.setPower(clamp(command, -1, +1));
 `}</JavaCode>
 
-Three lines, and it fixes the bang-bang problem completely: the further away the arm is, the harder it
-pushes, and near the target it eases off by itself with no tolerance band to tune.
+Three lines, and it fixes bang-bang's *discontinuity*: the further away the arm is, the harder it
+pushes, and near the target it eases off by itself with no tolerance band to tune. It does not remove
+overshoot — a proportional controller on something with momentum still races past the target, and
+learning what to add for that is the rest of this curriculum.
 
 <Exercise title="What kP's units are">
 

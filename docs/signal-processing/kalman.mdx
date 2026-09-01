@@ -20,9 +20,14 @@ cycle and the gain that decides how far to trust the model versus the measuremen
 </Abstract>
 
 The Kalman filter is the optimal linear state estimator when the model is linear, the noise is
-Gaussian, and the covariances are honest: given a motion model and noisy measurements, it produces
-the minimum-variance estimate of the true state, and tracks its own uncertainty while doing so. It is
-the principled successor to the hand-tuned complementary filter.
+Gaussian, the covariances are honest, and that noise is **zero-mean and uncorrelated from loop to
+loop**: given a motion model and noisy measurements, it produces the minimum-variance estimate of the
+true state, and tracks its own uncertainty while doing so. It is the principled successor to the
+hand-tuned complementary filter.
+
+That last assumption is the one real sensors break. A camera with a bent mount or a miscalibrated tag
+carries a *constant offset*, not zero-mean noise — and no value of $R$ fixes a bias. Only calibration
+does; feed a biased measurement in and the filter converges confidently onto the wrong answer.
 
 Kou and Haggenmiller's FTC-focused paper,
 [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459),
@@ -74,7 +79,8 @@ void correct(double z) {
     P = (1 - K) * P;
 }`}</JavaCode>
 
-With `delta = 1`, `Q = 1`, `R = 4`, and measurements `1.2, 2.1, 2.9`, three complete loops are:
+Starting from $\hat x_0 = 0$ and $P_0 = 4$, with `delta = 1`, `Q = 1`, `R = 4`, and measurements
+`1.2, 2.1, 2.9`, three complete loops are:
 
 | Loop | prediction $\hat x^-$ | gain $K$ | corrected $\hat x$ | corrected $P$ |
 |---:|---:|---:|---:|---:|
@@ -109,8 +115,29 @@ it. That is the behavior you want, and it is also why a tag seen at a bad angle 
 
 Put this beside the low-pass filter you already wrote. Both compute
 `estimate + gain * (measurement - estimate)`; the only difference is where the gain comes from. You
-picked $\alpha$ by hand, and $K$ is derived. Work out what happens to $K$ over many loops when $Q$ and
-$R$ are held constant, and use it to explain a filter that gradually stops responding to its sensor.
+picked $\alpha$ by hand, and $K$ is derived. Work out what $K$ *converges to* over many loops when $Q$
+and $R$ are held constant: solve the fixed point of $P^- = (1-K)P^- + Q$. Then set $Q = 0$ and redo it.
+
+<Solution>
+
+With $Q$ and $R$ constant the gain settles on a constant. Writing $p$ for the steady-state $P^-$, the
+fixed point is $p = \frac{Rp}{p+R} + Q$, or $p^2 - Qp - QR = 0$, so
+
+$$
+p = \frac{Q + \sqrt{Q^2 + 4QR}}{2}, \qquad K_\infty = \frac{p}{p + R}.
+$$
+
+For the $Q = 1$, $R = 4$ used above that is $p = 2.562$ and $K_\infty = 0.390$ — exactly where the
+three-loop table is heading (0.556, 0.446, 0.410). **That is where $\alpha$ came from.** A settled
+Kalman filter *is* a first-order low-pass filter; the difference is that its blend factor was computed
+from your noise estimates instead of guessed.
+
+Now set $Q = 0$. Nothing re-inflates $P$ after each correction shrinks it, so $1/P_k = 1/P_0 + k/R$ and
+$K \to 0$: the filter grows steadily more confident until it stops listening to its sensor entirely.
+That is the classic over-confident-$Q$ failure, and it needs $Q = 0$ — a constant, nonzero $Q$ will not
+produce it.
+
+</Solution>
 
 </Exercise>
 
@@ -130,7 +157,7 @@ $$
 <EquationLegend
   items={[
     {symbol: 'the superscript minus', meaning: 'a PRIOR: after prediction, before any measurement has corrected it. Losing track of which values carry the minus is the most common way to misread these equations'},
-    {symbol: 'APA\u1d40', meaning: 'how the existing uncertainty is reshaped by the motion. Q is then ADDED, because moving without measuring can only make you less certain'},
+    {symbol: 'APA\u1d40', meaning: 'how the existing uncertainty is reshaped by the motion. Q is then ADDED on top, because the model is never perfect. Whether the total actually grows depends on A \u2014 see the note below the equation'},
   ]}
 />
 
@@ -152,6 +179,7 @@ control input into state change; $P$ is the covariance matrix, meaning the uncer
 the estimate; and $Q$ is process noise, the uncertainty added because the model is never perfect. Total
 covariance does not have to grow on every prediction: a contracting $A$ can shrink $APA^\top$ by more than
 $Q$ adds.
+
 The paper writes this as the prediction model $x_{a,t}=Ax_{a,t-1}+Bu_t+q_t$, where $q_t$ is
 Gaussian process noise with covariance $Q$.
 
@@ -232,14 +260,16 @@ measurement noise $R$, every step:
 
 In the demo, a target follows a smooth path reported only as noisy blips. The filter recovers a
 smooth estimate plus an uncertainty bubble. The two tuning parameters are $R$
-(measurement noise) and $Q$ (process noise / "model trust").
+(measurement noise) and $Q$ (process noise — how wrong you expect the motion model to be each loop).
 
 <Kalman />
 
 <Callout type="warn" title="Q and R are the tuning.">
-Set model trust very low and the estimate lags on sharp turns — it over-believes its motion model.
-Set it high and it chases every blip. Choosing <code>Q</code> and <code>R</code> to match the real
-process and sensor noise is the engineering of applying a Kalman filter.
+Set <code>Q</code> very low and the estimate lags on sharp turns: you have told the filter its motion
+model is nearly perfect, so it over-believes its own prediction. Set it high and it chases every blip.
+Note the direction — <code>Q</code> is how much you <strong>distrust</strong> the model, so raising it
+makes the filter trust the sensor more, not less. Choosing <code>Q</code> and <code>R</code> to match
+the real process and sensor noise is the engineering of applying a Kalman filter.
 </Callout>
 
 </Theory>

@@ -243,7 +243,7 @@ export default function Kalman() {
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">How blurry the radar blips are.</div>
         </div>
         <div>
-          <Slider label="Model trust" value={kfQ} min={0.3} max={40} step={0.5} onChange={setKfQ} format={(v) => v.toFixed(1)} />
+          <Slider label="Process noise Q" value={kfQ} min={0.3} max={40} step={0.5} onChange={setKfQ} format={(v) => v.toFixed(1)} />
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">Low = "moves predictably" (smoother, lags turns) · High = "could do anything"</div>
         </div>
       </div>

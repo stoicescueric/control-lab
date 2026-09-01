@@ -15,7 +15,7 @@ import Drone from '@site/src/components/simulations/control-theory/Drone';
 PID is the most widely used feedback controller: it sums three reactions to the error — proportional to its
 present value, its accumulated past, and its rate of change — into a single command. This lesson builds
 each term from intuition — including *why* the derivative term lands you on the target with zero velocity —
-then upgrades the loop to the FTC "PDFL" controller: a constant feedforward and a static-friction floor
+then upgrades the loop to the controller the FTC community calls "PDFL": a constant feedforward and a static-friction floor
 that replace the integral entirely, plus a low-pass-filtered derivative.
 </Abstract>
 
@@ -25,7 +25,8 @@ name sounds scary; the idea behind it is simple.
 
 <Problem title="Proportional-only control leaves a standing error">
 
-Consider an arm that must hold 90° against gravity. The intuitive controller is *proportional* —
+Consider an arm that must hold itself horizontal against gravity — the worst case, where the full
+weight acts at the end of the moment arm. The intuitive controller is *proportional* —
 command in proportion to the error, $u = K_p e$. It has a structural flaw: to produce the steady
 holding torque gravity demands, it **requires a non-zero error to exist**. The arm settles a few
 degrees low and stays there. Raising $K_p$ shrinks the gap but invites overshoot and oscillation,
@@ -102,7 +103,8 @@ remains.
 | Slow to respond | `kP` too low | raise `kP` |
 | Overshoots & oscillates | `kP` high / `kD` low | lower `kP`, raise `kD` |
 | Never reaches target | no / low `kI` | add a little `kI` |
-| Slow drift, sluggish wobble | `kI` too high (windup) | lower `kI` |
+| Slow drift, sluggish wobble | `kI` too high | lower `kI` |
+| Big overshoot after a long saturated move | integral windup | add anti-windup (next lesson) |
 | Jittery, twitchy | `kD` too high (noise) | lower `kD`, filter the input |
 
 ### Core checkpoint: tune and log one feedback loop
@@ -128,7 +130,7 @@ $$
     {symbol: 'u_k, e_k', meaning: 'the command and the error at loop k'},
     {symbol: 'j', meaning: 'a counter over past loops for the running sum. Not a physical quantity'},
     {symbol: 'm_k, m_{k-1}', meaning: 'the MEASUREMENT this loop and last loop. The derivative is taken on m rather than on e, which is why a minus sign appears in front of K_d'},
-    {symbol: 'the minus sign', meaning: 'a rising measurement means the mechanism is approaching, so the term must subtract. Differentiating the error instead would spike every time the target moves'},
+    {symbol: 'the minus sign', meaning: 'this term is velocity feedback: it always opposes the direction the mechanism is moving, on either side of the target. Differentiating the error instead would spike every time the target moves'},
   ]}
 />
 
@@ -197,15 +199,20 @@ then control it.
 
 Notice the arm problem never actually needed an *integral*. The steady push gravity demands is
 *predictable*, so you can supply it directly and skip the slow, windup-prone I term. That is the idea
-behind the **PDFL** controller used widely in FTC — **P**roportional, **D**erivative, **F**eedforward, and
-an **L**ower-limit (static-friction) term, with **no integral at all**:
+behind the controller the FTC community calls **PDFL** (from the video linked below) — **P**roportional,
+**D**erivative, **F**eedforward, and an **L**ower-limit (static-friction) term, with **no integral at
+all**. The name is community shorthand rather than standard control vocabulary; the pieces are the same
+$k_G$ and $k_S$ you meet in [feedforward](./feedforward.mdx), rearranged to replace the integral:
 
 - **P**: proportional to the error, exactly as before.
 - **D**: the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
   ruin it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
   It is still the velocity feedback that brings you in at zero velocity.
 - **F**: a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
-  It does the integral's old job instantly, with nothing to wind up.
+  It does the integral's old job instantly, with nothing to wind up. On a **slide** that really is one
+  constant. On an **arm** the hold varies as $\cos\theta$, so a constant `kF` is only right near the angle
+  you measured it at — for an arm that sweeps a wide range, swap it for the $k_G\cos\theta$ term from
+  [feedforward](./feedforward.mdx) and keep the rest of PDFL unchanged.
 - **L**: a **static-friction floor**: a fixed $k_L\,\operatorname{sign}(e)$ that shoves *just hard enough*
   to break stiction in the direction you need to move. It is applied only **outside a small dead zone**
   around the target — inside it the sign of the error flips every loop, so dropping L there stops the
@@ -273,9 +280,12 @@ double run(double target, double measurement, double dt) {
     return p + d + f + l;
 }`}</JavaCode>
 
-Tune `kF` and `kL` by measurement rather than by guessing: find the smallest power that holds the arm
-still — that is `kF` — then the smallest power that makes it just break away and move. The difference
-is `kL`.
+Tune `kF` and `kL` by measurement rather than by guessing, using the two-reading method above: find the
+smallest power that just moves the arm **up** ($u_\text{up}$), then lower the command until the arm just
+starts to creep **down** — the largest power at which it still descends is $u_\text{down}$. Then `kF` is
+their average and `kL` is half their difference. Note that there is no single "power that holds the arm
+still" to read off: static friction holds it anywhere between those two readings. That band is
+$2k_L$ wide, so `kL` is *half* of it — which is exactly the formula above.
 
 <Exercise title="Two ideas hidden in the D term">
 

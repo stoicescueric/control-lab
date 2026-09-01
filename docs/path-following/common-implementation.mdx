@@ -234,8 +234,8 @@ converts it to four wheel powers and desaturates. That mixer — including field
 shaping, and the desaturation step — is derived in full in
 [Mecanum kinematics](./mecanum-kinematics.mdx); the followers just call its entry point:
 
-<JavaCode league="FTC" label="The one call every follower ends with">{`// A robot-frame chassis command: vx forward and vy left in inches/second,
-// omega CCW in radians/second. Writes four wheel powers to the motors.
+<JavaCode league="FTC" label="The one call every follower ends with">{`// A robot-frame chassis command in NORMALIZED POWER, each component in [-1, 1]:
+// vx forward, vy left, omega CCW. Writes four wheel powers to the motors.
 void drive(double vx, double vy, double omega) {
     double[] powers = mixWheelPowers(vx, vy, omega);
 
@@ -246,6 +246,14 @@ void drive(double vx, double vy, double omega) {
     setWheelPowers(powers);
 }
 `}</JavaCode>
+
+:::warning[Convert to normalized power *before* you call this]
+The desaturator compares each wheel value against the literal `1`, which only means anything if the
+inputs are already fractions of full power. Divide physical speeds by `MAX_SPEED` and `MAX_TURN` at the
+call site. Pass raw inches per second instead and every command above about 1 in/s mixes to four equal
+values that all divide down to exactly `1.0` — so 5 in/s, 20 in/s, and 40 in/s all come out as full
+power, and the entire speed plan is silently discarded.
+:::
 
 <Exercise title="What desaturation protects">
 

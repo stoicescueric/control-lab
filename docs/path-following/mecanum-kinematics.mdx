@@ -232,7 +232,7 @@ it the output would jump straight from 0 to `DEADZONE`.
 
 <JavaCode league="FTC" label="Field-centric mecanum drive">{`// fwd +1 away from the driver, strafe +1 to the driver's left,
 // turn +1 counter-clockwise, all [-1, 1]. heading is field-frame radians.
-void drive(double fwd, double strafe, double turn, double heading) {
+void driveFieldCentric(double fwd, double strafe, double turn, double heading) {
     double mag = Math.min(1, Math.hypot(fwd, strafe));   // shape the MAGNITUDE
     double dir = Math.atan2(strafe, fwd);
     double m = shape(mag);
@@ -299,16 +299,16 @@ rebuilding from the angle leaves the direction untouched.
 
 Those signs *are* the lesson. A mecanum roller at 45° turns wheel spin into a force at 45°. Draw all
 four rollers from above, add the force vectors for "all wheels forward," then for "left pair forward,
-right pair backward."
+right pair backward," and finally for one diagonal pair (FL, BR) driven against the other (FR, BL).
 
 <Solution>
 
 All four forward: the lateral components of the four roller forces cancel in pairs and the forward
 components add, so the robot translates straight ahead. Left pair forward with the right pair
-backward: now the forward components cancel and the lateral components add, so the robot strafes. The
-third combination — one diagonal pair against the other — produces a pure couple, which is the turn.
-Every entry in the mix is just which of those three the wheel contributes to, and with what sign. Look
-up "mecanum wheel force decomposition."
+backward: the forward *and* lateral components both cancel, and what is left is a pure couple — the
+robot spins in place. One diagonal pair against the other: the forward components and the couple both
+cancel, leaving a net lateral force, which is the strafe. Every entry in the mix is just which of those
+three the wheel contributes to, and with what sign. Look up "mecanum wheel force decomposition."
 
 </Solution>
 

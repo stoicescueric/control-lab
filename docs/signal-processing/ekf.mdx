@@ -398,11 +398,12 @@ update. Work out what breaks if you compute the residual as `z.minus(H.times(x))
 
 <Solution>
 
-`H` is a first-order approximation valid near `x`; `h` is the honest prediction of what the camera
-should have seen. Using `H * x` as the prediction reintroduces the linearization error directly into
-the correction, so the filter chases a residual that is partly its own approximation. It biases the
-estimate toward wherever the tangent plane happens to sit, and the bias grows with the angle between
-the robot and the tag.
+`H` is the *slope* of `h` near `x`, not a substitute for `h` itself. The linearization is
+$h(x) \approx h(\hat x^-) + H(x - \hat x^-)$, so at the linearization point the correct prediction is
+exactly $h(\hat x^-)$. Writing `H * x` silently drops the constant term $h(\hat x^-) - H\hat x^-$ — and
+that is not a small approximation error, it is a large offset that even depends on where you happened to
+put the field origin ($h$ is translation-invariant; $H\hat x^-$ is not). Move the origin and the residual
+changes. It stops meaning "how surprised was the camera" and the filter diverges on the first update.
 
 </Solution>
 

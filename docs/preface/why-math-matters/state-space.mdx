@@ -12,15 +12,30 @@ import {StateSpaceLiveDemo} from '@site/src/components/simulations/foundations/M
 <Difficulty level="Hard" />
 
 <Abstract>
-State space is a way to model a system by listing the variables that fully describe it right now and writing rules for how those variables update.
-It is the bridge between calculus, linear algebra, differential equations, odometry, Kalman filters, and modern robot controllers.
+Your odometry says the robot is at (24, 48) and the AprilTag camera says (26, 47). Neither number is the robot's position; both are evidence about it, and something has to hold one estimate and decide how much of each reading to believe.
+State space is that something: the list of variables that describe the robot right now, together with the rules that update them every loop.
 </Abstract>
 
 State space is the moment the previous lessons snap together. Calculus gives rates. Linear algebra
 packages variables into vectors and matrices. Differential equations describe evolution. State space
 puts all of that into a model you can run every loop.
 
-## FTC example: one sensor reading is not enough
+## The loop you are about to write
+
+The picture worth holding is a loop: state goes into the model, input changes it, sensors correct it,
+and the next state becomes the starting point for the next loop.
+
+<StateSpaceLiveDemo />
+
+<VideoEmbed
+  title="MATLAB Tech Talks (Brian Douglas): Introduction to State-Space Equations"
+  src="https://www.youtube.com/embed/hpeKrMG-WP0"
+  href="https://www.youtube.com/watch?v=hpeKrMG-WP0">
+  This control-oriented introduction complements the 3Blue1Brown calculus, linear algebra, and
+  differential-equation intuition by showing the standard engineering notation.
+</VideoEmbed>
+
+## One sensor reading is not enough
 
 An encoder gives a wheel position. An IMU gives heading. A distance sensor gives range. None of those
 alone tells you "where the robot is" or "what the mechanism is doing."
@@ -41,22 +56,7 @@ $$
 That vector is the **state**. Here, $x$ and $y$ are field position, $\theta$ is heading, $v$ is linear
 velocity, and $\omega$ is angular velocity.
 
-## Visual intuition
-
-For state space, the most useful picture is a loop: state goes into the model, input changes it, sensors
-correct it, and the next state becomes the starting point for the next loop.
-
-<StateSpaceLiveDemo />
-
-<VideoEmbed
-  title="State-space equations: an introduction"
-  src="https://www.youtube.com/embed/SdvNME2thaQ"
-  href="https://www.youtube.com/watch?v=SdvNME2thaQ">
-  This control-oriented introduction complements the 3Blue1Brown calculus, linear algebra, and
-  differential-equation intuition by showing the standard engineering notation.
-</VideoEmbed>
-
-## The basics
+## States, inputs, outputs, and the update rule
 
 A state-space model has four pieces:
 
@@ -90,11 +90,22 @@ affects future motion, $B$ describes how inputs affect the state, and $\mathbf{u
 In a robot loop, the discrete version is more directly useful:
 
 $$
-\mathbf{x}_{k+1} = A\mathbf{x}_k + B\mathbf{u}_k
+\mathbf{x}_{k+1} = A_d\mathbf{x}_k + B_d\mathbf{u}_k
 $$
 
 Here, $k$ is the current robot loop and $k+1$ is the next loop. The equation says: use the current
 state and current input to predict the next state.
+
+:::warning[$A_d$ is not $A$]
+The subscript is doing real work. $A$ and $B$ describe *rates* — how fast the state is changing right
+now — while $A_d$ and $B_d$ describe a *jump* across one whole loop period. They are different numbers,
+and converting the first pair into the second is called **discretization**: for a loop period $\Delta t$
+it is $A_d = e^{A\Delta t}$, not $A$ itself. Dropping the subscript is one of the most common beginner
+errors in state-space code, and it is dimensionally impossible to miss once you look: $A$ carries units
+of $1/\text{s}$, while $A_d$ is a pure number. See
+[From Math to a Loop](../../software-architecture/discretization.mdx) and
+[State Feedback](../../state-space-control/state-feedback.mdx) for how the conversion is done.
+:::
 
 Sensors read some part of the state:
 
@@ -118,7 +129,7 @@ Those three matrices say:
 - $B$ describes how inputs affect it,
 - $C$ describes what the sensors can see.
 
-## Engineering use case: odometry plus correction
+## Odometry plus correction
 
 Odometry is a state update. Every loop, wheel motion advances the pose:
 
@@ -159,8 +170,9 @@ amount justified by the uncertainty.
 <Admonition type="warning" title="Hardware reality: the state is only as good as the sensors">
 
 If wheel slip corrupts odometry, if an IMU is noisy, or if a camera frame arrives late, the state vector
-can look precise while being wrong. State-space models are powerful because they force you to say what
-you trust and how much.
+can look precise while being wrong. A state-space model earns its keep here by forcing you to write down
+how much you trust each source, so a bad sensor shows up as a number you chose rather than a silent
+assumption.
 
 </Admonition>
 

@@ -12,10 +12,16 @@ import DynamicTargetingDashboard from '@site/src/components/simulations/research
 <Difficulty level="Hard" />
 
 <Abstract>
-Once the projectile model exists, the robot still has to execute it under match conditions: a flywheel loses momentum after every shot, lookup tables can invent fake commands, and a moving chassis changes the aiming geometry. This lesson makes those three deployment problems interactive so the control logic can be inspected instead of trusted blindly.
+Once the projectile model exists, the robot still has to execute it under match conditions: a flywheel
+loses momentum after every shot, lookup tables can invent fake commands, and a moving chassis changes the
+aiming geometry. This lesson makes those three deployment problems interactive so the control logic can
+be inspected instead of trusted blindly.
 </Abstract>
 
-The simulator answers "what should the shot be?" The robot has a harder question: "can I make that shot right now?" If the flywheel is not recovered, if interpolation overshoots a calibration shelf, or if the robot aims at the real target while moving sideways, the paper model is technically correct and the shot still misses.
+The simulator answers "what should the shot be?" The robot has a harder question: "can I make that shot
+right now?" If the flywheel is not recovered, if interpolation overshoots a calibration shelf, or if the
+robot aims at the real target while moving sideways, the paper model is technically correct and the shot
+still misses.
 
 <DynamicTargetingDashboard />
 
@@ -27,7 +33,8 @@ three pieces before considering the research extensions later on this page.
 
 ### 1. Recover the flywheel after a shot
 
-A flywheel shot is a disturbance. The projectile leaves with energy that used to be stored in the wheel, so the measured velocity drops. A basic velocity controller tries to recover with error feedback:
+A flywheel shot is a disturbance. The projectile leaves with energy that used to be stored in the wheel,
+so the measured velocity drops. A basic velocity controller tries to recover with error feedback:
 
 $$
 u = k_S + k_V r + k_P(r - y)
@@ -44,15 +51,26 @@ $$
   ]}
 />
 
-The research controller adds an asymmetric recovery mode: if the wheel is below the ready band after a shot, command aggressively upward; if it is above target, do not kick downward with the same violence. That asymmetry matters because a flywheel below target causes a short shot, while a small overspeed can often be absorbed by the calibration margin.
+The research controller adds an asymmetric recovery mode: if the wheel is below the ready band after a
+shot, command aggressively upward; if it is above target, do not kick downward with the same violence.
+That asymmetry matters because a flywheel below target causes a short shot, while a small overspeed can
+often be absorbed by the calibration margin.
 
 ### 2. Keep calibrated lookup tables monotone
 
-Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the match it needs values between those distances. A lookup table stores the measured shots and *interpolates* to fill the gaps — and the choice of interpolant decides whether those in-between values are safe.
+Calibration data is sparse. The robot may know good shooter settings at a few distances, but during the
+match it needs values between those distances. A lookup table stores the measured shots and
+*interpolates* to fill the gaps — and the choice of interpolant decides whether those in-between values
+are safe.
 
 <LookupTableIllustration />
 
-A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf, the spline can overshoot between equal points and command a speed that was never measured. The safer choice for monotone data is a monotone cubic Hermite interpolant. First set both endpoint tangents to zero on every interval whose secant slope is zero. On every nonzero interval, initialize tangents with the same sign as the secant, so $\alpha_k \ge 0$ and $\beta_k \ge 0$, then apply the Fritsch-Carlson projection:
+A natural cubic spline is smooth, but smooth is not the same as safe. If the data contains a flat shelf,
+the spline can overshoot between equal points and command a speed that was never measured. The safer
+choice for monotone data is a monotone cubic Hermite interpolant. First set both endpoint tangents to
+zero on every interval whose secant slope is zero. On every nonzero interval, initialize tangents with
+the same sign as the secant, so $\alpha_k \ge 0$ and $\beta_k \ge 0$, then apply the Fritsch-Carlson
+projection:
 
 $$
 \alpha_k^2 + \beta_k^2 \le 9
@@ -62,7 +80,7 @@ $$
   items={[
     {symbol: '\u03b1_k, \u03b2_k', meaning: 'the two tangent ratios at interval k, each the interval\u2019s end tangent divided by its secant slope. They are not the filter blend \u03b1 used elsewhere on the site'},
     {symbol: 'the secant', meaning: 'the straight line between two consecutive data points. Matching its sign is what keeps the interpolant from overshooting between them'},
-    {symbol: '\u2264 9', meaning: 'the Fritsch-Carlson circle. Staying inside it is exactly the condition for the spline to remain MONOTONE, which for a flight-time lookup means further can never mean sooner'},
+    {symbol: '\u2264 9', meaning: 'the Fritsch-Carlson circle. Staying inside it GUARANTEES the spline is monotone, which for a flight-time lookup means further can never mean sooner. It is a sufficient condition, deliberately conservative: the true monotone region is larger, but the circle is the cheapest safe projection to implement'},
   ]}
 />
 
@@ -74,11 +92,16 @@ $$
   ]}
 />
 
-The dashboard lets you drag calibration knots. The red curve shows what a natural spline can do in a dangerous flat region. The blue curve shows the monotone Hermite alternative staying inside the behavior implied by the data.
+The dashboard lets you drag calibration knots. The red curve shows what a natural spline can do in a
+dangerous flat region. The blue curve shows the monotone Hermite alternative staying inside the behavior
+implied by the data.
 
 ### 3. Cancel inherited chassis velocity with a bounded fixed point
 
-When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim at the real target; it should aim at a virtual target shifted opposite the robot motion during the launch delay and projectile flight. With $\mathbf v_R$ defined as the robot's field-frame chassis velocity, the projectile already inherits $+\mathbf v_R$, so the aim displacement must cancel it:
+When the robot drives while firing, the projectile inherits chassis velocity. The turret should not aim
+at the real target; it should aim at a virtual target shifted opposite the robot motion during the launch
+delay and projectile flight. With $\mathbf v_R$ defined as the robot's field-frame chassis velocity, the
+projectile already inherits $+\mathbf v_R$, so the aim displacement has to cancel it:
 
 $$
 \mathbf{p}^{(i+1)}_{\text{virtual}}
@@ -96,9 +119,23 @@ $$
     {symbol: 'v_R', meaning: 'the ROBOT\u2019s field-frame velocity. The projectile leaves already carrying this, which is exactly what the offset has to cancel'},
     {symbol: 't_d', meaning: 'feeder delay: dead time between the command to fire and the projectile actually leaving', unit: 's'},
     {symbol: 't_f', meaning: 'flight time for this iteration\u2019s geometry. It depends on the distance, which depends on the aim point, which is why this must iterate', unit: 's'},
-    {symbol: 'G', meaning: 'the motion gain, a scale from 0 to 1 on how much of the robot\u2019s velocity to compensate. Set below 1 when the model overcorrects in practice'},
+    {symbol: 'G', meaning: 'the motion gain, a scale from 0 to 1 on how much of the robot\u2019s velocity to compensate. It is below 1 mainly because drag makes the full offset an overcorrection — see the admonition below'},
   ]}
 />
+
+:::warning[This offset is exact only in a vacuum]
+Writing the shift as $\mathbf v_R t$ assumes an inherited velocity simply translates the whole
+trajectory — which is true when the horizontal dynamics are linear in velocity, i.e. with no drag. Under
+the quadratic drag of the [previous lesson](./trajectory-simulation.mdx) it is a **linearization**, not
+an identity: adding $\mathbf v_R$ raises the airspeed, which raises drag for the entire flight, so the
+real landing point shifts by *less* than $\mathbf v_R t_f$.
+
+Simulated against this curriculum's own drag constant, the actual shift is about **60%** of
+$\mathbf v_R t_f$ across the whole range of realistic chassis speeds; turn drag off and the formula
+comes back exact to four digits. At a typical $1.5\ \mathrm{m/s}$ the drag-free offset overcorrects by
+nearly a metre. That, more than the feeder's spin-up behaviour, is what the gain $G$ is absorbing —
+which is also why $G$ must be **calibrated by shooting on the move**, not assumed to be 1.
+:::
 
 <EquationLegend
   items={[
@@ -111,14 +148,18 @@ $$
   ]}
 />
 
-This is circular: the virtual target changes the distance, the distance changes flight time, and flight time changes the virtual target. Fixed-point iteration breaks the loop. Start with the real target, compute a flight time, shift the target, compute the new flight time, and stop when the time changes by less than the tolerance.
+This is circular: the virtual target changes the distance, the distance changes flight time, and flight
+time changes the virtual target. Fixed-point iteration breaks the loop. Start with the real target,
+compute a flight time, shift the target, compute the new flight time, and stop when the time changes by
+less than the tolerance.
 
 The iteration is locally contractive when
 $G\lVert\mathbf v_R\rVert\,|dt_f/dd| < 1$; the radial projection can make the actual derivative smaller
 still. At ordinary speeds with a gently sloped flight-time table, each pass moves the answer less than
 the last, and the dashboard usually converges in two or three rounds. At very high chassis speed, near
 an abrupt table slope, or with impossible geometry, that bound can fail even if the table is otherwise
-valid. The hard iteration cap therefore protects the real-time loop from non-convergence as well as bad data.
+valid. The hard iteration cap therefore protects the real-time loop from non-convergence as well as
+bad data.
 
 ### Core implementation: bound the deployed solver
 
@@ -209,8 +250,8 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'v\u0307', meaning: 'the deceleration implied by the measured braking curve, rather than assumed to be constant', unit: 'in/s\u00b2'},
-    {symbol: 'a, b', meaning: 'the same two fitted coefficients from D(v) above: a is the ideal constant-deceleration part, b the viscous drag part'},
+    {symbol: 'v\u0307', meaning: 'the deceleration implied by the measured braking curve, rather than assumed to be constant', unit: 'm/s\u00b2'},
+    {symbol: 'a, b', meaning: 'the same two fitted coefficients from D(v) above: a is the ideal constant-deceleration part, b the viscous drag part. This whole section works in SI, matching the projectile model', unit: 's\u00b2/m, s'},
   ]}
 />
 
@@ -222,7 +263,7 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'v_0', meaning: 'the entry speed: how fast the robot was going when the coast began', unit: 'in/s'},
+    {symbol: 'v_0', meaning: 'the entry speed: how fast the robot was going when the coast began', unit: 'm/s'},
     {symbol: 'ln', meaning: 'the natural logarithm, appearing because separating the variables leaves a 1/v term to integrate'},
     {symbol: 'the minus t', meaning: 'time enters with a negative sign because the robot is slowing. Solving this relation for v given t is what the branches below do'},
   ]}
@@ -426,19 +467,32 @@ changing.
 
 </Exercise>
 
-<Exercise title="Closing the loop on rate, not just position">
+<Exercise title="What actually removes the ramp lag">
 
-`K_VEL` closes the loop on rate rather than position. A turret that only tracks position always lags a
-moving target by however long it takes position error to build up. Work out that lag for a target
-sweeping at 1 rad/s with a position-only loop.
+A turret that only tracks position always lags a moving target by however long it takes position error
+to build up. Work out that lag for a target sweeping at 1 rad/s with a position-only loop — then work
+out whether adding the rate feedback term `K_VEL` removes it.
 
 <Solution>
 
 At steady state a position-only loop settles where `K_POS * error` equals the voltage needed to sustain
 1 rad/s — so the error never reaches zero, it reaches whatever standing offset produces that voltage.
 With a typical turret that is a tenth of a radian or so of permanent lag, which at competition range is
-a miss. The rate term supplies the sustaining voltage directly, so the position error is free to go to
-zero.
+a miss.
+
+Adding `K_VEL` does **not** remove it. Once the turret is tracking the ramp, the measured rate has
+caught up to the reference, so `K_VEL * (omegaStar - measuredTurretRate)` evaluates to **zero** — a
+feedback term needs an error to produce output, and at steady state this one has none. Solving the
+turret plant $J\ddot\theta = u - b\dot\theta$ confirms it:
+
+$$
+e_{ss} = \frac{b\,\omega^*}{K_{POS}} \quad\text{— independent of } K_{VEL}.
+$$
+
+What removes the lag is the **feedforward** $k_V\omega^*$, which supplies the sustaining voltage without
+needing an error to generate it. That is the general rule this section opened with: the feedforward does
+the tracking, the feedback cleans up what the model got wrong. `K_VEL` earns its place by damping the
+transient and rejecting rate disturbances — not by closing the standing gap.
 
 </Solution>
 
@@ -446,8 +500,9 @@ zero.
 
 `MIN_VALID_BATTERY_VOLTS` is a team-validated sensor-sanity threshold, not a universal FTC cutoff.
 
-This also reframes the turret-lead trick from the coast projection. A servo turret has a position-only interface —
-there is nowhere to put $\omega^*$ — so aiming it at the *projected* pose is the poor man's velocity
+This also reframes the turret-lead trick from the coast projection. A servo turret has a position-only
+interface — there is nowhere to put $\omega^*$ — so aiming it at the *projected* pose is the poor man's
+velocity
 reference. A motor-driven turret under state feedback consumes $[\theta^*, \omega^*]$ directly and
 removes the ideal steady ramp lag without an extra empirical lead. Real sensing and command latency,
 model error, saturation, and the finite-difference estimate remain, so projection or measured lead may
@@ -466,8 +521,8 @@ This lesson references Eric Stoicescu's July 2026
 [*Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic Launcher*](./index.mdx#research-paper),
 the [YaoMing firmware](https://github.com/stoicescueric/YaoMing), and the
 [Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) simulator. The coasting
-model in the research extension — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the forward-projection trick —
-is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance data behind the fit was
-collected by Jacob Ophoven.
+model in the research extension — the $D(v) = av^2 + bv$ fit, its Lambert-W solution, and the
+forward-projection trick — is from a derivation by Havish Sripada (Pedro Pathing); the braking-distance
+data behind the fit was collected by Jacob Ophoven.
 
 </Admonition>
