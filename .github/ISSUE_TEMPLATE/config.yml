@@ -1,11 +1,14 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Question or discussion
+    url: https://github.com/stoicescueric/control-lab/discussions
+    about: Ask about a lesson, the math, or applying any of this to your own robot.
   - name: Contribution guide
     url: https://github.com/stoicescueric/control-lab/blob/main/CONTRIBUTING.md
     about: Read the proposal, lesson, and pull request workflow before starting.
-  - name: AI-assisted lesson workflow
-    url: https://github.com/stoicescueric/control-lab/blob/main/AI_WORKFLOW.md
-    about: Use the repository-aware prompts with any AI assistant.
+  - name: Code of Conduct
+    url: https://github.com/stoicescueric/control-lab/blob/main/CODE_OF_CONDUCT.md
+    about: Community standards and how to report a conduct concern privately.
   - name: Security report
     url: https://github.com/stoicescueric/control-lab/security/advisories/new
     about: Report vulnerabilities privately instead of opening a public issue.

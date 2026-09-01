@@ -49,9 +49,8 @@ for (const file of trackedFiles) {
 const publicTextFiles = [
   path.join(root, 'README.md'),
   path.join(root, 'CONTRIBUTING.md'),
-  path.join(root, 'AGENTS.md'),
-  path.join(root, 'AI_WORKFLOW.md'),
   path.join(root, 'GOVERNANCE.md'),
+  path.join(root, 'CODE_OF_CONDUCT.md'),
   path.join(root, 'package.json'),
   ...walk(path.join(root, 'docs'), (file) => file.endsWith('.mdx')),
   ...walk(path.join(root, 'src'), (file) => /\.(?:ts|tsx|js|jsx)$/.test(file)),
@@ -74,6 +73,7 @@ const placeholderPatterns = [
 ];
 
 for (const file of publicTextFiles) {
+  if (!existsSync(file)) continue;
   const source = readFileSync(file, 'utf8');
   const name = relative(file);
 

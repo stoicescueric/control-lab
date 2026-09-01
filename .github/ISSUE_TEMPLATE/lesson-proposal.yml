@@ -16,14 +16,14 @@ body:
     attributes:
       label: Curriculum area
       options:
-        - Foundations
-        - Software architecture
-        - Signal processing
-        - Localization and odometry
-        - Motor dynamics and control theory
-        - Path following and kinematics
-        - State-space control
-        - Trajectory generation and implementation
+        - Preface · Why Math Matters
+        - Module 1 · Software Architecture & Loop Optimization
+        - Module 2 · Motor Dynamics & Control Theory
+        - Module 3 · Signal Processing
+        - Module 4 · Path Following & Kinematics
+        - Module 5 · State-Space Control
+        - Advanced Topics & Misc
+        - Elective case study · Drag-aware launcher
     validations:
       required: true
   - type: textarea

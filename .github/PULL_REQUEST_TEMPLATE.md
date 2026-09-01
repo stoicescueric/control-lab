@@ -1,28 +1,39 @@
-## Proposal
+<!-- Small change? The three sections below are all you need. Delete the rest. -->
 
-- Proposal or issue:
-- Contribution type: lesson / simulation / correction / infrastructure
-- Maintainer-confirmed scope, if this is a new lesson:
+## What changed
 
-## Learning Objective
+One or two sentences. Link the Proposal or issue if there is one.
 
-State what a reader should be able to explain, calculate, or implement after
-this change.
+## Sources
 
-## Scope
+Cite a source for each nontrivial mathematical, algorithmic, framework, or
+hardware claim, and say which claim it supports. Typo, wording, and link fixes
+need nothing here.
+
+## How you verified
+
+- [ ] `npm run verify` passes locally
+- Anything else you checked (pages, viewports, hand calculations):
+- Was any of this written or edited with an AI tool? Say which parts, and what
+  you checked by hand.
+
+---
+
+<details>
+<summary><b>Lesson or simulation PR? Expand this checklist.</b> Skip it for corrections, wording, and infrastructure.</summary>
+
+### Learning objective
+
+What a reader should be able to explain, calculate, or implement after this
+change.
+
+### Scope
 
 - Lessons or modules changed:
 - Components or shared models changed:
 - Deliberately out of scope:
 
-## Evidence
-
-List the primary or authoritative sources for nontrivial mathematical,
-algorithmic, framework, or hardware claims. State which claim each source
-supports. For an interactive model, explain what behavior was checked against
-the source.
-
-## Mathematical Review
+### Mathematical Review
 
 - [ ] Coordinate frames, axis directions, angle signs, and wrapping conventions match `docs/notation.mdx`
 - [ ] Units and dimensions are consistent
@@ -31,21 +42,19 @@ the source.
 - [ ] Prose, equations, examples, tests, and interactive behavior agree
 - [ ] I opened and verified every cited source
 
-## Verification
+### Verification
 
-- [ ] `npm run verify`
 - [ ] Relevant pages checked in light and dark mode
 - [ ] Relevant pages checked at a narrow mobile width
 - [ ] Interactive controls checked with keyboard input where applicable
 - [ ] No exact hardware claim was added without a source
 
-## Tool Assistance
+### Tool Assistance
 
-State whether code or prose was generated or edited with automated tools, what
-was reviewed manually, and which checks support the result.
+Which parts were generated or edited with automated tools, what you reviewed
+manually, and which checks support the result.
 
-## Maintainer Notes
+</details>
 
-This section may be used during review. A passing check or an AI-generated
-review is not approval; the required code owner gives final approval before
-merge.
+<!-- A passing check or an AI-generated review is not approval. The required
+     code owner gives final approval before merge. -->

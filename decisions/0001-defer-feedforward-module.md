@@ -1,8 +1,8 @@
 # ADR 0001 — Defer the feedforward module; build `pidStep` alone
 
-- Status: Accepted
+- Status: Superseded — the feedforward module was subsequently extracted to `src/lib/domain/feedforward.ts`, reversing the decision below.
 - Date: 2026-06-21
-- Context source: architecture review of `src/components/sims/*`, grilling session on the deep `pidStep` controller module.
+- Context source: architecture review of `src/components/simulations/*`, grilling session on the deep `pidStep` controller module.
 
 ## Context
 
@@ -24,8 +24,12 @@ is *gravity* feedforward — a position-dependent `kG` from a lookup table
 
 ## Decision
 
-Build `pidStep` (`src/lib/controller.ts`) now. **Do not** extract a `feedforward`
+Build `pidStep` (`src/lib/domain/pid.ts`) now. **Do not** extract a `feedforward`
 module yet. Flywheel keeps its `kS+kV` feedforward inline.
+
+> Superseded: the second consumer anticipated below did appear, and
+> `src/lib/domain/feedforward.ts` now exports `motorFeedforward` and
+> `armFeedforward`. The "do not extract" instruction is history; do not act on it.
 
 `pidStep` shape settled in grilling:
 

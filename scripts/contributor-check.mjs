@@ -19,9 +19,8 @@ function requireText(relativePath, text, expected) {
   }
 }
 
-const agents = source('AGENTS.md');
-const aiWorkflow = source('AI_WORKFLOW.md');
 const governance = source('GOVERNANCE.md');
+const codeOfConduct = source('CODE_OF_CONDUCT.md');
 const contributing = source('CONTRIBUTING.md');
 const readme = source('README.md');
 const lessonTemplate = source('templates/lesson.mdx');
@@ -33,30 +32,15 @@ const packageJson = source('package.json');
 const scaffolder = source('scripts/scaffold-lesson.mjs');
 const gitignore = source('.gitignore');
 
-for (const expected of [
-  'CONTRIBUTING.md',
-  'ARCHITECTURE.md',
-  'docs/notation.mdx',
-  'templates/lesson.mdx',
-  'npm run verify',
-  'maintainer',
-]) {
-  requireText('AGENTS.md', agents, expected);
-}
-
-for (const expected of ['AGENTS.md', 'Pass 1', 'Pass 2', 'Pass 3', 'Human Review Checklist']) {
-  requireText('AI_WORKFLOW.md', aiWorkflow, expected);
-}
-
 for (const expected of ['CODEOWNERS', 'requires a pull request', 'requires review from Code Owners']) {
   requireText('GOVERNANCE.md', governance, expected);
 }
 
-for (const expected of ['AI_WORKFLOW.md', 'templates/lesson.mdx', 'GOVERNANCE.md']) {
+for (const expected of ['templates/lesson.mdx', 'GOVERNANCE.md', 'npm run verify']) {
   requireText('CONTRIBUTING.md', contributing, expected);
 }
 
-for (const expected of ['AGENTS.md', 'AI_WORKFLOW.md', 'GOVERNANCE.md']) {
+for (const expected of ['CODE_OF_CONDUCT.md', 'GOVERNANCE.md', 'ARCHITECTURE.md']) {
   requireText('README.md', readme, expected);
 }
 
@@ -80,8 +64,13 @@ requireText('package.json', packageJson, '"new:lesson"');
 for (const expected of ['templates/lesson.mdx', '--module', '--slug', '--description']) {
   requireText('scripts/scaffold-lesson.mjs', scaffolder, expected);
 }
-if (/^AGENTS\.md\s*$/m.test(gitignore)) {
-  failures.push('.gitignore must not exclude the public AGENTS.md guide');
+for (const expected of ['Contributor Covenant', 'enforcement']) {
+  requireText('CODE_OF_CONDUCT.md', codeOfConduct, expected);
+}
+for (const expected of ['.claude/', '.agents/', 'CLAUDE.md']) {
+  if (!gitignore.includes(expected)) {
+    failures.push(`.gitignore must exclude local tooling state: ${expected}`);
+  }
 }
 
 if (!/^\*\s+@\S+/m.test(codeowners)) {
@@ -116,5 +105,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  'Contributor workflow checks passed: governance, AI guidance, ownership, and lesson templates.',
+  'Contributor workflow checks passed: governance, conduct, ownership, and lesson templates.',
 );

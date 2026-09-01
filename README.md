@@ -58,8 +58,8 @@ npm run typecheck          # TypeScript check
 npm test                   # unit tests
 npm run build              # production Docusaurus build into build/
 npm run serve              # preview the production build
-npm run security           # workflow, lockfile, and built-output checks
-npm run size               # enforce the production bundle budget
+npm run security           # workflow, lockfile, and built-output checks (run after build)
+npm run size               # enforce the production bundle budget (run after build)
 npm run new:lesson -- ...  # scaffold a lesson in an existing module
 npm run verify             # run the complete pre-PR verification sequence
 ```
@@ -193,7 +193,9 @@ The configured project site is:
 https://stoicescueric.github.io/control-lab/
 ```
 
-For a fork or renamed repository, update `ORG`, `REPO`, `url`, and `baseUrl` in `docusaurus.config.ts`.
+For a fork or renamed repository, update `ORG` and `REPO` in `docusaurus.config.ts` — `url`,
+`baseUrl`, and the edit links are derived from them. Also replace `ANALYTICS_ID` in
+`src/lib/platform/analytics.ts`, or your fork will report into this project's analytics property.
 
 ## Security and Privacy
 
@@ -207,9 +209,9 @@ self-hosted, and YouTube videos are click-to-load privacy-enhanced embeds. See t
 
 ## Development Process
 
-AI assistance is used for implementation and editorial iteration. Curriculum decisions are author-led,
-and technical claims, derivations, and Java examples are expected to be checked against cited sources,
-tests, and the behavior of the interactive models before publication.
+Curriculum decisions are author-led. Technical claims, derivations, and Java examples are checked
+against cited sources, unit tests, and the behavior of the interactive models before publication.
+AI assistance is used for implementation and editorial iteration, and is never treated as a source.
 
 ## Contributing
 
@@ -218,8 +220,7 @@ substantive lessons should start with a proposal, and every accepted change
 requires maintainer approval before merge.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md): human workflow and authoring standards.
-- [AGENTS.md](AGENTS.md): canonical project context for any AI assistant.
-- [AI_WORKFLOW.md](AI_WORKFLOW.md): reusable proposal, implementation, and audit prompts.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): expected conduct, and how to report a problem.
 - [GOVERNANCE.md](GOVERNANCE.md): maintainer authority and merge policy.
 - [ARCHITECTURE.md](ARCHITECTURE.md): repository boundaries and extension paths.
 

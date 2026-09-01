@@ -98,8 +98,8 @@ function Contributors(): ReactNode {
             to={`${repoUrl}/issues/new?template=lesson-proposal.yml`}>
             Propose a lesson
           </Link>
-          <Link className="button button--secondary" to={`${repoUrl}/blob/main/AI_WORKFLOW.md`}>
-            Contribute with AI
+          <Link className="button button--secondary" to={`${repoUrl}/issues/new?template=content-correction.yml`}>
+            Report a correction
           </Link>
         </div>
       </div>

@@ -4,6 +4,11 @@ Control Lab is a technical curriculum, not a content dump. Contributions should 
 
 This guide explains the standards for lesson writing, interactive demos, Java examples, design, and pull requests.
 
+Everyone taking part is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Much of this project's audience is
+students being reviewed in public for the first time: review the work, not the
+person.
+
 ## How Contributions Are Accepted
 
 All published changes go through a pull request and require maintainer approval.
@@ -29,20 +34,19 @@ to a pull request without a proposal issue.
 
 ## Using an AI Assistant
 
-AI-assisted contributions are welcome. The project publishes one canonical,
-tool-neutral repository guide in [AGENTS.md](AGENTS.md). If an assistant does
-not load that file automatically, explicitly ask it to read the file before it
-plans or edits.
+AI-assisted contributions are welcome, and the contributor stays responsible for
+the result. Verify sources yourself, read the diff, run `npm run verify`, and say
+what you used in the pull request. An AI response is not a source and not an
+approval.
 
-Use [AI_WORKFLOW.md](AI_WORKFLOW.md) for ready-to-paste prompts that separate:
+Before you open the pull request, you should be able to answer:
 
-1. proposal and evidence gathering;
-2. focused implementation;
-3. independent mathematical and engineering review.
-
-The human contributor remains responsible for the result. Verify sources
-yourself, read the generated diff, run the checks, and disclose assistance in
-the pull request. An AI response is not a source or an approval.
+- Can I explain every equation and approximation without the assistant?
+- Did I open and verify the cited sources?
+- Do the units and sign conventions match `docs/notation.mdx`?
+- Does the code implement the equation shown in the prose?
+- Did I test a boundary or failure case?
+- Did I view the page on a narrow screen and in both themes?
 
 ## Before You Start
 
@@ -408,7 +412,7 @@ Before submitting:
 - Architecture and content checks pass.
 - New lessons have frontmatter, tags, and an abstract.
 - New formulas define their variables.
-- Java snippets are formatted and include Javadoc where useful.
+- Java snippets use `//` comments only, carrying units or ranges. No Javadoc.
 - Interactive demos are SSR-safe and clean up event listeners.
 - Links are not placeholders.
 - Images have useful captions or context.

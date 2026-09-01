@@ -34,8 +34,6 @@ lessons, pages, or theme overrides.
 
 | Path | Responsibility |
 | --- | --- |
-| `AGENTS.md` | Canonical, tool-neutral repository instructions for AI-assisted work. |
-| `AI_WORKFLOW.md` | Reusable prompts and human verification stages for AI-assisted contributions. |
 | `GOVERNANCE.md` | Maintainer authority, proposal decisions, and merge policy. |
 | `.github/` | CI, deployment, dependency updates, ownership, and contributor templates. |
 | `docs/` | The curriculum. Every lesson is an MDX document organized by module. |

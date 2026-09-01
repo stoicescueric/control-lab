@@ -1,0 +1,32 @@
+name: Content correction
+description: Report a small error in a lesson — a sign error, a wrong number, a broken link, a typo.
+title: "[Correction] "
+labels:
+  - content
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a small, self-contained fix. If a simulation misbehaves or an entire
+        explanation is wrong, use the bug report instead. If you already know the
+        fix, a pull request is welcome and does not need an issue first.
+  - type: textarea
+    id: correction
+    attributes:
+      label: What is wrong
+      description: Name the page and the spot, then say what is wrong. A lesson URL plus a heading, equation number, or quoted sentence is enough.
+      placeholder: |
+        On Module 4 · Pure Pursuit, in the lookahead intersection derivation,
+        the discriminant term is subtracted where it should be added.
+    validations:
+      required: true
+  - type: input
+    id: correct_value
+    attributes:
+      label: What it should say
+      description: The corrected equation, number, or wording, if you know it. Leave blank if you only spotted that something is off.
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: A link or reference supporting the correction. Not needed for typos or broken links.
