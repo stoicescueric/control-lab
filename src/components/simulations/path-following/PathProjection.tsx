@@ -7,7 +7,8 @@ const H = 360;
 const FIELD_WIDTH_IN = 144;
 const IN_PER_PX = FIELD_WIDTH_IN / W;
 const NUDGE = 6; // px per keyboard arrow-key nudge
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 type Point = {x: number; y: number};
 type Projection = {
@@ -119,22 +120,44 @@ export function PathProjection() {
   };
   const nudgeControlPoint = (index: number, dx: number, dy: number) => {
     setPoints((prev) =>
-      prev.map((point, i) => (i === index ? {x: clamp(point.x + dx, 12, W - 12), y: clamp(point.y + dy, 12, H - 12)} : point)),
+      prev.map((point, i) =>
+        i === index
+          ? {x: clamp(point.x + dx, 12, W - 12), y: clamp(point.y + dy, 12, H - 12)}
+          : point,
+      ),
     );
   };
   const onRobotKeyDown = (event: React.KeyboardEvent) => {
     const step = event.shiftKey ? NUDGE * 4 : NUDGE;
-    if (event.key === 'ArrowLeft') { nudgeRobot(-step, 0); event.preventDefault(); }
-    else if (event.key === 'ArrowRight') { nudgeRobot(step, 0); event.preventDefault(); }
-    else if (event.key === 'ArrowUp') { nudgeRobot(0, -step); event.preventDefault(); }
-    else if (event.key === 'ArrowDown') { nudgeRobot(0, step); event.preventDefault(); }
+    if (event.key === 'ArrowLeft') {
+      nudgeRobot(-step, 0);
+      event.preventDefault();
+    } else if (event.key === 'ArrowRight') {
+      nudgeRobot(step, 0);
+      event.preventDefault();
+    } else if (event.key === 'ArrowUp') {
+      nudgeRobot(0, -step);
+      event.preventDefault();
+    } else if (event.key === 'ArrowDown') {
+      nudgeRobot(0, step);
+      event.preventDefault();
+    }
   };
   const onControlPointKeyDown = (index: number) => (event: React.KeyboardEvent) => {
     const step = event.shiftKey ? NUDGE * 4 : NUDGE;
-    if (event.key === 'ArrowLeft') { nudgeControlPoint(index, -step, 0); event.preventDefault(); }
-    else if (event.key === 'ArrowRight') { nudgeControlPoint(index, step, 0); event.preventDefault(); }
-    else if (event.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); event.preventDefault(); }
-    else if (event.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); event.preventDefault(); }
+    if (event.key === 'ArrowLeft') {
+      nudgeControlPoint(index, -step, 0);
+      event.preventDefault();
+    } else if (event.key === 'ArrowRight') {
+      nudgeControlPoint(index, step, 0);
+      event.preventDefault();
+    } else if (event.key === 'ArrowUp') {
+      nudgeControlPoint(index, 0, -step);
+      event.preventDefault();
+    } else if (event.key === 'ArrowDown') {
+      nudgeControlPoint(index, 0, step);
+      event.preventDefault();
+    }
   };
   const endDrag = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -154,7 +177,14 @@ export function PathProjection() {
         onPointerMove={onMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}>
-        <path d={path} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />
+        <path
+          d={path}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="4"
+          strokeLinecap="round"
+          pointerEvents="none"
+        />
         <polyline
           points={points.map((point) => `${point.x},${point.y}`).join(' ')}
           fill="none"
@@ -178,7 +208,15 @@ export function PathProjection() {
         <Arrow from={projection.point} dir={projection.tangent} length={56} color="#ffc24d" />
         <Arrow from={projection.point} dir={projection.normal} length={42} color="#6f8bff" dashed />
 
-        <circle cx={projection.point.x} cy={projection.point.y} r="8" fill="#0b1120" stroke="#5ce08a" strokeWidth="3" pointerEvents="none" />
+        <circle
+          cx={projection.point.x}
+          cy={projection.point.y}
+          r="8"
+          fill="#0b1120"
+          stroke="#5ce08a"
+          strokeWidth="3"
+          pointerEvents="none"
+        />
         <text
           x={projection.point.x + 12}
           y={projection.point.y - 12}
@@ -189,9 +227,21 @@ export function PathProjection() {
           phi(psi(p))
         </text>
 
-        <Arrow from={projection.point} dir={errorDir} length={Math.min(errorMag, 90)} color="#ff6f9c" dashed />
+        <Arrow
+          from={projection.point}
+          dir={errorDir}
+          length={Math.min(errorMag, 90)}
+          color="#ff6f9c"
+          dashed
+        />
 
-        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8" pointerEvents="none">
+        <text
+          x="16"
+          y="28"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="13"
+          fill="#8294b8"
+          pointerEvents="none">
           drag the pink robot or blue Bezier handles
         </text>
 

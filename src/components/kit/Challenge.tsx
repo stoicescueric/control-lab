@@ -49,7 +49,9 @@ export function ChallengeChip({
         {passed ? 'PASS' : 'TEST'}
       </span>
       <span className={`min-w-0 flex-1 font-medium ${passed ? 'text-green' : 'text-[#c7d2e8]'}`}>
-        <span className="mr-2 font-bold uppercase tracking-wide text-[0.7rem] opacity-80">Challenge</span>
+        <span className="mr-2 font-bold uppercase tracking-wide text-[0.7rem] opacity-80">
+          Challenge
+        </span>
         {label}
       </span>
       {passed ? (

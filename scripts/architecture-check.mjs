@@ -54,10 +54,9 @@ for (const entry of readdirSync(simulationRoot, {withFileTypes: true})) {
   }
 }
 
-const sourceFiles = [
-  ...walk(path.join(root, 'src')),
-  ...walk(path.join(root, 'docs')),
-].filter((file) => sourceExtensions.has(path.extname(file)));
+const sourceFiles = [...walk(path.join(root, 'src')), ...walk(path.join(root, 'docs'))].filter(
+  (file) => sourceExtensions.has(path.extname(file)),
+);
 
 const obsoleteImports = [
   '@site/src/components/sims/',
@@ -101,7 +100,10 @@ for (const file of walk(path.join(root, 'src', 'lib', 'domain')).filter((entry) 
   const forbiddenPatterns = [
     {pattern: /from\s+['"]react(?:\/[^'"]*)?['"]/, label: 'React'},
     {pattern: /from\s+['"]@docusaurus\//, label: 'Docusaurus'},
-    {pattern: /@site\/src\/(?:components|pages|theme|lib\/(?:platform|visualization))\//, label: 'an outer layer'},
+    {
+      pattern: /@site\/src\/(?:components|pages|theme|lib\/(?:platform|visualization))\//,
+      label: 'an outer layer',
+    },
     {pattern: /\b(?:window|document|localStorage|sessionStorage)\b/, label: 'a browser global'},
   ];
 

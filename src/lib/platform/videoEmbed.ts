@@ -1,8 +1,4 @@
-const YOUTUBE_EMBED_HOSTS = new Set([
-  'youtube.com',
-  'www.youtube.com',
-  'www.youtube-nocookie.com',
-]);
+const YOUTUBE_EMBED_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'www.youtube-nocookie.com']);
 
 export function toSafeExternalUrl(href: string | undefined): string | null {
   if (!href) return null;

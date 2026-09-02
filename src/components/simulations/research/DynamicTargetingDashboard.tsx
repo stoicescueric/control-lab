@@ -51,7 +51,12 @@ function FlywheelRecovery() {
 
       while (accumulator >= DT) {
         const m = model.current;
-        const {feedforward: ffOn, pid: pidOn, bangBang: bbOn, aggression: bbScale} = toggles.current;
+        const {
+          feedforward: ffOn,
+          pid: pidOn,
+          bangBang: bbOn,
+          aggression: bbScale,
+        } = toggles.current;
         const error = TARGET - m.speed;
 
         // The controller choices below are the lesson: feedforward holds the
@@ -67,7 +72,8 @@ function FlywheelRecovery() {
         m.t += DT;
         m.lastVoltage = voltage;
         m.samples.push({t: m.t, value: m.speed});
-        while (m.samples.length > 520 || (m.samples[0] && m.t - m.samples[0].t > 4.5)) m.samples.shift();
+        while (m.samples.length > 520 || (m.samples[0] && m.t - m.samples[0].t > 4.5))
+          m.samples.shift();
         accumulator -= DT;
       }
 
@@ -122,21 +128,74 @@ function FlywheelRecovery() {
         className="block h-auto w-full rounded-xl bg-[#0b1120]"
         role="img"
         aria-label="Flywheel velocity recovery line chart after a shot disturbance.">
-        <rect x={padL} y={sy(TARGET + READY_BAND)} width={W - padL - padR} height={sy(TARGET - READY_BAND) - sy(TARGET + READY_BAND)} fill="rgba(92,224,138,0.10)" />
-        <line x1={padL} y1={sy(TARGET)} x2={W - padR} y2={sy(TARGET)} stroke="#6f8bff" strokeWidth="2" strokeDasharray="6 5" />
-        <line x1={padL} y1={sy(TARGET + READY_BAND)} x2={W - padR} y2={sy(TARGET + READY_BAND)} stroke="#5ce08a" strokeWidth="1.5" strokeDasharray="3 5" />
-        <line x1={padL} y1={sy(TARGET - READY_BAND)} x2={W - padR} y2={sy(TARGET - READY_BAND)} stroke="#5ce08a" strokeWidth="1.5" strokeDasharray="3 5" />
+        <rect
+          x={padL}
+          y={sy(TARGET + READY_BAND)}
+          width={W - padL - padR}
+          height={sy(TARGET - READY_BAND) - sy(TARGET + READY_BAND)}
+          fill="rgba(92,224,138,0.10)"
+        />
+        <line
+          x1={padL}
+          y1={sy(TARGET)}
+          x2={W - padR}
+          y2={sy(TARGET)}
+          stroke="#6f8bff"
+          strokeWidth="2"
+          strokeDasharray="6 5"
+        />
+        <line
+          x1={padL}
+          y1={sy(TARGET + READY_BAND)}
+          x2={W - padR}
+          y2={sy(TARGET + READY_BAND)}
+          stroke="#5ce08a"
+          strokeWidth="1.5"
+          strokeDasharray="3 5"
+        />
+        <line
+          x1={padL}
+          y1={sy(TARGET - READY_BAND)}
+          x2={W - padR}
+          y2={sy(TARGET - READY_BAND)}
+          stroke="#5ce08a"
+          strokeWidth="1.5"
+          strokeDasharray="3 5"
+        />
         {[2000, 2250, 2500, 2750].map((y) => (
           <g key={y}>
             <line x1={padL} y1={sy(y)} x2={W - padR} y2={sy(y)} stroke="rgba(255,255,255,0.05)" />
-            <text x={padL - 10} y={sy(y) + 4} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#8294b8">
+            <text
+              x={padL - 10}
+              y={sy(y) + 4}
+              textAnchor="end"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="11"
+              fill="#8294b8">
               {y}
             </text>
           </g>
         ))}
-        <path d={path} fill="none" stroke={ready ? '#5ce08a' : '#ff6f9c'} strokeWidth="3.5" strokeLinecap="round" />
-        <circle cx={samples.length ? sx(samples[samples.length - 1].t) : padL} cy={sy(clamp(m.speed, yMin, yMax))} r="5.5" fill={ready ? '#5ce08a' : '#ff6f9c'} />
-        <text x={W - padR} y={padT + 12} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
+        <path
+          d={path}
+          fill="none"
+          stroke={ready ? '#5ce08a' : '#ff6f9c'}
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
+        <circle
+          cx={samples.length ? sx(samples[samples.length - 1].t) : padL}
+          cy={sy(clamp(m.speed, yMin, yMax))}
+          r="5.5"
+          fill={ready ? '#5ce08a' : '#ff6f9c'}
+        />
+        <text
+          x={W - padR}
+          y={padT + 12}
+          textAnchor="end"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12"
+          fill="#aab8d6">
           target = {TARGET} ticks/s, ready band = +/- {READY_BAND}
         </text>
       </svg>
@@ -158,7 +217,15 @@ function FlywheelRecovery() {
       </div>
 
       <Controls>
-        <Slider label="Bang-bang recovery aggression" min={0.4} max={1.5} step={0.05} value={aggression} onChange={setAggression} format={(v) => `${v.toFixed(2)}x`} />
+        <Slider
+          label="Bang-bang recovery aggression"
+          min={0.4}
+          max={1.5}
+          step={0.05}
+          value={aggression}
+          onChange={setAggression}
+          format={(v) => `${v.toFixed(2)}x`}
+        />
       </Controls>
       <Readout
         items={[
@@ -193,7 +260,11 @@ export default function DynamicTargetingDashboard() {
     <Demo title={`On-Bot Control - ${current.title}`} pill="Research dashboard">
       <div className="mb-4 flex flex-wrap gap-2">
         {tabs.map((tab) => (
-          <Button key={tab.id} active={active === tab.id} primary={active === tab.id} onClick={() => setActive(tab.id)}>
+          <Button
+            key={tab.id}
+            active={active === tab.id}
+            primary={active === tab.id}
+            onClick={() => setActive(tab.id)}>
             {tab.label}: {tab.title}
           </Button>
         ))}

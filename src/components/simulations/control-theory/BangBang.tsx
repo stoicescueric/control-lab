@@ -263,8 +263,24 @@ export default function BangBang() {
       </Stage>
 
       <Controls>
-        <Slider label="Target speed" min={120} max={330} step={10} value={target} onChange={setTarget} format={(v) => `${v.toFixed(0)} rpm`} />
-        <Slider label="TBH gain" min={0.2} max={2} step={0.1} value={gain} onChange={setGain} format={(v) => v.toFixed(1)} />
+        <Slider
+          label="Target speed"
+          min={120}
+          max={330}
+          step={10}
+          value={target}
+          onChange={setTarget}
+          format={(v) => `${v.toFixed(0)} rpm`}
+        />
+        <Slider
+          label="TBH gain"
+          min={0.2}
+          max={2}
+          step={0.1}
+          value={gain}
+          onChange={setGain}
+          format={(v) => v.toFixed(1)}
+        />
       </Controls>
       <Buttons>
         <Button primary onClick={fire}>
@@ -277,10 +293,16 @@ export default function BangBang() {
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Bang-bang ripple: <b ref={roRipple} className="text-white">—</b>
+          Bang-bang ripple:{' '}
+          <b ref={roRipple} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          TBH holding drive: <b ref={roDrive} className="text-white">—</b>
+          TBH holding drive:{' '}
+          <b ref={roDrive} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

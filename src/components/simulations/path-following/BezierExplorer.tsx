@@ -16,10 +16,14 @@ import {
 const W = 640;
 const H = 360;
 
-const lerp = (a: Pt, b: Pt, t: number): Pt => ({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t});
+const lerp = (a: Pt, b: Pt, t: number): Pt => ({
+  x: a.x + (b.x - a.x) * t,
+  y: a.y + (b.y - a.y) * t,
+});
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const NUDGE = 6;
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 export function BezierExplorer() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -41,7 +45,9 @@ export function BezierExplorer() {
     if (drag.current == null) return;
     const p = toSvg(e);
     const i = drag.current;
-    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)),
+    );
   };
   const onPointKeyDown = (i: number) => (e: React.KeyboardEvent) => {
     const step = e.shiftKey ? NUDGE * 4 : NUDGE;
@@ -54,11 +60,14 @@ export function BezierExplorer() {
     else return;
     e.preventDefault();
     setPts((prev) =>
-      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+      prev.map((q, j) =>
+        j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q,
+      ),
     );
   };
   const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     drag.current = null;
   };
 
@@ -104,15 +113,39 @@ export function BezierExplorer() {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}>
         {/* control polygon */}
-        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#3b4a6b" strokeWidth="2" strokeDasharray="7 7" pointerEvents="none" />
+        <polyline
+          points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="#3b4a6b"
+          strokeWidth="2"
+          strokeDasharray="7 7"
+          pointerEvents="none"
+        />
 
         {/* curvature comb */}
         {combHairs.map((h, i) => (
-          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" pointerEvents="none" />
+          <line
+            key={i}
+            x1={h.x1}
+            y1={h.y1}
+            x2={h.x2}
+            y2={h.y2}
+            stroke="#5ce08a"
+            strokeWidth="1.5"
+            opacity="0.5"
+            pointerEvents="none"
+          />
         ))}
 
         {/* the curve */}
-        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />
+        <path
+          d={d}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="4"
+          strokeLinecap="round"
+          pointerEvents="none"
+        />
 
         {/* de Casteljau scaffold at t */}
         <g opacity="0.9" pointerEvents="none" aria-hidden="true">
@@ -150,7 +183,15 @@ export function BezierExplorer() {
                 }}
                 onKeyDown={onPointKeyDown(i)}
               />
-              <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill={isAnchor ? '#9db0ff' : '#ffd98a'} pointerEvents="none" aria-hidden="true">
+              <text
+                x={p.x}
+                y={p.y - 16}
+                textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace"
+                fontSize="13"
+                fill={isAnchor ? '#9db0ff' : '#ffd98a'}
+                pointerEvents="none"
+                aria-hidden="true">
                 P{i}
               </text>
             </g>
@@ -163,7 +204,15 @@ export function BezierExplorer() {
       </p>
 
       <Controls>
-        <Slider label="Parameter t" min={0} max={1} step={0.01} value={t} onChange={setT} format={(v) => v.toFixed(2)} />
+        <Slider
+          label="Parameter t"
+          min={0}
+          max={1}
+          step={0.01}
+          value={t}
+          onChange={setT}
+          format={(v) => v.toFixed(2)}
+        />
       </Controls>
       <Buttons>
         <Button active={comb} onClick={() => setComb((v) => !v)}>

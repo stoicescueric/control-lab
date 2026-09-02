@@ -42,7 +42,9 @@ function ContributorCard({c, rank}: {c: Contributor; rank: number}) {
           </span>
         )}
       </div>
-      <h3 className="m-0 mt-4 text-base font-bold text-ink group-hover:text-accent-text">{c.login}</h3>
+      <h3 className="m-0 mt-4 text-base font-bold text-ink group-hover:text-accent-text">
+        {c.login}
+      </h3>
       <p className="m-0 mt-1 font-mono text-[0.85rem] text-ink-soft">
         {c.contributions.toLocaleString()} {c.contributions === 1 ? 'commit' : 'commits'}
       </p>
@@ -85,7 +87,9 @@ function Contributors(): ReactNode {
   return (
     <section className="mx-auto max-w-6xl px-6 py-14 lg:py-16">
       <div className="mx-auto max-w-2xl text-center">
-        <p className="m-0 mb-3 font-mono text-xs font-semibold text-accent-text uppercase">Open source</p>
+        <p className="m-0 mb-3 font-mono text-xs font-semibold text-accent-text uppercase">
+          Open source
+        </p>
         <h1 className="m-0 text-3xl font-extrabold text-ink lg:text-4xl">Contributors</h1>
         <p className="mt-4 text-ink-soft">
           This list is loaded from the repository&apos;s public GitHub contribution data. To propose
@@ -98,7 +102,9 @@ function Contributors(): ReactNode {
             to={`${repoUrl}/issues/new?template=lesson-proposal.yml`}>
             Propose a lesson
           </Link>
-          <Link className="button button--secondary" to={`${repoUrl}/issues/new?template=content-correction.yml`}>
+          <Link
+            className="button button--secondary"
+            to={`${repoUrl}/issues/new?template=content-correction.yml`}>
             Report a correction
           </Link>
         </div>

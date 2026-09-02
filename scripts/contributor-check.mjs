@@ -32,7 +32,11 @@ const packageJson = source('package.json');
 const scaffolder = source('scripts/scaffold-lesson.mjs');
 const gitignore = source('.gitignore');
 
-for (const expected of ['CODEOWNERS', 'requires a pull request', 'requires review from Code Owners']) {
+for (const expected of [
+  'CODEOWNERS',
+  'requires a pull request',
+  'requires review from Code Owners',
+]) {
   requireText('GOVERNANCE.md', governance, expected);
 }
 
@@ -84,7 +88,12 @@ for (const expected of ['Proposal', 'Mathematical Review', 'Verification', 'Tool
   requireText('.github/PULL_REQUEST_TEMPLATE.md', pullRequestTemplate, expected);
 }
 
-for (const expected of ['Learning objective', 'Mathematical scope', 'Primary sources', 'Acceptance criteria']) {
+for (const expected of [
+  'Learning objective',
+  'Mathematical scope',
+  'Primary sources',
+  'Acceptance criteria',
+]) {
   requireText('.github/ISSUE_TEMPLATE/lesson-proposal.yml', proposalTemplate, expected);
 }
 

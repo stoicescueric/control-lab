@@ -26,7 +26,14 @@ export default function ContentWrapper(props: Props) {
     <div ref={ref}>
       {mins != null && (
         <p className="mb-3 flex items-center gap-1.5 font-mono text-[0.78rem] text-ink-faint">
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round">
             <circle cx="12" cy="12" r="9" />
             <path d="M12 7v5l3 3" />
           </svg>

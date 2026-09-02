@@ -19,7 +19,8 @@ const H = 380;
 const FIELD = 144; // canvas width = 12 ft (144 in) field
 const SCALE = FIELD / W; // inches per pixel
 const NUDGE = 6; // px per keyboard arrow-key nudge
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -64,25 +65,46 @@ export function GuidedVectorField() {
   };
   const nudgeControlPoint = (index: number, dx: number, dy: number) => {
     setP((prev) =>
-      prev.map((q, j) => (j === index ? {x: clamp(q.x + dx, 8, W - 8), y: clamp(q.y + dy, 8, H - 8)} : q)),
+      prev.map((q, j) =>
+        j === index ? {x: clamp(q.x + dx, 8, W - 8), y: clamp(q.y + dy, 8, H - 8)} : q,
+      ),
     );
   };
   const onRobotKeyDown = (e: React.KeyboardEvent) => {
     const step = e.shiftKey ? NUDGE * 4 : NUDGE;
-    if (e.key === 'ArrowLeft') { nudgeRobot(-step, 0); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { nudgeRobot(step, 0); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { nudgeRobot(0, -step); e.preventDefault(); }
-    else if (e.key === 'ArrowDown') { nudgeRobot(0, step); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') {
+      nudgeRobot(-step, 0);
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      nudgeRobot(step, 0);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      nudgeRobot(0, -step);
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      nudgeRobot(0, step);
+      e.preventDefault();
+    }
   };
   const onControlPointKeyDown = (index: number) => (e: React.KeyboardEvent) => {
     const step = e.shiftKey ? NUDGE * 4 : NUDGE;
-    if (e.key === 'ArrowLeft') { nudgeControlPoint(index, -step, 0); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { nudgeControlPoint(index, step, 0); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { nudgeControlPoint(index, 0, -step); e.preventDefault(); }
-    else if (e.key === 'ArrowDown') { nudgeControlPoint(index, 0, step); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') {
+      nudgeControlPoint(index, -step, 0);
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight') {
+      nudgeControlPoint(index, step, 0);
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      nudgeControlPoint(index, 0, -step);
+      e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      nudgeControlPoint(index, 0, step);
+      e.preventDefault();
+    }
   };
   const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     drag.current = null;
   };
 
@@ -111,7 +133,9 @@ export function GuidedVectorField() {
     if (Math.hypot(cur.x - end.x, cur.y - end.y) < 10) break;
     if (cur.x < -20 || cur.x > W + 20 || cur.y < -20 || cur.y > H + 20) break;
   }
-  const flowStr = flow.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const flowStr = flow
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+    .join(' ');
 
   const here = field(P, robot, kN);
   const arrowColor = (e: number) => {
@@ -141,24 +165,65 @@ export function GuidedVectorField() {
           return (
             <g key={i} opacity="0.7" pointerEvents="none" aria-hidden="true">
               <line x1={a.x} y1={a.y} x2={ex} y2={ey} stroke={col} strokeWidth="1.6" />
-              <path d={`M ${ex} ${ey} L ${ex - a.dx * 5 + px * 3} ${ey - a.dy * 5 + py * 3} L ${ex - a.dx * 5 - px * 3} ${ey - a.dy * 5 - py * 3} Z`} fill={col} />
+              <path
+                d={`M ${ex} ${ey} L ${ex - a.dx * 5 + px * 3} ${ey - a.dy * 5 + py * 3} L ${ex - a.dx * 5 - px * 3} ${ey - a.dy * 5 - py * 3} Z`}
+                fill={col}
+              />
             </g>
           );
         })}
 
         {/* the path */}
-        <path d={pathStr} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" opacity="0.95" pointerEvents="none" />
+        <path
+          d={pathStr}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          opacity="0.95"
+          pointerEvents="none"
+        />
         {/* start / end markers */}
         <circle cx={P[0].x} cy={P[0].y} r="5" fill="#5ce08a" pointerEvents="none" />
-        <circle cx={P[3].x} cy={P[3].y} r="7" fill="none" stroke="#5ce08a" strokeWidth="2.5" pointerEvents="none" />
+        <circle
+          cx={P[3].x}
+          cy={P[3].y}
+          r="7"
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="2.5"
+          pointerEvents="none"
+        />
 
         {/* robot flow line */}
-        <path d={flowStr} fill="none" stroke="#ffc24d" strokeWidth="3" strokeLinecap="round" strokeDasharray="1 7" opacity="0.95" pointerEvents="none" />
+        <path
+          d={flowStr}
+          fill="none"
+          stroke="#ffc24d"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="1 7"
+          opacity="0.95"
+          pointerEvents="none"
+        />
 
         {/* control-point polygon + handles */}
-        <polyline points={P.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="1.5" strokeDasharray="4 5" pointerEvents="none" />
+        <polyline
+          points={P.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="#2a3656"
+          strokeWidth="1.5"
+          strokeDasharray="4 5"
+          pointerEvents="none"
+        />
 
-        <text x="16" y="28" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8" pointerEvents="none">
+        <text
+          x="16"
+          y="28"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="13"
+          fill="#8294b8"
+          pointerEvents="none">
           drag the robot or blue path handles
         </text>
 
@@ -210,11 +275,20 @@ export function GuidedVectorField() {
       </svg>
 
       <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
-        Drag the robot or a path handle, or focus one and use the arrow keys; hold Shift for a larger step.
+        Drag the robot or a path handle, or focus one and use the arrow keys; hold Shift for a
+        larger step.
       </p>
 
       <Controls>
-        <Slider label="Convergence gain kN" min={0.1} max={1.5} step={0.05} value={kN} onChange={setKN} format={(x) => `${x.toFixed(2)} /in`} />
+        <Slider
+          label="Convergence gain kN"
+          min={0.1}
+          max={1.5}
+          step={0.05}
+          value={kN}
+          onChange={setKN}
+          format={(x) => `${x.toFixed(2)} /in`}
+        />
       </Controls>
       <Buttons>
         <Button onClick={() => setShowGrid((s) => !s)} active={showGrid}>

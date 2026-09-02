@@ -108,7 +108,9 @@ describe('shoot-on-the-move solver', () => {
     const shooter = {x: 50, y: 28};
     const goal = {x: 100, y: 120};
     expect(() => solveSOTM({...shooter, x: Number.NaN}, goal, {x: 0, y: 0})).toThrow(/finite/);
-    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => Number.NaN)).toThrow(/finite and positive/);
+    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => Number.NaN)).toThrow(
+      /finite and positive/,
+    );
     expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => 0)).toThrow(/finite and positive/);
   });
 });

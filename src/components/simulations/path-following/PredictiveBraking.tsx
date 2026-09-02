@@ -57,7 +57,10 @@ export default function PredictiveBraking() {
 
   const st = useRef({t: 0, done: 0, chalPassed: false, plain: newBot(), pred: newBot()});
   const acc = useRef(0);
-  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({
+    status: 'idle',
+    progress: 0,
+  });
 
   function restart() {
     st.current = {...st.current, t: 0, done: 0, plain: newBot(), pred: newBot()};
@@ -243,14 +246,32 @@ export default function PredictiveBraking() {
       p.line(s.plain.trace.points(), {color: '#ff6f9c', width: 2.5});
       p.line(s.pred.trace.points(), {color: '#ffc24d', width: 3});
       // live dots
-      p.dot(TARGET - s.plain.x, Math.abs(s.plain.v), {color: '#ff6f9c', r: 4.5, ring: '#0b1120', ringW: 2});
-      p.dot(TARGET - s.pred.x, Math.abs(s.pred.v), {color: '#ffc24d', r: 4.5, ring: '#0b1120', ringW: 2});
+      p.dot(TARGET - s.plain.x, Math.abs(s.plain.v), {
+        color: '#ff6f9c',
+        r: 4.5,
+        ring: '#0b1120',
+        ringW: 2,
+      });
+      p.dot(TARGET - s.pred.x, Math.abs(s.pred.v), {
+        color: '#ffc24d',
+        r: 4.5,
+        ring: '#0b1120',
+        ringW: 2,
+      });
     });
-    p.text(D_MIN + 0.06, 2.85, 'overshoot zone', {color: '#ff9cbb', font: '10px ui-monospace, monospace'});
-    p.text(TARGET - 0.08, V_MAX + 0.12, 'v_max', {color: '#8294b8', align: 'right', font: '11px ui-monospace, monospace'});
+    p.text(D_MIN + 0.06, 2.85, 'overshoot zone', {
+      color: '#ff9cbb',
+      font: '10px ui-monospace, monospace',
+    });
+    p.text(TARGET - 0.08, V_MAX + 0.12, 'v_max', {
+      color: '#8294b8',
+      align: 'right',
+      font: '11px ui-monospace, monospace',
+    });
 
     const fmt = (b: Bot) =>
-      `${(b.overshoot * 100).toFixed(0)} cm over` + (b.settleT != null ? `, settled ${b.settleT.toFixed(1)} s` : '');
+      `${(b.overshoot * 100).toFixed(0)} cm over` +
+      (b.settleT != null ? `, settled ${b.settleT.toFixed(1)} s` : '');
     if (roPlain.current) {
       roPlain.current.textContent = fmt(s.plain);
       roPlain.current.style.color = s.plain.overshoot > 0.05 ? '#ff6f9c' : '#fff';
@@ -265,9 +286,15 @@ export default function PredictiveBraking() {
     }
     if (roClock.current) roClock.current.textContent = s.t.toFixed(1) + ' s';
 
-    const status: ChallengeStatus = s.chalPassed ? 'passed' : s.plain.overshoot > 0.02 ? 'holding' : 'idle';
+    const status: ChallengeStatus = s.chalPassed
+      ? 'passed'
+      : s.plain.overshoot > 0.02
+        ? 'holding'
+        : 'idle';
     const progress = Math.min(1, s.plain.overshoot / 0.4);
-    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
+    setChal((c) =>
+      c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress},
+    );
   }
 
   useRaf((frameDt: number) => {
@@ -307,8 +334,24 @@ export default function PredictiveBraking() {
       />
 
       <Controls>
-        <Slider label="Gain kP" min={0.8} max={4} step={0.1} value={kP} onChange={setKp} format={(v) => v.toFixed(1)} />
-        <Slider label="Decel limit a" min={0.8} max={3} step={0.1} value={decel} onChange={setDecel} format={(v) => `${v.toFixed(1)} m/s²`} />
+        <Slider
+          label="Gain kP"
+          min={0.8}
+          max={4}
+          step={0.1}
+          value={kP}
+          onChange={setKp}
+          format={(v) => v.toFixed(1)}
+        />
+        <Slider
+          label="Decel limit a"
+          min={0.8}
+          max={3}
+          step={0.1}
+          value={decel}
+          onChange={setDecel}
+          format={(v) => `${v.toFixed(1)} m/s²`}
+        />
       </Controls>
       <Buttons>
         <Button primary onClick={restart}>
@@ -324,16 +367,28 @@ export default function PredictiveBraking() {
       />
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Plain PID: <b ref={roPlain} className="text-white">—</b>
+          Plain PID:{' '}
+          <b ref={roPlain} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Predictive: <b ref={roPred} className="text-white">—</b>
+          Predictive:{' '}
+          <b ref={roPred} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Glide distance now: <b ref={roGlide} className="text-white">—</b>
+          Glide distance now:{' '}
+          <b ref={roGlide} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          t: <b ref={roClock} className="text-white">—</b>
+          t:{' '}
+          <b ref={roClock} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

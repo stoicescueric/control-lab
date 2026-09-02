@@ -21,7 +21,14 @@ export default function LowPass() {
   ctrl.current = {alpha, noise};
 
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const plotRef = usePlot(canvas, {height: 290, xmin: 0, xmax: 12, ymin: -5, ymax: 7, yLabel: 'value'});
+  const plotRef = usePlot(canvas, {
+    height: 290,
+    xmin: 0,
+    xmax: 12,
+    ymin: -5,
+    ymax: 7,
+    yLabel: 'value',
+  });
   const lagEl = useRef<HTMLElement | null>(null);
   const residEl = useRef<HTMLElement | null>(null);
 
@@ -68,7 +75,8 @@ export default function LowPass() {
         p.line(s.filtT.points(), {color: '#6f8bff', width: 3});
       });
     }
-    if (lagEl.current) lagEl.current.textContent = Number.isFinite(s.lag) ? s.lag.toFixed(2) + ' s' : '∞';
+    if (lagEl.current)
+      lagEl.current.textContent = Number.isFinite(s.lag) ? s.lag.toFixed(2) + ' s' : '∞';
     const pts = s.filtT.points();
     const tp = s.trueT.points();
     let sum = 0;
@@ -109,17 +117,47 @@ export default function LowPass() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Smoothing α" value={alpha} min={0.02} max={1} step={0.01} onChange={setAlpha} format={(v) => v.toFixed(2)} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Left = smoother & slower · Right = snappier & noisier</div>
+          <Slider
+            label="Smoothing α"
+            value={alpha}
+            min={0.02}
+            max={1}
+            step={0.01}
+            onChange={setAlpha}
+            format={(v) => v.toFixed(2)}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Left = smoother & slower · Right = snappier & noisier
+          </div>
         </div>
-        <Slider label="Sensor noise" value={noise} min={0} max={3} step={0.05} onChange={setNoise} format={(v) => v.toFixed(2)} />
+        <Slider
+          label="Sensor noise"
+          value={noise}
+          min={0}
+          max={3}
+          step={0.05}
+          onChange={setNoise}
+          format={(v) => v.toFixed(2)}
+        />
       </div>
       <Buttons>
-        <Button onClick={() => (st.current.stepOffset = st.current.stepOffset > 1 ? 0 : 3.5)}>Sudden jump (step test)</Button>
+        <Button onClick={() => (st.current.stepOffset = st.current.stepOffset > 1 ? 0 : 3.5)}>
+          Sudden jump (step test)
+        </Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Time constant τ: <b ref={lagEl} className="text-white">—</b></span>
-        <span>Noise left in output: <b ref={residEl} className="text-white">—</b></span>
+        <span>
+          Time constant τ:{' '}
+          <b ref={lagEl} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Noise left in output:{' '}
+          <b ref={residEl} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

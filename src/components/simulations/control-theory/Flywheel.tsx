@@ -158,12 +158,38 @@ export default function Flywheel() {
       />
 
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
-        <Slider label="Target speed" value={goal} min={0} max={4} step={0.1} onChange={setGoal} format={(v) => v.toFixed(1) + ' m/s'} />
+        <Slider
+          label="Target speed"
+          value={goal}
+          min={0}
+          max={4}
+          step={0.1}
+          onChange={setGoal}
+          format={(v) => v.toFixed(1) + ' m/s'}
+        />
         <div>
-          <Slider label="kV (your estimate)" value={kVc} min={0} max={4} step={0.05} onChange={setKVc} format={(v) => v.toFixed(2)} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">True value ≈ 2.40. Try mistuning it.</div>
+          <Slider
+            label="kV (your estimate)"
+            value={kVc}
+            min={0}
+            max={4}
+            step={0.05}
+            onChange={setKVc}
+            format={(v) => v.toFixed(2)}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            True value ≈ 2.40. Try mistuning it.
+          </div>
         </div>
-        <Slider label="kP (feedback)" value={kP} min={0} max={12} step={0.1} onChange={setKP} format={(v) => v.toFixed(1)} />
+        <Slider
+          label="kP (feedback)"
+          value={kP}
+          min={0}
+          max={12}
+          step={0.1}
+          onChange={setKP}
+          format={(v) => v.toFixed(1)}
+        />
       </div>
 
       <div className="mt-4 grid gap-2.5">
@@ -178,7 +204,11 @@ export default function Flywheel() {
               {name}
             </span>
             <div className="relative h-3.5 overflow-hidden rounded-[7px] bg-[#1a2440]">
-              <div ref={fill} className="absolute bottom-0 left-0 top-0 rounded-[7px]" style={{background: color}} />
+              <div
+                ref={fill}
+                className="absolute bottom-0 left-0 top-0 rounded-[7px]"
+                style={{background: color}}
+              />
             </div>
             <span ref={num} className="text-right font-mono text-[0.82rem] text-white">
               0 V
@@ -214,10 +244,30 @@ export default function Flywheel() {
       </Buttons>
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Speed: <b ref={roV} className="text-white">—</b></span>
-        <span>Target: <b ref={roT} className="text-white">—</b></span>
-        <span>Error: <b ref={roE} className="text-white">—</b></span>
-        <span>Voltage: <b ref={roVolt} className="text-white">—</b></span>
+        <span>
+          Speed:{' '}
+          <b ref={roV} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Target:{' '}
+          <b ref={roT} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Error:{' '}
+          <b ref={roE} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Voltage:{' '}
+          <b ref={roVolt} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

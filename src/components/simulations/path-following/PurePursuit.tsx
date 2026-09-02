@@ -4,7 +4,7 @@
    Everything below runs in a FIXED world coordinate space (WX x WY world units,
    where 100 units = 1 m so the metric read-outs stay honest). The world is only
    mapped to the <canvas> at draw time with a single uniform `scale` + centering
-   offset, exactly like the Kalman/EKF sims. That keeps the geometry AND the
+   offset, exactly like the Kalman sim. That keeps the geometry AND the
    tuned parameters (lookahead, speed, thresholds) resolution-independent, so the
    robot follows the same-shaped path and wobbles the same way on a phone as on a
    desktop — previously they lived in raw canvas pixels and the behaviour drifted
@@ -29,7 +29,8 @@ const WY = 380;
 const PAD = 12; // canvas padding (px) kept around the world when it's letterboxed
 const WP_NUDGE = 8; // arrow-key step for a focused waypoint, in world units (8 units = 8 cm)
 const WAYPOINT_COUNT = 5; // matches defaultPath() below
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 interface Pose {
   x: number;
@@ -153,17 +154,14 @@ export default function PurePursuit() {
     const v = spdRef.current;
     s.cte = nearestAhead();
     const last = s.path[s.path.length - 1];
-    if (s.pursuitProgress.segmentIndex >= s.path.length - 2
-        && Math.hypot(s.pose.x - last.x, s.pose.y - last.y) < 12) {
+    if (
+      s.pursuitProgress.segmentIndex >= s.path.length - 2 &&
+      Math.hypot(s.pose.x - last.x, s.pose.y - last.y) < 12
+    ) {
       restart();
       return;
     }
-    const lookahead = continuousLookaheadPoint(
-      s.path,
-      s.pose,
-      ldRef.current,
-      s.pursuitProgress,
-    );
+    const lookahead = continuousLookaheadPoint(s.path, s.pose, ldRef.current, s.pursuitProgress);
     s.carrot = lookahead.point;
     s.pursuitProgress = lookahead.progress;
     const rf = toRobotFrame(s.carrot, s.pose);
@@ -174,7 +172,10 @@ export default function PurePursuit() {
     s.pose.y += v * Math.sin(s.pose.th) * dt;
     s.pose.th += w * dt;
     const tr = s.trail;
-    if (tr.length === 0 || Math.hypot(s.pose.x - tr[tr.length - 1][0], s.pose.y - tr[tr.length - 1][1]) > 3) {
+    if (
+      tr.length === 0 ||
+      Math.hypot(s.pose.x - tr[tr.length - 1][0], s.pose.y - tr[tr.length - 1][1]) > 3
+    ) {
       tr.push([s.pose.x, s.pose.y]);
       if (tr.length > 1200) tr.shift();
     }
@@ -305,6 +306,9 @@ export default function PurePursuit() {
       active = false;
       observer.disconnect();
     };
+    // init/draw read the world through refs and are recreated every render, so listing
+    // them would rebuild the observer constantly; these three are what must repaint.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, Ld, size]);
 
   useRaf((frameDt: number) => {
@@ -382,7 +386,10 @@ export default function PurePursuit() {
       const s = st.current;
       const wp = s.waypoints[i];
       if (!s.inited || !wp || s.path.length < 2) return;
-      s.waypoints[i] = [Math.max(8, Math.min(WX - 8, wp[0] + dx)), Math.max(8, Math.min(WY - 8, wp[1] + dy))];
+      s.waypoints[i] = [
+        Math.max(8, Math.min(WX - 8, wp[0] + dx)),
+        Math.max(8, Math.min(WY - 8, wp[1] + dy)),
+      ];
       buildPath();
       restart();
     };
@@ -401,21 +408,22 @@ export default function PurePursuit() {
           onPointerUp={onPointerEnd}
           onPointerCancel={onPointerEnd}
         />
-        {ready && Array.from({length: WAYPOINT_COUNT}, (_, i) => (
-          <button
-            key={i}
-            ref={(el) => {
-              wpRefs.current[i] = el;
-            }}
-            type="button"
-            tabIndex={0}
-            role="application"
-            aria-label={`Waypoint ${i + 1} at x ${(st.current.waypoints[i][0] / 100).toFixed(2)} metres, y ${(st.current.waypoints[i][1] / 100).toFixed(2)} metres. Use arrow keys to move; hold Shift to move faster.`}
-            aria-keyshortcuts={SPATIAL_KEYS}
-            className="pointer-events-none absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
-            onKeyDown={onWaypointKeyDown(i)}
-          />
-        ))}
+        {ready &&
+          Array.from({length: WAYPOINT_COUNT}, (_, i) => (
+            <button
+              key={i}
+              ref={(el) => {
+                wpRefs.current[i] = el;
+              }}
+              type="button"
+              tabIndex={0}
+              role="application"
+              aria-label={`Waypoint ${i + 1} at x ${(st.current.waypoints[i][0] / 100).toFixed(2)} metres, y ${(st.current.waypoints[i][1] / 100).toFixed(2)} metres. Use arrow keys to move; hold Shift to move faster.`}
+              aria-keyshortcuts={SPATIAL_KEYS}
+              className="pointer-events-none absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[#ffc24d]"
+              onKeyDown={onWaypointKeyDown(i)}
+            />
+          ))}
       </div>
       <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
         Drag a waypoint, or Tab to it and use the arrow keys; hold Shift for a larger step.
@@ -429,20 +437,50 @@ export default function PurePursuit() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Lookahead distance" value={Ld} min={14} max={150} step={2} onChange={setLd} format={(x) => (x / 100).toFixed(2) + ' m'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Small = wobbly · Large = cuts corners.</div>
+          <Slider
+            label="Lookahead distance"
+            value={Ld}
+            min={14}
+            max={150}
+            step={2}
+            onChange={setLd}
+            format={(x) => (x / 100).toFixed(2) + ' m'}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Small = wobbly · Large = cuts corners.
+          </div>
         </div>
-        <Slider label="Robot speed" value={spd} min={40} max={200} step={5} onChange={setSpd} format={(x) => (x / 100).toFixed(2) + ' m/s'} />
+        <Slider
+          label="Robot speed"
+          value={spd}
+          min={40}
+          max={200}
+          step={5}
+          onChange={setSpd}
+          format={(x) => (x / 100).toFixed(2) + ' m/s'}
+        />
       </div>
       <Buttons>
         <Button primary={playing} active={playing} onClick={() => setPlaying((v) => !v)}>
           {playing ? 'Pause' : 'Play'}
         </Button>
-        <Button onClick={restart} disabled={!ready}>↺ Restart from start</Button>
+        <Button onClick={restart} disabled={!ready}>
+          ↺ Restart from start
+        </Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Cross-track error: <b ref={roCte} className="text-white">—</b></span>
-        <span>Progress: <b ref={roProg} className="text-white">—</b></span>
+        <span>
+          Cross-track error:{' '}
+          <b ref={roCte} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Progress:{' '}
+          <b ref={roProg} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

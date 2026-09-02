@@ -23,7 +23,14 @@ export default function SignalNoise() {
   ctrl.current = {noise, drift, freq};
 
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const plotRef = usePlot(canvas, {height: 290, xmin: 0, xmax: 10, ymin: -6, ymax: 6, yLabel: 'value'});
+  const plotRef = usePlot(canvas, {
+    height: 290,
+    xmin: 0,
+    xmax: 10,
+    ymin: -6,
+    ymax: 6,
+    yLabel: 'value',
+  });
   const snr = useRef<HTMLElement | null>(null);
 
   const st = useRef({t: 0, spike: 0, bias: 0, trueT: new Trace(700), measT: new Trace(700)});
@@ -85,20 +92,52 @@ export default function SignalNoise() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Random noise" value={noise} min={0} max={4} step={0.05} onChange={setNoise} format={(v) => v.toFixed(2)} />
+          <Slider
+            label="Random noise"
+            value={noise}
+            min={0}
+            max={4}
+            step={0.05}
+            onChange={setNoise}
+            format={(v) => v.toFixed(2)}
+          />
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">How shaky the sensor is.</div>
         </div>
         <div>
-          <Slider label="Drift / bias" value={drift} min={0} max={1} step={0.02} onChange={setDrift} format={(v) => v.toFixed(2)} />
+          <Slider
+            label="Drift / bias"
+            value={drift}
+            min={0}
+            max={1}
+            step={0.02}
+            onChange={setDrift}
+            format={(v) => v.toFixed(2)}
+          />
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">A slow lean away from the truth.</div>
         </div>
-        <Slider label="Signal speed" value={freq} min={0.2} max={2.5} step={0.05} onChange={setFreq} format={(v) => v.toFixed(2) + '×'} />
+        <Slider
+          label="Signal speed"
+          value={freq}
+          min={0.2}
+          max={2.5}
+          step={0.05}
+          onChange={setFreq}
+          format={(v) => v.toFixed(2) + '×'}
+        />
       </div>
       <Buttons>
-        <Button onClick={() => (st.current.spike += (Math.random() > 0.5 ? 1 : -1) * 6)}>Inject a spike</Button>
+        <Button onClick={() => (st.current.spike += (Math.random() > 0.5 ? 1 : -1) * 6)}>
+          Inject a spike
+        </Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Signal-to-noise: <b ref={snr} className="text-white">—</b> (higher = cleaner)</span>
+        <span>
+          Signal-to-noise:{' '}
+          <b ref={snr} className="text-white">
+            —
+          </b>{' '}
+          (higher = cleaner)
+        </span>
       </div>
     </Demo>
   );

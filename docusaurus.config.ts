@@ -8,7 +8,6 @@ function tailwindPlugin() {
   return {
     name: 'control-lab-tailwind',
     configurePostCss(postcssOptions: {plugins: unknown[]}) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       postcssOptions.plugins.push(
         {
           postcssPlugin: 'control-lab-katex-woff2-only',
@@ -179,15 +178,24 @@ const config: Config = {
             {label: 'References & Resources', to: '/docs/references'},
             {label: 'CTRL ALT FTC', href: 'https://www.ctrlaltftc.com/'},
             {label: 'Game Manual 0', href: 'https://gm0.org/en/latest/'},
-            {label: 'Controls Engineering in FRC', href: 'https://file.tavsys.net/control/controls-engineering-in-frc.pdf'},
+            {
+              label: 'Controls Engineering in FRC',
+              href: 'https://file.tavsys.net/control/controls-engineering-in-frc.pdf',
+            },
           ],
         },
         {
           title: 'More',
           items: [
             {label: 'Contributors', to: '/contributors'},
-            {label: 'Contribution guide', href: `https://github.com/${ORG}/${REPO}/blob/main/CONTRIBUTING.md`},
-            {label: 'Code of conduct', href: `https://github.com/${ORG}/${REPO}/blob/main/CODE_OF_CONDUCT.md`},
+            {
+              label: 'Contribution guide',
+              href: `https://github.com/${ORG}/${REPO}/blob/main/CONTRIBUTING.md`,
+            },
+            {
+              label: 'Code of conduct',
+              href: `https://github.com/${ORG}/${REPO}/blob/main/CODE_OF_CONDUCT.md`,
+            },
             {label: 'Privacy & Cookies', to: '/privacy'},
             {label: 'GitHub', href: `https://github.com/${ORG}/${REPO}`},
           ],
@@ -231,8 +239,18 @@ const config: Config = {
         offlineModeActivationStrategies: ['appInstalled', 'standalone', 'queryString'],
         pwaHead: [
           {tagName: 'link', rel: 'manifest', href: `/${REPO}/manifest.webmanifest`},
-          {tagName: 'meta', name: 'theme-color', content: '#f7f5f0', media: '(prefers-color-scheme: light)'},
-          {tagName: 'meta', name: 'theme-color', content: '#111113', media: '(prefers-color-scheme: dark)'},
+          {
+            tagName: 'meta',
+            name: 'theme-color',
+            content: '#f7f5f0',
+            media: '(prefers-color-scheme: light)',
+          },
+          {
+            tagName: 'meta',
+            name: 'theme-color',
+            content: '#111113',
+            media: '(prefers-color-scheme: dark)',
+          },
           {tagName: 'link', rel: 'apple-touch-icon', href: `/${REPO}/img/logo.svg`},
         ],
       },

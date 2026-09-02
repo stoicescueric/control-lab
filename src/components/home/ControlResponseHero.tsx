@@ -235,17 +235,14 @@ function ClosedLoopResponse() {
     context.stroke();
   }
 
-  useRaf(
-    (frameDt: number) => {
-      if (playing && frameDt > 0) {
-        const dt = Math.min(frameDt, 0.05);
-        const substeps = 4;
-        for (let index = 0; index < substeps; index += 1) advance(dt / substeps);
-      }
-      draw();
-    },
-    canvasRef,
-  );
+  useRaf((frameDt: number) => {
+    if (playing && frameDt > 0) {
+      const dt = Math.min(frameDt, 0.05);
+      const substeps = 4;
+      for (let index = 0; index < substeps; index += 1) advance(dt / substeps);
+    }
+    draw();
+  }, canvasRef);
 
   const dragging = useRef(false);
 

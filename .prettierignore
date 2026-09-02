@@ -1,0 +1,12 @@
+# Prose is the author's to format. Lesson MDX carries LaTeX, JSX, and
+# hand-wrapped paragraphs that content-check.mjs already governs.
+docs/
+*.md
+*.mdx
+
+# Generated or vendored.
+build/
+.docusaurus/
+node_modules/
+package-lock.json
+static/

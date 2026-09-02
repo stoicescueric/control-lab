@@ -3,9 +3,9 @@ import {parseConsentCookie} from './consent';
 
 describe('parseConsentCookie', () => {
   it('reads an analytics grant among unrelated cookies', () => {
-    expect(parseConsentCookie('theme=dark; control_lab_analytics_consent=granted; progress=4')).toBe(
-      'granted',
-    );
+    expect(
+      parseConsentCookie('theme=dark; control_lab_analytics_consent=granted; progress=4'),
+    ).toBe('granted');
   });
 
   it('reads an analytics denial', () => {

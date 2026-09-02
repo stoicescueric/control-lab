@@ -99,7 +99,13 @@ export default function MecanumDrive() {
     const raw = mecanumMix(vx, vy, omega);
 
     // 4) desaturate: divide by the largest magnitude if it exceeds 1
-    const norm = Math.max(1, Math.abs(raw.fl), Math.abs(raw.fr), Math.abs(raw.bl), Math.abs(raw.br));
+    const norm = Math.max(
+      1,
+      Math.abs(raw.fl),
+      Math.abs(raw.fr),
+      Math.abs(raw.bl),
+      Math.abs(raw.br),
+    );
     const desat = desaturate(raw);
     const wheels = [desat.fl, desat.fr, desat.bl, desat.br];
 
@@ -118,10 +124,22 @@ export default function MecanumDrive() {
     // wrap at the field edges (and cut the trail so it doesn't streak across)
     const m = 8;
     let wrapped = false;
-    if (s.x < -m) (s.x = w + m), (wrapped = true);
-    if (s.x > w + m) (s.x = -m), (wrapped = true);
-    if (s.y < -m) (s.y = h + m), (wrapped = true);
-    if (s.y > h + m) (s.y = -m), (wrapped = true);
+    if (s.x < -m) {
+      s.x = w + m;
+      wrapped = true;
+    }
+    if (s.x > w + m) {
+      s.x = -m;
+      wrapped = true;
+    }
+    if (s.y < -m) {
+      s.y = h + m;
+      wrapped = true;
+    }
+    if (s.y > h + m) {
+      s.y = -m;
+      wrapped = true;
+    }
     if (wrapped) s.trail = [];
 
     s.trail.push({x: s.x, y: s.y});
@@ -325,11 +343,51 @@ export default function MecanumDrive() {
       />
 
       <Controls>
-        <Slider label="Forward (vₓ)" min={-1} max={1} step={0.05} value={fwd} onChange={setFwd} format={(v) => v.toFixed(2)} />
-        <Slider label="Strafe (v_y, +left)" min={-1} max={1} step={0.05} value={str} onChange={setStr} format={(v) => v.toFixed(2)} />
-        <Slider label="Turn (ω, +CCW)" min={-1} max={1} step={0.05} value={turn} onChange={setTurn} format={(v) => v.toFixed(2)} />
-        <Slider label="Set heading θ" min={0} max={360} step={5} value={headingDeg} onChange={setHeading} format={(v) => `${v.toFixed(0)}°`} />
-        <Slider label="Joystick curve (exp)" min={1} max={3} step={0.1} value={curve} onChange={setCurve} format={(v) => v.toFixed(1)} />
+        <Slider
+          label="Forward (vₓ)"
+          min={-1}
+          max={1}
+          step={0.05}
+          value={fwd}
+          onChange={setFwd}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Strafe (v_y, +left)"
+          min={-1}
+          max={1}
+          step={0.05}
+          value={str}
+          onChange={setStr}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Turn (ω, +CCW)"
+          min={-1}
+          max={1}
+          step={0.05}
+          value={turn}
+          onChange={setTurn}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Set heading θ"
+          min={0}
+          max={360}
+          step={5}
+          value={headingDeg}
+          onChange={setHeading}
+          format={(v) => `${v.toFixed(0)}°`}
+        />
+        <Slider
+          label="Joystick curve (exp)"
+          min={1}
+          max={3}
+          step={0.1}
+          value={curve}
+          onChange={setCurve}
+          format={(v) => v.toFixed(1)}
+        />
       </Controls>
 
       <Buttons>
@@ -344,28 +402,52 @@ export default function MecanumDrive() {
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          robot vₓ: <b ref={roVx} className="text-white">—</b>
+          robot vₓ:{' '}
+          <b ref={roVx} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          robot v_y: <b ref={roVy} className="text-white">—</b>
+          robot v_y:{' '}
+          <b ref={roVy} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          desaturate ÷: <b ref={roNorm} className="text-white">—</b>
+          desaturate ÷:{' '}
+          <b ref={roNorm} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          heading: <b ref={roHead} className="text-white">—</b>
+          heading:{' '}
+          <b ref={roHead} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          FL: <b ref={roFL} className="text-white">—</b>
+          FL:{' '}
+          <b ref={roFL} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          FR: <b ref={roFR} className="text-white">—</b>
+          FR:{' '}
+          <b ref={roFR} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          BL: <b ref={roBL} className="text-white">—</b>
+          BL:{' '}
+          <b ref={roBL} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          BR: <b ref={roBR} className="text-white">—</b>
+          BR:{' '}
+          <b ref={roBR} className="text-white">
+            —
+          </b>
         </span>
       </div>
       <Legend

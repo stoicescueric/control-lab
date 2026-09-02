@@ -24,7 +24,13 @@ function randn(): number {
 }
 
 function makeAxis(p0: number): Axis {
-  return {x: [p0, 0], P: [[10, 0], [0, 10]]};
+  return {
+    x: [p0, 0],
+    P: [
+      [10, 0],
+      [0, 10],
+    ],
+  };
 }
 
 function kfStep(ax: Axis, z: number, q: number, r: number) {
@@ -162,7 +168,9 @@ export default function Kalman() {
       ctx.strokeStyle = 'rgba(92,224,138,.45)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      s.truePath.forEach((p, i) => (i ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1]))));
+      s.truePath.forEach((p, i) =>
+        i ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1])),
+      );
       ctx.stroke();
     }
     ctx.fillStyle = 'rgba(255,194,77,.85)';
@@ -176,7 +184,9 @@ export default function Kalman() {
       ctx.lineWidth = 3;
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      s.estPath.forEach((p, i) => (i ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1]))));
+      s.estPath.forEach((p, i) =>
+        i ? ctx.lineTo(PX(p[0]), PY(p[1])) : ctx.moveTo(PX(p[0]), PY(p[1])),
+      );
       ctx.stroke();
     }
     const ex = s.axX.x[0];
@@ -205,7 +215,9 @@ export default function Kalman() {
 
     if (errMEl.current) errMEl.current.textContent = s.errM.toFixed(2);
     if (errKEl.current) errKEl.current.textContent = s.errK.toFixed(2);
-    if (impEl.current) impEl.current.textContent = (s.errM > 0.01 ? s.errM / Math.max(s.errK, 1e-3) : 1).toFixed(1) + '× cleaner';
+    if (impEl.current)
+      impEl.current.textContent =
+        (s.errM > 0.01 ? s.errM / Math.max(s.errK, 1e-3) : 1).toFixed(1) + '× cleaner';
   }
 
   useRaf((frameDt: number) => {
@@ -239,12 +251,30 @@ export default function Kalman() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Measurement noise" value={kfR} min={0.5} max={9} step={0.1} onChange={setKfR} format={(v) => v.toFixed(1)} />
+          <Slider
+            label="Measurement noise"
+            value={kfR}
+            min={0.5}
+            max={9}
+            step={0.1}
+            onChange={setKfR}
+            format={(v) => v.toFixed(1)}
+          />
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">How blurry the radar blips are.</div>
         </div>
         <div>
-          <Slider label="Process noise Q" value={kfQ} min={0.3} max={40} step={0.5} onChange={setKfQ} format={(v) => v.toFixed(1)} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Low = "moves predictably" (smoother, lags turns) · High = "could do anything"</div>
+          <Slider
+            label="Process noise Q"
+            value={kfQ}
+            min={0.3}
+            max={40}
+            step={0.5}
+            onChange={setKfQ}
+            format={(v) => v.toFixed(1)}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Low = "moves predictably" (smoother, lags turns) · High = "could do anything"
+          </div>
         </div>
       </div>
       <Buttons>
@@ -254,9 +284,24 @@ export default function Kalman() {
         <Button onClick={reset}>↺ Reset</Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Raw blip error: <b ref={errMEl} className="text-white">—</b></span>
-        <span>Kalman error: <b ref={errKEl} className="text-white">—</b></span>
-        <span>Improvement: <b ref={impEl} className="text-white">—</b></span>
+        <span>
+          Raw blip error:{' '}
+          <b ref={errMEl} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Kalman error:{' '}
+          <b ref={errKEl} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Improvement:{' '}
+          <b ref={impEl} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

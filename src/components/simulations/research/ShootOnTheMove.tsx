@@ -102,14 +102,21 @@ export default function ShootOnTheMove() {
     const step = 4;
     const k = e.key.toLowerCase();
     const d: Record<string, V> = {
-      w: {x: 0, y: step}, arrowup: {x: 0, y: step},
-      s: {x: 0, y: -step}, arrowdown: {x: 0, y: -step},
-      a: {x: -step, y: 0}, arrowleft: {x: -step, y: 0},
-      d: {x: step, y: 0}, arrowright: {x: step, y: 0},
+      w: {x: 0, y: step},
+      arrowup: {x: 0, y: step},
+      s: {x: 0, y: -step},
+      arrowdown: {x: 0, y: -step},
+      a: {x: -step, y: 0},
+      arrowleft: {x: -step, y: 0},
+      d: {x: step, y: 0},
+      arrowright: {x: step, y: 0},
     };
     if (d[k]) {
       e.preventDefault();
-      setPshooter((q) => ({x: clamp(q.x + d[k].x, 6, FIELD - 6), y: clamp(q.y + d[k].y, 6, FIELD - 6)}));
+      setPshooter((q) => ({
+        x: clamp(q.x + d[k].x, 6, FIELD - 6),
+        y: clamp(q.y + d[k].y, 6, FIELD - 6),
+      }));
     }
   };
 
@@ -141,7 +148,16 @@ export default function ShootOnTheMove() {
           onPointerLeave={() => (drag.current = null)}
           onKeyDown={onKey}>
           {/* field border + grid (1-ft squares) */}
-          <rect x={SX(0)} y={SY(FIELD)} width={FIELD * scale} height={FIELD * scale} fill="none" stroke="#3b4a6b" strokeWidth="2" rx="6" />
+          <rect
+            x={SX(0)}
+            y={SY(FIELD)}
+            width={FIELD * scale}
+            height={FIELD * scale}
+            fill="none"
+            stroke="#3b4a6b"
+            strokeWidth="2"
+            rx="6"
+          />
           {Array.from({length: 11}, (_, i) => (i + 1) * 12).map((g) => (
             <g key={g} stroke="rgba(255,255,255,0.04)" strokeWidth="1">
               <line x1={SX(g)} y1={SY(0)} x2={SX(g)} y2={SY(FIELD)} />
@@ -150,33 +166,100 @@ export default function ShootOnTheMove() {
           ))}
 
           {/* line of sight to the REAL target (where a naive turret points) */}
-          <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(pgoal.x)} y2={SY(pgoal.y)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="6 6" />
+          <line
+            x1={SX(pshooter.x)}
+            y1={SY(pshooter.y)}
+            x2={SX(pgoal.x)}
+            y2={SY(pgoal.y)}
+            stroke="#8294b8"
+            strokeWidth="1.5"
+            strokeDasharray="6 6"
+          />
           {/* cancellation offset: real → virtual, opposite chassis velocity */}
-          <line x1={SX(pgoal.x)} y1={SY(pgoal.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke={solutionColor} strokeWidth="1.5" strokeDasharray="3 4" />
+          <line
+            x1={SX(pgoal.x)}
+            y1={SY(pgoal.y)}
+            x2={SX(sol.pv.x)}
+            y2={SY(sol.pv.y)}
+            stroke={solutionColor}
+            strokeWidth="1.5"
+            strokeDasharray="3 4"
+          />
           {/* A nonconverged line is a candidate visualization, never a fire command. */}
-          <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(sol.pv.x)} y2={SY(sol.pv.y)} stroke={sol.converged ? '#ffc24d' : solutionColor} strokeWidth="2" strokeDasharray={sol.converged ? undefined : '5 5'} />
+          <line
+            x1={SX(pshooter.x)}
+            y1={SY(pshooter.y)}
+            x2={SX(sol.pv.x)}
+            y2={SY(sol.pv.y)}
+            stroke={sol.converged ? '#ffc24d' : solutionColor}
+            strokeWidth="2"
+            strokeDasharray={sol.converged ? undefined : '5 5'}
+          />
 
           {/* real target */}
-          <circle cx={SX(pgoal.x)} cy={SY(pgoal.y)} r="10" fill="none" stroke="#ff9a3d" strokeWidth="3" />
+          <circle
+            cx={SX(pgoal.x)}
+            cy={SY(pgoal.y)}
+            r="10"
+            fill="none"
+            stroke="#ff9a3d"
+            strokeWidth="3"
+          />
           <circle cx={SX(pgoal.x)} cy={SY(pgoal.y)} r="3" fill="#ff9a3d" />
-          <text x={SX(pgoal.x) + 14} y={SY(pgoal.y) + 4} fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#ffb066">real target</text>
+          <text
+            x={SX(pgoal.x) + 14}
+            y={SY(pgoal.y) + 4}
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="11"
+            fill="#ffb066">
+            real target
+          </text>
 
           {/* virtual target (where the turret aims) */}
           <circle cx={SX(sol.pv.x)} cy={SY(sol.pv.y)} r="9" fill={solutionColor} opacity="0.9" />
-          <text x={SX(sol.pv.x) + 13} y={SY(sol.pv.y) + 4} fontFamily="JetBrains Mono, monospace" fontSize="11" fill={solutionColor}>{sol.converged ? 'virtual target' : 'candidate only'}</text>
+          <text
+            x={SX(sol.pv.x) + 13}
+            y={SY(sol.pv.y) + 4}
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="11"
+            fill={solutionColor}>
+            {sol.converged ? 'virtual target' : 'candidate only'}
+          </text>
 
           {/* robot body, oriented to its turret heading */}
-          <g transform={`translate(${SX(pshooter.x)},${SY(pshooter.y)}) rotate(${(-heading * 180) / Math.PI})`}>
-            <rect x="-13" y="-13" width="26" height="26" rx="4" fill="#6f8bff" stroke="#0b1120" strokeWidth="2" />
+          <g
+            transform={`translate(${SX(pshooter.x)},${SY(pshooter.y)}) rotate(${(-heading * 180) / Math.PI})`}>
+            <rect
+              x="-13"
+              y="-13"
+              width="26"
+              height="26"
+              rx="4"
+              fill="#6f8bff"
+              stroke="#0b1120"
+              strokeWidth="2"
+            />
             <line x1="0" y1="0" x2="20" y2="0" stroke="#0b1120" strokeWidth="3" /> {/* turret */}
           </g>
 
           {/* velocity vector (cyan, draggable tip) */}
-          <line x1={SX(pshooter.x)} y1={SY(pshooter.y)} x2={SX(tip.x)} y2={SY(tip.y)} stroke="#37d6e0" strokeWidth="3" />
+          <line
+            x1={SX(pshooter.x)}
+            y1={SY(pshooter.y)}
+            x2={SX(tip.x)}
+            y2={SY(tip.y)}
+            stroke="#37d6e0"
+            strokeWidth="3"
+          />
           {arrowHead(pshooter, tip, '#37d6e0', 'vtip')}
           <circle cx={SX(tip.x)} cy={SY(tip.y)} r="7" fill="#37d6e0" style={{cursor: 'grab'}} />
 
-          <text x={SX(0) + 4} y={SY(FIELD) - 6} fontFamily="JetBrains Mono, monospace" fontSize="10" fill="#6b7a9c">
+          <text
+            x={SX(0) + 4}
+            y={SY(FIELD) - 6}
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="10"
+            fill="#6b7a9c">
             drag robot / arrow · click field then WASD
           </text>
         </svg>
@@ -197,11 +280,7 @@ export default function ShootOnTheMove() {
           {sol.iters.map((it) => (
             <div key={it.k} className="mb-1.5">
               <span className="text-[#6f8bff]">iter {it.k}</span>
-              {it.k === 0 ? (
-                <>: p_v = p_goal</>
-              ) : (
-                <>: shift −G·v_R·{it.T!.toFixed(2)}s</>
-              )}
+              {it.k === 0 ? <>: p_v = p_goal</> : <>: shift −G·v_R·{it.T!.toFixed(2)}s</>}
               <br />
               <span className="text-[#cfe0ff]">
                 d = {it.d.toFixed(1)} in · t_f = {it.tf.toFixed(2)} s
@@ -216,7 +295,8 @@ export default function ShootOnTheMove() {
             </div>
           ))}
           <div className="mt-2 border-t border-white/10 pt-2 text-white">
-            {sol.converged ? 'aim' : 'unusable candidate'} offset = {dist(sol.pv, pgoal).toFixed(1)} in opposite motion
+            {sol.converged ? 'aim' : 'unusable candidate'} offset = {dist(sol.pv, pgoal).toFixed(1)}{' '}
+            in opposite motion
           </div>
         </div>
       </div>
@@ -247,8 +327,14 @@ export default function ShootOnTheMove() {
           {color: '#6f8bff', label: 'robot (turret heading)'},
           {color: '#37d6e0', label: 'velocity v_R (drag tip)'},
           {color: '#ff9a3d', label: 'real target'},
-          {color: solutionColor, label: sol.converged ? 'validated virtual target' : 'nonconverged candidate'},
-          {color: sol.converged ? '#ffc24d' : solutionColor, label: sol.converged ? 'commanded line of sight' : 'shot inhibited'},
+          {
+            color: solutionColor,
+            label: sol.converged ? 'validated virtual target' : 'nonconverged candidate',
+          },
+          {
+            color: sol.converged ? '#ffc24d' : solutionColor,
+            label: sol.converged ? 'commanded line of sight' : 'shot inhibited',
+          },
         ]}
       />
     </Demo>

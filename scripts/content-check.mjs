@@ -9,11 +9,7 @@ function walk(directory, predicate = () => true) {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, {withFileTypes: true}).flatMap((entry) => {
     const fullPath = path.join(directory, entry.name);
-    return entry.isDirectory()
-      ? walk(fullPath, predicate)
-      : predicate(fullPath)
-        ? [fullPath]
-        : [];
+    return entry.isDirectory() ? walk(fullPath, predicate) : predicate(fullPath) ? [fullPath] : [];
   });
 }
 
@@ -90,6 +86,14 @@ for (const file of publicTextFiles) {
   }
 }
 
+// Standing reference pages rather than lessons: they carry an Abstract but no
+// difficulty, because there is no derivation to rate.
+const unbadgedReferencePages = new Set([
+  'docs/notation.mdx',
+  'docs/references.mdx',
+  'docs/preface/how-to-use.mdx',
+]);
+
 for (const file of walk(path.join(root, 'docs'), (name) => name.endsWith('.mdx'))) {
   const source = readFileSync(file, 'utf8');
   const name = relative(file);
@@ -110,11 +114,25 @@ for (const file of walk(path.join(root, 'docs'), (name) => name.endsWith('.mdx')
     fail(`${name} is missing an Abstract component`);
   }
 
+  // "How to Use" promises a difficulty badge under every lesson title. Module
+  // landing pages and the standing reference pages are not lessons.
+  if (
+    path.basename(file) !== 'index.mdx' &&
+    !unbadgedReferencePages.has(name) &&
+    !/<Difficulty\s+level="(?:Easy|Medium|Hard)"/.test(source)
+  ) {
+    fail(`${name} is missing a <Difficulty level="Easy|Medium|Hard" /> badge`);
+  }
+
   if (/<iframe\b/i.test(source)) {
     fail(`${name} contains a raw iframe; use the consent-aware VideoEmbed component`);
   }
 
-  if (/^#{1,6}\s+(?:The Hook|Physical Problem|Mathematical Solution|Enterprise Implementation)\s*$/im.test(source)) {
+  if (
+    /^#{1,6}\s+(?:The Hook|Physical Problem|Mathematical Solution|Enterprise Implementation)\s*$/im.test(
+      source,
+    )
+  ) {
     fail(`${name} uses a deprecated generic lesson heading`);
   }
 }
@@ -190,7 +208,9 @@ for (const file of walk(path.join(root, 'src'), (name) => /\.(?:ts|tsx|js|jsx)$/
   const source = readFileSync(file, 'utf8');
   const emoji = source.match(/\p{Extended_Pictographic}/u);
   if (emoji) {
-    fail(`${relative(file)} uses emoji UI (${emoji[0]}); use precise text or the project icon system`);
+    fail(
+      `${relative(file)} uses emoji UI (${emoji[0]}); use precise text or the project icon system`,
+    );
   }
 }
 

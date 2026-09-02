@@ -3,7 +3,10 @@ import {buildTrapezoidalProfile} from './motionProfile';
 
 function expectContinuous(distance: number, speed: number, acceleration: number) {
   const profile = buildTrapezoidalProfile(distance, speed, acceleration);
-  for (const boundary of [profile.accelerationTime, profile.accelerationTime + profile.cruiseTime]) {
+  for (const boundary of [
+    profile.accelerationTime,
+    profile.accelerationTime + profile.cruiseTime,
+  ]) {
     const before = profile.sample(boundary - 1e-7);
     const after = profile.sample(boundary + 1e-7);
     expect(after.position).toBeCloseTo(before.position, 4);
@@ -20,7 +23,11 @@ describe('trapezoidal motion profile', () => {
   it('returns the exact completed state at and after the duration', () => {
     const profile = buildTrapezoidalProfile(60, 40, 40);
     expect(profile.sample(profile.duration)).toEqual({position: 60, velocity: 0, acceleration: 0});
-    expect(profile.sample(profile.duration + 10)).toEqual({position: 60, velocity: 0, acceleration: 0});
+    expect(profile.sample(profile.duration + 10)).toEqual({
+      position: 60,
+      velocity: 0,
+      acceleration: 0,
+    });
   });
 
   it('supports signed moves and validates physical limits', () => {

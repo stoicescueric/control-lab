@@ -1,6 +1,6 @@
 name: Content correction
 description: Report a small error in a lesson — a sign error, a wrong number, a broken link, a typo.
-title: "[Correction] "
+title: '[Correction] '
 labels:
   - content
 body:

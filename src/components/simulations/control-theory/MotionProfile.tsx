@@ -160,7 +160,8 @@ export default function MotionProfile() {
         ],
         'rgba(255,111,156,0.06)',
       );
-      if (!prof.triangular) plot.hline(ctrl.current.vMax, {color: '#8294b8', width: 1.2, dash: [2, 8]});
+      if (!prof.triangular)
+        plot.hline(ctrl.current.vMax, {color: '#8294b8', width: 1.2, dash: [2, 8]});
 
       const N = 140;
       const vPts: [number, number][] = [];
@@ -179,15 +180,36 @@ export default function MotionProfile() {
       const state = prof.sample(tc);
       plot.vline(tc, {color: 'rgba(255,255,255,0.35)', width: 1, dash: [4, 4]});
       plot.dot(tc, state.velocity, {color: '#ffc24d', r: 5, ring: '#0b1120', ringW: 2});
-      plot.dot(tc, (state.position / d) * vAxis, {color: '#6f8bff', r: 5, ring: '#0b1120', ringW: 2});
+      plot.dot(tc, (state.position / d) * vAxis, {
+        color: '#6f8bff',
+        r: 5,
+        ring: '#0b1120',
+        ringW: 2,
+      });
     });
     const labelY = vAxis * 0.94;
-    plot.text(prof.accelerationTime / 2, labelY, 'accel', {color: '#2fd3c0', align: 'center', font: '10px ui-monospace, monospace'});
+    plot.text(prof.accelerationTime / 2, labelY, 'accel', {
+      color: '#2fd3c0',
+      align: 'center',
+      font: '10px ui-monospace, monospace',
+    });
     if (prof.cruiseTime > 0.15) {
-      plot.text(prof.accelerationTime + prof.cruiseTime / 2, labelY, 'cruise', {color: '#8fa3ff', align: 'center', font: '10px ui-monospace, monospace'});
+      plot.text(prof.accelerationTime + prof.cruiseTime / 2, labelY, 'cruise', {
+        color: '#8fa3ff',
+        align: 'center',
+        font: '10px ui-monospace, monospace',
+      });
     }
-    plot.text(prof.duration - prof.accelerationTime / 2, labelY, 'decel', {color: '#ff6f9c', align: 'center', font: '10px ui-monospace, monospace'});
-    plot.text(prof.duration * 0.82, vAxis * 0.12, 'blue: normalized x/d (0–100%)', {color: '#6f8bff', align: 'center', font: '10px ui-monospace, monospace'});
+    plot.text(prof.duration - prof.accelerationTime / 2, labelY, 'decel', {
+      color: '#ff6f9c',
+      align: 'center',
+      font: '10px ui-monospace, monospace',
+    });
+    plot.text(prof.duration * 0.82, vAxis * 0.12, 'blue: normalized x/d (0–100%)', {
+      color: '#6f8bff',
+      align: 'center',
+      font: '10px ui-monospace, monospace',
+    });
   }
 
   useRaf((frameDt: number) => {
@@ -225,9 +247,33 @@ export default function MotionProfile() {
       />
 
       <Controls>
-        <Slider label="Distance" min={5} max={120} step={5} value={d} onChange={setD} format={(v) => `${v.toFixed(0)} in`} />
-        <Slider label="Cruise speed vMax" min={10} max={80} step={5} value={vMax} onChange={setVMax} format={(v) => `${v.toFixed(0)} in/s`} />
-        <Slider label="Max accel aMax" min={10} max={120} step={5} value={aMax} onChange={setAMax} format={(v) => `${v.toFixed(0)} in/s²`} />
+        <Slider
+          label="Distance"
+          min={5}
+          max={120}
+          step={5}
+          value={d}
+          onChange={setD}
+          format={(v) => `${v.toFixed(0)} in`}
+        />
+        <Slider
+          label="Cruise speed vMax"
+          min={10}
+          max={80}
+          step={5}
+          value={vMax}
+          onChange={setVMax}
+          format={(v) => `${v.toFixed(0)} in/s`}
+        />
+        <Slider
+          label="Max accel aMax"
+          min={10}
+          max={120}
+          step={5}
+          value={aMax}
+          onChange={setAMax}
+          format={(v) => `${v.toFixed(0)} in/s²`}
+        />
       </Controls>
       <Buttons>
         <Button onClick={() => (st.current.t = 0)}>Replay</Button>

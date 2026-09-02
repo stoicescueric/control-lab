@@ -47,7 +47,9 @@ export function CurvatureCircle() {
     if (drag.current == null) return;
     const p = toSvg(e);
     const i = drag.current;
-    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)),
+    );
   };
   const onPointKeyDown = (i: number) => (e: React.KeyboardEvent<SVGCircleElement>) => {
     const step = e.shiftKey ? 16 : 4;
@@ -60,7 +62,11 @@ export function CurvatureCircle() {
     const delta = d[e.key];
     if (!delta) return;
     e.preventDefault();
-    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q)));
+    setPts((prev) =>
+      prev.map((q, j) =>
+        j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q,
+      ),
+    );
   };
 
   const cc = circumcircle(pts[0], pts[1], pts[2]);
@@ -83,10 +89,26 @@ export function CurvatureCircle() {
         {/* the circle (or, when collinear, the line through the points) */}
         {!straight && cc && (
           <>
-            <circle cx={cc.center.x} cy={cc.center.y} r={cc.r} fill="none" stroke="#6f8bff" strokeWidth="2.5" opacity="0.85" />
+            <circle
+              cx={cc.center.x}
+              cy={cc.center.y}
+              r={cc.r}
+              fill="none"
+              stroke="#6f8bff"
+              strokeWidth="2.5"
+              opacity="0.85"
+            />
             <circle cx={cc.center.x} cy={cc.center.y} r="4" fill="#6f8bff" />
             {/* radius to Q */}
-            <line x1={cc.center.x} y1={cc.center.y} x2={pts[1].x} y2={pts[1].y} stroke="#ffc24d" strokeWidth="2.5" strokeDasharray="6 5" />
+            <line
+              x1={cc.center.x}
+              y1={cc.center.y}
+              x2={pts[1].x}
+              y2={pts[1].y}
+              stroke="#ffc24d"
+              strokeWidth="2.5"
+              strokeDasharray="6 5"
+            />
             <text
               x={(cc.center.x + pts[1].x) / 2 + 8}
               y={(cc.center.y + pts[1].y) / 2}
@@ -98,7 +120,15 @@ export function CurvatureCircle() {
           </>
         )}
         {straight && (
-          <line x1={pts[0].x} y1={pts[0].y} x2={pts[2].x} y2={pts[2].y} stroke="#5ce08a" strokeWidth="3" strokeLinecap="round" />
+          <line
+            x1={pts[0].x}
+            y1={pts[0].y}
+            x2={pts[2].x}
+            y2={pts[2].y}
+            stroke="#5ce08a"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
         )}
 
         {/* arc through the three points (the local path) */}
@@ -130,7 +160,13 @@ export function CurvatureCircle() {
               }}
               onKeyDown={onPointKeyDown(i)}
             />
-            <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="14" fill="#ffa8c4">
+            <text
+              x={p.x}
+              y={p.y - 16}
+              textAnchor="middle"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="14"
+              fill="#ffa8c4">
               {LABELS[i]}
             </text>
           </g>

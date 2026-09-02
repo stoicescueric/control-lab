@@ -78,8 +78,7 @@ export function CookieConsent({children}: CookieConsentProps) {
               <h2 className={styles.title}>Privacy choices</h2>
               <p className={styles.description}>
                 Control Lab stores this choice. Optional Google Analytics helps identify useful
-                lessons and stays off until you allow it.{' '}
-                <Link to="/privacy">Privacy details</Link>
+                lessons and stays off until you allow it. <Link to="/privacy">Privacy details</Link>
               </p>
             </div>
             {choice !== null ? (
@@ -89,10 +88,16 @@ export function CookieConsent({children}: CookieConsentProps) {
             ) : null}
           </div>
           <div className={styles.actions}>
-            <button className="button button--secondary" type="button" onClick={() => choose('denied')}>
+            <button
+              className="button button--secondary"
+              type="button"
+              onClick={() => choose('denied')}>
               Essential only
             </button>
-            <button className="button button--primary" type="button" onClick={() => choose('granted')}>
+            <button
+              className="button button--primary"
+              type="button"
+              onClick={() => choose('granted')}>
               Allow analytics
             </button>
           </div>

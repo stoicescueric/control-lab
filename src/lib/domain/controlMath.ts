@@ -7,12 +7,12 @@ export interface MecanumWheelPowers {
 
 export function wrapRadians(radians: number): number {
   const turn = 2 * Math.PI;
-  const wrapped = ((radians + Math.PI) % turn + turn) % turn - Math.PI;
+  const wrapped = ((((radians + Math.PI) % turn) + turn) % turn) - Math.PI;
   return Object.is(wrapped, -0) ? 0 : wrapped;
 }
 
 export function wrapDegrees(degrees: number): number {
-  const wrapped = ((degrees + 180) % 360 + 360) % 360 - 180;
+  const wrapped = ((((degrees + 180) % 360) + 360) % 360) - 180;
   return Object.is(wrapped, -0) ? 0 : wrapped;
 }
 

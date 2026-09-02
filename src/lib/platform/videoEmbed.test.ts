@@ -3,9 +3,9 @@ import {toPrivacyEnhancedYoutubeUrl, toSafeExternalUrl} from './videoEmbed';
 
 describe('toPrivacyEnhancedYoutubeUrl', () => {
   it('moves a YouTube embed to the privacy-enhanced host and preserves parameters', () => {
-    expect(
-      toPrivacyEnhancedYoutubeUrl('https://www.youtube.com/embed/example?start=12'),
-    ).toBe('https://www.youtube-nocookie.com/embed/example?start=12');
+    expect(toPrivacyEnhancedYoutubeUrl('https://www.youtube.com/embed/example?start=12')).toBe(
+      'https://www.youtube-nocookie.com/embed/example?start=12',
+    );
   });
 
   it('accepts privacy-enhanced playlist embeds', () => {

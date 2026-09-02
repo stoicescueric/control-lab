@@ -51,8 +51,7 @@ function solveTwoLink(targetSvg: Point, elbowUp: boolean): Solution {
   const maxReach = LINK_1 + LINK_2;
   const reachable = radius >= minReach && radius <= maxReach;
 
-  const c2Raw =
-    (radius * radius - LINK_1 * LINK_1 - LINK_2 * LINK_2) / (2 * LINK_1 * LINK_2);
+  const c2Raw = (radius * radius - LINK_1 * LINK_1 - LINK_2 * LINK_2) / (2 * LINK_1 * LINK_2);
   const cosElbow = clamp(c2Raw, -1, 1);
   const sinElbowMagnitude = Math.sqrt(Math.max(0, 1 - cosElbow * cosElbow));
   // In the displayed +x-right/+y-up frame, the negative-sine branch places
@@ -61,8 +60,7 @@ function solveTwoLink(targetSvg: Point, elbowUp: boolean): Solution {
 
   const elbow = Math.atan2(sinElbow, cosElbow);
   const shoulder =
-    Math.atan2(target.y, target.x) -
-    Math.atan2(LINK_2 * sinElbow, LINK_1 + LINK_2 * cosElbow);
+    Math.atan2(target.y, target.x) - Math.atan2(LINK_2 * sinElbow, LINK_1 + LINK_2 * cosElbow);
 
   const elbowRobot = {
     x: LINK_1 * Math.cos(shoulder),

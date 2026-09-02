@@ -1,5 +1,13 @@
 import {useRef, useState} from 'react';
-import {Demo, Stage, Controls, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
+import {
+  Demo,
+  Stage,
+  Controls,
+  Buttons,
+  Button,
+  Readout,
+  Legend,
+} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {threePointCurvature} from '@site/src/lib/domain/curvature';
 import {planPathSpeeds} from '@site/src/lib/domain/purePursuit';
@@ -33,8 +41,18 @@ function catmull(p: Pt[], perSeg: number): Pt[] {
       const t2 = t * t;
       const t3 = t2 * t;
       out.push({
-        x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-        y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+        x:
+          0.5 *
+          (2 * p1.x +
+            (-p0.x + p2.x) * t +
+            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y:
+          0.5 *
+          (2 * p1.y +
+            (-p0.y + p2.y) * t +
+            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
       });
     }
   }
@@ -66,7 +84,9 @@ export function VelocityProfile() {
     if (drag.current == null) return;
     const p = toSvg(e);
     const i = drag.current;
-    setWp((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+    setWp((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)),
+    );
   };
   const onWaypointKeyDown = (i: number) => (e: React.KeyboardEvent<SVGCircleElement>) => {
     const step = e.shiftKey ? 16 : 4;
@@ -79,7 +99,11 @@ export function VelocityProfile() {
     const delta = d[e.key];
     if (!delta) return;
     e.preventDefault();
-    setWp((prev) => prev.map((q, j) => (j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q)));
+    setWp((prev) =>
+      prev.map((q, j) =>
+        j === i ? {x: clamp(q.x + delta.x, 14, W - 14), y: clamp(q.y + delta.y, 14, H - 14)} : q,
+      ),
+    );
   };
 
   // densify, then work in inch coordinates for the physics
@@ -114,7 +138,10 @@ export function VelocityProfile() {
   const PYTOP = 40;
   const px = (d: number) => PX0 + (d / total) * (PX1 - PX0);
   const py = (val: number) => PY0 - (val / V_AXIS) * (PY0 - PYTOP);
-  const line = (arr: number[]) => arr.map((val, i) => `${i === 0 ? 'M' : 'L'} ${px(s[i]).toFixed(1)} ${py(val).toFixed(1)}`).join(' ');
+  const line = (arr: number[]) =>
+    arr
+      .map((val, i) => `${i === 0 ? 'M' : 'L'} ${px(s[i]).toFixed(1)} ${py(val).toFixed(1)}`)
+      .join(' ');
 
   return (
     <Demo title="Adaptive velocity planning: drag the path, watch the speed adapt">
@@ -130,7 +157,16 @@ export function VelocityProfile() {
           onPointerUp={() => (drag.current = null)}
           onPointerLeave={() => (drag.current = null)}>
           {dense.slice(0, n - 1).map((p, i) => (
-            <line key={i} x1={p.x} y1={p.y} x2={dense[i + 1].x} y2={dense[i + 1].y} stroke={speedColor(v[i])} strokeWidth="6" strokeLinecap="round" />
+            <line
+              key={i}
+              x1={p.x}
+              y1={p.y}
+              x2={dense[i + 1].x}
+              y2={dense[i + 1].y}
+              stroke={speedColor(v[i])}
+              strokeWidth="6"
+              strokeLinecap="round"
+            />
           ))}
           {wp.map((p, i) => (
             <circle
@@ -158,32 +194,93 @@ export function VelocityProfile() {
         </svg>
 
         {/* RIGHT: speed vs distance — cap and braking-limited profile */}
-        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Speed versus distance along the path">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="block h-auto w-full rounded-xl bg-[#0b1120]"
+          role="img"
+          aria-label="Speed versus distance along the path">
           {/* axes */}
           <line x1={PX0} y1={PY0} x2={PX1} y2={PY0} stroke="#31405f" strokeWidth="1.5" />
           <line x1={PX0} y1={PY0} x2={PX0} y2={PYTOP} stroke="#31405f" strokeWidth="1.5" />
           {/* max-speed line */}
-          <line x1={PX0} y1={py(vPath)} x2={PX1} y2={py(vPath)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="2 8" />
-          <text x={PX1} y={py(vPath) - 8} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
+          <line
+            x1={PX0}
+            y1={py(vPath)}
+            x2={PX1}
+            y2={py(vPath)}
+            stroke="#8294b8"
+            strokeWidth="1.5"
+            strokeDasharray="2 8"
+          />
+          <text
+            x={PX1}
+            y={py(vPath) - 8}
+            textAnchor="end"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12"
+            fill="#8294b8">
             v_path
           </text>
           {/* curvature cap */}
           <path d={line(cap)} fill="none" stroke="#6f8bff" strokeWidth="2.5" opacity="0.8" />
           {/* braking-limited */}
-          <path d={line(v)} fill="none" stroke="#ffc24d" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-          <text x={PX0 - 8} y={PYTOP + 4} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
+          <path
+            d={line(v)}
+            fill="none"
+            stroke="#ffc24d"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <text
+            x={PX0 - 8}
+            y={PYTOP + 4}
+            textAnchor="end"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12"
+            fill="#8294b8">
             v
           </text>
-          <text x={(PX0 + PX1) / 2} y={H - 18} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#8294b8">
+          <text
+            x={(PX0 + PX1) / 2}
+            y={H - 18}
+            textAnchor="middle"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12"
+            fill="#8294b8">
             distance along path →
           </text>
         </svg>
       </Stage>
 
       <Controls>
-        <Slider label="Path max speed v_path" min={20} max={80} step={5} value={vPath} onChange={setVPath} format={(x) => `${x.toFixed(0)} in/s`} />
-        <Slider label="Max lateral accel" min={10} max={100} step={5} value={aLatMax} onChange={setALatMax} format={(x) => `${x.toFixed(0)} in/s²`} />
-        <Slider label="Max decel a" min={20} max={120} step={5} value={aMax} onChange={setAMax} format={(x) => `${x.toFixed(0)} in/s²`} />
+        <Slider
+          label="Path max speed v_path"
+          min={20}
+          max={80}
+          step={5}
+          value={vPath}
+          onChange={setVPath}
+          format={(x) => `${x.toFixed(0)} in/s`}
+        />
+        <Slider
+          label="Max lateral accel"
+          min={10}
+          max={100}
+          step={5}
+          value={aLatMax}
+          onChange={setALatMax}
+          format={(x) => `${x.toFixed(0)} in/s²`}
+        />
+        <Slider
+          label="Max decel a"
+          min={20}
+          max={120}
+          step={5}
+          value={aMax}
+          onChange={setAMax}
+          format={(x) => `${x.toFixed(0)} in/s²`}
+        />
       </Controls>
       <Buttons>
         <Button onClick={() => setWp(INIT)}>Reset path</Button>

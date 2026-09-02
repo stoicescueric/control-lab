@@ -49,8 +49,11 @@ describe('guidedVectorField', () => {
     const low = guidedVectorField(q, CURVE, 0.1);
     const high = guidedVectorField(q, CURVE, 2.0);
     // Higher kN should tilt the direction further from the pure tangent.
-    const tangentDeviation = (dir: Point) => Math.hypot(dir.x - low.tangent.x, dir.y - low.tangent.y);
-    expect(tangentDeviation(high.direction)).toBeGreaterThan(tangentDeviation(low.direction) - 1e-9);
+    const tangentDeviation = (dir: Point) =>
+      Math.hypot(dir.x - low.tangent.x, dir.y - low.tangent.y);
+    expect(tangentDeviation(high.direction)).toBeGreaterThan(
+      tangentDeviation(low.direction) - 1e-9,
+    );
   });
 
   it('does not produce NaN for a degenerate zero-length path', () => {

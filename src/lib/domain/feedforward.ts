@@ -10,7 +10,13 @@
  *
  * Mirrors WPILib's SimpleMotorFeedforward#calculate(velocity, acceleration).
  */
-export function motorFeedforward(kS: number, kV: number, kA: number, velocity: number, acceleration: number): number {
+export function motorFeedforward(
+  kS: number,
+  kV: number,
+  kA: number,
+  velocity: number,
+  acceleration: number,
+): number {
   return kS * Math.sign(velocity) + kV * velocity + kA * acceleration;
 }
 
@@ -30,5 +36,10 @@ export function armFeedforward(
   angularVelocity: number,
   angularAcceleration: number,
 ): number {
-  return kS * Math.sign(angularVelocity) + kG * Math.cos(angleFromHorizontal) + kV * angularVelocity + kA * angularAcceleration;
+  return (
+    kS * Math.sign(angularVelocity) +
+    kG * Math.cos(angleFromHorizontal) +
+    kV * angularVelocity +
+    kA * angularAcceleration
+  );
 }

@@ -57,10 +57,20 @@ export default function MotorCurve() {
   const roTemp = useRef<HTMLElement | null>(null);
   const roState = useRef<HTMLElement | null>(null);
 
-  const st = useRef({w: 0, angle: 0, temp: AMBIENT, chalHold: 0, chalPassed: false, trail: [] as [number, number][]});
+  const st = useRef({
+    w: 0,
+    angle: 0,
+    temp: AMBIENT,
+    chalHold: 0,
+    chalPassed: false,
+    trail: [] as [number, number][],
+  });
   const acc = useRef(0);
   const DT = 0.01;
-  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({
+    status: 'idle',
+    progress: 0,
+  });
 
   function step() {
     const s = st.current;
@@ -249,7 +259,9 @@ export default function MotorCurve() {
 
     const status: ChallengeStatus = s.chalPassed ? 'passed' : s.chalHold > 0 ? 'holding' : 'idle';
     const progress = Math.min(1, s.chalHold / 1);
-    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
+    setChal((c) =>
+      c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress},
+    );
   }
 
   useRaf((frameDt: number) => {
@@ -290,12 +302,32 @@ export default function MotorCurve() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Applied voltage" value={volts} min={0} max={12} step={0.5} onChange={setVolts} format={(x) => x.toFixed(1) + ' V'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Lower voltage slides the whole line inward — same slope.</div>
+          <Slider
+            label="Applied voltage"
+            value={volts}
+            min={0}
+            max={12}
+            step={0.5}
+            onChange={setVolts}
+            format={(x) => x.toFixed(1) + ' V'}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Lower voltage slides the whole line inward — same slope.
+          </div>
         </div>
         <div>
-          <Slider label="Load (resisting torque)" value={load} min={0} max={0.25} step={0.005} onChange={setLoad} format={(x) => x.toFixed(3) + ' N·m'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Past the stall torque, the motor can&apos;t move it — watch the temperature.</div>
+          <Slider
+            label="Load (resisting torque)"
+            value={load}
+            min={0}
+            max={0.25}
+            step={0.005}
+            onChange={setLoad}
+            format={(x) => x.toFixed(3) + ' N·m'}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Past the stall torque, the motor can&apos;t move it — watch the temperature.
+          </div>
         </div>
       </div>
       <Buttons>
@@ -328,25 +360,46 @@ export default function MotorCurve() {
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Speed: <b ref={roSpeed} className="text-white">—</b>
+          Speed:{' '}
+          <b ref={roSpeed} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Current: <b ref={roCurr} className="text-white">—</b>
+          Current:{' '}
+          <b ref={roCurr} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Power out: <b ref={roPout} className="text-white">—</b>
+          Power out:{' '}
+          <b ref={roPout} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Efficiency: <b ref={roEff} className="text-white">—</b>
+          Efficiency:{' '}
+          <b ref={roEff} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Heat (I²R): <b ref={roHeat} className="text-white">—</b>
+          Heat (I²R):{' '}
+          <b ref={roHeat} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Winding temp: <b ref={roTemp} className="text-white">—</b>
+          Winding temp:{' '}
+          <b ref={roTemp} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Status: <b ref={roState} className="text-white">—</b>
+          Status:{' '}
+          <b ref={roState} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

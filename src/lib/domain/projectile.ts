@@ -297,7 +297,11 @@ export function naturalCubic(xs: number[], ys: number[]): (x: number) => number 
     const hi = h(i);
     const A = (xs[i + 1] - x) / hi;
     const B = (x - xs[i]) / hi;
-    return A * ys[i] + B * ys[i + 1] + (((A * A * A - A) * M[i] + (B * B * B - B) * M[i + 1]) * (hi * hi)) / 6;
+    return (
+      A * ys[i] +
+      B * ys[i + 1] +
+      (((A * A * A - A) * M[i] + (B * B * B - B) * M[i + 1]) * (hi * hi)) / 6
+    );
   };
 }
 

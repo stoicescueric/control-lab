@@ -12,7 +12,15 @@
 import {useState} from 'react';
 import {Controls, Readout, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {DRAG_K, G, H0, H_RIM, type Pt, simulateDrag, simulateVacuum} from '@site/src/lib/domain/projectile';
+import {
+  DRAG_K,
+  G,
+  H0,
+  H_RIM,
+  type Pt,
+  simulateDrag,
+  simulateVacuum,
+} from '@site/src/lib/domain/projectile';
 
 export default function DragAwakening() {
   const [v0, setV0] = useState(8);
@@ -35,7 +43,8 @@ export default function DragAwakening() {
   const yMax = Math.max(2, Math.min(4.5, vac.apex * 1.18));
   const sx = (xm: number) => padL + (xm / xMax) * (W - padL - padR);
   const sy = (ym: number) => padT + (1 - ym / yMax) * (Hsvg - padT - padB);
-  const toPath = (pts: Pt[]) => 'M ' + pts.map((p) => `${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(' L ');
+  const toPath = (pts: Pt[]) =>
+    'M ' + pts.map((p) => `${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(' L ');
 
   // aperture marker: the spot the vacuum model expects the ball to clear
   const apX = vac.rimCross ?? vac.range;
@@ -55,28 +64,83 @@ export default function DragAwakening() {
         {/* x grid + labels */}
         {xTicks.map((m) => (
           <g key={m}>
-            <line x1={sx(m)} y1={sy(0)} x2={sx(m)} y2={sy(yMax)} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-            <text x={sx(m)} y={sy(0) + 18} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#6b7a9c">
+            <line
+              x1={sx(m)}
+              y1={sy(0)}
+              x2={sx(m)}
+              y2={sy(yMax)}
+              stroke="rgba(255,255,255,0.05)"
+              strokeWidth="1"
+            />
+            <text
+              x={sx(m)}
+              y={sy(0) + 18}
+              textAnchor="middle"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="11"
+              fill="#6b7a9c">
               {m}m
             </text>
           </g>
         ))}
 
         {/* aperture rim reference height */}
-        <line x1={sx(0)} y1={sy(H_RIM)} x2={sx(xMax)} y2={sy(H_RIM)} stroke="#2a3656" strokeWidth="1.5" strokeDasharray="3 5" />
-        <text x={sx(0) + 6} y={sy(H_RIM) - 5} fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#6b7a9c">
+        <line
+          x1={sx(0)}
+          y1={sy(H_RIM)}
+          x2={sx(xMax)}
+          y2={sy(H_RIM)}
+          stroke="#2a3656"
+          strokeWidth="1.5"
+          strokeDasharray="3 5"
+        />
+        <text
+          x={sx(0) + 6}
+          y={sy(H_RIM) - 5}
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="11"
+          fill="#6b7a9c">
           aperture rim 0.984 m
         </text>
 
         {/* the target aperture the naive model aims for (a small hoop at rim height) */}
         <g>
-          <ellipse cx={sx(apX)} cy={sy(H_RIM)} rx="5" ry="11" fill="none" stroke="#ffc24d" strokeWidth="3" />
-          <line x1={sx(apX)} y1={sy(H_RIM) + 11} x2={sx(apX)} y2={sy(0)} stroke="#ffc24d" strokeWidth="1" strokeDasharray="2 4" opacity="0.5" />
+          <ellipse
+            cx={sx(apX)}
+            cy={sy(H_RIM)}
+            rx="5"
+            ry="11"
+            fill="none"
+            stroke="#ffc24d"
+            strokeWidth="3"
+          />
+          <line
+            x1={sx(apX)}
+            y1={sy(H_RIM) + 11}
+            x2={sx(apX)}
+            y2={sy(0)}
+            stroke="#ffc24d"
+            strokeWidth="1"
+            strokeDasharray="2 4"
+            opacity="0.5"
+          />
         </g>
 
         {/* trajectories */}
-        <path d={toPath(vac.pts)} fill="none" stroke="#8294b8" strokeWidth="2.5" strokeDasharray="7 6" />
-        <path d={toPath(drag.pts)} fill="none" stroke="#6f8bff" strokeWidth="3.5" strokeLinecap="round" />
+        <path
+          d={toPath(vac.pts)}
+          fill="none"
+          stroke="#8294b8"
+          strokeWidth="2.5"
+          strokeDasharray="7 6"
+        />
+        <path
+          d={toPath(drag.pts)}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
 
         {/* landing markers */}
         <circle cx={sx(vac.range)} cy={sy(0)} r="4" fill="#8294b8" />
@@ -85,7 +149,14 @@ export default function DragAwakening() {
         {/* shortfall bracket along the ground */}
         {errAbs > 0.05 && (
           <g>
-            <line x1={sx(drag.range)} y1={sy(0) + 9} x2={sx(vac.range)} y2={sy(0) + 9} stroke="#ff6f9c" strokeWidth="2" />
+            <line
+              x1={sx(drag.range)}
+              y1={sy(0) + 9}
+              x2={sx(vac.range)}
+              y2={sy(0) + 9}
+              stroke="#ff6f9c"
+              strokeWidth="2"
+            />
             <text
               x={sx((drag.range + vac.range) / 2)}
               y={sy(0) + 24}
@@ -99,12 +170,35 @@ export default function DragAwakening() {
         )}
 
         {/* launcher */}
-        <rect x={sx(0) - 12} y={sy(H0) - 6} width="14" height={sy(0) - sy(H0) + 6} rx="2" fill="#2a3656" />
+        <rect
+          x={sx(0) - 12}
+          y={sy(H0) - 6}
+          width="14"
+          height={sy(0) - sy(H0) + 6}
+          rx="2"
+          fill="#2a3656"
+        />
       </svg>
 
       <Controls>
-        <Slider label="Exit velocity" min={3} max={12} step={0.1} value={v0} onChange={setV0} format={(v) => `${(+v).toFixed(1)} m/s`} />
-        <Slider label="Launch angle" min={30} max={75} step={1} value={angDeg} onChange={setAngDeg} format={(v) => `${v}°`} />
+        <Slider
+          label="Exit velocity"
+          min={3}
+          max={12}
+          step={0.1}
+          value={v0}
+          onChange={setV0}
+          format={(v) => `${(+v).toFixed(1)} m/s`}
+        />
+        <Slider
+          label="Launch angle"
+          min={30}
+          max={75}
+          step={1}
+          value={angDeg}
+          onChange={setAngDeg}
+          format={(v) => `${v}°`}
+        />
       </Controls>
 
       <Readout

@@ -86,9 +86,7 @@ if (!existsSync(buildDir)) {
       fail(`${relative} loads a third-party iframe before interaction`);
     }
     if (
-      /<link\b(?=[^>]*\brel=["']stylesheet["'])(?=[^>]*\bhref=["']https?:\/\/)[^>]*>/i.test(
-        html,
-      )
+      /<link\b(?=[^>]*\brel=["']stylesheet["'])(?=[^>]*\bhref=["']https?:\/\/)[^>]*>/i.test(html)
     ) {
       fail(`${relative} loads a third-party stylesheet`);
     }

@@ -290,8 +290,13 @@ In the demo the Kalman error is typically a fraction of the raw blip error — g
 recovery, not just smoothing. That is why it underpins GPS, drone, and robot localisation.
 </Callout>
 
-The basic filter assumes the motion and measurement models are **linear**. Robot localisation is
-not — range/bearing and heading involve trigonometry. The Extended Kalman Filter handles that, next.
+The basic filter assumes the motion and measurement models are **linear**, and that is the edge of
+what this lesson covers. Full field localisation is not linear — range, bearing, and heading involve
+trigonometry, and a camera divides by depth. Handling that means linearising the model at every step
+with a Jacobian, which is what an *extended* Kalman filter does and what the pose estimators inside
+Road Runner and Pedro Pathing already implement. Take your absolute pose from one of those, verified
+against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx), and use this
+lesson's filter for the one-dimensional signals you fuse yourself.
 
 </Deploy>
 

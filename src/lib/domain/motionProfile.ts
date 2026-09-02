@@ -52,16 +52,16 @@ export function buildTrapezoidalProfile(
     } else if (t < accelerationTime + cruiseTime) {
       acceleration = 0;
       velocity = peakSpeed;
-      position = 0.5 * maxAcceleration * accelerationTime ** 2
-        + peakSpeed * (t - accelerationTime);
+      position = 0.5 * maxAcceleration * accelerationTime ** 2 + peakSpeed * (t - accelerationTime);
     } else {
       const decelerationTime = t - accelerationTime - cruiseTime;
       acceleration = -maxAcceleration;
       velocity = peakSpeed - maxAcceleration * decelerationTime;
-      position = 0.5 * maxAcceleration * accelerationTime ** 2
-        + peakSpeed * cruiseTime
-        + peakSpeed * decelerationTime
-        - 0.5 * maxAcceleration * decelerationTime ** 2;
+      position =
+        0.5 * maxAcceleration * accelerationTime ** 2 +
+        peakSpeed * cruiseTime +
+        peakSpeed * decelerationTime -
+        0.5 * maxAcceleration * decelerationTime ** 2;
     }
     return {
       position: direction * position,

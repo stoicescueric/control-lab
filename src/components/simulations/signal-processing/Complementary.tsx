@@ -28,7 +28,14 @@ export default function Complementary() {
   const beamRef = useRef<HTMLCanvasElement | null>(null);
   const plotCanvas = useRef<HTMLCanvasElement | null>(null);
   const bsize = useDprCanvas(beamRef, 290);
-  const plotRef = usePlot(plotCanvas, {height: 290, xmin: 0, xmax: 12, ymin: -45, ymax: 45, yLabel: 'tilt (°)'});
+  const plotRef = usePlot(plotCanvas, {
+    height: 290,
+    xmin: 0,
+    xmax: 12,
+    ymin: -45,
+    ymax: 45,
+    yLabel: 'tilt (°)',
+  });
 
   const errGEl = useRef<HTMLElement | null>(null);
   const errCEl = useRef<HTMLElement | null>(null);
@@ -185,21 +192,59 @@ export default function Complementary() {
       </Stage>
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Trust in motor encoder α" value={alpha} min={0.5} max={0.999} step={0.001} onChange={setAlpha} format={(v) => v.toFixed(3)} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">High = smooth but drifts · Low = jittery but anchored</div>
+          <Slider
+            label="Trust in motor encoder α"
+            value={alpha}
+            min={0.5}
+            max={0.999}
+            step={0.001}
+            onChange={setAlpha}
+            format={(v) => v.toFixed(3)}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            High = smooth but drifts · Low = jittery but anchored
+          </div>
         </div>
         <div>
-          <Slider label="Slip drift" value={bias} min={0} max={1} step={0.01} onChange={setBias} format={(v) => v.toFixed(2) + '°/s'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Belt slip &amp; backlash: the motor is not the joint.</div>
+          <Slider
+            label="Slip drift"
+            value={bias}
+            min={0}
+            max={1}
+            step={0.01}
+            onChange={setBias}
+            format={(v) => v.toFixed(2) + '°/s'}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Belt slip &amp; backlash: the motor is not the joint.
+          </div>
         </div>
-        <Slider label="Absolute encoder noise" value={noise} min={0} max={12} step={0.5} onChange={setNoise} format={(v) => v.toFixed(1) + '°'} />
+        <Slider
+          label="Absolute encoder noise"
+          value={noise}
+          min={0}
+          max={12}
+          step={0.5}
+          onChange={setNoise}
+          format={(v) => v.toFixed(1) + '°'}
+        />
       </div>
       <Buttons>
         <Button onClick={reset}>↺ Reset estimates</Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Motor-encoder-only error: <b ref={errGEl} className="text-white">—</b></span>
-        <span>Fused error: <b ref={errCEl} className="text-white">—</b></span>
+        <span>
+          Motor-encoder-only error:{' '}
+          <b ref={errGEl} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Fused error:{' '}
+          <b ref={errCEl} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

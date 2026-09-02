@@ -1,6 +1,6 @@
 name: Lesson or simulation proposal
 description: Propose a curriculum addition with a defined teaching objective and evidence.
-title: "[Proposal] "
+title: '[Proposal] '
 labels:
   - content
 body:

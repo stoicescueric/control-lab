@@ -90,9 +90,7 @@ export function savitzkyGolayWeights({
 
   // Normal matrix M[j][k] = sum_i x_i^(j+k).
   const normal: number[][] = Array.from({length: order}, (_, j) =>
-    Array.from({length: order}, (_, k) =>
-      offsets.reduce((sum, x) => sum + x ** (j + k), 0),
-    ),
+    Array.from({length: order}, (_, k) => offsets.reduce((sum, x) => sum + x ** (j + k), 0)),
   );
 
   /* g_j is the p-th derivative of x^j evaluated at `at`: the falling factorial

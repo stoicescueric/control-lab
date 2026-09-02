@@ -59,10 +59,7 @@ export function complementaryFrequencyResponse(
   const zInverse = {re: Math.cos(omega), im: -Math.sin(omega)};
   const denominator = {re: 1 - alpha * zInverse.re, im: -alpha * zInverse.im};
   const absolute = divide({re: 1 - alpha, im: 0}, denominator);
-  const relative = divide(
-    {re: alpha * (1 - zInverse.re), im: -alpha * zInverse.im},
-    denominator,
-  );
+  const relative = divide({re: alpha * (1 - zInverse.re), im: -alpha * zInverse.im}, denominator);
   return {absolute, relative};
 }
 

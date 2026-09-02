@@ -143,11 +143,16 @@ export default function SystemId() {
       });
     }
     if (s.running) {
-      p.text(V_AXIS_RPM - 8, 12.4, `ramping… ${s.volts.toFixed(1)} V (${PRESENTATION_SPEED}x time)`, {
-        color: '#8294b8',
-        align: 'right',
-        font: '11px ui-monospace, monospace',
-      });
+      p.text(
+        V_AXIS_RPM - 8,
+        12.4,
+        `ramping… ${s.volts.toFixed(1)} V (${PRESENTATION_SPEED}x time)`,
+        {
+          color: '#8294b8',
+          align: 'right',
+          font: '11px ui-monospace, monospace',
+        },
+      );
     }
 
     if (roKs.current) {
@@ -194,8 +199,18 @@ export default function SystemId() {
       />
 
       <Controls>
-        <Slider label="Noise level" min={0} max={2} step={0.1} value={noiseLevel} onChange={setNoiseLevel} format={(v) => `${v.toFixed(1)}×`} />
-        <div className="text-[0.74rem] text-[#8294b8]">1× adds up to ±1 V and ±8 rpm; 0× disables both.</div>
+        <Slider
+          label="Noise level"
+          min={0}
+          max={2}
+          step={0.1}
+          value={noiseLevel}
+          onChange={setNoiseLevel}
+          format={(v) => `${v.toFixed(1)}×`}
+        />
+        <div className="text-[0.74rem] text-[#8294b8]">
+          1× adds up to ±1 V and ±8 rpm; 0× disables both.
+        </div>
       </Controls>
       <Buttons>
         <Button primary onClick={restart}>
@@ -211,16 +226,28 @@ export default function SystemId() {
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          kS (fit / true): <b ref={roKs} className="text-white">—</b>
+          kS (fit / true):{' '}
+          <b ref={roKs} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          kV (fit / true): <b ref={roKv} className="text-white">—</b>
+          kV (fit / true):{' '}
+          <b ref={roKv} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Samples: <b ref={roN} className="text-white">—</b>
+          Samples:{' '}
+          <b ref={roN} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Status: <b ref={roPhase} className="text-white">—</b>
+          Status:{' '}
+          <b ref={roPhase} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

@@ -15,6 +15,9 @@
     "check:architecture": "node scripts/architecture-check.mjs",
     "check:content": "node scripts/content-check.mjs",
     "check:contributor": "node scripts/contributor-check.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "size": "node scripts/bundle-size.mjs",
     "security": "node scripts/security-check.mjs",
     "write-translations": "docusaurus write-translations",
@@ -23,7 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "new:lesson": "node scripts/scaffold-lesson.mjs",
-    "verify": "npm run check:architecture && npm run check:content && npm run check:contributor && npm run typecheck && npm test && npm run build && npm run security && npm run size"
+    "verify": "npm run check:architecture && npm run check:content && npm run check:contributor && npm run lint && npm run format:check && npm run typecheck && npm test && npm run build && npm run security && npm run size"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
@@ -46,12 +49,18 @@
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/postcss": "^4.0.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.0.0",
     "typescript": "~6.0.2",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.9"
   },
   "overrides": {

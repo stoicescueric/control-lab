@@ -54,6 +54,9 @@ Common commands:
 npm run check:architecture # directory and dependency-boundary checks
 npm run check:content      # lesson structure and repository-quality checks
 npm run check:contributor  # governance and contribution-workflow checks
+npm run lint               # ESLint, including the React Hooks rules
+npm run format             # apply Prettier to source (docs/ prose is excluded)
+npm run format:check       # fail if any source file is unformatted
 npm run typecheck          # TypeScript check
 npm test                   # unit tests
 npm run build              # production Docusaurus build into build/
@@ -64,8 +67,9 @@ npm run new:lesson -- ...  # scaffold a lesson in an existing module
 npm run verify             # run the complete pre-PR verification sequence
 ```
 
-CI and deployment require architecture and content checks, typechecking, unit
-tests, a production build, security checks, and the bundle-size budget to pass.
+CI and deployment require architecture and content checks, linting, formatting,
+typechecking, unit tests, a production build, security checks, and the
+bundle-size budget to pass.
 
 ## Repository Layout
 
@@ -105,7 +109,7 @@ The current curriculum is organized as a filesystem-driven Docusaurus sidebar:
 - Advanced Topics & Misc
 - References & Resources
 
-Core topics include calculus, linear algebra, differential equations, state space, state machines, command-based programming, filtering, Kalman and Extended Kalman filters, DC motor modeling, feedforward, PID/PDFL, voltage compensation, motion profiling, mecanum kinematics, pure pursuit, splines, guided vector fields, RK4 integration, air drag, and trajectory simulation.
+Core topics include calculus, linear algebra, differential equations, state space, state machines, command-based programming, filtering, sensor fusion and Kalman filtering, DC motor modeling, feedforward, PID/PDFL, voltage compensation, motion profiling, mecanum kinematics, pure pursuit, splines, guided vector fields, RK4 integration, air drag, and trajectory simulation.
 
 ## Lesson Standard
 

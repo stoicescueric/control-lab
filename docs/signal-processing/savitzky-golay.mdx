@@ -181,8 +181,8 @@ A moving average can never leave the range of its window; it is an average, so i
 smallest and largest reading. A Savitzky-Golay filter can overshoot past every sample it saw, because
 two of its weights are negative. On a real peak that is the feature. On a single wild outlier it is a
 liability: the filter treats the spike as evidence of curvature and leans further into it than an
-average would. Gate outliers out before this filter, exactly as the [EKF lesson](./ekf.mdx) gates
-implausible vision measurements.
+average would. Gate outliers out before this filter: reject any sample that jumps further than the
+mechanism physically can in one loop, and the spike never reaches the fit.
 </Callout>
 
 ### Velocity, already paid for

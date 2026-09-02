@@ -19,7 +19,11 @@ export function PrivacyControls() {
   }, []);
 
   const status =
-    choice === 'granted' ? 'Analytics allowed' : choice === 'denied' ? 'Essential only' : 'Not selected';
+    choice === 'granted'
+      ? 'Analytics allowed'
+      : choice === 'denied'
+        ? 'Essential only'
+        : 'Not selected';
 
   return (
     <div className="not-prose my-6 rounded-lg border border-line bg-surface p-5">

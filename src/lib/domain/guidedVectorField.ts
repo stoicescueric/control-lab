@@ -39,7 +39,8 @@ function unitTangentAt(controlPoints: Point[], t: number): Point {
 }
 
 function validateGeometry(point: Point, controlPoints: Point[]): void {
-  if (controlPoints.length !== 4) throw new Error('A cubic Bezier path requires four control points');
+  if (controlPoints.length !== 4)
+    throw new Error('A cubic Bezier path requires four control points');
   const values = [point.x, point.y, ...controlPoints.flatMap((p) => [p.x, p.y])];
   if (!values.every(Number.isFinite)) throw new Error('Path geometry must be finite');
 }
@@ -51,7 +52,11 @@ function validateGeometry(point: Point, controlPoints: Point[]): void {
  * search both widgets used inline. `samples` controls the coarse grid
  * resolution; the default (260) matches the widgets' original precision.
  */
-export function closestPointOnPath(point: Point, controlPoints: Point[], samples = 260): PathProjection {
+export function closestPointOnPath(
+  point: Point,
+  controlPoints: Point[],
+  samples = 260,
+): PathProjection {
   validateGeometry(point, controlPoints);
   if (!Number.isInteger(samples) || samples <= 0) {
     throw new Error('Projection sample count must be a positive integer');
@@ -119,7 +124,11 @@ export interface GuidedVectorFieldResult extends PathProjection {
  * (e.g. a degenerate zero-length path), matching the `|| 1` guard both
  * widgets used inline.
  */
-export function guidedVectorField(position: Point, controlPoints: Point[], kN: number): GuidedVectorFieldResult {
+export function guidedVectorField(
+  position: Point,
+  controlPoints: Point[],
+  kN: number,
+): GuidedVectorFieldResult {
   if (!Number.isFinite(kN) || kN < 0) throw new Error('GVF gain must be finite and non-negative');
   const proj = closestPointOnPath(position, controlPoints);
   const vx = proj.tangent.x - kN * proj.signedError * proj.normal.x;

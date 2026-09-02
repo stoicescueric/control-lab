@@ -85,7 +85,10 @@ export default function Drone() {
     altT: new Trace(700),
     tgtT: new Trace(700),
   });
-  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({status: 'idle', progress: 0});
+  const [chal, setChal] = useState<{status: ChallengeStatus; progress: number}>({
+    status: 'idle',
+    progress: 0,
+  });
 
   const acc = useRef(0);
 
@@ -278,9 +281,15 @@ export default function Drone() {
     }
 
     // challenge chip (cheap state update only when something changed)
-    const status: 'idle' | 'holding' | 'passed' = s.chalPassed ? 'passed' : s.gustAt >= 0 ? 'holding' : 'idle';
+    const status: 'idle' | 'holding' | 'passed' = s.chalPassed
+      ? 'passed'
+      : s.gustAt >= 0
+        ? 'holding'
+        : 'idle';
     const progress = Math.min(1, s.chalHold / 0.5);
-    setChal((c) => (c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress}));
+    setChal((c) =>
+      c.status === status && Math.abs(c.progress - progress) < 0.05 ? c : {status, progress},
+    );
   }
 
   useRaf((frameDt: number) => {
@@ -350,7 +359,8 @@ export default function Drone() {
             onKeyDown={onTargetKeyDown}
           />
           <div className="mt-1.5 text-[0.82rem] text-[#8294b8]">
-            Drag inside this box, or focus it and use the up/down arrow keys, to move the target altitude.
+            Drag inside this box, or focus it and use the up/down arrow keys, to move the target
+            altitude.
           </div>
         </div>
         <div>
@@ -370,9 +380,33 @@ export default function Drone() {
       </Stage>
 
       <Controls>
-        <Slider label="Kp — Proportional" value={Kp} min={0} max={16} step={0.1} onChange={setKp} format={(v) => v.toFixed(1)} />
-        <Slider label="Ki — Integral" value={Ki} min={0} max={8} step={0.1} onChange={setKi} format={(v) => v.toFixed(1)} />
-        <Slider label="Kd — Derivative" value={Kd} min={0} max={10} step={0.1} onChange={setKd} format={(v) => v.toFixed(1)} />
+        <Slider
+          label="Kp — Proportional"
+          value={Kp}
+          min={0}
+          max={16}
+          step={0.1}
+          onChange={setKp}
+          format={(v) => v.toFixed(1)}
+        />
+        <Slider
+          label="Ki — Integral"
+          value={Ki}
+          min={0}
+          max={8}
+          step={0.1}
+          onChange={setKi}
+          format={(v) => v.toFixed(1)}
+        />
+        <Slider
+          label="Kd — Derivative"
+          value={Kd}
+          min={0}
+          max={10}
+          step={0.1}
+          onChange={setKd}
+          format={(v) => v.toFixed(1)}
+        />
       </Controls>
 
       {/* live term meters */}
@@ -389,7 +423,11 @@ export default function Drone() {
               {name}
             </span>
             <div className="relative h-3 overflow-hidden rounded-md bg-[#1a2440] after:absolute after:bottom-0 after:left-1/2 after:top-0 after:w-px after:bg-white/25 after:content-['']">
-              <div ref={fill} className="absolute bottom-0 top-0 rounded-md" style={{background: color}} />
+              <div
+                ref={fill}
+                className="absolute bottom-0 top-0 rounded-md"
+                style={{background: color}}
+              />
             </div>
             <span ref={num} className="text-right font-mono text-[0.82rem] text-white">
               0
@@ -426,13 +464,22 @@ export default function Drone() {
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Altitude: <b ref={roAlt} className="text-white">—</b>
+          Altitude:{' '}
+          <b ref={roAlt} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Target: <b ref={roTgt} className="text-white">—</b>
+          Target:{' '}
+          <b ref={roTgt} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Error: <b ref={roErr} className="text-white">—</b>
+          Error:{' '}
+          <b ref={roErr} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

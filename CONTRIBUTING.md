@@ -71,6 +71,18 @@ npm run verify
 
 These are the same verification gates used by CI and deployment.
 
+Two of them are mechanical, so let the tools do the work rather than
+hand-matching a style:
+
+```bash
+npm run format   # apply Prettier to source; docs/ prose is left alone
+npm run lint     # ESLint, including the React Hooks dependency rules
+```
+
+`npm run lint` is the one worth reading rather than auto-fixing. A
+`react-hooks/exhaustive-deps` warning on a simulation usually means a demo that
+will stop responding to one of its own controls, not a style complaint.
+
 Read [ARCHITECTURE.md](ARCHITECTURE.md) before adding a new component or shared
 library. It explains the dependency direction and includes recipes for lessons,
 simulations, mathematical models, and browser integrations.
@@ -427,7 +439,7 @@ Keep each commit focused on one coherent change and use a message that describes
 
 ```text
 Add motor model lesson and torque-speed demo
-Refine EKF AprilTag Jacobian explanation
+Refine Savitzky-Golay derivative explanation
 Fix dark-mode admonition contrast
 ```
 

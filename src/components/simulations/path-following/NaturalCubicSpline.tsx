@@ -11,7 +11,8 @@ import {evalSpline, moments} from '@site/src/lib/domain/naturalCubicSpline';
 const W = 640;
 const H = 360;
 const KEY_STEP = 8; // px per arrow-key nudge, in SVG viewBox units
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
 type Pt = {x: number; y: number};
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -38,11 +39,15 @@ export function NaturalCubicSpline() {
     if (drag.current == null) return;
     const p = toSvg(e);
     const i = drag.current;
-    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)),
+    );
   };
   const nudge = (i: number, dx: number, dy: number) => {
     setPts((prev) =>
-      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+      prev.map((q, j) =>
+        j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q,
+      ),
     );
   };
   const onKeyDown = (i: number) => (e: React.KeyboardEvent) => {
@@ -66,7 +71,8 @@ export function NaturalCubicSpline() {
     e.preventDefault();
   };
   const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     drag.current = null;
   };
 
@@ -107,15 +113,40 @@ export function NaturalCubicSpline() {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}>
         {/* waypoint polyline */}
-        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="2" strokeDasharray="6 7" pointerEvents="none" />
+        <polyline
+          points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="#2a3656"
+          strokeWidth="2"
+          strokeDasharray="6 7"
+          pointerEvents="none"
+        />
 
         {/* curvature comb */}
         {hairs.map((h, i) => (
-          <line key={i} x1={h.x1} y1={h.y1} x2={h.x2} y2={h.y2} stroke="#5ce08a" strokeWidth="1.5" opacity="0.5" pointerEvents="none" />
+          <line
+            key={i}
+            x1={h.x1}
+            y1={h.y1}
+            x2={h.x2}
+            y2={h.y2}
+            stroke="#5ce08a"
+            strokeWidth="1.5"
+            opacity="0.5"
+            pointerEvents="none"
+          />
         ))}
 
         {/* the spline */}
-        <path d={d} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />
+        <path
+          d={d}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pointerEvents="none"
+        />
 
         {/* waypoints (all on the curve) */}
         {pts.map((p, i) => {
@@ -143,7 +174,15 @@ export function NaturalCubicSpline() {
                 onKeyDown={onKeyDown(i)}
               />
               {isEnd && (
-                <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffd98a" pointerEvents="none" aria-hidden="true">
+                <text
+                  x={p.x}
+                  y={p.y - 16}
+                  textAnchor="middle"
+                  fontFamily="JetBrains Mono, monospace"
+                  fontSize="12"
+                  fill="#ffd98a"
+                  pointerEvents="none"
+                  aria-hidden="true">
                   κ = 0
                 </text>
               )}

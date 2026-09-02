@@ -3,7 +3,12 @@ import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import ControlResponseHero from '@site/src/components/home/ControlResponseHero';
-import {completedCount, getLast, subscribe, type LastVisited} from '@site/src/lib/platform/progress';
+import {
+  completedCount,
+  getLast,
+  subscribe,
+  type LastVisited,
+} from '@site/src/lib/platform/progress';
 
 interface Practice {
   label: string;
@@ -52,7 +57,7 @@ const CORE_MODULES: Module[] = [
   {
     number: '03',
     title: 'Signal Processing',
-    description: 'Low-pass, moving-average, complementary, Kalman, and extended Kalman filters.',
+    description: 'Low-pass, moving-average, Savitzky-Golay, complementary, and Kalman filters.',
     to: '/docs/signal-processing',
   },
   {
@@ -72,7 +77,8 @@ const CORE_MODULES: Module[] = [
 const ELECTIVE: Module = {
   number: 'E1',
   title: 'Drag-Aware Launcher',
-  description: 'Trajectory generation, launcher calibration, flywheel control, and dynamic targeting.',
+  description:
+    'Trajectory generation, launcher calibration, flywheel control, and dynamic targeting.',
   to: '/docs/advanced-research',
 };
 
@@ -143,7 +149,9 @@ function Curriculum() {
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20 lg:py-24">
         <div>
           <SectionLabel>Curriculum / 00–05</SectionLabel>
-          <h2 id="curriculum-heading" className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
+          <h2
+            id="curriculum-heading"
+            className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
             Learn in the order the robot depends on it.
           </h2>
           <p className="m-0 mt-5 max-w-lg leading-relaxed text-ink-soft">
@@ -229,7 +237,9 @@ function InteractiveExample() {
         <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end lg:gap-20">
           <div>
             <SectionLabel>Inside a lesson</SectionLabel>
-            <h2 id="example-heading" className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
+            <h2
+              id="example-heading"
+              className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
               Change the geometry. Watch the follower respond.
             </h2>
           </div>
@@ -268,8 +278,12 @@ function GuideNotes() {
           </p>
           <ol className="m-0 mt-8 list-none border-b border-line p-0">
             {PRACTICES.map((practice) => (
-              <li key={practice.label} className="grid gap-2 border-t border-line py-5 sm:grid-cols-[2.5rem_9rem_1fr] sm:gap-4">
-                <span className="font-mono text-xs font-semibold text-accent-text">{practice.label}</span>
+              <li
+                key={practice.label}
+                className="grid gap-2 border-t border-line py-5 sm:grid-cols-[2.5rem_9rem_1fr] sm:gap-4">
+                <span className="font-mono text-xs font-semibold text-accent-text">
+                  {practice.label}
+                </span>
                 <h3 className="m-0 text-base font-bold leading-snug text-ink">{practice.title}</h3>
                 <p className="m-0 text-[0.94rem] leading-relaxed text-ink-soft">{practice.body}</p>
               </li>

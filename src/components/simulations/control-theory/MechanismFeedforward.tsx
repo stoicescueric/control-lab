@@ -157,7 +157,11 @@ export default function MechanismFeedforward() {
     c.fillText('Arm: kG · cos(θ)', 16, 26);
     c.fillStyle = ffOn ? '#5ce08a' : '#ff6f9c';
     c.font = '11px ui-monospace, monospace';
-    c.fillText(ffOn ? 'feedforward ON — holds the target' : 'feedforward OFF — sags below target', 16, 44);
+    c.fillText(
+      ffOn ? 'feedforward ON — holds the target' : 'feedforward OFF — sags below target',
+      16,
+      44,
+    );
 
     const bw = Math.min(170, w - 130);
     c.fillStyle = 'rgba(255,255,255,0.1)';
@@ -295,7 +299,9 @@ export default function MechanismFeedforward() {
 
     const s = st.current;
     const {armTargetDeg, slideTarget} = ctrl.current;
-    if (roArmHold.current) roArmHold.current.textContent = (armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0)).toFixed(2) + ' V';
+    if (roArmHold.current)
+      roArmHold.current.textContent =
+        armFeedforward(0, 0, 0, ARM_KG, s.theta, 0, 0).toFixed(2) + ' V';
     if (roSlideHold.current) roSlideHold.current.textContent = interpolateKg(s.h).toFixed(2) + ' V';
     const armErr = armTargetDeg - (s.theta * 180) / Math.PI;
     if (roArmErr.current) {
@@ -327,8 +333,24 @@ export default function MechanismFeedforward() {
       </Stage>
 
       <Controls>
-        <Slider label="Arm target angle (from horizontal)" min={-70} max={100} step={1} value={armTargetDeg} onChange={setArmTargetDeg} format={(v) => `${v.toFixed(0)}°`} />
-        <Slider label="Slide target height" min={0} max={1} step={0.01} value={slideTarget} onChange={setSlideTarget} format={(v) => `${(v * 100).toFixed(0)}%`} />
+        <Slider
+          label="Arm target angle (from horizontal)"
+          min={-70}
+          max={100}
+          step={1}
+          value={armTargetDeg}
+          onChange={setArmTargetDeg}
+          format={(v) => `${v.toFixed(0)}°`}
+        />
+        <Slider
+          label="Slide target height"
+          min={0}
+          max={1}
+          step={0.01}
+          value={slideTarget}
+          onChange={setSlideTarget}
+          format={(v) => `${(v * 100).toFixed(0)}%`}
+        />
       </Controls>
 
       <Buttons>
@@ -352,16 +374,28 @@ export default function MechanismFeedforward() {
 
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Arm gravity hold: <b ref={roArmHold} className="text-white">—</b>
+          Arm gravity hold:{' '}
+          <b ref={roArmHold} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Slide kG(height): <b ref={roSlideHold} className="text-white">—</b>
+          Slide kG(height):{' '}
+          <b ref={roSlideHold} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Arm error: <b ref={roArmErr} className="text-white">—</b>
+          Arm error:{' '}
+          <b ref={roArmErr} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Slide error: <b ref={roSlideErr} className="text-white">—</b>
+          Slide error:{' '}
+          <b ref={roSlideErr} className="text-white">
+            —
+          </b>
         </span>
       </div>
       <Legend

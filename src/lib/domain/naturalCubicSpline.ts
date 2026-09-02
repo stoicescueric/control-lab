@@ -52,7 +52,8 @@ export function evalSpline(Y: number[], M: number[], t: number): SplineSample {
   const u = t - i;
   const A = 1 - u;
   const B = u;
-  const v = (M[i] * A ** 3 + M[i + 1] * B ** 3) / 6 + (Y[i] - M[i] / 6) * A + (Y[i + 1] - M[i + 1] / 6) * B;
+  const v =
+    (M[i] * A ** 3 + M[i + 1] * B ** 3) / 6 + (Y[i] - M[i] / 6) * A + (Y[i + 1] - M[i + 1] / 6) * B;
   const d = (-M[i] * A * A + M[i + 1] * B * B) / 2 + (Y[i + 1] - Y[i]) - (M[i + 1] - M[i]) / 6;
   const dd = M[i] * A + M[i + 1] * B;
   return {v, d, dd};

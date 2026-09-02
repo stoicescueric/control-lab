@@ -170,7 +170,15 @@ export default function VoltageComp() {
       />
 
       <Controls>
-        <Slider label="Target motor voltage" min={3} max={12} step={0.5} value={targetV} onChange={setTargetV} format={(v) => `${v.toFixed(1)} V`} />
+        <Slider
+          label="Target motor voltage"
+          min={3}
+          max={12}
+          step={0.5}
+          value={targetV}
+          onChange={setTargetV}
+          format={(v) => `${v.toFixed(1)} V`}
+        />
         <Slider
           label="Battery voltage now"
           min={VB_MIN}
@@ -202,16 +210,28 @@ export default function VoltageComp() {
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Raw (no comp): <b ref={roRaw} className="text-white">—</b>
+          Raw (no comp):{' '}
+          <b ref={roRaw} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Compensated: <b ref={roComp} className="text-white">—</b>
+          Compensated:{' '}
+          <b ref={roComp} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Raw drift vs target: <b ref={roDrift} className="text-white">—</b>
+          Raw drift vs target:{' '}
+          <b ref={roDrift} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Match clock: <b ref={roClock} className="text-white">—</b>
+          Match clock:{' '}
+          <b ref={roClock} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

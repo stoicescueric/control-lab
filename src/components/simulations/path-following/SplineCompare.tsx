@@ -1,6 +1,10 @@
 import {useRef, useState} from 'react';
 import {Demo, Buttons, Button, Readout, Legend} from '@site/src/components/kit/Demo';
-import {bezierPoint as bez, catmullRomPath as hermitePath, type Point as Pt} from '@site/src/lib/domain/bezier';
+import {
+  bezierPoint as bez,
+  catmullRomPath as hermitePath,
+  type Point as Pt,
+} from '@site/src/lib/domain/bezier';
 
 /* Interpolation vs. approximation, on the SAME four draggable points:
    - a cubic Bézier treats them as CONTROL points (approximates — only the ends
@@ -15,9 +19,11 @@ const H = 360;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const NUDGE = 6;
-const SPATIAL_KEYS = 'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
+const SPATIAL_KEYS =
+  'ArrowLeft ArrowRight ArrowUp ArrowDown Shift+ArrowLeft Shift+ArrowRight Shift+ArrowUp Shift+ArrowDown';
 
-const toPath = (pts: Pt[]) => `M ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')}`;
+const toPath = (pts: Pt[]) =>
+  `M ${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' L ')}`;
 
 export function SplineCompare() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -39,7 +45,9 @@ export function SplineCompare() {
     if (drag.current == null) return;
     const p = toSvg(e);
     const i = drag.current;
-    setPts((prev) => prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)));
+    setPts((prev) =>
+      prev.map((q, j) => (j === i ? {x: clamp(p.x, 14, W - 14), y: clamp(p.y, 14, H - 14)} : q)),
+    );
   };
   const onPointKeyDown = (i: number) => (e: React.KeyboardEvent) => {
     const step = e.shiftKey ? NUDGE * 4 : NUDGE;
@@ -52,11 +60,14 @@ export function SplineCompare() {
     else return;
     e.preventDefault();
     setPts((prev) =>
-      prev.map((q, j) => (j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q)),
+      prev.map((q, j) =>
+        j === i ? {x: clamp(q.x + dx, 14, W - 14), y: clamp(q.y + dy, 14, H - 14)} : q,
+      ),
     );
   };
   const endDrag = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
     drag.current = null;
   };
 
@@ -74,10 +85,35 @@ export function SplineCompare() {
         onPointerUp={endDrag}
         onPointerCancel={endDrag}>
         {/* polygon through the points */}
-        <polyline points={pts.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2a3656" strokeWidth="2" strokeDasharray="6 7" pointerEvents="none" />
+        <polyline
+          points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="#2a3656"
+          strokeWidth="2"
+          strokeDasharray="6 7"
+          pointerEvents="none"
+        />
 
-        {showBezier && <path d={toPath(bezierPts)} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />}
-        {showHermite && <path d={toPath(hermitePath(pts))} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" pointerEvents="none" />}
+        {showBezier && (
+          <path
+            d={toPath(bezierPts)}
+            fill="none"
+            stroke="#6f8bff"
+            strokeWidth="4"
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+        )}
+        {showHermite && (
+          <path
+            d={toPath(hermitePath(pts))}
+            fill="none"
+            stroke="#5ce08a"
+            strokeWidth="4"
+            strokeLinecap="round"
+            pointerEvents="none"
+          />
+        )}
 
         {pts.map((p, i) => {
           const onBezier = i === 0 || i === 3;
@@ -103,7 +139,15 @@ export function SplineCompare() {
                 }}
                 onKeyDown={onPointKeyDown(i)}
               />
-              <text x={p.x} y={p.y - 16} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" fill="#8294b8" pointerEvents="none" aria-hidden="true">
+              <text
+                x={p.x}
+                y={p.y - 16}
+                textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace"
+                fontSize="13"
+                fill="#8294b8"
+                pointerEvents="none"
+                aria-hidden="true">
                 {i === 0 || i === 3 ? `end` : `mid`}
               </text>
             </g>

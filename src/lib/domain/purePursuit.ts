@@ -58,7 +58,12 @@ export function toRobotFrame(point: Point, pose: Pose): Point {
  * point on the path is that far away (e.g. the remaining path is shorter
  * than the lookahead distance, or the robot has nearly reached the end).
  */
-export function lookaheadPoint<T extends Point>(path: T[], pose: Pose, lookahead: number, fromIndex = 0): T {
+export function lookaheadPoint<T extends Point>(
+  path: T[],
+  pose: Pose,
+  lookahead: number,
+  fromIndex = 0,
+): T {
   validatePath(path, lookahead);
   const start = Math.max(0, Math.min(path.length - 1, Math.trunc(fromIndex)));
   for (let i = start; i < path.length; i++) {
@@ -87,8 +92,9 @@ export function segmentCircleIntersectionT(
   const discriminant = b * b - 4 * a * c;
   if (discriminant < 0) return null;
   const root = Math.sqrt(Math.max(0, discriminant));
-  const candidates = [(-b - root) / (2 * a), (-b + root) / (2 * a)]
-    .filter((t) => t >= Math.max(0, minimumT) && t <= 1);
+  const candidates = [(-b - root) / (2 * a), (-b + root) / (2 * a)].filter(
+    (t) => t >= Math.max(0, minimumT) && t <= 1,
+  );
   return candidates.length ? Math.max(...candidates) : null;
 }
 
@@ -108,7 +114,13 @@ export function continuousLookaheadPoint(
   const firstT = Math.max(0, Math.min(1, from.t));
   for (let segmentIndex = firstSegment; segmentIndex < path.length - 1; segmentIndex++) {
     const minimumT = segmentIndex === firstSegment ? firstT : 0;
-    const t = segmentCircleIntersectionT(path[segmentIndex], path[segmentIndex + 1], center, radius, minimumT);
+    const t = segmentCircleIntersectionT(
+      path[segmentIndex],
+      path[segmentIndex + 1],
+      center,
+      radius,
+      minimumT,
+    );
     if (t !== null) {
       const a = path[segmentIndex];
       const b = path[segmentIndex + 1];
@@ -140,8 +152,12 @@ export function speedScaledLookahead(
   minimum: number,
   maximum: number,
 ): number {
-  if (![speed, scaleSeconds, minimum, maximum].every(Number.isFinite)
-      || scaleSeconds < 0 || minimum <= 0 || maximum < minimum) {
+  if (
+    ![speed, scaleSeconds, minimum, maximum].every(Number.isFinite) ||
+    scaleSeconds < 0 ||
+    minimum <= 0 ||
+    maximum < minimum
+  ) {
     throw new Error('Dynamic-lookahead parameters are invalid');
   }
   return Math.max(minimum, Math.min(maximum, scaleSeconds * Math.abs(speed)));
@@ -184,9 +200,14 @@ export function planPathSpeeds(
   if (speedCaps.length !== path.length || speedCaps.some((v) => !Number.isFinite(v) || v < 0)) {
     throw new Error('Every path point needs a finite non-negative speed cap');
   }
-  if (!Number.isFinite(maxAcceleration) || maxAcceleration <= 0
-      || !Number.isFinite(startSpeed) || startSpeed < 0
-      || !Number.isFinite(endSpeed) || endSpeed < 0) {
+  if (
+    !Number.isFinite(maxAcceleration) ||
+    maxAcceleration <= 0 ||
+    !Number.isFinite(startSpeed) ||
+    startSpeed < 0 ||
+    !Number.isFinite(endSpeed) ||
+    endSpeed < 0
+  ) {
     throw new Error('Acceleration must be positive and endpoint speeds finite and non-negative');
   }
   const speeds = speedCaps.slice();

@@ -1,6 +1,6 @@
 ---
 title: Signal Processing
-description: Turning noisy sensor streams into signals you can control on — filtering a single noisy sensor, then fusing two sensors whose failures cancel, up through the Kalman family.
+description: Turning noisy sensor streams into signals you can control on — filtering a single noisy sensor, then fusing two sensors whose failures cancel, up through the Kalman filter.
 tags: [filters, kalman, sensor-fusion, noise]
 ---
 
@@ -35,8 +35,6 @@ Fusion combines two imperfect sensors whose failures point in opposite direction
   encoder anchored by a slow-but-honest absolute encoder, blended with one constant.
 - **[1-D Kalman filter](./kalman.mdx)**: the same blend, except the weight is computed optimally
   every step from how uncertain each source actually is.
-- **[Extended Kalman Filter (EKF)](./ekf.mdx)**: the same machinery on the nonlinear measurements
-  real localisation is made of, like AprilTag vision.
 
 <Admonition type="tip" title="Filters and controllers are a team">
 
@@ -47,4 +45,4 @@ still oscillate on a noisy distance sensor. Master this module before you trust 
 </Admonition>
 
 Start with [Signals & Noise](./signals.mdx), work through the two filters, then cross into fusion
-with the complementary filter and the Kalman family.
+with the complementary filter and the Kalman filter.

@@ -21,7 +21,14 @@ export default function MovingAverage() {
   ctrl.current = {N, noise};
 
   const canvas = useRef<HTMLCanvasElement | null>(null);
-  const plotRef = usePlot(canvas, {height: 290, xmin: 0, xmax: 12, ymin: -5, ymax: 7, yLabel: 'value'});
+  const plotRef = usePlot(canvas, {
+    height: 290,
+    xmin: 0,
+    xmax: 12,
+    ymin: -5,
+    ymax: 7,
+    yLabel: 'value',
+  });
   const lagEl = useRef<HTMLElement | null>(null);
 
   const st = useRef({
@@ -94,16 +101,42 @@ export default function MovingAverage() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Window size N" value={N} min={1} max={80} step={1} onChange={setN} format={(v) => v + ' readings'} />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">More readings = smoother but laggier.</div>
+          <Slider
+            label="Window size N"
+            value={N}
+            min={1}
+            max={80}
+            step={1}
+            onChange={setN}
+            format={(v) => v + ' readings'}
+          />
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            More readings = smoother but laggier.
+          </div>
         </div>
-        <Slider label="Sensor noise" value={noise} min={0} max={3} step={0.05} onChange={setNoise} format={(v) => v.toFixed(2)} />
+        <Slider
+          label="Sensor noise"
+          value={noise}
+          min={0}
+          max={3}
+          step={0.05}
+          onChange={setNoise}
+          format={(v) => v.toFixed(2)}
+        />
       </div>
       <Buttons>
-        <Button onClick={() => (st.current.stepOffset = st.current.stepOffset > 1 ? 0 : 3.5)}>Sudden jump (step test)</Button>
+        <Button onClick={() => (st.current.stepOffset = st.current.stepOffset > 1 ? 0 : 3.5)}>
+          Sudden jump (step test)
+        </Button>
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Window covers ≈ <b ref={lagEl} className="text-white">—</b> of data</span>
+        <span>
+          Window covers ≈{' '}
+          <b ref={lagEl} className="text-white">
+            —
+          </b>{' '}
+          of data
+        </span>
       </div>
     </Demo>
   );

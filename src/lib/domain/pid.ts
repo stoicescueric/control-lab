@@ -63,7 +63,11 @@ export function stepSaturatingPidPlant(
 
   if (antiWindup) {
     const integralContribution = ki * nextIntegral;
-    const limitedContribution = clamp(integralContribution, -integralLimitVolts, integralLimitVolts);
+    const limitedContribution = clamp(
+      integralContribution,
+      -integralLimitVolts,
+      integralLimitVolts,
+    );
     nextIntegral = ki === 0 ? 0 : limitedContribution / ki;
   }
 

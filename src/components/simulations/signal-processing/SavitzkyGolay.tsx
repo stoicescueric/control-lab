@@ -22,7 +22,7 @@ function randn(): number {
 
 /* A flat approach with a sharp peak, so the curvature is unmistakable. */
 function truthAt(t: number): number {
-  const u = ((t % BUMP_PERIOD) + BUMP_PERIOD) % BUMP_PERIOD - BUMP_PERIOD / 2;
+  const u = (((t % BUMP_PERIOD) + BUMP_PERIOD) % BUMP_PERIOD) - BUMP_PERIOD / 2;
   return 1.1 + 4.2 * Math.exp(-(u * u) / 0.32);
 }
 
@@ -158,7 +158,9 @@ export default function SavitzkyGolay() {
             onChange={setHalfWidth}
             format={(v) => `${2 * v + 1} samples`}
           />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">Both filters see the same window.</div>
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Both filters see the same window.
+          </div>
         </div>
         <div>
           <Slider
@@ -206,8 +208,8 @@ export default function SavitzkyGolay() {
 
       <div className="mt-4">
         <div className="mb-2 text-[0.78rem] text-[#8294b8]">
-          The weight applied to each sample in the window, oldest on the left. Bars below the line are
-          negative, which is how the fit is able to lift a peak instead of flattening it.
+          The weight applied to each sample in the window, oldest on the left. Bars below the line
+          are negative, which is how the fit is able to lift a peak instead of flattening it.
         </div>
         <div className="flex h-16 items-center gap-[2px]" aria-hidden="true">
           {weights.map((w, i) => (

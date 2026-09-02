@@ -28,7 +28,9 @@ function sy(y: number, min: number, max: number) {
 }
 
 function path(points: [number, number][]) {
-  return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  return points
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
 }
 
 function gaussian(x: number, mean: number, variance: number) {
@@ -42,18 +44,49 @@ function Grid({xLabel, yLabel}: {xLabel: string; yLabel: string}) {
       <rect width={W} height={H} rx="18" fill="#0b1120" />
       {Array.from({length: 7}, (_, i) => {
         const x = P.l + (i / 6) * PW;
-        return <line key={`x-${i}`} x1={x} x2={x} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,0.07)" />;
+        return (
+          <line
+            key={`x-${i}`}
+            x1={x}
+            x2={x}
+            y1={P.t}
+            y2={H - P.b}
+            stroke="rgba(255,255,255,0.07)"
+          />
+        );
       })}
       {Array.from({length: 5}, (_, i) => {
         const y = P.t + (i / 4) * PH;
-        return <line key={`y-${i}`} x1={P.l} x2={W - P.r} y1={y} y2={y} stroke="rgba(255,255,255,0.07)" />;
+        return (
+          <line
+            key={`y-${i}`}
+            x1={P.l}
+            x2={W - P.r}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.07)"
+          />
+        );
       })}
       <line x1={P.l} x2={W - P.r} y1={H - P.b} y2={H - P.b} stroke="rgba(255,255,255,0.34)" />
       <line x1={P.l} x2={P.l} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,0.34)" />
-      <text x={W / 2} y={H - 18} fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13">
+      <text
+        x={W / 2}
+        y={H - 18}
+        fill="#8294b8"
+        textAnchor="middle"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize="13">
         {xLabel}
       </text>
-      <text x="22" y={H / 2} fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13" transform={`rotate(-90 22 ${H / 2})`}>
+      <text
+        x="22"
+        y={H / 2}
+        fill="#8294b8"
+        textAnchor="middle"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize="13"
+        transform={`rotate(-90 22 ${H / 2})`}>
         {yLabel}
       </text>
     </g>
@@ -61,6 +94,14 @@ function Grid({xLabel, yLabel}: {xLabel: string; yLabel: string}) {
 }
 
 /* Deterministic hash noise in [-1, 1] — SSR-safe (no Math.random in render). */
+/* Fixed display ranges for the explorers below. These live at module scope
+   because they never change; declaring them inside a component makes them look
+   reactive to the dependency linter. */
+const NOISE_Y_MIN = -2;
+const NOISE_Y_MAX = 2;
+const GAIN_X_MIN = -3;
+const GAIN_X_MAX = 3;
+
 function hashNoise(i: number, seed: number) {
   const s = Math.sin((i + 1) * 12.9898 + seed * 7.137) * 43758.5453;
   return (s - Math.floor(s)) * 2 - 1;
@@ -76,8 +117,6 @@ export function NoiseAnatomyExplorer() {
   const [spike, setSpike] = useState(0.9);
   const T = 4; // seconds shown
   const N = 120;
-  const yMin = -2;
-  const yMax = 2;
 
   const data = useMemo(() => {
     const truth: [number, number][] = [];
@@ -89,31 +128,91 @@ export function NoiseAnatomyExplorer() {
       const bias = drift * t;
       const isSpike = spike > 0.01 && i % 29 === 11;
       const y =
-        truthY + bias + jitter * hashNoise(i, 3) + (isSpike ? spike * (hashNoise(i, 7) > 0 ? 1 : -1) : 0);
-      truth.push([sx(t, 0, T), sy(truthY, yMin, yMax)]);
-      drifted.push([sx(t, 0, T), sy(truthY + bias, yMin, yMax)]);
-      meas.push({x: sx(t, 0, T), y: sy(clamp(y, yMin, yMax), yMin, yMax), isSpike});
+        truthY +
+        bias +
+        jitter * hashNoise(i, 3) +
+        (isSpike ? spike * (hashNoise(i, 7) > 0 ? 1 : -1) : 0);
+      truth.push([sx(t, 0, T), sy(truthY, NOISE_Y_MIN, NOISE_Y_MAX)]);
+      drifted.push([sx(t, 0, T), sy(truthY + bias, NOISE_Y_MIN, NOISE_Y_MAX)]);
+      meas.push({
+        x: sx(t, 0, T),
+        y: sy(clamp(y, NOISE_Y_MIN, NOISE_Y_MAX), NOISE_Y_MIN, NOISE_Y_MAX),
+        isSpike,
+      });
     }
     return {truth, drifted, meas};
   }, [jitter, drift, spike]);
 
   return (
     <Demo title="The anatomy of a noisy measurement" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="A true signal corrupted by jitter, drift, and spikes, with one slider per corruption">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="A true signal corrupted by jitter, drift, and spikes, with one slider per corruption">
         <Grid xLabel="seconds" yLabel="reading" />
-        <path d={path(data.truth)} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
-        <path d={path(data.drifted)} fill="none" stroke="#6f8bff" strokeWidth="2.5" strokeDasharray="8 7" />
+        <path
+          d={path(data.truth)}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <path
+          d={path(data.drifted)}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="2.5"
+          strokeDasharray="8 7"
+        />
         {data.meas.map((m, i) => (
-          <circle key={i} cx={m.x} cy={m.y} r={m.isSpike ? 5 : 2.6} fill={m.isSpike ? '#ff6f9c' : '#ffc24d'} opacity={m.isSpike ? 1 : 0.85} />
+          <circle
+            key={i}
+            cx={m.x}
+            cy={m.y}
+            r={m.isSpike ? 5 : 2.6}
+            fill={m.isSpike ? '#ff6f9c' : '#ffc24d'}
+            opacity={m.isSpike ? 1 : 0.85}
+          />
         ))}
-        <text x={W - P.r - 8} y={P.t + 20} fill="#6f8bff" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <text
+          x={W - P.r - 8}
+          y={P.t + 20}
+          fill="#6f8bff"
+          textAnchor="end"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           drift: the center itself leans away
         </text>
       </svg>
       <Controls>
-        <Slider label="Jitter (fast random wobble)" min={0} max={0.5} step={0.02} value={jitter} onChange={setJitter} format={(v) => v.toFixed(2)} />
-        <Slider label="Drift (slow lean, per second)" min={-0.4} max={0.4} step={0.02} value={drift} onChange={setDrift} format={(v) => v.toFixed(2)} />
-        <Slider label="Spikes (occasional wild reading)" min={0} max={1.6} step={0.1} value={spike} onChange={setSpike} format={(v) => v.toFixed(1)} />
+        <Slider
+          label="Jitter (fast random wobble)"
+          min={0}
+          max={0.5}
+          step={0.02}
+          value={jitter}
+          onChange={setJitter}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Drift (slow lean, per second)"
+          min={-0.4}
+          max={0.4}
+          step={0.02}
+          value={drift}
+          onChange={setDrift}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Spikes (occasional wild reading)"
+          min={0}
+          max={1.6}
+          step={0.1}
+          value={spike}
+          onChange={setSpike}
+          format={(v) => v.toFixed(1)}
+        />
       </Controls>
       <Readout
         items={[
@@ -156,12 +255,24 @@ export function EmaWeightsExplorer() {
 
   return (
     <Demo title="What α really is: fading weights and a time constant" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Exponential moving average weights on past readings and the resulting step response">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="Exponential moving average weights on past readings and the resulting step response">
         <rect width={W} height={H} rx="18" fill="#0b1120" />
 
         {/* left: the weights */}
         <g>
-          <rect x={boxL.x} y={boxL.y} width={boxL.w} height={boxL.h} rx="12" fill="#101a2e" stroke="#2a3656" />
+          <rect
+            x={boxL.x}
+            y={boxL.y}
+            width={boxL.w}
+            height={boxL.h}
+            rx="12"
+            fill="#101a2e"
+            stroke="#2a3656"
+          />
           {bars.map((wgt, k) => {
             const bw = (boxL.w - 40) / K;
             const bh = (wgt / alpha) * (boxL.h - 70);
@@ -178,19 +289,52 @@ export function EmaWeightsExplorer() {
               />
             );
           })}
-          <text x={boxL.x + 20} y={boxL.y + 24} fill="#e8eefc" fontFamily="JetBrains Mono, monospace" fontSize="13">
+          <text
+            x={boxL.x + 20}
+            y={boxL.y + 24}
+            fill="#e8eefc"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="13">
             weight of each past reading
           </text>
-          <text x={boxL.x + 20} y={boxL.y + 44} fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12">
+          <text
+            x={boxL.x + 20}
+            y={boxL.y + 44}
+            fill="#8294b8"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12">
             α·(1−α)^k — never zero, always fading
           </text>
-          <text x={boxL.x + 24} y={boxL.y + boxL.h - 10} fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12">newest</text>
-          <text x={boxL.x + boxL.w - 24} y={boxL.y + boxL.h - 10} fill="#8294b8" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12">oldest</text>
+          <text
+            x={boxL.x + 24}
+            y={boxL.y + boxL.h - 10}
+            fill="#8294b8"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12">
+            newest
+          </text>
+          <text
+            x={boxL.x + boxL.w - 24}
+            y={boxL.y + boxL.h - 10}
+            fill="#8294b8"
+            textAnchor="end"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12">
+            oldest
+          </text>
         </g>
 
         {/* right: the step response */}
         <g>
-          <rect x={boxR.x} y={boxR.y} width={boxR.w} height={boxR.h} rx="12" fill="#101a2e" stroke="#2a3656" />
+          <rect
+            x={boxR.x}
+            y={boxR.y}
+            width={boxR.w}
+            height={boxR.h}
+            rx="12"
+            fill="#101a2e"
+            stroke="#2a3656"
+          />
           {(() => {
             const px = (k: number) => boxR.x + 24 + (k / (STEPS - 1)) * (boxR.w - 48);
             const py = (v: number) => boxR.y + boxR.h - 34 - v * (boxR.h - 92);
@@ -198,33 +342,111 @@ export function EmaWeightsExplorer() {
             const x63 = px(Math.min(STEPS - 1, n63 - 1));
             return (
               <g>
-                <line x1={boxR.x + 16} x2={boxR.x + boxR.w - 16} y1={py(1)} y2={py(1)} stroke="#5ce08a" strokeWidth="1.5" strokeDasharray="3 6" />
-                <line x1={boxR.x + 16} x2={boxR.x + boxR.w - 16} y1={y63} y2={y63} stroke="#8294b8" strokeWidth="1.2" strokeDasharray="2 6" />
-                <text x={boxR.x + boxR.w - 20} y={y63 - 6} fill="#8294b8" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="11">63.2 %</text>
-                <line x1={x63} x2={x63} y1={y63} y2={boxR.y + boxR.h - 34} stroke="#ff6f9c" strokeWidth="1.5" strokeDasharray="4 4" />
-                <text x={x63} y={boxR.y + boxR.h - 16} fill="#ff6f9c" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11">τ</text>
-                <path d={path(step.map((v, k) => [px(k), py(v)] as [number, number]))} fill="none" stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" />
+                <line
+                  x1={boxR.x + 16}
+                  x2={boxR.x + boxR.w - 16}
+                  y1={py(1)}
+                  y2={py(1)}
+                  stroke="#5ce08a"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 6"
+                />
+                <line
+                  x1={boxR.x + 16}
+                  x2={boxR.x + boxR.w - 16}
+                  y1={y63}
+                  y2={y63}
+                  stroke="#8294b8"
+                  strokeWidth="1.2"
+                  strokeDasharray="2 6"
+                />
+                <text
+                  x={boxR.x + boxR.w - 20}
+                  y={y63 - 6}
+                  fill="#8294b8"
+                  textAnchor="end"
+                  fontFamily="JetBrains Mono, monospace"
+                  fontSize="11">
+                  63.2 %
+                </text>
+                <line
+                  x1={x63}
+                  x2={x63}
+                  y1={y63}
+                  y2={boxR.y + boxR.h - 34}
+                  stroke="#ff6f9c"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                />
+                <text
+                  x={x63}
+                  y={boxR.y + boxR.h - 16}
+                  fill="#ff6f9c"
+                  textAnchor="middle"
+                  fontFamily="JetBrains Mono, monospace"
+                  fontSize="11">
+                  τ
+                </text>
+                <path
+                  d={path(step.map((v, k) => [px(k), py(v)] as [number, number]))}
+                  fill="none"
+                  stroke="#ffc24d"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                />
                 {step.map((v, k) => (
                   <circle key={k} cx={px(k)} cy={py(v)} r="2.6" fill="#ffc24d" />
                 ))}
               </g>
             );
           })()}
-          <text x={boxR.x + 20} y={boxR.y + 24} fill="#e8eefc" fontFamily="JetBrains Mono, monospace" fontSize="13">
+          <text
+            x={boxR.x + 20}
+            y={boxR.y + 24}
+            fill="#e8eefc"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="13">
             response to a sudden step
           </text>
-          <text x={boxR.x + 20} y={boxR.y + 44} fill="#8294b8" fontFamily="JetBrains Mono, monospace" fontSize="12">
+          <text
+            x={boxR.x + 20}
+            y={boxR.y + 44}
+            fill="#8294b8"
+            fontFamily="JetBrains Mono, monospace"
+            fontSize="12">
             reaches 63 % after τ — the lag you buy
           </text>
         </g>
 
-        <text x={W / 2} y={H - 16} fill="#8294b8" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="13">
+        <text
+          x={W / 2}
+          y={H - 16}
+          fill="#8294b8"
+          textAnchor="middle"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="13">
           samples, newest → oldest · exact relation: α = 1 − exp(−Δt/τ)
         </text>
       </svg>
       <Controls>
-        <Slider label="Smoothing α" min={0.04} max={0.85} step={0.01} value={alpha} onChange={setAlpha} format={(v) => v.toFixed(2)} />
-        <Slider label="Loop time Δt" min={5} max={50} step={5} value={dtMs} onChange={setDtMs} format={(v) => `${v} ms`} />
+        <Slider
+          label="Smoothing α"
+          min={0.04}
+          max={0.85}
+          step={0.01}
+          value={alpha}
+          onChange={setAlpha}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Loop time Δt"
+          min={5}
+          max={50}
+          step={5}
+          value={dtMs}
+          onChange={setDtMs}
+          format={(v) => `${v} ms`}
+        />
       </Controls>
       <Readout
         items={[
@@ -270,28 +492,88 @@ export function WindowVsFadeExplorer() {
 
   return (
     <Demo title="One outlier, two memories" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Impulse response of a moving average versus an exponential moving average after a single outlier">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="Impulse response of a moving average versus an exponential moving average after a single outlier">
         <Grid xLabel="samples since the spike" yLabel="share of the spike in the output" />
         {/* the spike itself */}
-        <line x1={px(0)} x2={px(0)} y1={P.t + 6} y2={H - P.b} stroke="#ff6f9c" strokeWidth="2.5" strokeDasharray="6 5" />
-        <text x={px(0) + 8} y={P.t + 20} fill="#ff6f9c" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <line
+          x1={px(0)}
+          x2={px(0)}
+          y1={P.t + 6}
+          y2={H - P.b}
+          stroke="#ff6f9c"
+          strokeWidth="2.5"
+          strokeDasharray="6 5"
+        />
+        <text
+          x={px(0) + 8}
+          y={P.t + 20}
+          fill="#ff6f9c"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           a single wild spike lands here
         </text>
         {/* MA: full effect for exactly N samples, then amnesia */}
-        <path d={path(maPath)} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        <line x1={px(N)} x2={px(N)} y1={py(0)} y2={py(1 / N)} stroke="#6f8bff" strokeWidth="2" strokeDasharray="3 5" />
-        <text x={px(Math.min(N, K - 4))} y={py(0) + 18} fill="#6f8bff" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <path
+          d={path(maPath)}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <line
+          x1={px(N)}
+          x2={px(N)}
+          y1={py(0)}
+          y2={py(1 / N)}
+          stroke="#6f8bff"
+          strokeWidth="2"
+          strokeDasharray="3 5"
+        />
+        <text
+          x={px(Math.min(N, K - 4))}
+          y={py(0) + 18}
+          fill="#6f8bff"
+          textAnchor="middle"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           forgotten at k = N
         </text>
         {/* EMA: geometric fade */}
-        <path d={path(ema.map((v, k) => [px(k), py(v)] as [number, number]))} fill="none" stroke="#ffc24d" strokeWidth="4" strokeLinecap="round" />
+        <path
+          d={path(ema.map((v, k) => [px(k), py(v)] as [number, number]))}
+          fill="none"
+          stroke="#ffc24d"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
         {ema.map((v, k) => (
           <circle key={k} cx={px(k)} cy={py(v)} r="2.4" fill="#ffc24d" />
         ))}
       </svg>
       <Controls>
-        <Slider label="Window size N" min={2} max={24} step={1} value={N} onChange={setN} format={(v) => v.toFixed(0)} />
-        <Slider label="EMA smoothing α" min={0.05} max={0.7} step={0.01} value={alpha} onChange={setAlpha} format={(v) => v.toFixed(2)} />
+        <Slider
+          label="Window size N"
+          min={2}
+          max={24}
+          step={1}
+          value={N}
+          onChange={setN}
+          format={(v) => v.toFixed(0)}
+        />
+        <Slider
+          label="EMA smoothing α"
+          min={0.05}
+          max={0.7}
+          step={0.01}
+          value={alpha}
+          onChange={setAlpha}
+          format={(v) => v.toFixed(2)}
+        />
       </Controls>
       <Readout
         items={[
@@ -345,30 +627,96 @@ export function ComplementarySplitExplorer() {
 
   return (
     <Demo title="The frequency split: each sensor keeps its own band" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Low-pass and high-pass frequency responses of a complementary filter, crossing at the cutoff frequency">
-        <Grid xLabel={`frequency (Hz, log; Nyquist ${fMax.toFixed(1)} Hz)`} yLabel="exact sampled magnitude" />
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="Low-pass and high-pass frequency responses of a complementary filter, crossing at the cutoff frequency">
+        <Grid
+          xLabel={`frequency (Hz, log; Nyquist ${fMax.toFixed(1)} Hz)`}
+          yLabel="exact sampled magnitude"
+        />
         {/* the two bands */}
-        <text x={P.l + 12} y={P.t + 22} fill="#ff9cbb" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <text
+          x={P.l + 12}
+          y={P.t + 22}
+          fill="#ff9cbb"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           absolute owns the slow truth
         </text>
-        <text x={W - P.r - 12} y={P.t + 22} fill="#5fe3d2" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <text
+          x={W - P.r - 12}
+          y={P.t + 22}
+          fill="#5fe3d2"
+          textAnchor="end"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           motor encoder owns the fast motion
         </text>
-        <text x={W - P.r - 12} y={P.t + 42} fill="#8294b8" textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="11">
+        <text
+          x={W - P.r - 12}
+          y={P.t + 42}
+          fill="#8294b8"
+          textAnchor="end"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="11">
           complex responses sum to 1; magnitudes include phase
         </text>
         {/* crossover */}
-        <line x1={xc} x2={xc} y1={P.t + 6} y2={H - P.b} stroke="#ffc24d" strokeWidth="2" strokeDasharray="6 5" />
-        <text x={xc} y={H - P.b + 30} fill="#ffc24d" textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">
+        <line
+          x1={xc}
+          x2={xc}
+          y1={P.t + 6}
+          y2={H - P.b}
+          stroke="#ffc24d"
+          strokeWidth="2"
+          strokeDasharray="6 5"
+        />
+        <text
+          x={xc}
+          y={H - P.b + 30}
+          fill="#ffc24d"
+          textAnchor="middle"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12">
           crossover {fc < 0.1 ? fc.toFixed(3) : fc.toFixed(2)} Hz
         </text>
         {/* the complements */}
-        <path d={path(curves.lp)} fill="none" stroke="#ff6f9c" strokeWidth="4" strokeLinecap="round" />
-        <path d={path(curves.hp)} fill="none" stroke="#2fd3c0" strokeWidth="4" strokeLinecap="round" />
+        <path
+          d={path(curves.lp)}
+          fill="none"
+          stroke="#ff6f9c"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <path
+          d={path(curves.hp)}
+          fill="none"
+          stroke="#2fd3c0"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
       </svg>
       <Controls>
-        <Slider label="Blend α (motor-encoder trust)" min={0.9} max={0.998} step={0.001} value={alpha} onChange={setAlpha} format={(v) => v.toFixed(3)} />
-        <Slider label="Loop time Δt" min={5} max={50} step={5} value={dtMs} onChange={setDtMs} format={(v) => `${v} ms`} />
+        <Slider
+          label="Blend α (motor-encoder trust)"
+          min={0.9}
+          max={0.998}
+          step={0.001}
+          value={alpha}
+          onChange={setAlpha}
+          format={(v) => v.toFixed(3)}
+        />
+        <Slider
+          label="Loop time Δt"
+          min={5}
+          max={50}
+          step={5}
+          value={dtMs}
+          onChange={setDtMs}
+          format={(v) => `${v} ms`}
+        />
       </Controls>
       <Readout
         items={[
@@ -394,23 +742,30 @@ export function KalmanGainExplorer() {
   const [measurement, setMeasurement] = useState(-0.7);
   const [pVar, setPVar] = useState(0.75);
   const [rVar, setRVar] = useState(0.35);
-  const min = -3;
-  const max = 3;
-  const {gain, innovation, estimate, variance: posteriorVar} = scalarKalmanUpdate(
-    prediction,
-    pVar,
-    measurement,
-    rVar,
-  );
+  const {
+    gain,
+    innovation,
+    estimate,
+    variance: posteriorVar,
+  } = scalarKalmanUpdate(prediction, pVar, measurement, rVar);
 
   const curves = useMemo(() => {
-    const xs = Array.from({length: 180}, (_, i) => min + (i / 179) * (max - min));
+    const xs = Array.from(
+      {length: 180},
+      (_, i) => GAIN_X_MIN + (i / 179) * (GAIN_X_MAX - GAIN_X_MIN),
+    );
     const predPeak = gaussian(prediction, prediction, pVar);
     const measPeak = gaussian(measurement, measurement, rVar);
     const estPeak = gaussian(estimate, estimate, posteriorVar);
     const peak = Math.max(predPeak, measPeak, estPeak);
     const toCurve = (mean: number, variance: number) =>
-      xs.map((x) => [sx(x, min, max), sy(gaussian(x, mean, variance) / peak, 0, 1.08)] as [number, number]);
+      xs.map(
+        (x) =>
+          [sx(x, GAIN_X_MIN, GAIN_X_MAX), sy(gaussian(x, mean, variance) / peak, 0, 1.08)] as [
+            number,
+            number,
+          ],
+      );
     return {
       prediction: toCurve(prediction, pVar),
       measurement: toCurve(measurement, rVar),
@@ -420,11 +775,33 @@ export function KalmanGainExplorer() {
 
   return (
     <Demo title="Kalman gain: covariance decides who gets believed" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Interactive Kalman gain Gaussian blend">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="Interactive Kalman gain Gaussian blend">
         <Grid xLabel="state value" yLabel="relative probability" />
-        <path d={path(curves.prediction)} fill="none" stroke="#6f8bff" strokeWidth="4" strokeLinecap="round" />
-        <path d={path(curves.measurement)} fill="none" stroke="#ff6f9c" strokeWidth="4" strokeLinecap="round" />
-        <path d={path(curves.estimate)} fill="none" stroke="#5ce08a" strokeWidth="5" strokeLinecap="round" />
+        <path
+          d={path(curves.prediction)}
+          fill="none"
+          stroke="#6f8bff"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <path
+          d={path(curves.measurement)}
+          fill="none"
+          stroke="#ff6f9c"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <path
+          d={path(curves.estimate)}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
         {/* each marker label gets its own row so they can't collide when the
             means are close; the dashed line starts below its label */}
         {(
@@ -434,12 +811,26 @@ export function KalmanGainExplorer() {
             ['estimate', estimate, '#5ce08a', 2],
           ] as [string, number, string, number][]
         ).map(([label, value, color, row]) => {
-          const x = clamp(sx(value, min, max), P.l + 40, W - P.r - 44);
+          const x = clamp(sx(value, GAIN_X_MIN, GAIN_X_MAX), P.l + 40, W - P.r - 44);
           const labelY = P.t + 16 + row * 17;
           return (
             <g key={label}>
-              <line x1={sx(value, min, max)} x2={sx(value, min, max)} y1={labelY + 6} y2={H - P.b} stroke={color} strokeWidth="2" strokeDasharray="7 7" />
-              <text x={x} y={labelY} fill={color} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="12">
+              <line
+                x1={sx(value, GAIN_X_MIN, GAIN_X_MAX)}
+                x2={sx(value, GAIN_X_MIN, GAIN_X_MAX)}
+                y1={labelY + 6}
+                y2={H - P.b}
+                stroke={color}
+                strokeWidth="2"
+                strokeDasharray="7 7"
+              />
+              <text
+                x={x}
+                y={labelY}
+                fill={color}
+                textAnchor="middle"
+                fontFamily="JetBrains Mono, monospace"
+                fontSize="12">
                 {label}
               </text>
             </g>
@@ -447,10 +838,42 @@ export function KalmanGainExplorer() {
         })}
       </svg>
       <Controls>
-        <Slider label="Prediction mean" min={-2.5} max={2.5} step={0.1} value={prediction} onChange={setPrediction} format={(v) => v.toFixed(1)} />
-        <Slider label="Measurement mean" min={-2.5} max={2.5} step={0.1} value={measurement} onChange={setMeasurement} format={(v) => v.toFixed(1)} />
-        <Slider label="Prediction variance P" min={0.08} max={2.5} step={0.02} value={pVar} onChange={setPVar} format={(v) => v.toFixed(2)} />
-        <Slider label="Measurement variance R" min={0.08} max={2.5} step={0.02} value={rVar} onChange={setRVar} format={(v) => v.toFixed(2)} />
+        <Slider
+          label="Prediction mean"
+          min={-2.5}
+          max={2.5}
+          step={0.1}
+          value={prediction}
+          onChange={setPrediction}
+          format={(v) => v.toFixed(1)}
+        />
+        <Slider
+          label="Measurement mean"
+          min={-2.5}
+          max={2.5}
+          step={0.1}
+          value={measurement}
+          onChange={setMeasurement}
+          format={(v) => v.toFixed(1)}
+        />
+        <Slider
+          label="Prediction variance P"
+          min={0.08}
+          max={2.5}
+          step={0.02}
+          value={pVar}
+          onChange={setPVar}
+          format={(v) => v.toFixed(2)}
+        />
+        <Slider
+          label="Measurement variance R"
+          min={0.08}
+          max={2.5}
+          step={0.02}
+          value={rVar}
+          onChange={setRVar}
+          format={(v) => v.toFixed(2)}
+        />
       </Controls>
       <Readout
         items={[

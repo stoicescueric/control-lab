@@ -14,7 +14,8 @@ export function Difficulty({level = 'Medium'}: {level?: Level}) {
   const tone = TONE[level] ?? TONE.Medium;
   return (
     <p className="not-prose -mt-2 mb-7 flex items-center gap-2">
-      <span className={`inline-flex items-center rounded-[4px] border px-3 py-1 text-sm font-bold ${tone}`}>
+      <span
+        className={`inline-flex items-center rounded-[4px] border px-3 py-1 text-sm font-bold ${tone}`}>
         {level}
       </span>
       <span className="text-sm text-ink-faint">difficulty</span>

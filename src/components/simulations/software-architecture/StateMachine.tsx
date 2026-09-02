@@ -83,7 +83,13 @@ export default function StateMachine() {
       setFlash(true);
       setTimeout(() => setFlash(false), 320);
       setLog((l) =>
-        [{text: `✗ ignored "${e.label.replace(/^\S+\s/, '')}" — not legal in ${stateRef.current}`, ok: false}, ...l].slice(0, 7),
+        [
+          {
+            text: `✗ ignored "${e.label.replace(/^\S+\s/, '')}" — not legal in ${stateRef.current}`,
+            ok: false,
+          },
+          ...l,
+        ].slice(0, 7),
       );
     }
   }
@@ -92,7 +98,15 @@ export default function StateMachine() {
     stateRef.current = 'IDLE';
     setState('IDLE');
     setLog([]);
-    anim.current = {roller: 0, intakePhase: 0, arm: ARM_STOW, claw: 0, dropY: 0, dropVy: 0, scored: false};
+    anim.current = {
+      roller: 0,
+      intakePhase: 0,
+      arm: ARM_STOW,
+      claw: 0,
+      dropY: 0,
+      dropVy: 0,
+      scored: false,
+    };
   }
 
   function draw(dt: number) {
@@ -280,7 +294,9 @@ export default function StateMachine() {
 
   const group = (title: string, evts: Evt[]) => (
     <div className="mt-3">
-      <div className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#8294b8]">{title}</div>
+      <div className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-wide text-[#8294b8]">
+        {title}
+      </div>
       <div className="flex flex-wrap gap-2">
         {evts.map((e) => (
           <Button key={e.id} primary={e.from === state} onClick={() => fire(e)}>
@@ -298,7 +314,9 @@ export default function StateMachine() {
           <Fragment key={s.id}>
             <div
               className={`flex min-w-[92px] flex-col items-center rounded-lg border px-3 py-2 text-center transition-colors ${
-                s.id === state ? 'border-brand bg-brand/20 text-white' : 'border-white/15 bg-white/5 text-[#8294b8]'
+                s.id === state
+                  ? 'border-brand bg-brand/20 text-white'
+                  : 'border-white/15 bg-white/5 text-[#8294b8]'
               }`}>
               <span className="font-mono text-[0.8rem] font-bold">{s.id}</span>
               <span className="text-[0.66rem] leading-tight">{s.desc}</span>
@@ -327,7 +345,9 @@ export default function StateMachine() {
         className={`mt-4 rounded-xl border bg-black/30 p-3 font-mono text-[0.78rem] transition-colors ${
           flash ? 'border-rose' : 'border-white/10'
         }`}>
-        <div className="mb-1 text-[0.7rem] uppercase tracking-wide text-[#8294b8]">Transition log</div>
+        <div className="mb-1 text-[0.7rem] uppercase tracking-wide text-[#8294b8]">
+          Transition log
+        </div>
         {log.length === 0 ? (
           <div className="text-[#66748f]">Fire an event to begin…</div>
         ) : (
@@ -341,7 +361,9 @@ export default function StateMachine() {
 
       <div className="mt-3 px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         Current state: <b style={{color: '#6f8bff'}}>{state}</b> · legal now:{' '}
-        <b className="text-white">{validNow.map((e) => e.label.replace(/^\S+\s/, '')).join(', ') || '—'}</b>
+        <b className="text-white">
+          {validNow.map((e) => e.label.replace(/^\S+\s/, '')).join(', ') || '—'}
+        </b>
       </div>
     </Demo>
   );

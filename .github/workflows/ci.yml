@@ -43,6 +43,8 @@ jobs:
       - run: npm run check:architecture
       - run: npm run check:content
       - run: npm run check:contributor
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

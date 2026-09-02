@@ -3,32 +3,43 @@
    a requestAnimationFrame loop, and a self-resizing Plot) so a demo's
    physics/draw code can stay plain and imperative inside one callback. */
 
-import { useEffect, useRef } from "react";
-import { Plot } from "./plot.js";
+import {useEffect, useRef, type RefObject} from 'react';
+import {Plot, type PlotOptions} from './plot';
+
+export interface CanvasSize {
+  /** Width in CSS pixels. */
+  w: number;
+  /** Height in CSS pixels. */
+  h: number;
+}
+
+/** The per-frame callback: `dt` is seconds since the previous frame. */
+export type RafCallback = (dt: number, now: number) => void;
 
 /**
  * Size a <canvas> for crisp HiDPI rendering and keep it sized to its container.
  * Returns a ref whose `.current` is `{ w, h }` in CSS pixels (logical units you
  * draw in — the device-pixel-ratio transform is already applied to the context).
  *
- *   const canvasRef = useRef(null);
+ *   const canvasRef = useRef<HTMLCanvasElement | null>(null);
  *   const size = useDprCanvas(canvasRef, 300);
  *   // later, in your draw loop: const { w, h } = size.current;
  */
-export function useDprCanvas(ref, height) {
-  const size = useRef({ w: 0, h: height });
+export function useDprCanvas(ref: RefObject<HTMLCanvasElement | null>, height: number) {
+  const size = useRef<CanvasSize>({w: 0, h: height});
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 600;
-      canvas.style.height = height + "px";
+      canvas.style.height = height + 'px';
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      size.current = { w, h: height };
+      size.current = {w, h: height};
     };
     resize();
     const ro = new ResizeObserver(resize);
@@ -63,22 +74,22 @@ export function useDprCanvas(ref, height) {
  * A `matchMedia` change listener keeps this in sync if the user flips the
  * setting while the page is open.
  */
-export function useRaf(callback, targetRef) {
-  const cb = useRef(callback);
+export function useRaf(callback: RafCallback, targetRef?: RefObject<Element | null>): void {
+  const cb = useRef<RafCallback>(callback);
   cb.current = callback;
   useEffect(() => {
-    let raf = null;
+    let raf: number | null = null;
     let last = performance.now();
     let reduceMotion = false;
-    let mq;
-    if (typeof window !== "undefined" && window.matchMedia) {
-      mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let mq: MediaQueryList | undefined;
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      mq = window.matchMedia('(prefers-reduced-motion: reduce)');
       reduceMotion = mq.matches;
     }
     // Last callback painted under reduced motion, so a re-render (a control
     // moving) repaints but an idle frame does not.
-    let painted = null;
-    const loop = (now) => {
+    let painted: RafCallback | null = null;
+    const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
       if (reduceMotion) {
@@ -104,16 +115,16 @@ export function useRaf(callback, targetRef) {
         raf = null;
       }
     };
-    const onMotionChange = (e) => {
+    const onMotionChange = (e: MediaQueryListEvent) => {
       reduceMotion = e.matches;
       // Force one repaint on the next frame either way, so turning the setting
       // on leaves a drawn frame rather than whatever was mid-flight.
       painted = null;
     };
     if (mq) {
-      if (typeof mq.addEventListener === "function") {
-        mq.addEventListener("change", onMotionChange);
-      } else if (typeof mq.addListener === "function") {
+      if (typeof mq.addEventListener === 'function') {
+        mq.addEventListener('change', onMotionChange);
+      } else if (typeof mq.addListener === 'function') {
         // Safari < 14 fallback.
         mq.addListener(onMotionChange);
       }
@@ -129,17 +140,16 @@ export function useRaf(callback, targetRef) {
       painted = null;
     };
     if (el) {
-      el.addEventListener("pointerdown", invalidate);
-      el.addEventListener("pointermove", invalidate);
-      el.addEventListener("keydown", invalidate);
+      el.addEventListener('pointerdown', invalidate);
+      el.addEventListener('pointermove', invalidate);
+      el.addEventListener('keydown', invalidate);
     }
 
-    let io;
-    if (el && typeof IntersectionObserver !== "undefined") {
-      io = new IntersectionObserver(
-        ([entry]) => (entry.isIntersecting ? start() : stop()),
-        { rootMargin: "200px" },
-      );
+    let io: IntersectionObserver | undefined;
+    if (el && typeof IntersectionObserver !== 'undefined') {
+      io = new IntersectionObserver(([entry]) => (entry.isIntersecting ? start() : stop()), {
+        rootMargin: '200px',
+      });
       io.observe(el);
     } else {
       start();
@@ -148,14 +158,14 @@ export function useRaf(callback, targetRef) {
       stop();
       if (io) io.disconnect();
       if (el) {
-        el.removeEventListener("pointerdown", invalidate);
-        el.removeEventListener("pointermove", invalidate);
-        el.removeEventListener("keydown", invalidate);
+        el.removeEventListener('pointerdown', invalidate);
+        el.removeEventListener('pointermove', invalidate);
+        el.removeEventListener('keydown', invalidate);
       }
       if (mq) {
-        if (typeof mq.removeEventListener === "function") {
-          mq.removeEventListener("change", onMotionChange);
-        } else if (typeof mq.removeListener === "function") {
+        if (typeof mq.removeEventListener === 'function') {
+          mq.removeEventListener('change', onMotionChange);
+        } else if (typeof mq.removeListener === 'function') {
           mq.removeListener(onMotionChange);
         }
       }
@@ -170,17 +180,18 @@ export function useRaf(callback, targetRef) {
  *   const plotRef = usePlot(canvasRef, { height: 300, ymin: 0, ymax: 10 });
  *   // in your draw loop: const p = plotRef.current; p?.clear(); p?.grid(); ...
  */
-export function usePlot(canvasRef, options) {
-  const plotRef = useRef(null);
+export function usePlot(canvasRef: RefObject<HTMLCanvasElement | null>, options: PlotOptions) {
+  const plotRef = useRef<Plot | null>(null);
   // Keep the latest options without re-creating the plot every render.
-  const optsRef = useRef(options);
+  const optsRef = useRef<PlotOptions>(options);
   optsRef.current = options;
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const p = new Plot(canvasRef.current, optsRef.current);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const p = new Plot(canvas, optsRef.current);
     plotRef.current = p;
     const ro = new ResizeObserver(() => p.resize());
-    ro.observe(canvasRef.current);
+    ro.observe(canvas);
     return () => {
       ro.disconnect();
       plotRef.current = null;

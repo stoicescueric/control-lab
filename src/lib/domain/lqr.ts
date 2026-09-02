@@ -39,7 +39,9 @@ export function scalarDiscreteLqr(
   R: number,
 ): ScalarDiscreteLqrResult {
   if (![ad, bd, Q, R].every(Number.isFinite) || bd === 0 || Q < 0 || R <= 0) {
-    throw new Error('Discrete LQR inputs must be finite, with bd nonzero, Q non-negative, and R positive');
+    throw new Error(
+      'Discrete LQR inputs must be finite, with bd nonzero, Q non-negative, and R positive',
+    );
   }
   const bd2 = bd * bd;
   const linear = R * (1 - ad * ad) - Q * bd2;

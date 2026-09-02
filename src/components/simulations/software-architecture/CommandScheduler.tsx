@@ -20,7 +20,13 @@ const D = {drive: 1.4, lift: 1.0, aim: 0.6, score: 0.5};
 
 function schedule(parallel: boolean): {cmds: Cmd[]; total: number} {
   const drive: Cmd = {name: 'DriveToPose', sub: 'Drive', color: '#6f8bff', start: 0, end: D.drive};
-  const lift: Cmd = {name: 'RaiseLift', sub: 'Lift', color: '#2fd3c0', start: D.drive, end: D.drive + D.lift};
+  const lift: Cmd = {
+    name: 'RaiseLift',
+    sub: 'Lift',
+    color: '#2fd3c0',
+    start: D.drive,
+    end: D.drive + D.lift,
+  };
   let aim: Cmd;
   let groupEnd: number;
   if (parallel) {
@@ -32,7 +38,13 @@ function schedule(parallel: boolean): {cmds: Cmd[]; total: number} {
     aim = {name: 'Aim', sub: 'Turret', color: '#ffc24d', start: lift.end, end: lift.end + D.aim};
     groupEnd = aim.end;
   }
-  const score: Cmd = {name: 'Score', sub: 'Scorer', color: '#ff6f9c', start: groupEnd, end: groupEnd + D.score};
+  const score: Cmd = {
+    name: 'Score',
+    sub: 'Scorer',
+    color: '#ff6f9c',
+    start: groupEnd,
+    end: groupEnd + D.score,
+  };
   return {cmds: [drive, lift, aim, score], total: score.end};
 }
 
@@ -128,7 +140,8 @@ export default function CommandScheduler() {
           t = <b className="text-white">{Math.min(t, total).toFixed(2)} s</b>
         </span>
         <span>
-          running: <b className="text-white">{active.map((c) => c.name).join(' + ') || '— (done)'}</b>
+          running:{' '}
+          <b className="text-white">{active.map((c) => c.name).join(' + ') || '— (done)'}</b>
         </span>
         <span>
           subsystems busy: <b className="text-white">{busy.length ? busy.join(', ') : '—'}</b>

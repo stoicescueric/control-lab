@@ -2,7 +2,12 @@ import {useMemo, useState} from 'react';
 import DragAwakening from '@site/src/components/simulations/research/DragAwakening';
 import {Button, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {ASSUMED_ETA, type Pt as Point, measuredEta, simulateDrag} from '@site/src/lib/domain/projectile';
+import {
+  ASSUMED_ETA,
+  type Pt as Point,
+  measuredEta,
+  simulateDrag,
+} from '@site/src/lib/domain/projectile';
 
 type TabId = 'integrator' | 'drag' | 'transfer';
 
@@ -17,7 +22,9 @@ function simulate(method: 'euler' | 'rk4', dt: number) {
 }
 
 function pathFrom(points: Point[], sx: (x: number) => number, sy: (y: number) => number) {
-  return 'M ' + points.map((p) => `${sx(p.x).toFixed(1)} ${sy(Math.max(0, p.y)).toFixed(1)}`).join(' L ');
+  return (
+    'M ' + points.map((p) => `${sx(p.x).toFixed(1)} ${sy(Math.max(0, p.y)).toFixed(1)}`).join(' L ')
+  );
 }
 
 function IntegratorBattle() {
@@ -50,19 +57,53 @@ function IntegratorBattle() {
         {ticks.map((m) => (
           <g key={m}>
             <line x1={sx(m)} y1={sy(0)} x2={sx(m)} y2={sy(yMax)} stroke="rgba(255,255,255,0.05)" />
-            <text x={sx(m)} y={sy(0) + 20} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#8294b8">
+            <text
+              x={sx(m)}
+              y={sy(0) + 20}
+              textAnchor="middle"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="11"
+              fill="#8294b8">
               {m}m
             </text>
           </g>
         ))}
-        <path d={pathFrom(truth.pts, sx, sy)} fill="none" stroke="#8294b8" strokeWidth="2" strokeDasharray="4 6" />
-        <path d={pathFrom(euler.pts, sx, sy)} fill="none" stroke="#ff6f9c" strokeWidth="3" strokeLinecap="round" />
-        <path d={pathFrom(rk4.pts, sx, sy)} fill="none" stroke="#5ce08a" strokeWidth="3.5" strokeLinecap="round" />
+        <path
+          d={pathFrom(truth.pts, sx, sy)}
+          fill="none"
+          stroke="#8294b8"
+          strokeWidth="2"
+          strokeDasharray="4 6"
+        />
+        <path
+          d={pathFrom(euler.pts, sx, sy)}
+          fill="none"
+          stroke="#ff6f9c"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path
+          d={pathFrom(rk4.pts, sx, sy)}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+        />
         <circle cx={sx(truth.range)} cy={sy(0)} r="6" fill="#ffc24d" />
-        <text x={sx(truth.range) + 10} y={sy(0) - 10} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#ffc24d">
+        <text
+          x={sx(truth.range) + 10}
+          y={sy(0) - 10}
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12"
+          fill="#ffc24d">
           high-resolution target
         </text>
-        <text x={sx(0) + 8} y={sy(yMax) + 18} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
+        <text
+          x={sx(0) + 8}
+          y={sy(yMax) + 18}
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12"
+          fill="#aab8d6">
           dt controls how often the simulator samples acceleration.
         </text>
       </svg>
@@ -126,11 +167,23 @@ function TransferRealityCheck() {
         className="block h-auto w-full rounded-xl bg-[#0b1120]"
         role="img"
         aria-label="Wheel surface speed to exit velocity graph with assumed and measured velocity-transfer ratios.">
-        <rect x={padL} y={padT} width={W - padL - padR} height={H - padT - padB} fill="rgba(255,255,255,0.015)" />
+        <rect
+          x={padL}
+          y={padT}
+          width={W - padL - padR}
+          height={H - padT - padB}
+          fill="rgba(255,255,255,0.015)"
+        />
         {Array.from({length: 8}, (_, i) => i * 5).map((x) => (
           <g key={`x${x}`}>
             <line x1={sx(x)} y1={sy(0)} x2={sx(x)} y2={sy(yMax)} stroke="rgba(255,255,255,0.05)" />
-            <text x={sx(x)} y={H - 18} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#8294b8">
+            <text
+              x={sx(x)}
+              y={H - 18}
+              textAnchor="middle"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="11"
+              fill="#8294b8">
               {x}
             </text>
           </g>
@@ -138,25 +191,72 @@ function TransferRealityCheck() {
         {Array.from({length: 6}, (_, i) => i * 5).map((y) => (
           <g key={`y${y}`}>
             <line x1={sx(0)} y1={sy(y)} x2={sx(xMax)} y2={sy(y)} stroke="rgba(255,255,255,0.05)" />
-            <text x={padL - 10} y={sy(y) + 4} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="11" fill="#8294b8">
+            <text
+              x={padL - 10}
+              y={sy(y) + 4}
+              textAnchor="end"
+              fontFamily="JetBrains Mono, monospace"
+              fontSize="11"
+              fill="#8294b8">
               {y}
             </text>
           </g>
         ))}
-        <path d={line(assumedEta)} fill="none" stroke="#8294b8" strokeWidth="2.5" strokeDasharray="8 6" />
+        <path
+          d={line(assumedEta)}
+          fill="none"
+          stroke="#8294b8"
+          strokeWidth="2.5"
+          strokeDasharray="8 6"
+        />
         <path d={line(measEta)} fill="none" stroke="#6f8bff" strokeWidth="3.5" />
-        <line x1={sx(targetWheel)} y1={sy(0)} x2={sx(targetWheel)} y2={sy(assumedExit)} stroke="#ffc24d" strokeWidth="1.5" strokeDasharray="3 4" />
-        <line x1={sx(targetWheel)} y1={sy(realExit)} x2={sx(targetWheel)} y2={sy(assumedExit)} stroke="#ff6f9c" strokeWidth="3" />
-        <text x={sx(xMax) - 4} y={H - 6} textAnchor="end" fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
+        <line
+          x1={sx(targetWheel)}
+          y1={sy(0)}
+          x2={sx(targetWheel)}
+          y2={sy(assumedExit)}
+          stroke="#ffc24d"
+          strokeWidth="1.5"
+          strokeDasharray="3 4"
+        />
+        <line
+          x1={sx(targetWheel)}
+          y1={sy(realExit)}
+          x2={sx(targetWheel)}
+          y2={sy(assumedExit)}
+          stroke="#ff6f9c"
+          strokeWidth="3"
+        />
+        <text
+          x={sx(xMax) - 4}
+          y={H - 6}
+          textAnchor="end"
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12"
+          fill="#aab8d6">
           wheel surface speed (m/s)
         </text>
-        <text x={12} y={padT + 12} transform={`rotate(-90 12 ${padT + 12})`} fontFamily="JetBrains Mono, monospace" fontSize="12" fill="#aab8d6">
+        <text
+          x={12}
+          y={padT + 12}
+          transform={`rotate(-90 12 ${padT + 12})`}
+          fontFamily="JetBrains Mono, monospace"
+          fontSize="12"
+          fill="#aab8d6">
           exit velocity (m/s)
         </text>
       </svg>
 
       <Controls>
-        <Slider label="Launch angle" min={20} max={70} step={1} value={angle} onChange={setAngle} format={(v) => `${v.toFixed(0)} deg`} />
+        <Slider
+          label="Launch angle"
+          min={20}
+          max={70}
+          step={1}
+          value={angle}
+          onChange={setAngle}
+          format={(v) => `${v.toFixed(0)} deg`}
+        />
       </Controls>
       <Readout
         items={[
@@ -169,7 +269,10 @@ function TransferRealityCheck() {
       <Legend
         items={[
           {color: '#8294b8', label: 'assumed transfer line, eta = 0.70'},
-          {color: '#6f8bff', label: 'experimental transfer line, eta about 0.26 and angle-dependent'},
+          {
+            color: '#6f8bff',
+            label: 'experimental transfer line, eta about 0.26 and angle-dependent',
+          },
           {color: '#ff6f9c', label: 'lost velocity from contact losses'},
         ]}
       />
@@ -191,7 +294,11 @@ export default function PhysicalRealityDashboard() {
     <Demo title={`Simulating Physical Reality - ${current.title}`} pill="Research dashboard">
       <div className="mb-4 flex flex-wrap gap-2">
         {tabs.map((tab) => (
-          <Button key={tab.id} active={active === tab.id} primary={active === tab.id} onClick={() => setActive(tab.id)}>
+          <Button
+            key={tab.id}
+            active={active === tab.id}
+            primary={active === tab.id}
+            onClick={() => setActive(tab.id)}>
             {tab.label}: {tab.title}
           </Button>
         ))}

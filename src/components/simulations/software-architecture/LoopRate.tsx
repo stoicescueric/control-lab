@@ -119,15 +119,46 @@ export default function LoopRate() {
       />
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
-          <Slider label="Loop period dt" value={dtMs} min={5} max={300} step={5} onChange={setDtMs} format={(v) => v + ' ms'} />
+          <Slider
+            label="Loop period dt"
+            value={dtMs}
+            min={5}
+            max={300}
+            step={5}
+            onChange={setDtMs}
+            format={(v) => v + ' ms'}
+          />
           <div className="mt-1 text-[0.74rem] text-[#8294b8]">A typical FTC loop is ~20–50 ms.</div>
         </div>
-        <Slider label="Signal frequency" value={freq} min={0.3} max={2} step={0.1} onChange={setFreq} format={(v) => v.toFixed(1) + ' Hz'} />
+        <Slider
+          label="Signal frequency"
+          value={freq}
+          min={0.3}
+          max={2}
+          step={0.1}
+          onChange={setFreq}
+          format={(v) => v.toFixed(1) + ' Hz'}
+        />
       </div>
       <div className="mt-3 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
-        <span>Loop rate: <b ref={roRate} className="text-white">—</b></span>
-        <span>Samples / wave: <b ref={roSpw} className="text-white">—</b></span>
-        <span>Quality: <b ref={roStatus} className="text-white">—</b></span>
+        <span>
+          Loop rate:{' '}
+          <b ref={roRate} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Samples / wave:{' '}
+          <b ref={roSpw} className="text-white">
+            —
+          </b>
+        </span>
+        <span>
+          Quality:{' '}
+          <b ref={roStatus} className="text-white">
+            —
+          </b>
+        </span>
       </div>
     </Demo>
   );

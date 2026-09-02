@@ -15,8 +15,12 @@ export function Abstract({children}: {children?: ReactNode}) {
     <aside
       className="cl-abstract not-prose my-6 rounded-[8px] border border-line border-l-4 border-l-brand bg-surface-2 p-5"
       aria-label="Abstract">
-      <div className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-accent-text">Abstract</div>
-      <div className="text-[0.97rem] leading-relaxed text-ink-soft [&>:last-child]:mb-0">{children}</div>
+      <div className="mb-1.5 text-[0.7rem] font-bold uppercase tracking-[0.14em] text-accent-text">
+        Abstract
+      </div>
+      <div className="text-[0.97rem] leading-relaxed text-ink-soft [&>:last-child]:mb-0">
+        {children}
+      </div>
     </aside>
   );
 }

@@ -113,7 +113,8 @@ With a large window the step test ramps up slowly instead of snapping — pure l
 spike shifts the average for the full N samples. For fast-moving data, the Kalman filter (two lessons
 ahead) is dramatically better. Spikes are a different problem: no linear filter rejects them — a settled
 Kalman filter would swing further on the first sample than this average does, just for fewer samples —
-so they get gated out before the filter ever sees them, as in the EKF lesson's validity check.
+so they get gated out before the filter ever sees them, by a validity check that rejects any reading
+the mechanism could not physically have produced since the last loop.
 </Callout>
 
 </Theory>

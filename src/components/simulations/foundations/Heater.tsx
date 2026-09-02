@@ -215,8 +215,30 @@ export default function Heater() {
       const x0 = w / 2 - rw - gap / 2;
       const x1 = w / 2 + gap / 2;
       const ry = h - 46 - rh;
-      drawRoom(c, x0, ry, rw, rh, s.closed, s.uClosed, '#ffc24d', 'closed loop', 'measures & corrects');
-      drawRoom(c, x1, ry, rw, rh, s.open, openPower, '#ff6f9c', 'open loop', `fixed power ${openPower.toFixed(1)}`);
+      drawRoom(
+        c,
+        x0,
+        ry,
+        rw,
+        rh,
+        s.closed,
+        s.uClosed,
+        '#ffc24d',
+        'closed loop',
+        'measures & corrects',
+      );
+      drawRoom(
+        c,
+        x1,
+        ry,
+        rw,
+        rh,
+        s.open,
+        openPower,
+        '#ff6f9c',
+        'open loop',
+        `fixed power ${openPower.toFixed(1)}`,
+      );
     }
 
     const p = plotRef.current;
@@ -235,7 +257,8 @@ export default function Heater() {
       roOpen.current.textContent = s.open.toFixed(1) + ' °C';
       roOpen.current.style.color = Math.abs(s.open - SET) > 2 ? '#ff6f9c' : '#fff';
     }
-    if (roPower.current) roPower.current.textContent = ((s.uClosed / U_MAX) * 100).toFixed(0) + ' %';
+    if (roPower.current)
+      roPower.current.textContent = ((s.uClosed / U_MAX) * 100).toFixed(0) + ' %';
   }
 
   useRaf((frameDt: number) => {
@@ -295,13 +318,22 @@ export default function Heater() {
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          Closed-loop: <b ref={roClosed} className="text-white">—</b>
+          Closed-loop:{' '}
+          <b ref={roClosed} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Open-loop: <b ref={roOpen} className="text-white">—</b>
+          Open-loop:{' '}
+          <b ref={roOpen} className="text-white">
+            —
+          </b>
         </span>
         <span>
-          Closed-loop heater: <b ref={roPower} className="text-white">—</b>
+          Closed-loop heater:{' '}
+          <b ref={roPower} className="text-white">
+            —
+          </b>
         </span>
       </div>
     </Demo>

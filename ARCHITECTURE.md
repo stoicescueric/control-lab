@@ -97,7 +97,7 @@ analytics, and URL safety belong in `src/lib/platform`.
 | `foundations/` | Introductory feedback and mathematical intuition. |
 | `software-architecture/` | State machines, command scheduling, and loop timing. |
 | `control-theory/` | Motor models, PID, feedforward, identification, saturation, and profiles. |
-| `signal-processing/` | Filters, Kalman estimation, EKF linearization, and sensor uncertainty. |
+| `signal-processing/` | Noise, smoothing filters, sensor fusion, and Kalman estimation. |
 | `path-following/` | Kinematics, pursuit, splines, vector fields, and steering geometry. |
 | `state-space/` | State feedback and optimal-control explorers. |
 | `research/` | Projectile simulation and shoot-on-the-move case studies. |
@@ -150,11 +150,13 @@ or Docusaurus helpers. Do not place source TypeScript in `static/`.
 | `npm run check:architecture` | Directory boundaries and import direction. |
 | `npm run check:content` | Lesson metadata, public-language rules, placeholders, and unsafe embeds. |
 | `npm run check:contributor` | AI guidance, governance, ownership, and contribution-template integrity. |
+| `npm run lint` | JavaScript/TypeScript correctness and the React Hooks dependency rules. |
+| `npm run format:check` | Prettier formatting of source (`docs/` prose is excluded). |
 | `npm run typecheck` | TypeScript contracts. |
 | `npm test` | Mathematical and platform behavior. |
 | `npm run build` | SSR, MDX compilation, links, KaTeX, and production bundling. |
 | `npm run security` | Workflow, lockfile, and built-output security assumptions. |
-| `npm run size` | Production artifact budget. |
+| `npm run size` | Per-category production size budgets. |
 
 CI and deployment run the same sequence, so a local pass should match the pull
 request result.

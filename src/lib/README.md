@@ -10,7 +10,7 @@ Docusaurus, the DOM, browser storage, or analytics. Tests live beside the model.
 Examples:
 
 - angle wrapping and control helpers;
-- linear algebra;
+- filter, spline, and state-space models;
 - projectile integration and interpolation.
 
 ## `visualization/`

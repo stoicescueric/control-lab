@@ -5,7 +5,11 @@
 
 export type LastVisited = {id: string; title: string; path: string};
 
-type Data = {completed: Record<string, true>; challenges?: Record<string, true>; last?: LastVisited};
+type Data = {
+  completed: Record<string, true>;
+  challenges?: Record<string, true>;
+  last?: LastVisited;
+};
 
 const KEY = 'cl-progress-v1';
 const EVT = 'cl-progress-change';

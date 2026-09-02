@@ -2,7 +2,7 @@ import {useRef, useState} from 'react';
 
 import {Trace} from '@site/src/lib/visualization/plot';
 import {usePlot, useRaf} from '@site/src/lib/visualization/canvas';
-import {Button, Buttons, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
+import {Button, Buttons, Controls, Demo, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {
   stepSaturatingPidPlant,
@@ -206,25 +206,40 @@ export default function AntiWindup() {
       </Buttons>
       <div className="mt-2 flex flex-wrap gap-[18px] px-1 font-mono text-[0.82rem] text-[#aab8d6]">
         <span>
-          windup I: <b ref={readouts.noAntiIntegral} className="text-white">0.00 V</b>
+          windup I:{' '}
+          <b ref={readouts.noAntiIntegral} className="text-white">
+            0.00 V
+          </b>
         </span>
         <span>
-          anti I: <b ref={readouts.antiIntegral} className="text-white">0.00 V</b>
+          anti I:{' '}
+          <b ref={readouts.antiIntegral} className="text-white">
+            0.00 V
+          </b>
         </span>
         <span>
-          raw PID: <b ref={readouts.noAntiRaw} className="text-white">0.00 V</b>
+          raw PID:{' '}
+          <b ref={readouts.noAntiRaw} className="text-white">
+            0.00 V
+          </b>
         </span>
         <span>
-          anti raw: <b ref={readouts.antiRaw} className="text-white">0.00 V</b>
+          anti raw:{' '}
+          <b ref={readouts.antiRaw} className="text-white">
+            0.00 V
+          </b>
         </span>
         <span>
-          saturated: <b ref={readouts.saturated} className="text-white">no</b>
+          saturated:{' '}
+          <b ref={readouts.saturated} className="text-white">
+            no
+          </b>
         </span>
       </div>
       <p className="mt-3 px-1 text-[0.82rem] leading-relaxed text-[#b9c5de]">
-        The solid lines are mechanism position. The dashed lines are the integral term measured in output
-        volts. When the raw PID command exceeds the actuator limit, the pink controller keeps integrating;
-        the green controller clamps and conditionally pauses integration.
+        The solid lines are mechanism position. The dashed lines are the integral term measured in
+        output volts. When the raw PID command exceeds the actuator limit, the pink controller keeps
+        integrating; the green controller clamps and conditionally pauses integration.
       </p>
     </Demo>
   );

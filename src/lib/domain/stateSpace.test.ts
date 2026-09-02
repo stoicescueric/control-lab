@@ -11,7 +11,7 @@ describe('discretizeScalarPlant', () => {
   it('matches a stable negative-A plant', () => {
     const result = discretizeScalarPlant(-4, 200, 0.02);
     expect(result.ad).toBeCloseTo(Math.exp(-0.08), 12);
-    expect(result.bd).toBeCloseTo(200 * (Math.exp(-0.08) - 1) / -4, 12);
+    expect(result.bd).toBeCloseTo((200 * (Math.exp(-0.08) - 1)) / -4, 12);
   });
 
   it('is continuous for very small A', () => {

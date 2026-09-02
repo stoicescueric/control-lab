@@ -22,7 +22,9 @@ function sy(y: number, min: number, max: number) {
   return P.t + (1 - (y - min) / (max - min)) * PH;
 }
 function path(points: [number, number][]) {
-  return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+  return points
+    .map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(' ');
 }
 
 function Grid({xLabel, yLabel}: {xLabel: string; yLabel: string}) {
@@ -31,18 +33,43 @@ function Grid({xLabel, yLabel}: {xLabel: string; yLabel: string}) {
       <rect width={W} height={H} rx="18" fill="#0b1120" />
       {Array.from({length: 7}, (_, i) => {
         const x = P.l + (i / 6) * PW;
-        return <line key={`x-${i}`} x1={x} x2={x} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,0.07)" />;
+        return (
+          <line
+            key={`x-${i}`}
+            x1={x}
+            x2={x}
+            y1={P.t}
+            y2={H - P.b}
+            stroke="rgba(255,255,255,0.07)"
+          />
+        );
       })}
       {Array.from({length: 5}, (_, i) => {
         const y = P.t + (i / 4) * PH;
-        return <line key={`y-${i}`} x1={P.l} x2={W - P.r} y1={y} y2={y} stroke="rgba(255,255,255,0.07)" />;
+        return (
+          <line
+            key={`y-${i}`}
+            x1={P.l}
+            x2={W - P.r}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.07)"
+          />
+        );
       })}
       <line x1={P.l} x2={W - P.r} y1={H - P.b} y2={H - P.b} stroke="rgba(255,255,255,0.34)" />
       <line x1={P.l} x2={P.l} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,0.34)" />
       <text x={W / 2} y={H - 18} fill="#8294b8" textAnchor="middle" fontFamily={MONO} fontSize="13">
         {xLabel}
       </text>
-      <text x="22" y={H / 2} fill="#8294b8" textAnchor="middle" fontFamily={MONO} fontSize="13" transform={`rotate(-90 22 ${H / 2})`}>
+      <text
+        x="22"
+        y={H / 2}
+        fill="#8294b8"
+        textAnchor="middle"
+        fontFamily={MONO}
+        fontSize="13"
+        transform={`rotate(-90 22 ${H / 2})`}>
         {yLabel}
       </text>
     </g>
@@ -68,9 +95,33 @@ export function ScalarStateStepExplorer() {
   return (
     <Demo title="One sampled state step" pill="Core checkpoint">
       <Controls>
-        <Slider label="Current velocity v" min={0} max={250} step={5} value={velocity} onChange={setVelocity} format={(v) => `${v.toFixed(0)} rad/s`} />
-        <Slider label="Applied voltage V" min={-12} max={12} step={0.5} value={volts} onChange={setVolts} format={(v) => `${v.toFixed(1)} V`} />
-        <Slider label="Measured loop time dt" min={0.005} max={0.08} step={0.005} value={dt} onChange={setDt} format={(v) => `${(v * 1000).toFixed(0)} ms`} />
+        <Slider
+          label="Current velocity v"
+          min={0}
+          max={250}
+          step={5}
+          value={velocity}
+          onChange={setVelocity}
+          format={(v) => `${v.toFixed(0)} rad/s`}
+        />
+        <Slider
+          label="Applied voltage V"
+          min={-12}
+          max={12}
+          step={0.5}
+          value={volts}
+          onChange={setVolts}
+          format={(v) => `${v.toFixed(1)} V`}
+        />
+        <Slider
+          label="Measured loop time dt"
+          min={0.005}
+          max={0.08}
+          step={0.005}
+          value={dt}
+          onChange={setDt}
+          format={(v) => `${(v * 1000).toFixed(0)} ms`}
+        />
       </Controls>
       <Readout
         items={[
@@ -96,7 +147,7 @@ export function LqrExplorer() {
   const kA = 0.005; // V per rad/s²
   const a = -kV / kA; // -4 s⁻¹
   const b = 1 / kA; // 200 (rad/s²) per volt
-  const sampleDt = 0.020;
+  const sampleDt = 0.02;
   const target = 300; // rad/s
   const T = 1.4; // seconds shown
   const V_LIM = rMax;
@@ -133,7 +184,7 @@ export function LqrExplorer() {
       v = ad * v + bd * u;
       if (shotFired) {
         // v now represents the next sampled instant, t + sampleDt.
-        if (settle == null && Math.abs(target - v) < 6) settle = (t + sampleDt) - SHOT_AT;
+        if (settle == null && Math.abs(target - v) < 6) settle = t + sampleDt - SHOT_AT;
         if (settle != null && Math.abs(target - v) >= 6) settle = null;
       }
     }
@@ -144,16 +195,39 @@ export function LqrExplorer() {
 
   return (
     <Demo title="Discrete LQR: state a preference, get a 20 ms gain" pill="Math explorer">
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full rounded-xl bg-[#0b1120]" role="img" aria-label="Flywheel step response and voltage under a 20 millisecond discrete LQR gain computed from the Q and R weights">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        role="img"
+        aria-label="Flywheel step response and voltage under a 20 millisecond discrete LQR gain computed from the Q and R weights">
         <Grid xLabel="seconds" yLabel="flywheel speed (rad/s)" />
         {/* target */}
-        <line x1={sx(0, 0, T)} x2={sx(T, 0, T)} y1={sy(target, 0, vMaxAxis)} y2={sy(target, 0, vMaxAxis)} stroke="#8294b8" strokeWidth="1.5" strokeDasharray="2 8" />
-        <text x={W - P.r - 8} y={sy(target, 0, vMaxAxis) - 8} fill="#8294b8" textAnchor="end" fontFamily={MONO} fontSize="12">
+        <line
+          x1={sx(0, 0, T)}
+          x2={sx(T, 0, T)}
+          y1={sy(target, 0, vMaxAxis)}
+          y2={sy(target, 0, vMaxAxis)}
+          stroke="#8294b8"
+          strokeWidth="1.5"
+          strokeDasharray="2 8"
+        />
+        <text
+          x={W - P.r - 8}
+          y={sy(target, 0, vMaxAxis) - 8}
+          fill="#8294b8"
+          textAnchor="end"
+          fontFamily={MONO}
+          fontSize="12">
           target {target} rad/s
         </text>
         {/* voltage ceiling, drawn on the voltage scale (right side, 0..12 V mapped to plot height) */}
         <path
-          d={path(sim.volts.map(([t, u]) => [sx(t, 0, T), sy((u / V_LIM) * vMaxAxis, 0, vMaxAxis)] as [number, number]))}
+          d={path(
+            sim.volts.map(
+              ([t, u]) =>
+                [sx(t, 0, T), sy((u / V_LIM) * vMaxAxis, 0, vMaxAxis)] as [number, number],
+            ),
+          )}
           fill="none"
           stroke="#ffc24d"
           strokeWidth="2.5"
@@ -163,24 +237,67 @@ export function LqrExplorer() {
           voltage (full height = {V_LIM} V){sim.saturated ? ' — hitting the ceiling!' : ''}
         </text>
         {/* the shot */}
-        <line x1={sx(SHOT_AT, 0, T)} x2={sx(SHOT_AT, 0, T)} y1={P.t + 6} y2={H - P.b} stroke="#ff6f9c" strokeWidth="1.5" strokeDasharray="5 5" />
+        <line
+          x1={sx(SHOT_AT, 0, T)}
+          x2={sx(SHOT_AT, 0, T)}
+          y1={P.t + 6}
+          y2={H - P.b}
+          stroke="#ff6f9c"
+          strokeWidth="1.5"
+          strokeDasharray="5 5"
+        />
         <text x={sx(SHOT_AT, 0, T) + 6} y={P.t + 34} fill="#ff6f9c" fontFamily={MONO} fontSize="12">
           shot: −{SHOT_DIP} rad/s
         </text>
         {/* velocity response */}
-        <path d={path(sim.vel.map(([t, v]) => [sx(t, 0, T), sy(v, 0, vMaxAxis)] as [number, number]))} fill="none" stroke="#5ce08a" strokeWidth="4" strokeLinecap="round" />
+        <path
+          d={path(sim.vel.map(([t, v]) => [sx(t, 0, T), sy(v, 0, vMaxAxis)] as [number, number]))}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
         {sim.settle != null && (
           <g>
-            <line x1={sx(SHOT_AT + sim.settle, 0, T)} x2={sx(SHOT_AT + sim.settle, 0, T)} y1={P.t + 6} y2={H - P.b} stroke="#6f8bff" strokeWidth="1.5" strokeDasharray="5 5" />
-            <text x={sx(SHOT_AT + sim.settle, 0, T) + 6} y={H - P.b - 10} fill="#6f8bff" fontFamily={MONO} fontSize="12">
+            <line
+              x1={sx(SHOT_AT + sim.settle, 0, T)}
+              x2={sx(SHOT_AT + sim.settle, 0, T)}
+              y1={P.t + 6}
+              y2={H - P.b}
+              stroke="#6f8bff"
+              strokeWidth="1.5"
+              strokeDasharray="5 5"
+            />
+            <text
+              x={sx(SHOT_AT + sim.settle, 0, T) + 6}
+              y={H - P.b - 10}
+              fill="#6f8bff"
+              fontFamily={MONO}
+              fontSize="12">
               recovered in {sim.settle.toFixed(2)} s
             </text>
           </g>
         )}
       </svg>
       <Controls>
-        <Slider label="Velocity-error tolerance" min={1} max={40} step={1} value={qTol} onChange={setQTol} format={(v) => `±${v.toFixed(0)} rad/s`} />
-        <Slider label="Voltage budget" min={2} max={12} step={0.5} value={rMax} onChange={setRMax} format={(v) => `±${v.toFixed(1)} V`} />
+        <Slider
+          label="Velocity-error tolerance"
+          min={1}
+          max={40}
+          step={1}
+          value={qTol}
+          onChange={setQTol}
+          format={(v) => `±${v.toFixed(0)} rad/s`}
+        />
+        <Slider
+          label="Voltage budget"
+          min={2}
+          max={12}
+          step={0.5}
+          value={rMax}
+          onChange={setRMax}
+          format={(v) => `±${v.toFixed(1)} V`}
+        />
       </Controls>
       <Readout
         items={[
@@ -189,7 +306,10 @@ export function LqrExplorer() {
           ['exact sampled model', `Ad=${ad.toFixed(4)}, Bd=${bd.toFixed(4)} at 20 ms`],
           ['gain K', `${K.toFixed(4)} V per rad/s of error`],
           ['closed-loop sampled pole', design.closedLoopPole.toFixed(4)],
-          ['recovers after the shot (±6 rad/s)', sim.settle != null ? `${sim.settle.toFixed(2)} s` : 'not in view'],
+          [
+            'recovers after the shot (±6 rad/s)',
+            sim.settle != null ? `${sim.settle.toFixed(2)} s` : 'not in view',
+          ],
           ['saturating?', sim.saturated ? 'yes — the model is lying to itself' : 'no'],
         ]}
       />

@@ -39,7 +39,9 @@ export function VideoEmbed({title, src, href, children}: VideoEmbedProps) {
               className="grid h-14 w-14 place-items-center rounded-full bg-brand shadow-lg">
               <span className="ml-1 block h-0 w-0 border-y-[10px] border-y-transparent border-l-[16px] border-l-white" />
             </span>
-            <span className="font-semibold">{privateEmbedUrl ? 'Load video' : 'Video unavailable'}</span>
+            <span className="font-semibold">
+              {privateEmbedUrl ? 'Load video' : 'Video unavailable'}
+            </span>
             {privateEmbedUrl ? (
               <span className="max-w-xl text-sm text-panel-ink/70">
                 YouTube loads only after you choose to play it.

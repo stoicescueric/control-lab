@@ -112,14 +112,23 @@ describe('continuous path geometry', () => {
   });
 
   it('scans past a duplicate at stored progress to find the next valid intersection', () => {
-    const path = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 10, y: 0}, {x: 20, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 0, y: 0},
+      {x: 10, y: 0},
+      {x: 20, y: 0},
+    ];
     const result = continuousLookaheadPoint(path, {x: 4, y: 0}, 3, {segmentIndex: 0, t: 0.8});
     expect(result.point).toEqual({x: 7, y: 0});
     expect(result.progress).toEqual({segmentIndex: 1, t: 0.7});
   });
 
   it('finds a continuous intersection without moving behind prior progress', () => {
-    const path = [{x: 0, y: 0}, {x: 10, y: 0}, {x: 20, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 10, y: 0},
+      {x: 20, y: 0},
+    ];
     const result = continuousLookaheadPoint(path, {x: 8, y: 0}, 5, {segmentIndex: 0, t: 0.8});
     expect(result.point.x).toBeCloseTo(13, 10);
     expect(result.progress.segmentIndex).toBe(1);
@@ -127,14 +136,21 @@ describe('continuous path geometry', () => {
   });
 
   it('preserves prior progress when a far-off robot has no circle intersection', () => {
-    const path = [{x: 0, y: 0}, {x: 10, y: 0}, {x: 20, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 10, y: 0},
+      {x: 20, y: 0},
+    ];
     const result = continuousLookaheadPoint(path, {x: 5, y: 100}, 4, {segmentIndex: 0, t: 0.5});
     expect(result.point).toEqual({x: 5, y: 0});
     expect(result.progress).toEqual({segmentIndex: 0, t: 0.5});
   });
 
   it('hands off to the endpoint only when it lies inside the lookahead circle', () => {
-    const path = [{x: 0, y: 0}, {x: 10, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 10, y: 0},
+    ];
     const result = continuousLookaheadPoint(path, {x: 9, y: 0}, 4, {segmentIndex: 0, t: 0.8});
     expect(result.point).toEqual({x: 10, y: 0});
     expect(result.progress).toEqual({segmentIndex: 0, t: 1});
@@ -146,7 +162,12 @@ describe('continuous path geometry', () => {
   });
 
   it('resamples at positive spacing and preserves the exact endpoint across duplicates', () => {
-    const path = [{x: 0, y: 0}, {x: 0, y: 0}, {x: 10, y: 0}, {x: 13, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 0, y: 0},
+      {x: 10, y: 0},
+      {x: 13, y: 0},
+    ];
     const result = resamplePolyline(path, 4);
     expect(result).toEqual([
       {x: 0, y: 0},
@@ -161,13 +182,21 @@ describe('continuous path geometry', () => {
 
 describe('forward and backward speed passes', () => {
   it('rejects non-finite endpoint speeds', () => {
-    const path = [{x: 0, y: 0}, {x: 1, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 1, y: 0},
+    ];
     expect(() => planPathSpeeds(path, [1, 1], 1, Number.NaN, 0)).toThrow(/finite/);
     expect(() => planPathSpeeds(path, [1, 1], 1, 0, Number.POSITIVE_INFINITY)).toThrow(/finite/);
   });
 
   it('accelerates from zero, remains braking-feasible, and ends at zero', () => {
-    const path = [{x: 0, y: 0}, {x: 2, y: 0}, {x: 4, y: 0}, {x: 6, y: 0}];
+    const path = [
+      {x: 0, y: 0},
+      {x: 2, y: 0},
+      {x: 4, y: 0},
+      {x: 6, y: 0},
+    ];
     const acceleration = 2;
     const speeds = planPathSpeeds(path, [10, 10, 10, 10], acceleration, 0, 0);
     expect(speeds[0]).toBe(0);
@@ -175,7 +204,9 @@ describe('forward and backward speed passes', () => {
     expect(speeds[speeds.length - 1]).toBe(0);
     for (let i = 0; i < speeds.length - 1; i++) {
       const ds = path[i + 1].x - path[i].x;
-      expect(speeds[i] ** 2).toBeLessThanOrEqual(speeds[i + 1] ** 2 + 2 * acceleration * ds + 1e-10);
+      expect(speeds[i] ** 2).toBeLessThanOrEqual(
+        speeds[i + 1] ** 2 + 2 * acceleration * ds + 1e-10,
+      );
     }
   });
 });

@@ -62,7 +62,7 @@ describe('scalarDiscreteLqr', () => {
   });
 
   it('matches the documented exact-ZOH 20 ms flywheel design and is sampled-stable', () => {
-    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.020);
+    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.02);
     const result = scalarDiscreteLqr(ad, bd, 1 / 64, 1 / 144);
     expect(ad).toBeCloseTo(0.9231163464, 10);
     expect(bd).toBeCloseTo(3.8441826807, 10);
@@ -73,13 +73,13 @@ describe('scalarDiscreteLqr', () => {
   });
 
   it('shows why the continuous gain must not be dropped into the 20 ms loop', () => {
-    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.020);
+    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.02);
     const continuousGain = scalarLqrGain(-4, 200, 1 / 64, 1 / 144);
     expect(Math.abs(ad - bd * continuousGain)).toBeGreaterThan(1);
   });
 
   it('becomes more aggressive when the sampled error weight grows', () => {
-    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.020);
+    const {ad, bd} = discretizeScalarPlant(-4, 200, 0.02);
     const loose = scalarDiscreteLqr(ad, bd, 1 / 40 ** 2, 1 / 12 ** 2);
     const tight = scalarDiscreteLqr(ad, bd, 1 / 4 ** 2, 1 / 12 ** 2);
     expect(tight.gain).toBeGreaterThan(loose.gain);

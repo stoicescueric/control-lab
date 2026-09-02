@@ -41,7 +41,10 @@ export default function AngleWrap() {
   const currentPoint = point(current);
   const targetPoint = point(target);
   const rawPath = useMemo(() => arcPath(current, rawError, R + 8, 80), [current, rawError]);
-  const wrappedPath = useMemo(() => arcPath(current, wrappedError, R - 8, 24), [current, wrappedError]);
+  const wrappedPath = useMemo(
+    () => arcPath(current, wrappedError, R - 8, 24),
+    [current, wrappedError],
+  );
 
   return (
     <Demo title="Angle wrapping: compare raw subtraction with shortest signed rotation">
@@ -51,13 +54,34 @@ export default function AngleWrap() {
         role="img"
         aria-label="Interactive angle wrapping dial comparing raw and wrapped heading error">
         <defs>
-          <marker id="angleWrapBlue" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" viewBox="0 0 9 9">
+          <marker
+            id="angleWrapBlue"
+            markerWidth="9"
+            markerHeight="9"
+            refX="8"
+            refY="4.5"
+            orient="auto"
+            viewBox="0 0 9 9">
             <path d="M0 0 L9 4.5 L0 9 Z" fill="#6f8bff" />
           </marker>
-          <marker id="angleWrapGreen" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" viewBox="0 0 9 9">
+          <marker
+            id="angleWrapGreen"
+            markerWidth="9"
+            markerHeight="9"
+            refX="8"
+            refY="4.5"
+            orient="auto"
+            viewBox="0 0 9 9">
             <path d="M0 0 L9 4.5 L0 9 Z" fill="#5ce08a" />
           </marker>
-          <marker id="angleWrapRose" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto" viewBox="0 0 9 9">
+          <marker
+            id="angleWrapRose"
+            markerWidth="9"
+            markerHeight="9"
+            refX="8"
+            refY="4.5"
+            orient="auto"
+            viewBox="0 0 9 9">
             <path d="M0 0 L9 4.5 L0 9 Z" fill="#ff6f9c" />
           </marker>
         </defs>
@@ -74,7 +98,13 @@ export default function AngleWrap() {
           return (
             <g key={d}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#8294b8" strokeWidth="2" />
-              <text x={lx} y={ly + 4} fill="#8294b8" textAnchor="middle" fontFamily={MONO} fontSize="12">
+              <text
+                x={lx}
+                y={ly + 4}
+                fill="#8294b8"
+                textAnchor="middle"
+                fontFamily={MONO}
+                fontSize="12">
                 {d === 180 ? '-180 deg (canonical seam)' : `${d} deg`}
               </text>
             </g>
@@ -91,38 +121,124 @@ export default function AngleWrap() {
           strokeDasharray="5 5"
         />
 
-        <path d={rawPath} fill="none" stroke="#ff6f9c" strokeWidth="3.5" strokeLinecap="round" markerEnd="url(#angleWrapRose)" opacity="0.75" />
-        <path d={wrappedPath} fill="none" stroke="#5ce08a" strokeWidth="5" strokeLinecap="round" markerEnd="url(#angleWrapGreen)" />
+        <path
+          d={rawPath}
+          fill="none"
+          stroke="#ff6f9c"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          markerEnd="url(#angleWrapRose)"
+          opacity="0.75"
+        />
+        <path
+          d={wrappedPath}
+          fill="none"
+          stroke="#5ce08a"
+          strokeWidth="5"
+          strokeLinecap="round"
+          markerEnd="url(#angleWrapGreen)"
+        />
 
-        <line x1={CX} y1={CY} x2={currentPoint[0]} y2={currentPoint[1]} stroke="#6f8bff" strokeWidth="4" markerEnd="url(#angleWrapBlue)" />
-        <line x1={CX} y1={CY} x2={targetPoint[0]} y2={targetPoint[1]} stroke="#ffc24d" strokeWidth="3" strokeDasharray="7 6" />
+        <line
+          x1={CX}
+          y1={CY}
+          x2={currentPoint[0]}
+          y2={currentPoint[1]}
+          stroke="#6f8bff"
+          strokeWidth="4"
+          markerEnd="url(#angleWrapBlue)"
+        />
+        <line
+          x1={CX}
+          y1={CY}
+          x2={targetPoint[0]}
+          y2={targetPoint[1]}
+          stroke="#ffc24d"
+          strokeWidth="3"
+          strokeDasharray="7 6"
+        />
         <circle cx={targetPoint[0]} cy={targetPoint[1]} r="7" fill="#ffc24d" />
         <circle cx={currentPoint[0]} cy={currentPoint[1]} r="7" fill="#6f8bff" />
 
         <g transform="translate(455 76)" fontFamily={MONO}>
-          <rect x="0" y="0" width="220" height="164" rx="14" fill="rgba(16,26,46,0.92)" stroke="rgba(255,255,255,0.12)" />
-          <text x="18" y="34" fill="#e8eefc" fontSize="14">target - current</text>
-          <text x="18" y="62" fill="#ff9bbb" fontSize="20" fontWeight="700">{fmt(rawError)}</text>
-          <text x="18" y="98" fill="#e8eefc" fontSize="14">wrap(raw error)</text>
-          <text x="18" y="126" fill="#8ff0b0" fontSize="20" fontWeight="700">{fmt(wrappedError)}</text>
-          <text x="18" y="150" fill="#8294b8" fontSize="12">controller should use green</text>
+          <rect
+            x="0"
+            y="0"
+            width="220"
+            height="164"
+            rx="14"
+            fill="rgba(16,26,46,0.92)"
+            stroke="rgba(255,255,255,0.12)"
+          />
+          <text x="18" y="34" fill="#e8eefc" fontSize="14">
+            target - current
+          </text>
+          <text x="18" y="62" fill="#ff9bbb" fontSize="20" fontWeight="700">
+            {fmt(rawError)}
+          </text>
+          <text x="18" y="98" fill="#e8eefc" fontSize="14">
+            wrap(raw error)
+          </text>
+          <text x="18" y="126" fill="#8ff0b0" fontSize="20" fontWeight="700">
+            {fmt(wrappedError)}
+          </text>
+          <text x="18" y="150" fill="#8294b8" fontSize="12">
+            controller should use green
+          </text>
         </g>
       </svg>
 
       <Controls>
-        <Slider label="Current heading" min={-180} max={180} step={1} value={current} onChange={setCurrent} format={(v) => `${v.toFixed(0)} deg`} />
-        <Slider label="Target heading" min={-180} max={180} step={1} value={target} onChange={setTarget} format={(v) => `${v.toFixed(0)} deg`} />
+        <Slider
+          label="Current heading"
+          min={-180}
+          max={180}
+          step={1}
+          value={current}
+          onChange={setCurrent}
+          format={(v) => `${v.toFixed(0)} deg`}
+        />
+        <Slider
+          label="Target heading"
+          min={-180}
+          max={180}
+          step={1}
+          value={target}
+          onChange={setTarget}
+          format={(v) => `${v.toFixed(0)} deg`}
+        />
       </Controls>
       <Buttons>
-        <Button onClick={() => { setCurrent(179); setTarget(-179); }}>Seam bug</Button>
-        <Button onClick={() => { setCurrent(-90); setTarget(45); }}>Normal turn</Button>
-        <Button onClick={() => { setCurrent(170); setTarget(10); }}>Large turn</Button>
+        <Button
+          onClick={() => {
+            setCurrent(179);
+            setTarget(-179);
+          }}>
+          Seam bug
+        </Button>
+        <Button
+          onClick={() => {
+            setCurrent(-90);
+            setTarget(45);
+          }}>
+          Normal turn
+        </Button>
+        <Button
+          onClick={() => {
+            setCurrent(170);
+            setTarget(10);
+          }}>
+          Large turn
+        </Button>
       </Buttons>
       <Readout
         items={[
           ['raw error', fmt(rawError)],
           ['wrapped error', fmt(wrappedError)],
-          ['wrong-way extra rotation', `${Math.max(0, Math.abs(rawError) - Math.abs(wrappedError)).toFixed(1)} deg`],
+          [
+            'wrong-way extra rotation',
+            `${Math.max(0, Math.abs(rawError) - Math.abs(wrappedError)).toFixed(1)} deg`,
+          ],
         ]}
       />
       <Legend
