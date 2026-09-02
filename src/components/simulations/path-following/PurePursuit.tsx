@@ -1,6 +1,11 @@
 /* Pure-pursuit path follower. The robot chases a "carrot" a fixed lookahead
    distance ahead on the path; drag the white waypoints to reshape it.
 
+   Waypoint edits are live: the path is rebuilt under a robot that keeps its
+   pose, heading, trail and progress, so you can bend a corner mid-lap and watch
+   the follower steer onto the new path instead of teleporting back to the start.
+   See reshape() for how progress is carried across the re-sample.
+
    Everything below runs in a FIXED world coordinate space (WX x WY world units,
    where 100 units = 1 m so the metric read-outs stay honest). The world is only
    mapped to the <canvas> at draw time with a single uniform `scale` + centering
@@ -61,6 +66,8 @@ export default function PurePursuit() {
     inited: false,
     waypoints: [] as number[][],
     path: [] as {x: number; y: number}[],
+    // path index each waypoint lands on, so progress survives a re-sample
+    segStart: [] as number[],
     pose: null as Pose | null,
     pi: 0, // nearest sampled point, kept separate from continuous pursuit progress
     pursuitProgress: {segmentIndex: 0, t: 0} as PathProgress,
@@ -96,7 +103,9 @@ export default function PurePursuit() {
     const s = st.current;
     const wp = s.waypoints;
     const path: {x: number; y: number}[] = [];
+    const segStart: number[] = [];
     for (let k = 0; k < wp.length - 1; k++) {
+      segStart.push(path.length);
       const a = wp[k];
       const b = wp[k + 1];
       const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -107,8 +116,67 @@ export default function PurePursuit() {
       }
     }
     const last = wp[wp.length - 1];
+    segStart.push(path.length);
     path.push({x: last[0], y: last[1]});
     s.path = path;
+    s.segStart = segStart;
+  }
+
+  /* Editing a waypoint re-samples the whole path, and each leg gets a sample
+     count proportional to its length -- so a raw path index means something
+     different before and after the edit. These two convert between an index on
+     the sampled path and a (leg, fraction-along-leg) pair, which is anchored to
+     the waypoints themselves and therefore survives the re-sample. Fractions
+     stay local: dragging the last waypoint leaves progress on leg 0 untouched. */
+  function toLegSpace(progress: PathProgress) {
+    const seg = st.current.segStart;
+    let k = 0;
+    while (k < seg.length - 2 && seg[k + 1] <= progress.segmentIndex) k++;
+    const n = seg[k + 1] - seg[k];
+    return {k, u: n > 0 ? Math.min(1, (progress.segmentIndex - seg[k] + progress.t) / n) : 0};
+  }
+
+  function fromLegSpace(leg: {k: number; u: number}): PathProgress {
+    const s = st.current;
+    const seg = s.segStart;
+    const k = Math.max(0, Math.min(seg.length - 2, leg.k));
+    const n = seg[k + 1] - seg[k];
+    const f = Math.max(0, Math.min(n, leg.u * n));
+    const lastSegment = Math.max(0, s.path.length - 2);
+    const segmentIndex = seg[k] + Math.floor(f);
+    // Past the final segment means the end of the path, so hold t there rather
+    // than letting the leftover fraction wrap back to the segment's start.
+    if (segmentIndex >= lastSegment) {
+      return {segmentIndex: lastSegment, t: Math.min(1, seg[k] + f - lastSegment)};
+    }
+    return {segmentIndex, t: f - Math.floor(f)};
+  }
+
+  /* Rebuild the path around the moved waypoint without touching the robot: the
+     pose, heading and trail all carry over, and progress is re-anchored through
+     leg space so the carrot stays where it was on the path rather than snapping
+     back to the start. This is what makes editing feel live -- you reshape the
+     path under a robot that is already driving and watch it steer onto the new
+     one. */
+  function reshape() {
+    const s = st.current;
+    if (!s.pose || s.path.length < 2) {
+      buildPath();
+      restart();
+      return;
+    }
+    const pursuit = toLegSpace(s.pursuitProgress);
+    const nearest = toLegSpace({segmentIndex: s.pi, t: 0});
+    buildPath();
+    s.pursuitProgress = fromLegSpace(pursuit);
+    s.pi = fromLegSpace(nearest).segmentIndex;
+    // Re-aim the carrot now so a paused sim redraws consistently instead of
+    // pointing at the point it found on the previous shape of the path.
+    const lookahead = continuousLookaheadPoint(s.path, s.pose, ldRef.current, s.pursuitProgress);
+    s.carrot = lookahead.point;
+    s.pursuitProgress = lookahead.progress;
+    s.cte = nearestAhead();
+    if (s.inited) draw();
   }
 
   function restart() {
@@ -358,8 +426,7 @@ export default function PurePursuit() {
     const wx = (mx - ox) / scale;
     const wy = (my - oy) / scale;
     s.waypoints[s.drag] = [Math.max(8, Math.min(WX - 8, wx)), Math.max(8, Math.min(WY - 8, wy))];
-    buildPath();
-    restart();
+    reshape();
     ev.preventDefault();
   }
 
@@ -390,8 +457,7 @@ export default function PurePursuit() {
         Math.max(8, Math.min(WX - 8, wp[0] + dx)),
         Math.max(8, Math.min(WY - 8, wp[1] + dy)),
       ];
-      buildPath();
-      restart();
+      reshape();
     };
   }
 
@@ -401,7 +467,7 @@ export default function PurePursuit() {
         <canvas
           ref={canvas}
           role="img"
-          aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path the robot chases."
+          aria-label="Interactive pure pursuit simulation; drag the waypoints to reshape the path while the robot keeps following it."
           className="block w-full touch-none rounded-xl bg-[#0b1120]"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -426,7 +492,8 @@ export default function PurePursuit() {
           ))}
       </div>
       <p className="mt-2 px-1 text-[0.78rem] text-[#aab8d6]">
-        Drag a waypoint, or Tab to it and use the arrow keys; hold Shift for a larger step.
+        Drag a waypoint, or Tab to it and use the arrow keys; hold Shift for a larger step. The
+        robot keeps driving as you edit &mdash; it steers onto the new path from wherever it is.
       </p>
       <Legend
         items={[
