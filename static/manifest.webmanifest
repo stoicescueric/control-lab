@@ -5,8 +5,8 @@
   "start_url": "/control-lab/",
   "scope": "/control-lab/",
   "display": "standalone",
-  "background_color": "#0d0d0f",
-  "theme_color": "#4f6cf7",
+  "background_color": "#f7f5f0",
+  "theme_color": "#2f52e0",
   "icons": [
     {
       "src": "/control-lab/img/logo.svg",

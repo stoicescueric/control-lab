@@ -123,8 +123,8 @@ const config: Config = {
   themeConfig: {
     image: 'img/control-lab-social-card.png',
     colorMode: {
-      defaultMode: 'dark',
-      respectPrefersColorScheme: false,
+      defaultMode: 'light',
+      respectPrefersColorScheme: true,
     },
     docs: {
       sidebar: {
@@ -231,7 +231,8 @@ const config: Config = {
         offlineModeActivationStrategies: ['appInstalled', 'standalone', 'queryString'],
         pwaHead: [
           {tagName: 'link', rel: 'manifest', href: `/${REPO}/manifest.webmanifest`},
-          {tagName: 'meta', name: 'theme-color', content: '#2f52e0'},
+          {tagName: 'meta', name: 'theme-color', content: '#f7f5f0', media: '(prefers-color-scheme: light)'},
+          {tagName: 'meta', name: 'theme-color', content: '#111113', media: '(prefers-color-scheme: dark)'},
           {tagName: 'link', rel: 'apple-touch-icon', href: `/${REPO}/img/logo.svg`},
         ],
       },

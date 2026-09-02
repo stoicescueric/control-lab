@@ -6,7 +6,7 @@ type Level = 'Easy' | 'Medium' | 'Hard';
 
 const TONE: Record<Level, string> = {
   Easy: 'text-green border-green/40 bg-green/10',
-  Medium: 'text-amber border-amber/40 bg-amber/10',
+  Medium: 'text-amber-text border-amber/40 bg-amber/10',
   Hard: 'text-rose border-rose/40 bg-rose/10',
 };
 

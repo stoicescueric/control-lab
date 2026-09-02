@@ -33,7 +33,7 @@ export default function FooterWrapper(props: Props) {
           className={`inline-flex cursor-pointer items-center gap-2 rounded-[6px] border px-5 py-2.5 text-[0.9rem] font-semibold transition-[color,background-color,border-color,transform] duration-150 ease-out active:scale-[0.97] ${
             done
               ? 'border-green/40 bg-green/10 text-green'
-              : 'border-line bg-surface text-ink-soft hover:border-brand/40 hover:text-brand'
+              : 'border-line bg-surface text-ink-soft hover:border-accent-text/40 hover:text-accent-text'
           }`}>
           <span
             aria-hidden="true"

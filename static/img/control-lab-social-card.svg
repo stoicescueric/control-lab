@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f7f5f0"/>
+  <g stroke="#dedbd3" stroke-width="1" opacity="0.7">
+    <path d="M0 126h1200M0 252h1200M0 378h1200M0 504h1200"/>
+    <path d="M120 0v630M240 0v630M360 0v630M480 0v630M600 0v630M720 0v630M840 0v630M960 0v630M1080 0v630"/>
+  </g>
+
+  <rect x="64" y="58" width="58" height="58" rx="13" fill="#2f52e0"/>
+  <path d="M77 101l13-17 13 8 7-20" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="140" y="99" fill="#1d1d1b" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700">Control Lab</text>
+  <text x="64" y="160" fill="#2543c2" font-family="Courier New, monospace" font-size="17" font-weight="700">INTERACTIVE FTC CONTROLS TEXTBOOK</text>
+
+  <g fill="#1d1d1b" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="750">
+    <text x="64" y="224">Understand why your</text>
+    <text x="64" y="286">robot moves,</text>
+    <text x="64" y="348">estimates, and</text>
+    <text x="64" y="410">corrects itself.</text>
+  </g>
+
+  <text x="64" y="474" fill="#56544f" font-family="Arial, Helvetica, sans-serif" font-size="27">
+    Behavior, derivations, interactive models, and FTC Java.
+  </text>
+
+  <g transform="translate(730 180)">
+    <rect width="398" height="226" rx="14" fill="#fff" stroke="#dedbd3" stroke-width="2"/>
+    <g stroke="#dedbd3" stroke-width="1">
+      <path d="M28 46h342M28 92h342M28 138h342M28 184h342"/>
+      <path d="M96 28v170M164 28v170M232 28v170M300 28v170"/>
+    </g>
+    <path d="M28 166h72l34-6 34-94 62-5 54 31 44-13h42" fill="none" stroke="#2f52e0" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M28 166h106V80h236" fill="none" stroke="#9a6200" stroke-width="3" stroke-dasharray="9 8"/>
+    <circle cx="370" cy="79" r="8" fill="#9a6200"/>
+  </g>
+
+  <path d="M64 552h1072" stroke="#dedbd3" stroke-width="2"/>
+  <text x="64" y="590" fill="#66666f" font-family="Courier New, monospace" font-size="18">control theory / state estimation / path following</text>
+  <text x="1136" y="590" text-anchor="end" fill="#2543c2" font-family="Courier New, monospace" font-size="18">open source</text>
+</svg>

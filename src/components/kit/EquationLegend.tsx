@@ -20,7 +20,7 @@ export function EquationLegend({title = 'Symbols in this equation', items}: Equa
       <dl className="m-0 divide-y divide-line">
         {items.map((item, index) => (
           <div key={index} className="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(5rem,8rem)_1fr_auto] sm:items-baseline sm:gap-4">
-            <dt className="font-mono text-[1.02rem] font-semibold text-brand">{item.symbol}</dt>
+            <dt className="font-mono text-[1.02rem] font-semibold text-accent-text">{item.symbol}</dt>
             <dd className="m-0 text-[0.98rem] leading-relaxed text-ink">{item.meaning}</dd>
             {item.unit ? <dd className="m-0 font-mono text-[0.84rem] text-ink-soft">{item.unit}</dd> : <span />}
           </div>

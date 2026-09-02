@@ -1,4 +1,10 @@
-import {useRef, useState, type PointerEvent as ReactPointerEvent} from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import Link from '@docusaurus/Link';
 import {useDprCanvas, useRaf} from '@site/src/lib/visualization/canvas';
 import {FlylineSweep} from '@site/src/components/home/Flyline';
@@ -28,6 +34,8 @@ interface ResponseModel {
 const WINDOW_SECONDS = 8;
 const KP = 24;
 const KD = 5.4;
+const MIN_TARGET = 0.08;
+const MAX_TARGET = 0.92;
 
 function createInitialModel(): ResponseModel {
   const model: ResponseModel = {
@@ -62,29 +70,59 @@ function responsePalette() {
   const dark = document.documentElement.dataset.theme === 'dark';
   return dark
     ? {
-        grid: '#2c2c33',
-        text: '#a9a9b2',
-        output: '#8fa5ff',
+        grid: '#343238',
+        text: '#b5b0a7',
+        output: '#aebaff',
         target: '#f5b942',
       }
     : {
-        grid: '#e8e8ee',
-        text: '#55555e',
+        grid: '#dedbd3',
+        text: '#66666f',
         output: '#2543c2',
-        target: '#b87200',
+        target: '#9a6200',
       };
 }
 
 function ClosedLoopResponse() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const size = useDprCanvas(canvasRef, 136);
+  const size = useDprCanvas(canvasRef, 220);
   const state = useRef<ResponseModel | null>(null);
   if (state.current === null) state.current = createInitialModel();
+
+  const [playing, setPlaying] = useState(true);
   const [readout, setReadout] = useState<Readout>(() => ({
     target: state.current!.target,
     output: state.current!.output,
     error: Math.abs(state.current!.target - state.current!.output),
   }));
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!media) return;
+
+    const sync = () => {
+      if (media.matches) setPlaying(false);
+    };
+    sync();
+    media.addEventListener?.('change', sync);
+    return () => media.removeEventListener?.('change', sync);
+  }, []);
+
+  function publishReadout() {
+    const model = state.current!;
+    setReadout({
+      target: model.target,
+      output: model.output,
+      error: Math.abs(model.target - model.output),
+    });
+  }
+
+  function setTarget(value: number) {
+    const model = state.current!;
+    model.target = Math.max(MIN_TARGET, Math.min(MAX_TARGET, value));
+    model.nextStep = model.time + 4.5;
+    publishReadout();
+  }
 
   function advance(dt: number) {
     const model = state.current!;
@@ -111,11 +149,7 @@ function ClosedLoopResponse() {
 
     if (model.time - model.lastPublish >= 0.12) {
       model.lastPublish = model.time;
-      setReadout({
-        target: model.target,
-        output: model.output,
-        error: Math.abs(model.target - model.output),
-      });
+      publishReadout();
     }
   }
 
@@ -138,9 +172,7 @@ function ClosedLoopResponse() {
     const x = (time: number) => left + ((time - oldestTime) / WINDOW_SECONDS) * plotWidth;
     const y = (value: number) => top + (1 - Math.max(0, Math.min(1, value))) * plotHeight;
 
-    // Transparent canvas: the frosted-glass figure behind it provides the fill.
     context.clearRect(0, 0, w, h);
-
     context.lineWidth = 1;
     context.strokeStyle = colors.grid;
     context.fillStyle = colors.text;
@@ -184,9 +216,7 @@ function ClosedLoopResponse() {
         return;
       }
       const previous = visible[index - 1];
-      if (previous.target !== sample.target) {
-        context.lineTo(px, y(previous.target));
-      }
+      if (previous.target !== sample.target) context.lineTo(px, y(previous.target));
       context.lineTo(px, py);
     });
     context.stroke();
@@ -205,23 +235,23 @@ function ClosedLoopResponse() {
     context.stroke();
   }
 
-  useRaf((frameDt: number) => {
-    const dt = Math.min(frameDt, 0.05);
-    const substeps = 4;
-    for (let index = 0; index < substeps; index += 1) {
-      advance(dt / substeps);
-    }
-    draw();
-  });
+  useRaf(
+    (frameDt: number) => {
+      if (playing && frameDt > 0) {
+        const dt = Math.min(frameDt, 0.05);
+        const substeps = 4;
+        for (let index = 0; index < substeps; index += 1) advance(dt / substeps);
+      }
+      draw();
+    },
+    canvasRef,
+  );
 
   const dragging = useRef(false);
 
   function pointToTarget(event: ReactPointerEvent<HTMLCanvasElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
-    const target = 1 - (event.clientY - rect.top) / rect.height;
-    state.current!.target = Math.max(0.08, Math.min(0.92, target));
-    // Hold off the scripted step while the reader is driving the setpoint.
-    state.current!.nextStep = state.current!.time + 4.5;
+    setTarget(1 - (event.clientY - rect.top) / rect.height);
   }
 
   function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -230,44 +260,77 @@ function ClosedLoopResponse() {
     pointToTarget(event);
   }
 
+  const rangeFill = ((readout.target - MIN_TARGET) / (MAX_TARGET - MIN_TARGET)) * 100;
+
   return (
-    <figure className="cl-home-plot m-0 mt-10 overflow-hidden rounded-[20px] border border-white/60 bg-surface/70 backdrop-blur-xl dark:border-white/10 dark:bg-surface/55">
-      <div className="flex flex-col gap-3 border-b border-line/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <figure className="cl-home-plot m-0 overflow-hidden rounded-[12px] border border-line bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="cl-live-marker" aria-hidden="true" />
+          <span className="cl-status-marker" aria-hidden="true" />
           <div>
-            <p className="m-0 font-mono text-[0.7rem] font-semibold uppercase text-teal">
-              Live model
+            <p className="m-0 font-mono text-[0.7rem] font-semibold text-teal-text">
+              {playing ? 'Running model' : 'Model paused'}
             </p>
             <p className="m-0 mt-0.5 text-sm font-bold text-ink">Closed-loop step response</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 font-mono text-[0.7rem] text-ink-soft sm:gap-x-5 sm:text-xs">
-          <span>target {readout.target.toFixed(2)}</span>
-          <span>output {readout.output.toFixed(2)}</span>
-          <span>error {readout.error.toFixed(3)}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => setPlaying((value) => !value)}
+          aria-pressed={!playing}
+          className="cl-model-toggle min-h-11 rounded-[8px] border border-line bg-bg px-4 text-sm font-semibold text-ink">
+          {playing ? 'Pause' : 'Play'}
+        </button>
       </div>
+
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-line px-4 py-2.5 font-mono text-[0.7rem] text-ink-soft">
+        <span>target {readout.target.toFixed(2)}</span>
+        <span>output {readout.output.toFixed(2)}</span>
+        <span>error {readout.error.toFixed(3)}</span>
+      </div>
+
       <canvas
         ref={canvasRef}
         onPointerDown={handlePointerDown}
-        onPointerMove={(e) => dragging.current && pointToTarget(e)}
+        onPointerMove={(event) => dragging.current && pointToTarget(event)}
         onPointerUp={() => (dragging.current = false)}
         onPointerCancel={() => (dragging.current = false)}
         role="img"
-        aria-label="Interactive closed-loop step-response plot. A solid output trace follows a dashed target line. Drag vertically to move the target."
+        aria-label="Interactive closed-loop step-response plot. A solid output trace follows a dashed target line. Drag vertically on the plot or use the setpoint slider below."
         className="block w-full cursor-crosshair touch-none"
       />
-      <figcaption className="flex flex-wrap gap-x-6 gap-y-2 border-t border-line/60 px-4 py-3 text-xs text-ink-soft">
-        <span className="inline-flex items-center gap-2">
-          <span className="h-0.5 w-5 bg-brand" aria-hidden="true" />
-          simulated mechanism output
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="w-5 border-t-2 border-dashed border-amber" aria-hidden="true" />
-          requested setpoint
-        </span>
-        <span className="ml-auto hidden sm:inline">PD model: kP = {KP}, kD = {KD}</span>
+
+      <figcaption className="border-t border-line px-4 py-3">
+        <label className="flex items-center gap-3 text-sm font-semibold text-ink">
+          <span>Setpoint</span>
+          <input
+            className="cl-home-setpoint min-w-0 flex-1"
+            style={{'--cl-range-fill': `${rangeFill}%`} as CSSProperties}
+            type="range"
+            min={MIN_TARGET}
+            max={MAX_TARGET}
+            step={0.01}
+            value={readout.target}
+            aria-valuetext={readout.target.toFixed(2)}
+            onChange={(event) => setTarget(Number(event.target.value))}
+          />
+          <output className="w-10 text-right font-mono text-xs text-ink-soft">
+            {readout.target.toFixed(2)}
+          </output>
+        </label>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-soft">
+          <span className="inline-flex items-center gap-2">
+            <span className="h-0.5 w-5 bg-accent-text" aria-hidden="true" />
+            mechanism output
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="w-5 border-t-2 border-dashed border-amber-text" aria-hidden="true" />
+            requested setpoint
+          </span>
+          <span className="ml-auto hidden font-mono sm:inline">
+            kP = {KP} · kD = {KD}
+          </span>
+        </div>
       </figcaption>
     </figure>
   );
@@ -278,53 +341,35 @@ export default function ControlResponseHero() {
     <header className="cl-home-hero relative overflow-hidden bg-bg">
       <div className="cl-hero-gradient" aria-hidden="true" />
       <FlylineSweep />
-      <div className="relative mx-auto max-w-6xl px-6 pb-6 pt-10 sm:pb-8 sm:pt-14 lg:pb-10 lg:pt-16">
-        <div className="cl-home-enter cl-home-enter--copy">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="m-0 flex items-center gap-3 text-[0.8rem] font-semibold uppercase tracking-[0.18em] text-brand dark:text-brand-soft">
-              <span className="h-px w-8 bg-current" aria-hidden="true" />
-              FTC control theory / open source
-            </p>
+      <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[0.86fr_1.14fr] lg:items-center lg:gap-14 lg:py-20">
+        <div className="cl-home-enter">
+          <p className="m-0 font-mono text-xs font-semibold text-accent-text">
+            Interactive FTC controls textbook
+          </p>
+          <h1 className="m-0 mt-5 max-w-3xl text-[clamp(2.75rem,5vw,4.35rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-ink">
+            Understand why your robot moves, estimates, and corrects itself.
+          </h1>
+          <p className="m-0 mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
+            Connect observable behavior to the mathematics, models, FTC Java, and hardware limits
+            behind reliable autonomous systems.
+          </p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link
+              to="/docs/preface/why-math-matters"
+              className="cl-home-action inline-flex min-h-11 items-center rounded-[10px] bg-accent-fill px-5 py-2.5 font-semibold text-on-accent no-underline hover:bg-brand-dk">
+              Start the course
+            </Link>
             <a
-              href="https://github.com/stoicescueric/control-lab"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-ink-soft no-underline transition-colors hover:border-brand hover:text-brand">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-              </svg>
-              View on GitHub
+              href="#curriculum"
+              className="cl-home-action inline-flex min-h-11 items-center rounded-[10px] border border-line bg-surface px-5 py-2.5 font-semibold text-ink no-underline hover:border-accent-text hover:text-accent-text">
+              Browse curriculum
             </a>
           </div>
-          <h1 className="m-0 mt-4 max-w-5xl text-[3.35rem] font-extrabold leading-[0.92] tracking-[-0.035em] text-ink sm:mt-5 sm:text-[5.7rem] lg:text-[7.35rem]">
-            Control <span className="text-brand dark:text-brand-soft">Lab</span>
-          </h1>
-
-          <div className="mt-5 grid gap-4 sm:mt-7 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-            <p className="m-0 max-w-2xl text-xl font-semibold leading-snug tracking-[-0.015em] text-ink/90 sm:text-2xl lg:text-[1.8rem]">
-              Understand what makes the robot move, estimate, and correct itself.
-            </p>
-            <div>
-              <p className="m-0 max-w-2xl text-[1.05rem] leading-relaxed text-ink-soft sm:text-lg">
-                Study the mathematics, models, and software patterns behind competitive-robotics
-                autonomy. Connect observable behavior to its derivation, Java implementation, and
-                hardware limits.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  to="/docs/preface/why-math-matters"
-                  className="cl-home-action inline-flex min-h-11 items-center rounded-full bg-brand px-7 py-3 font-semibold text-white no-underline hover:bg-brand-dk">
-                  Start the preface
-                </Link>
-                <Link
-                  to="/docs/control-theory"
-                  className="cl-home-action inline-flex min-h-11 items-center rounded-full border border-line bg-surface/70 px-7 py-3 font-semibold text-ink no-underline backdrop-blur-md hover:border-brand hover:text-brand">
-                  Browse modules
-                </Link>
-              </div>
-            </div>
-          </div>
+          <p className="m-0 mt-7 font-mono text-xs leading-relaxed text-ink-faint">
+            Open source · interactive simulations · Java implementations
+          </p>
         </div>
+
         <div className="cl-home-enter cl-home-enter--model">
           <ClosedLoopResponse />
         </div>
