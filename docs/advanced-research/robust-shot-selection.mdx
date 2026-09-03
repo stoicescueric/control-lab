@@ -1,0 +1,91 @@
+---
+title: Choose a Shot That Tolerates Errors
+description: "Use a speed-angle map to compare nominal scoring shots and select the command with the highest bounded perturbation coverage."
+sidebar_position: 2
+tags: [research, robustness, trajectory-generation, optimization]
+---
+
+import RobustSelection from '@site/src/components/simulations/research/RobustSelection';
+
+# Choose a Shot That Tolerates Errors
+
+<Difficulty level="Medium" />
+
+<Abstract>
+A nominal trajectory only answers whether one exact command enters the opening. Robust selection tests a neighborhood of speed and angle errors, then chooses the scoring command that survives the largest fraction of those tests.
+</Abstract>
+
+A recovered flywheel can still release slightly faster or slower than expected. Compression changes, the hood settles differently, and the ball leaves at a slightly different angle. We want to compare commands under those variations before spending practice time on the robot.
+
+## Inspect the family from three views
+
+The workbench adapts the **side view, shot-family view, and tolerance map** from the [Trajectory Simulation project](https://github.com/stoicescueric/Trajectory-Simulation). They are linked: select a command on the map and both trajectory views update.
+
+The WebGL view places the vertical launch plane inside a three-dimensional field. **Scoring family** draws one tolerant scoring representative per sampled launch angle. **Perturbation cloud** draws 81 evenly spaced representatives from the selected command’s full error box. Orbit the field to see the goal depth and the fan of arcs; switch to the side view when you need exact height and distance. The paper’s model remains two-dimensional, so the 3D view adds spatial context without inventing lateral forces.
+
+Each point in the tolerance map is a speed–angle pair. Dark points miss or never reach the descending rim event. The scoring band contains commands that enter. The gold rectangle moves with your chosen command and covers its tested perturbations; the dashed outline marks the measured command envelope.
+
+:::tip[Predict, compare, explain]
+Start with **Fragile scoring shot**. Predict whether its nearby arcs will mostly enter, then choose **Perturbation cloud** in the 3D view. Switch to **Most tolerant shot**, orbit the field with drag or arrow keys, and move the target farther away. Compare the two clouds, rectangles, and successful counts, not just the nominal paths.
+:::
+
+<RobustSelection />
+
+## Worked example: 494 successful perturbations
+
+At the **70-inch** front-lip distance, the selector chooses **5.25 m/s and 58°**. Around that command it checks speed offsets from −0.7 to +0.7 m/s in 0.025 m/s steps, and angle offsets from −1.5° to +1.5° in 0.1° steps.
+
+There are **57 speed values × 31 angles = 1,767 trials**. Of these, **494 enter**, giving:
+
+$$
+J=\frac{494}{1767}\approx0.280.
+$$
+
+The paper calls this a bounded make fraction. Here we label it **coverage**: the fraction of the specified stress box that enters in simulation. The chosen nominal command must itself enter. The selector maximizes coverage, breaking exact ties by lower speed and then lower angle. The best count need not put the nominal crossing in the center of the opening: it ranks the entire speed–angle neighborhood. Source: paper §5.5, Figure 5.
+
+:::note[Why 0.280 and 93/100 are compatible]
+The stress box gives equal weight to every point across a deliberately wide range of errors. It was not fitted as a probability distribution for repeated shots. The physical result of 93/100 entries therefore does not contradict 0.280 coverage. The two numbers answer different questions.
+:::
+
+The ±0.7 m/s and ±1.5° limits are engineering stress allowances. In particular, variation across the seven pilot calibration configurations is not a measurement of repeated-shot scatter at one fixed command.
+
+## Reuse the flight calculation
+
+For fixed physical parameters, the descending crossing $X(v,\theta)$ depends on the command, not on where we place the goal. Moving the goal changes only the entry interval. The experiment therefore calculates the expanded event map once, then applies the new interval to the cached crossings.
+
+A **prefix sum** makes the rectangular count cheap: store cumulative entry counts, then add and subtract four corners to obtain the count inside any box. This is a faster way to evaluate the same selection rule; it does not change which command wins.
+
+<details>
+<summary>Why the map extends beyond the command envelope</summary>
+
+Nominal commands lie within the measured 4.70–6.61 m/s, 42–58° envelope. Their possible perturbations can extend beyond that envelope. Clipping the test rectangle at its edge would silently test fewer errors and distort the comparison.
+
+The event map therefore covers 4.00–7.30 m/s and 40.5–59.5°. Every deployed perturbation box fits inside it. The browser performs integration in a worker so the page remains usable while the map is prepared. Source: paper §5.4.
+
+</details>
+
+## Java: compare scoring candidates
+
+Visit commands in ascending speed, then ascending angle. Updating only for a strictly larger count preserves the tie rule:
+
+<JavaCode label="Select the largest make-window count">{`Candidate chooseShot(List<Candidate> orderedCandidates) {
+    Candidate best = null;
+    for (Candidate candidate : orderedCandidates) {
+        if (!candidate.nominalEntry()) continue;
+        if (best == null || candidate.makeCount() > best.makeCount()) {
+            best = candidate;
+        }
+    }
+    return best;
+}`}</JavaCode>
+
+Every candidate must use the same number of perturbations. A null result means no nominal scoring command was found; it is not a request to extrapolate the motor command.
+
+<Exercise title="Which command wins?">
+A and B both enter and each has 1,767 perturbations. A succeeds on 410 and B on 494. C succeeds on 520, but its nominal trajectory misses. Which should the selector return?
+<Solution>
+B. C is ineligible because the nominal command misses. Among the eligible commands, B has the larger successful count. Its coverage is approximately 0.280, not a predicted physical success probability.
+</Solution>
+</Exercise>
+
+**Next:** [connect the chosen shot to the launcher’s calibrated commands](./launcher-calibration.mdx).

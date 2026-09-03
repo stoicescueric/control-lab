@@ -1,0 +1,151 @@
+---
+title: Turn the Model into Launcher Commands
+description: "Measure wheel-to-ball transfer, recover release speed from high-speed video, and connect the model to calibrated launcher settings."
+sidebar_position: 3
+tags: [research, calibration, flywheel, interpolation, implementation]
+---
+
+import {LauncherMechanism} from '@site/src/components/simulations/research/ResearchFigures';
+import {TransferExperiment, CalibrationLookup} from '@site/src/components/simulations/research/LauncherCalibration';
+import TransferEstimation from '@site/src/components/simulations/research/TransferEstimation';
+import FlywheelRecovery from '@site/src/components/simulations/research/FlywheelRecovery';
+
+# Turn the Model into Launcher Commands
+
+<Difficulty level="Medium" />
+
+<Abstract>
+The simulator selects a ball exit speed and angle, while the robot controls wheel velocity and hood position. Calibration measures the transfer between those descriptions, and readiness checks help the robot reproduce the calibrated shot.
+</Abstract>
+
+You have a trajectory that tolerates errors. Sending its 5.25 m/s exit speed directly to a motor controller still cannot make the shot: the encoder reports wheel motion, and the ball does not leave at the wheel’s surface speed.
+
+<LauncherMechanism />
+
+## Worked example: encoder ticks to ball speed
+
+For a wheel radius of **0.0692 m** and **28 encoder counts per revolution**, an encoder velocity of **1,500 ticks/s** corresponds to:
+
+$$
+v_{\rm wheel}=2\pi(0.0692)\frac{1500}{28}\approx23.29\ \mathrm{m/s}.
+$$
+
+Using the pilot mean transfer ratio, $\eta=0.259$, gives an estimated ball speed of $0.259\times23.29\approx\mathbf{6.03\ \mathrm{m/s}}$. This is an arithmetic example using the pilot mean, not a measured launch at this particular setting.
+
+:::tip[Predict the unit conversion]
+Increase the encoder reading from 1,500 to 1,650 ticks/s. Which speeds should increase by 10% if η stays fixed? Change the slider and check the conversion, then reset the example.
+:::
+
+<TransferExperiment />
+
+The paper’s seven tracked launches gave mean η = **0.259**, sample standard deviation **0.031**, and a 95% t interval for the mean of **0.230–0.288**. Those shots varied in speed, angle, and distance. Their spread describes calibration scatter across configurations, not repeatability at one fixed command. The camera was not calibrated to the flight plane, so this pilot identifies the launcher’s conversion scale; it does not identify aerodynamic drag. Source: paper §9.
+
+## Measure a stronger transfer estimate
+
+For launch $j$, synchronize the wheel encoder and ball measurement at release, then calculate:
+
+$$
+\eta_j=\frac{\lVert\mathbf v_{\text{exit},j}\rVert}
+{r\,\omega_{\text{wheel},j}}.
+$$
+
+This definition exposes the two measurements needed: wheel surface speed **at separation**, and ball speed **at the same event**. Averaging an encoder trace over a convenient interval can bias η if the wheel droops while transferring energy to the ball.
+
+Several measurement methods improve on one uncalibrated video estimate:
+
+| Method | What it measures well | Main limitation |
+|---|---|---|
+| **Two optical gates near the exit** | Transit time over a surveyed baseline gives a direct local speed without differentiating video pixels. | The wide, perforated ball can interrupt a beam inconsistently; use multiple beams or a light curtain and calibrate the trigger geometry. |
+| **High-frame-rate video + backward integration** | A tracked post-release state can be propagated backward through the drag model to the release plane. It also estimates launch angle. | Pixel noise first enters a velocity difference, then grows during backward propagation. Camera geometry, release time, and the force model must be known. |
+| **Multi-frame forward fit** | Every tracked center constrains one release speed and angle. Residuals reveal a poor fit instead of hiding it in one derivative. | It needs an optimizer and calibrated timestamps. A short arc usually cannot identify exit speed and drag coefficient independently. |
+| **Radar or a validated ball chronograph** | Direct speed measurements make a useful independent reference for the camera pipeline. | Alignment, measurement volume, and a nonstandard perforated projectile must be checked experimentally. |
+
+:::tip[Try the inverse problem]
+Use **Clean 480 fps**, then add one pixel of position noise. Move the backtracking frame later in the flight and compare the three-frame estimate with the 18-frame forward fit. Higher frame rate reduces time discretization and motion blur, but a shorter frame interval also makes a two-frame velocity estimate more sensitive to pixel noise.
+:::
+
+<TransferEstimation />
+
+### Backward with the same integrator
+
+Suppose calibrated video provides three consecutive ball centers around time $t_k$. Estimate velocity with the centered difference
+
+$$
+\hat{\mathbf v}_k=\frac{\mathbf p_{k+1}-\mathbf p_{k-1}}
+{t_{k+1}-t_{k-1}},
+$$
+
+form the state $[x_k,z_k,\hat v_{x,k},\hat v_{z,k}]$, and run RK4 with a **negative** step until the estimated release time. The recovered velocity magnitude divided by synchronized wheel surface speed gives η. Use early post-release frames: reversing a dissipative drag model amplifies state and model errors, so a long backward reconstruction is fragile.
+
+The experiment uses this procedure exactly, with synthetic camera noise and the paper’s flight equations. It then compares a stronger batch estimate:
+
+$$
+(\hat v_0,\hat\theta)=\arg\min_{v_0,\theta}
+\sum_i \left\lVert
+\mathbf p_{\text{model}}(t_i;v_0,\theta)-\mathbf p_{\text{video},i}
+\right\rVert^2.
+$$
+
+Each candidate release state is integrated **forward** to all observed frames. This avoids constructing one noisy instantaneous velocity and produces a residual in millimetres that can be inspected. A production fit should also account for camera calibration uncertainty and reject frames where the ball is occluded or blurred.
+
+### A practical collection protocol
+
+1. Place a surveyed calibration board in the launch plane, correct lens distortion, use a short exposure, and verify the true frame timestamps instead of trusting only the nominal FPS label.
+2. Record the encoder at high rate. Add a visible synchronization LED or electrical trigger so the video and encoder clocks share a release event.
+3. Track the ball center for the first clear frames after it loses contact. Keep the raw pixels, confidence score, timestamps, hood setting, ball ID, battery voltage, and wheel-speed trace.
+4. Estimate exit speed with optical gates or the multi-frame fit. Use backward integration as a cross-check; disagreement larger than the stated uncertainty is a reason to inspect timing, camera geometry, or the model.
+5. Repeat each fixed configuration enough times to measure shot-to-shot spread, then validate the resulting command map on held-out distances and balls.
+
+Do not force every launch into one constant η. Fit or tabulate transfer against variables that physically change contact, such as wheel speed, hood position, compression, and ball condition. Randomize the order of configurations so battery temperature and mechanism warm-up do not masquerade as a speed-dependent coefficient. These methods are recommendations for a stronger follow-up experiment; the paper reports only the seven-launch pilot estimate above.
+
+## Query three calibrated maps
+
+The deployed pipeline is:
+
+**Estimated distance → flywheel target + hood position + rim flight time → ready bands → release.**
+
+The speed and hood knots combine simulator guidance with physical calibration. The time map stores the descending rim-event time. This is more faithful to the real mechanism than treating one constant η as a complete actuator calibration.
+
+Between measured distances, the interpolant should preserve the data’s shape. A natural cubic spline can bulge between equal knots. A monotone cubic Hermite interpolant keeps a flat segment flat.
+
+<CalibrationLookup />
+
+The illustrated shelf comes from the [archived launcher map](https://github.com/stoicescueric/YaoMing/blob/75db349d/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Hardware/Outtake/Launcher.java): **100, 110, and 120 inches all request 1,700 ticks/s**. Compare the curves near 105 inches. A speed excursion created solely by interpolation was never part of that calibration. The experiment evaluates the full archived map and displays its 80–130 inch region.
+
+<details>
+<summary>How monotone Hermite avoids the bulge</summary>
+
+First compute the secant slope between adjacent knots. Flat intervals get zero tangents at both ends; tangents opposing the secant are also zeroed. For a nonzero secant $s$, normalize the two endpoint tangents as $\alpha=m_0/s$ and $\beta=m_1/s$. The Fritsch–Carlson construction projects them into the sufficient monotonicity region $\alpha^2+\beta^2\le9$.
+
+This guarantees shape preservation within each interval, not that the measured data itself is correct. Source: paper §5.7 and its Fritsch–Carlson reference.
+
+</details>
+
+## Recover before the next release
+
+A shot removes energy from the wheel. A simplified plant makes that disturbance easy to inspect: press **Fire**, then compare recovery with feedforward, proportional feedback, and an aggressive under-speed mode enabled or disabled.
+
+<FlywheelRecovery />
+
+The demo’s gains, disturbance size, and motor dynamics are illustrative. They are not measurements from the paper. Use the [feedforward lesson](../control-theory/feedforward.mdx) for controller design and log real recovery before choosing your robot’s ready bands. Paper §5.7 describes waiting for flywheel and hood readiness before release.
+
+## Java: request release only inside the ready bands
+
+<JavaCode league="FTC" label="Check the calibrated launcher state">{`boolean launcherReady(double wheelTarget, double wheelMeasured,
+                      double hoodTarget, double hoodMeasured) {
+    if (!Double.isFinite(wheelMeasured)
+            || !Double.isFinite(hoodMeasured)) return false;
+    return Math.abs(wheelTarget - wheelMeasured) <= wheelReadyBand
+            && Math.abs(hoodTarget - hoodMeasured) <= hoodReadyBand;
+}`}</JavaCode>
+
+The bands are measured on the mechanism, in the same units as their signals. Equality to one exact encoder value is not a practical readiness condition. Validate map outputs before this check and account for the feeder delay after it; a readiness check is only one part of the release decision.
+
+<Exercise title="Read a point on the shelf">
+The measured targets at 100, 110, and 120 inches are all 1,700 ticks/s. What should a monotone table return at 105 inches? Does that tell you the ball’s exact exit speed?
+<Solution>
+1,700 ticks/s. It is a wheel command between equal calibrated knots. Exit speed still depends on the physical transfer at the chosen configuration; a lookup result is not an independent measurement of the ball.
+</Solution>
+</Exercise>
+
+**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper).

@@ -1,178 +1,113 @@
 ---
-title: Simulating Physical Reality
-description: "A three-part interactive case study on RK4 integration, quadratic drag, and real launcher energy transfer for an FTC projectile system."
+title: Predict Where the Ball Enters
+description: "See drag change a projectile’s descending rim crossing, then learn how RK4 and Hermite interpolation locate the entry event."
 sidebar_position: 1
-tags: [research, rk4, euler, air-drag, trajectory, projectile, launcher]
+tags: [research, rk4, air-drag, projectile, numerical-integration]
 ---
 
-import PhysicalRealityDashboard from '@site/src/components/simulations/research/PhysicalRealityDashboard';
+import {EntryGeometry} from '@site/src/components/simulations/research/ResearchFigures';
+import FlightExplorer, {IntegratorExperiment} from '@site/src/components/simulations/research/FlightExplorer';
 
-# Simulating Physical Reality
+# Predict Where the Ball Enters
 
-<Difficulty level="Hard" />
+<Difficulty level="Medium" />
 
 <Abstract>
-Accurate projectile control starts before the robot fires: the simulator must predict how the projectile flies and how much energy the launcher actually transfers. This lesson turns the research paper's physics stack into a three-step dashboard: numerical integration, aerodynamic drag, and contact-loss calibration.
+A launcher needs to predict where the ball crosses the goal opening on its way down. This lesson connects that visible event to a drag-aware flight model and a numerical method that finds it between stored samples.
 </Abstract>
 
-The practical failure is simple: a robot can spin the flywheel to a speed that looks correct, fire from the correct distance, and still miss because the model is too clean. Vacuum parabolas ignore drag. Euler integration accumulates error when the time step gets coarse. A flywheel's surface speed is not the same thing as projectile exit velocity.
+A shot aimed at the front lip can look correct as a line on a screen and still clip the goal. The ball has a radius. Its **center** must pass far enough inside both edges, and it must be descending.
 
-That is why this module begins with a simulator instead of code. You can only compensate a shot in real time if the offline model already knows the important losses.
+## First, draw the available opening
 
-<PhysicalRealityDashboard />
+<EntryGeometry />
 
-## Step 1: Numerical integration is part of the model
-
-Projectile motion with quadratic drag is not a one-line parabola. The acceleration depends on the velocity, and the velocity is changing during the flight:
+The paper’s opening is 0.465 m deep and the ball’s diameter is 0.127 m. The usable center interval is therefore:
 
 $$
-\dot{\mathbf{p}} = \mathbf{v}
+0.465-0.127=0.338\ \mathrm{m}.
 $$
 
-$$
-\dot{\mathbf{v}} =
-\begin{bmatrix}
-0 \\
--g
-\end{bmatrix}
--
-k \|\mathbf{v}\| \mathbf{v}
-$$
+For a front lip at $d=1.778\ \mathrm{m}$ (70 inches), the center must cross between **1.8415 m and 2.1795 m**. The launch height is 0.400 m and the rim plane is 0.984 m above the floor. These are the case-study geometry, from paper §§3 and 5.3.
 
-<EquationLegend
-  items={[
-    {symbol: 'p', meaning: 'projectile position vector', unit: 'm'},
-    {symbol: 'v', meaning: 'projectile velocity vector', unit: 'm/s'},
-    {symbol: 'g', meaning: 'gravitational acceleration', unit: 'm/s^2'},
-    {symbol: 'k', meaning: 'lumped drag coefficient for the simplified demo model', unit: '1/m'},
-    {symbol: '|v|', meaning: 'speed, the magnitude of the velocity vector', unit: 'm/s'},
-  ]}
-/>
+## Worked example: a 22.5 cm shift
 
-Euler integration takes one slope and trusts it for the entire step:
+At **5.25 m/s and 58°**, a vacuum calculation places the descending crossing at **2.084 m**. With the paper’s effective drag coefficient, $C_D=0.47$, it crosses at **1.859 m**: approximately **22.5 cm earlier**, a 10.8% reduction.
 
-$$
-\mathbf{x}_{k+1} = \mathbf{x}_k + f(\mathbf{x}_k)\Delta t
-$$
+Both nominal predictions enter this particular opening. But the drag-aware prediction leaves only about **1.8 cm** of front-lip center clearance. That is the reason the next lesson tests neighboring commands instead of celebrating one successful line. Source: paper §4, Figure 3.
 
-RK4 samples the slope four times inside the same step:
-
-$$
-\begin{aligned}
-\mathbf{k}_1 &= f(\mathbf{x}_k), \\
-\mathbf{k}_2 &= f\!\left(\mathbf{x}_k + \frac{\Delta t}{2}\mathbf{k}_1\right), \\
-\mathbf{k}_3 &= f\!\left(\mathbf{x}_k + \frac{\Delta t}{2}\mathbf{k}_2\right), \\
-\mathbf{k}_4 &= f\!\left(\mathbf{x}_k + \Delta t\,\mathbf{k}_3\right).
-\end{aligned}
-$$
-
-Those four state derivatives are combined in the weighted update:
-
-$$
-\mathbf{x}_{k+1}
-=
-\mathbf{x}_k
-+
-{\Delta t \over 6}
-\left(
-\mathbf{k}_1 + 2\mathbf{k}_2 + 2\mathbf{k}_3 + \mathbf{k}_4
-\right)
-$$
-
-The point of RK4 is not that it is magically "more advanced." It is that the acceleration changes during
-the time step, so the simulator should not pretend the first slope remains true until the next loop. Euler
-commits to the start-of-step velocity for the whole step, so under constant gravity alone it already lands
-long — it never feels the velocity it picks up *during* the step. Classical RK4 is **fourth-order accurate**
-for smooth dynamics. It exactly reproduces this constant-acceleration, no-drag model; velocity-dependent
-drag still has a small numerical error that shrinks rapidly with the step size.
-
-In the dashboard, slide $\Delta t$ up: Euler's range error grows roughly linearly with the step, passing a quarter-metre well before RK4 has moved a centimetre. That gap is not a tuning artifact — it is the discretization choice deciding whether the offline model is trustworthy before any robot code exists.
-
-:::tip[Dashboard task: Integrator]
-**Predict:** which trace will move farther when $\Delta t$ increases. **Act:** open **Integrator** and move
-the time-step slider from its smallest value upward. **Observe:** compare each method's reported miss to
-the reference before reading the explanation again.
+:::tip[Predict, change, explain]
+Before touching the controls, predict what increasing drag will do to the crossing. Set the drag coefficient to zero, restore it to 0.47, then lower the exit speed. Watch for the difference between **missing the opening** and **never reaching a descending rim event**.
 :::
 
-## Step 2: Drag is not a small correction
+<FlightExplorer />
 
-For a light, blunt game element, drag can be the same order of magnitude as gravity at shooter speeds. The standard quadratic form is:
+In the **Hermite event locator**, press **Test midpoint** one step at a time. Each test asks whether the reconstructed height is still above the rim. On a descending segment, “above” keeps the right half and “below” keeps the left. After 16 decisions, the original 20 ms interval is only about **0.305 µs** wide; the same fractional time is then used to reconstruct horizontal position and velocity.
 
-$$
-\mathbf{F}_d = -{1 \over 2}\rho C_d A \|\mathbf{v}\|\mathbf{v}
-$$
+## Two forces change the velocity
 
-<EquationLegend
-  items={[
-    {symbol: 'F_d', meaning: 'aerodynamic drag force, opposite the velocity', unit: 'N'},
-    {symbol: 'rho', meaning: 'air density', unit: 'kg/m^3'},
-    {symbol: 'C_d', meaning: 'drag coefficient; the demo uses 0.47 from the paper prompt', unit: 'unitless'},
-    {symbol: 'A', meaning: 'projectile frontal area', unit: 'm^2'},
-  ]}
-/>
-
-The dashboard overlays two paths: the dashed vacuum model and the solid drag model, and reports the drag force as a multiple of the projectile's weight at exit. For this light game element that ratio is a meaningful fraction of $mg$ at shooter speeds — drag is not a rounding error you can sweep into a fudge factor, it is a force of the same order as gravity. The important number is the range error. If the vacuum model says the shot clears the target but the drag model lands short, the problem is not "tuning." The problem is that the firmware was given the wrong world.
-
-<Admonition type="warning" title="Hardware reality: coefficients are not universal">
-
-The demo uses the coefficient values specified for this research case study. Do not copy them into a different FTC robot unless the projectile, wheel contact, launch height, and calibration procedure match. The method transfers; the constants have to be measured.
-
-</Admonition>
-
-:::tip[Dashboard task: Drag awakening]
-**Predict:** whether drag shortens or lengthens range at the current exit speed. **Act:** open **Drag
-Awakening**, then change exit speed and launch angle. **Observe:** compare the solid drag trajectory with
-the dashed vacuum trajectory and watch how their landing points separate.
-:::
-
-## Step 3: Wheel speed does not transfer one-for-one
-
-The firmware may start with a clean assumption:
+Gravity points down. Drag points opposite the ball’s velocity relative to the air. For still air, the two-dimensional equations are:
 
 $$
-v_{\text{exit}} = \eta v_{\text{wheel}}
+\dot x=v_x,\qquad \dot z=v_z,\qquad
+\dot v_x=-k\|\mathbf v\|v_x,\qquad
+\dot v_z=-g-k\|\mathbf v\|v_z.
 $$
 
-where $\eta$ is a **velocity-transfer ratio** between the flywheel surface and the projectile. In the
-research case study, the naive assumption was about $\eta = 0.70$, while the measured ratio was closer
-to $\eta \approx 0.26$ and changed with launch angle. It is not an energy efficiency: kinetic energy
-depends on mass or rotational inertia and on speed squared.
+<EquationLegend items={[
+  {symbol: 'x, z', meaning: 'horizontal position and height', unit: 'm'},
+  {symbol: 'v_x, v_z', meaning: 'horizontal and vertical velocity', unit: 'm/s'},
+  {symbol: 'g', meaning: 'gravitational acceleration, 9.80665', unit: 'm/s²'},
+  {symbol: 'k', meaning: 'rho C_D A / (2m), approximately 0.0479 for this ball', unit: '1/m'},
+  {symbol: '|v|', meaning: 'speed: the magnitude of the velocity vector', unit: 'm/s'},
+]} />
 
-<EquationLegend
-  items={[
-    {symbol: 'v_exit', meaning: 'projectile speed as it leaves the launcher', unit: 'm/s'},
-    {symbol: 'v_wheel', meaning: 'linear speed of the flywheel surface', unit: 'm/s'},
-    {symbol: 'eta', meaning: 'projectile exit speed divided by wheel surface speed', unit: 'unitless'},
-  ]}
-/>
+The model uses a 0.0748 kg ball, air density 1.204 kg/m³, and frontal area $A=\pi(0.127/2)^2$. The constant $C_D$ is an effective modeling choice, not a drag measurement from the tracking video. Spin, lateral forces, and goal contact are outside this flight model.
 
-That gap is the difference between "the math says it should work" and "the robot actually scored." Contact time, compression, slip, asymmetric loading, and wheel scrub all live inside $\eta$. The simulator exposes the missing exit speed; calibration measures the ratio.
+## Find the event between samples
 
-:::tip[Dashboard task: Transfer reality]
-**Predict:** whether the assumed or measured transfer ratio will demand more wheel speed for the same
-exit speed. **Act:** open **Transfer Reality** and change the launch angle. **Observe:** compare $\eta$,
-exit speed, and the implied wheel-speed gap as contact conditions change.
-:::
+RK4 advances the state in 20 ms steps. Scoring happens at the instant the ball descends through the rim plane, which usually lies **between** two samples. Cubic Hermite interpolation uses both endpoint positions and velocities to reconstruct that short segment. Sixteen binary-search halvings locate the crossing inside the known bracket.
 
-## How the deployed version is structured
+The same crossing supplies the horizontal coordinate, flight time, and entry velocity. The time when the ball later hits the floor describes a different event and cannot replace it.
 
-The key design idea is to keep two responsibilities apart. The physics model predicts the *exit speed* a shot needs for a given distance. A separate, replaceable transfer model turns that exit speed into a *wheel command*, using a velocity ratio that was measured rather than assumed. Keeping them separate means recalibrating the launcher never forces you to touch the trajectory solver.
+<details>
+<summary>Explore the integration method</summary>
 
-<JavaCode label="Exit speed to wheel command">{`double wheelCommand(double desiredExitSpeed, double launchAngle) {
-    // Measured velocity ratio at this launch angle, from calibration.
-    double eta = velocityRatioAt(launchAngle);
-    if (!(eta > 0)) throw new IllegalStateException("no calibration");
-    return desiredExitSpeed / eta;
-}
-`}</JavaCode>
+Euler takes one starting slope for a whole step. RK4 evaluates four slopes, including estimates inside the step, and combines them with weights $1,2,2,1$ divided by six. With smooth dynamics its global error decreases as the fourth power of the step size.
 
-The only number that comes from the bench is `eta`, and it is allowed to depend on launch angle because contact time changes with it. Everything upstream of this conversion stays pure physics; everything mechanism-specific lives in the one velocity-ratio lookup.
+<IntegratorExperiment />
 
-<Admonition type="tip" title="Source trail">
+For an endpoint position $p$ with endpoint velocity $v$, the Hermite segment is:
 
-This lesson is based on Eric Stoicescu's July 2026
-[*Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic Launcher*](./index.mdx#research-paper),
-plus the public [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and
-[Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
+$$
+H(\tau)=(2\tau^3-3\tau^2+1)p_0+(\tau^3-2\tau^2+\tau)hv_0
++(-2\tau^3+3\tau^2)p_1+(\tau^3-\tau^2)hv_1.
+$$
 
-</Admonition>
+Here $h$ is the step duration and $\tau$ runs from zero to one inside the step. Apply this formula to height to find the root $H_z(\tau)=z_{\rm rim}$, then use that same $\tau$ for horizontal position. Source: paper §5.2, Figure 4.
+
+</details>
+
+## Java: turn the crossing into an entry test
+
+Once the solver has found a descending event, the geometric test is small:
+
+<JavaCode label="Check the descending center crossing">{`boolean entersOpening(double crossingX, boolean descending,
+                      double frontLip, double openingDepth,
+                      double ballRadius) {
+    if (!descending || !Double.isFinite(crossingX)) return false;
+    double firstCenter = frontLip + ballRadius;
+    double lastCenter = frontLip + openingDepth - ballRadius;
+    return crossingX >= firstCenter && crossingX <= lastCenter;
+}`}</JavaCode>
+
+All distances in this method use metres. An unavailable event must not be substituted with a ground range.
+
+<Exercise title="Does this ball clear both lips?">
+For the 70-inch example, does a descending center crossing at 1.830 m enter? How about 1.900 m?
+<Solution>
+The valid interval is [1.8415, 2.1795] m. The 1.830 m crossing misses the front lip; 1.900 m lies inside the interval and passes the geometric test. Neither result predicts whether the ball will bounce out afterward.
+</Solution>
+</Exercise>
+
+**Next:** [choose a command that tolerates speed and angle errors](./robust-shot-selection.mdx).

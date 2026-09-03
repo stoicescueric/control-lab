@@ -1,18 +1,18 @@
 import {describe, expect, it} from 'vitest';
 import {
   DRAG_K,
-  FEEDER_DELAY,
+  backtrackRelease,
+  entryInterval,
+  entersGoal,
+  fitReleaseFromPositions,
   G,
   H0,
+  integrateStateFor,
   monotoneHermite,
   naturalCubic,
   rk4Step,
   simulateDrag,
   simulateVacuum,
-  solveSOTM,
-  SOTM_GAIN,
-  SOTM_MAX_ITERS,
-  tof,
   type State,
 } from './projectile';
 
@@ -45,6 +45,49 @@ describe('numerical integration', () => {
   });
 });
 
+describe('video-based release reconstruction', () => {
+  const speed = 6.03;
+  const angleDeg = 52;
+  const angle = (angleDeg * Math.PI) / 180;
+  const release: State = [0, H0, speed * Math.cos(angle), speed * Math.sin(angle)];
+  const positionAt = (time: number) => {
+    const state = integrateStateFor(release, time, 0.00025);
+    return {time, x: state[0], z: state[1]};
+  };
+
+  it('reverses an exact integrated state back to release', () => {
+    const later = integrateStateFor(release, 0.08, 0.00025);
+    const recovered = integrateStateFor(later, -0.08, 0.00025);
+    recovered.forEach((value, i) => expect(value).toBeCloseTo(release[i], 8));
+  });
+
+  it('recovers release speed from three high-rate positions', () => {
+    const dt = 1 / 480;
+    const estimate = backtrackRelease(positionAt(9 * dt), positionAt(10 * dt), positionAt(11 * dt));
+    expect(estimate.speed).toBeCloseTo(speed, 3);
+    expect(estimate.angleDeg).toBeCloseTo(angleDeg, 2);
+  });
+
+  it('fits release speed and angle to a complete position sequence', () => {
+    const samples = Array.from({length: 18}, (_, i) => positionAt((i + 1) / 240));
+    const fit = fitReleaseFromPositions(samples, {
+      speedMin: 5,
+      speedMax: 7,
+      angleMinDeg: 45,
+      angleMaxDeg: 60,
+    });
+    expect(Math.abs(fit.speed - speed)).toBeLessThan(0.015);
+    expect(Math.abs(fit.angleDeg - angleDeg)).toBeLessThan(0.12);
+    expect(fit.rmse).toBeLessThan(0.0003);
+  });
+
+  it('rejects invalid inverse-calibration inputs', () => {
+    expect(() => integrateStateFor(release, 0.1, 0)).toThrow();
+    expect(() => fitReleaseFromPositions([positionAt(0.1)])).toThrow();
+    expect(() => backtrackRelease(positionAt(0.02), positionAt(0.01), positionAt(0.03))).toThrow();
+  });
+});
+
 describe('drag vs. vacuum', () => {
   it('drag always lands shorter than the vacuum prediction', () => {
     for (const angDeg of [35, 45, 55, 65]) {
@@ -53,65 +96,6 @@ describe('drag vs. vacuum', () => {
       const vac = simulateVacuum(8, ang);
       expect(drag.range).toBeLessThan(vac.range);
     }
-  });
-});
-
-describe('shoot-on-the-move solver', () => {
-  it('returns the real target unchanged when the robot is still', () => {
-    const shooter = {x: 50, y: 28};
-    const goal = {x: 100, y: 120};
-    const sol = solveSOTM(shooter, goal, {x: 0, y: 0});
-    expect(sol.converged).toBe(true);
-    expect(sol.pv.x).toBeCloseTo(goal.x, 6);
-    expect(sol.pv.y).toBeCloseTo(goal.y, 6);
-  });
-
-  it('offsets opposite robot motion to cancel inherited velocity and converges', () => {
-    const shooter = {x: 50, y: 28};
-    const goal = {x: 100, y: 120};
-    const sol = solveSOTM(shooter, goal, {x: 26, y: 10});
-    expect(sol.converged).toBe(true);
-    expect(sol.pv.x).toBeLessThan(goal.x); // robot moves +x, so aim shifts -x
-    expect(sol.pv.y).toBeLessThan(goal.y); // robot moves +y, so aim shifts -y
-    expect(sol.iters[sol.iters.length - 1].done).toBe(true);
-  });
-
-  it('applies the documented virtual-target equation exactly for fixed flight time', () => {
-    const goal = {x: 100, y: 120};
-    const velocity = {x: 26, y: 10};
-    const fixedFlightTime = 0.8;
-    const sol = solveSOTM({x: 50, y: 28}, goal, velocity, () => fixedFlightTime);
-    expect(sol.converged).toBe(true);
-    const compensationTime = FEEDER_DELAY + fixedFlightTime;
-    expect(sol.pv.x).toBeCloseTo(goal.x - SOTM_GAIN * velocity.x * compensationTime, 12);
-    expect(sol.pv.y).toBeCloseTo(goal.y - SOTM_GAIN * velocity.y * compensationTime, 12);
-  });
-
-  it('keeps the time-of-flight LUT monotone in distance', () => {
-    expect(tof(120)).toBeGreaterThan(tof(80));
-  });
-
-  it('reports the iteration cap instead of presenting a nonconverged aim as valid', () => {
-    const speed = 3.5 * 39.37;
-    const direction = Math.PI / 6;
-    const sol = solveSOTM(
-      {x: 6, y: 6},
-      {x: 100, y: 120},
-      {x: speed * Math.cos(direction), y: speed * Math.sin(direction)},
-    );
-    expect(sol.converged).toBe(false);
-    expect(sol.iters).toHaveLength(SOTM_MAX_ITERS + 1);
-    expect(sol.iters[sol.iters.length - 1].done).toBe(false);
-  });
-
-  it('rejects invalid geometry and nonphysical flight-time lookup outputs', () => {
-    const shooter = {x: 50, y: 28};
-    const goal = {x: 100, y: 120};
-    expect(() => solveSOTM({...shooter, x: Number.NaN}, goal, {x: 0, y: 0})).toThrow(/finite/);
-    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => Number.NaN)).toThrow(
-      /finite and positive/,
-    );
-    expect(() => solveSOTM(shooter, goal, {x: 0, y: 0}, () => 0)).toThrow(/finite and positive/);
   });
 });
 
@@ -169,5 +153,88 @@ describe('calibration-table interpolation', () => {
     expect(() => naturalCubic([0], [1])).toThrow();
     expect(() => monotoneHermite([0, 0], [1, 2])).toThrow();
     expect(() => monotoneHermite([0, 1], [1, Number.NaN])).toThrow();
+  });
+});
+
+// Independent scalar midpoint integrator. It uses linear event interpolation,
+// no production RK4/Hermite functions, and a 10 microsecond reference step.
+function midpointReference(speed: number, degrees: number, dt: number) {
+  let x = 0,
+    z = 0.4,
+    vx = speed * Math.cos((degrees * Math.PI) / 180),
+    vz = speed * Math.sin((degrees * Math.PI) / 180);
+  const k = (1.204 * 0.47 * Math.PI * (0.127 / 2) ** 2) / (2 * 0.0748);
+  for (let i = 0; i < 2 / dt; i++) {
+    const magnitude = Math.hypot(vx, vz);
+    const mx = vx - (dt / 2) * k * magnitude * vx;
+    const mz = vz - (dt / 2) * (9.80665 + k * magnitude * vz);
+    const midSpeed = Math.hypot(mx, mz);
+    const nextX = x + dt * mx,
+      nextZ = z + dt * mz;
+    if (z >= 0.984 && nextZ < 0.984 && vz < 0) {
+      const fraction = (z - 0.984) / (z - nextZ);
+      return {x: x + fraction * (nextX - x), time: (i + fraction) * dt};
+    }
+    x = nextX;
+    z = nextZ;
+    vx -= dt * k * midSpeed * mx;
+    vz -= dt * (9.80665 + k * midSpeed * mz);
+  }
+  throw new Error('Reference did not find an event');
+}
+
+describe('audited rim-event calculation', () => {
+  it('matches analytic vacuum event position and time', () => {
+    for (const speed of [4.7, 5.25, 6.6])
+      for (const degrees of [42, 50, 58]) {
+        const angle = (degrees * Math.PI) / 180,
+          vz = speed * Math.sin(angle);
+        const disc = vz * vz - 2 * G * (0.984 - H0);
+        const event = simulateDrag({v0: speed, angle, dragCoefficient: 0}).rimEvent;
+        if (disc < 0) {
+          expect(event).toBeNull();
+          continue;
+        }
+        const time = (vz + Math.sqrt(disc)) / G;
+        expect(event).not.toBeNull();
+        expect(Math.abs(event!.time - time)).toBeLessThan(3e-7);
+        expect(Math.abs(event!.x - speed * Math.cos(angle) * time)).toBeLessThan(1e-6);
+      }
+  });
+  it('agrees with a converged independent midpoint reference under drag', () => {
+    for (const [speed, degrees] of [
+      [5.25, 58],
+      [6, 50],
+      [4.7, 58],
+      [6.6, 42],
+    ]) {
+      const reference = midpointReference(speed, degrees, 0.00001);
+      const finer = midpointReference(speed, degrees, 0.000005);
+      expect(Math.abs(reference.x - finer.x)).toBeLessThan(1e-7);
+      const event = simulateDrag({v0: speed, angle: (degrees * Math.PI) / 180}).rimEvent!;
+      expect(Math.abs(event.x - reference.x)).toBeLessThan(2e-6);
+      expect(Math.abs(event.time - reference.time)).toBeLessThan(5e-7);
+      expect(event.vz).toBeLessThan(0);
+    }
+  });
+  it('reproduces the paper crossing and exposes missing events', () => {
+    expect(simulateDrag({v0: 5.25, angle: (58 * Math.PI) / 180}).rimCross).toBeCloseTo(1.859, 3);
+    expect(simulateVacuum(5.25, (58 * Math.PI) / 180).rimCross).toBeCloseTo(2.084, 3);
+    expect(simulateDrag({v0: 1, angle: Math.PI / 4}).rimEvent).toBeNull();
+    expect(() => simulateDrag({v0: 5, angle: 1, dt: 0})).toThrow();
+    expect(() => simulateDrag({v0: NaN, angle: 1})).toThrow();
+  });
+});
+
+describe('calibration and aperture boundaries', () => {
+  it('includes center-entry endpoints and excludes unavailable events', () => {
+    const [lo, hi] = entryInterval(1.778);
+    expect(hi - lo).toBeCloseTo(0.338, 12);
+    expect(entersGoal(lo, 1.778)).toBe(true);
+    expect(entersGoal(hi, 1.778)).toBe(true);
+    expect(entersGoal(lo - 0.000001, 1.778)).toBe(false);
+    expect(entersGoal(hi + 0.000001, 1.778)).toBe(false);
+    expect(entersGoal(null, 1.778)).toBe(false);
+    expect(entersGoal(NaN, 1.778)).toBe(false);
   });
 });

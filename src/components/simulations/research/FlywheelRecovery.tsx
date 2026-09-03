@@ -1,11 +1,9 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
-import InterpolationTrap from '@site/src/components/simulations/research/InterpolationTrap';
-import ShootOnTheMove from '@site/src/components/simulations/research/ShootOnTheMove';
+import {useEffect, useRef, useState} from 'react';
 import {Button, Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {clamp} from '@site/src/lib/domain/projectile';
+import styles from './Research.module.css';
 
-type TabId = 'flywheel' | 'interpolation' | 'sotm';
 type Sample = {t: number; value: number};
 
 const TARGET = 2500;
@@ -22,11 +20,12 @@ const flywheelDrag = (speed: number) => 0.0028 * speed + 0.00000022 * speed * sp
 // recovered trace settles on the setpoint instead of drifting off-chart.
 const FF_VOLTS = (DRAG_K * flywheelDrag(TARGET)) / TORQUE_K;
 
-function FlywheelRecovery() {
+export default function FlywheelRecovery() {
   const [feedforward, setFeedforward] = useState(true);
   const [pid, setPid] = useState(true);
   const [bangBang, setBangBang] = useState(true);
   const [aggression, setAggression] = useState(1);
+  const [paused, setPaused] = useState(true);
   const [frame, setFrame] = useState(0);
   const model = useRef({
     t: 0,
@@ -38,6 +37,7 @@ function FlywheelRecovery() {
   toggles.current = {feedforward, pid, bangBang, aggression};
 
   useEffect(() => {
+    if (paused) return;
     let raf = 0;
     let last = performance.now();
     let accumulator = 0;
@@ -86,16 +86,16 @@ function FlywheelRecovery() {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [paused]);
 
   const m = model.current;
   const samples = m.samples;
-  const W = 720;
-  const H = 360;
+  const W = 520;
+  const H = 330;
   const padL = 54;
   const padR = 20;
-  const padT = 22;
-  const padB = 36;
+  const padT = 48;
+  const padB = 48;
   const xMin = Math.max(0, m.t - 4.5);
   const xMax = Math.max(4.5, m.t);
   const yMin = TARGET - 520;
@@ -109,6 +109,7 @@ function FlywheelRecovery() {
   const ready = Math.abs(TARGET - m.speed) <= READY_BAND;
 
   function takeShot() {
+    setPaused(false);
     const s = model.current;
     s.speed = clamp(s.speed - 300, 0, 3100);
     s.samples.push({t: s.t, value: s.speed});
@@ -116,16 +117,25 @@ function FlywheelRecovery() {
   }
 
   function reset() {
+    setPaused(true);
+    setFeedforward(true);
+    setPid(true);
+    setBangBang(true);
+    setAggression(1);
     model.current = {t: 0, speed: TARGET, samples: [{t: 0, value: TARGET}], lastVoltage: 0};
     setFrame((v) => v + 1);
   }
 
   return (
-    <>
+    <Demo title="Recover after a shot" pill="Illustrative flywheel model">
+      <p className="text-sm text-panel-ink">
+        A simplified plant with illustrative gains, not a replay of measured robot telemetry. Press
+        Fire to remove stored wheel energy, then compare recovery modes.
+      </p>
       <svg
         key={frame}
         viewBox={`0 0 ${W} ${H}`}
-        className="block h-auto w-full rounded-xl bg-[#0b1120]"
+        className={styles.plot}
         role="img"
         aria-label="Flywheel velocity recovery line chart after a shot disturbance.">
         <rect
@@ -191,28 +201,39 @@ function FlywheelRecovery() {
         />
         <text
           x={W - padR}
-          y={padT + 12}
+          y={26}
           textAnchor="end"
           fontFamily="JetBrains Mono, monospace"
           fontSize="12"
           fill="#aab8d6">
-          target = {TARGET} ticks/s, ready band = +/- {READY_BAND}
+          target {TARGET} ticks/s · band ±{READY_BAND}
+        </text>
+        {Array.from({length: 6}, (_, i) => Math.ceil(xMin) + i)
+          .filter((t) => t <= xMax)
+          .map((t) => (
+            <text key={t} x={sx(t)} y={H - 25} textAnchor="middle">
+              {t}
+            </text>
+          ))}
+        <text x={W / 2} y={H - 5} textAnchor="middle">
+          time (s)
         </text>
       </svg>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button primary onClick={takeShot}>
-          Take Shot (-300 ticks/s)
+          Fire (-300 ticks/s)
         </Button>
         <Button active={feedforward} onClick={() => setFeedforward((v) => !v)}>
           Feedforward {feedforward ? 'on' : 'off'}
         </Button>
         <Button active={pid} onClick={() => setPid((v) => !v)}>
-          PID {pid ? 'on' : 'off'}
+          P feedback {pid ? 'on' : 'off'}
         </Button>
         <Button active={bangBang} onClick={() => setBangBang((v) => !v)}>
           Asymmetric Bang-Bang {bangBang ? 'on' : 'off'}
         </Button>
+        <Button onClick={() => setPaused((v) => !v)}>{paused ? 'Run' : 'Pause'}</Button>
         <Button onClick={reset}>Reset</Button>
       </div>
 
@@ -242,37 +263,6 @@ function FlywheelRecovery() {
           {color: '#ff6f9c', label: 'outside ready band'},
         ]}
       />
-    </>
-  );
-}
-
-const tabs: {id: TabId; label: string; title: string}[] = [
-  {id: 'flywheel', label: 'Step 1', title: 'Taming the Flywheel'},
-  {id: 'interpolation', label: 'Step 2', title: 'The Interpolation Trap'},
-  {id: 'sotm', label: 'Step 3', title: 'Shoot-On-The-Move'},
-];
-
-export default function DynamicTargetingDashboard() {
-  const [active, setActive] = useState<TabId>('flywheel');
-  const current = useMemo(() => tabs.find((tab) => tab.id === active)!, [active]);
-
-  return (
-    <Demo title={`On-Bot Control - ${current.title}`} pill="Research dashboard">
-      <div className="mb-4 flex flex-wrap gap-2">
-        {tabs.map((tab) => (
-          <Button
-            key={tab.id}
-            active={active === tab.id}
-            primary={active === tab.id}
-            onClick={() => setActive(tab.id)}>
-            {tab.label}: {tab.title}
-          </Button>
-        ))}
-      </div>
-
-      {active === 'flywheel' && <FlywheelRecovery />}
-      {active === 'interpolation' && <InterpolationTrap />}
-      {active === 'sotm' && <ShootOnTheMove />}
     </Demo>
   );
 }

@@ -1,67 +1,51 @@
 ---
-title: "Elective Case Study: Drag-Aware Launcher"
-description: "An optional case study in drag-aware projectile simulation, launcher calibration, and shoot-on-the-move control."
-tags: [trajectory-generation, implementation, rk4, air-drag, flywheel, shoot-on-the-move]
+title: "Elective Case Study: Reliable Shooting"
+description: "Follow a real FTC launcher from drag-aware flight prediction to robust shot selection and calibration."
+tags: [trajectory-generation, research, calibration]
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import {Workflow} from '@site/src/components/simulations/research/ResearchFigures';
 
-# Elective Case Study: Drag-Aware Launcher
+# From One Successful Shot to Reliable Shooting
 
-This optional research track follows one model all the way from a desktop trajectory solver to a
-competition robot. It is one worked launcher case study, not a universal curriculum capstone.
-The engineering question is precise:
+A ball can enter once and still be a poor shot to repeat. This elective follows the Quantum Robotics launcher through a more useful question: **which command will keep working when the speed and angle change a little?**
 
-> How can a robot generate and execute a projectile trajectory in real time while the projectile loses
-> energy to drag, the launcher loses energy to contact, and the chassis is still moving?
+<figure>
+  <img src={useBaseUrl('/img/research/launcher-deployment.jpg')} alt="Quantum Robotics launcher on the competition field, with a purple projectile in flight" width="1170" height="755" loading="lazy" />
+  <figcaption>The physical launcher in competition. Team archive photograph reproduced from Figure 1 of the research paper.</figcaption>
+</figure>
 
-## Readiness
+The robot launches a light, perforated ball through a raised opening. Its simulator predicts the ball’s flight; robust selection searches a family of nearby shots; calibration connects that prediction to the actual wheels and hood.
 
-Start this elective after you can use differential equations, measured-loop
-[discretization](../software-architecture/discretization.mdx),
-[feedforward and PID](../control-theory/feedforward.mdx), interpolation, and
-[state feedback](../state-space-control/state-feedback.mdx). You do not need to derive Lambert W to use
-the first three on-robot ideas; the lesson marks where that research extension begins.
+<Workflow />
 
-The implementation pipeline is:
+## Follow one shot through three lessons
 
-1. Generate candidate trajectories with a quadratic-drag model and RK4 integration.
-2. Select feasible launch conditions and turn them into calibrated flywheel, hood, and time-of-flight maps.
-3. Control the flywheel so it recovers after each shot.
-4. Interpolate sparse calibration data without inventing unsafe overshoot.
-5. Compensate inherited chassis velocity with a fixed-point virtual-target solver.
+1. **[Predict Where the Ball Enters](./trajectory-simulation.mdx).** See why drag changes the crossing, and why the ball’s center needs clearance from both lips.
+2. **[Choose a Shot That Tolerates Errors](./robust-shot-selection.mdx).** Compare nearby speed–angle commands and find the one with the most successful perturbations.
+3. **[Turn the Model into Launcher Commands](./launcher-calibration.mdx).** Measure the wheel-to-ball transfer, interpolate calibrated settings, and recover after a shot.
 
-## Lessons
+The first two lessons share the paper’s **70-inch (1.778 m) front-lip distance** and its selected **5.25 m/s, 58°** command. Every experiment has a reset button so you can return to its worked example.
 
-- [**Simulating Physical Reality**](./trajectory-simulation.mdx) - generate trajectories with RK4,
-  compare vacuum and drag models, and calibrate wheel-speed-to-exit-velocity transfer.
-- [**On-Bot Control & Dynamic Targeting**](./shoot-on-the-move.mdx) - implement flywheel recovery,
-  monotone interpolation, and fixed-point shoot-on-the-move aiming.
+## What you need first
+
+Start with vectors, [differential equations](../preface/why-math-matters/differential-equations.mdx), [measured loop timing](../software-architecture/discretization.mdx), and [feedforward with feedback](../control-theory/feedforward.mdx). The pictures and experiments come before the derivations. Expand the mathematics when you want to understand the implementation in more detail.
+
+By the end, you should be able to explain why a simulator can be numerically accurate yet still need calibration, why a wide stress box is not a probability model, and how synchronized measurements turn wheel speed into a trustworthy exit-speed map.
 
 ## Research paper
 
-Eric Stoicescu, *Drag-Aware Trajectory Planning and Shoot-on-the-Move Control for a Mobile Robotic
-Launcher: From Aerodynamic Modelling to Competition-Scale Deployment*, revised preprint, July 2026.
+Eric Stoicescu, *Robust Drag-Aware Launch Planning and Shoot-on-the-Move Compensation for a Competition Mobile Robot*, audited manuscript, 2026.
 
 <div>
-  <a
-    href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')}
-    target="_blank"
-    rel="noopener noreferrer">
-    Open the research paper in your browser (PDF)
-  </a>
+  <a href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')} target="_blank" rel="noopener noreferrer">Open the research paper (PDF)</a>
   {' · '}
-  <a
-    href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')}
-    download="drag-aware-trajectory-planning.pdf">
-    Download the PDF
-  </a>
+  <a href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')} download="drag-aware-trajectory-planning.pdf">Download the PDF</a>
 </div>
 
-<Admonition type="note" title="Source trail">
+The lessons cite the manuscript’s sections beside their examples. The source trail includes the [trajectory simulator repository](https://github.com/stoicescueric/Trajectory-Simulation) and [archived season firmware at commit 75db349d](https://github.com/stoicescueric/YaoMing/tree/75db349d). The manuscript is the source for reported experiments; the pinned firmware supplies the deployed lookup knots.
 
-The paper documents the model-to-deployment workflow behind these lessons. The corresponding public
-implementations are available in the [YaoMing firmware](https://github.com/stoicescueric/YaoMing) and
-[Trajectory-Simulation](https://github.com/stoicescueric/Trajectory-Simulation) repositories.
-
-</Admonition>
+:::note[Keep three kinds of numbers separate]
+**Calculated predictions** come from the flight model. **Teaching examples** let you inspect an algorithm or do arithmetic. **Reported observations** are the paper’s physical launch counts. The lessons label these roles wherever confusing them would change the conclusion.
+:::

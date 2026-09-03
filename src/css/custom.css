@@ -899,6 +899,27 @@ input.cl-home-setpoint[type='range']::-moz-range-thumb {
   overflow-wrap: break-word;
 }
 
+/* Preserve an image's intrinsic aspect ratio when its width is reduced to fit
+   the article column. HTML width/height attributes reserve layout space, but
+   without an explicit auto height the browser can keep that height after
+   max-width shrinks the image on phones. */
+.theme-doc-markdown img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* The user-agent figure margin removes 40px from each side of an already
+   narrow phone column. Lesson figures should use the full article width. */
+.theme-doc-markdown > figure {
+  max-width: 100%;
+  margin-inline: 0;
+}
+
+.theme-doc-markdown > figure > img {
+  display: block;
+  width: 100%;
+}
+
 /* Data tables keep readable type and scroll locally when their two-dimensional
    structure is wider than the prose column. */
 .theme-doc-markdown table {
