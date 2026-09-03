@@ -1,0 +1,376 @@
+---
+title: RST Pole Placement
+description: Turn measured feedforward constants into a velocity controller by asking for a closed-loop time constant in seconds instead of guessing three gains, then solving the controller polynomials for it.
+sidebar_position: 6.5
+tags: [rst, pole-placement, discrete-control, velocity-control, diophantine, feedforward]
+---
+
+import RstPolePlacement from '@site/src/components/simulations/control-theory/RstPolePlacement';
+
+# RST Pole Placement
+
+<Difficulty level="Hard" />
+
+<Abstract>
+An RST controller is discrete pole placement written as three polynomials, $R$, $S$ and $T$, acting on
+the measurement, the past command, and the reference. Instead of three gains with no physical meaning
+it asks for a description of the plant, which [system identification](./system-identification.mdx)
+already measured, and a description of the response you want, expressed as a time constant in seconds,
+then solves for its own coefficients from those.
+</Abstract>
+
+[System identification](./system-identification.mdx) ends with $k_S$, $k_V$ and $k_A$ measured from
+your own robot. A PID loop then throws most of that away: it takes the error and asks you for three
+more numbers, tuned by feel, whose units nobody states. The model you just measured is a complete
+description of the mechanism, and a controller can be solved for rather than tuned.
+
+<Problem title="A tuned gain is a number that only works where it was tuned">
+
+Tune a velocity PID on a drivetrain at a 20 ms loop and it behaves differently at 45 ms, because the
+integral is a running sum and the derivative a difference over a $\Delta t$ that changed. Tune it on a
+fresh battery and it softens as the pack sags, because a duty cycle is not a unit of force. Neither
+failure announces itself. The loop keeps working, slightly worse, and nothing in the three numbers
+tells you which of them to move.
+
+The symptom on a real robot is a mechanism that was tuned crisply on Friday, feels sluggish in the
+third match on Saturday, and rings when a teammate adds a vision pipeline to the loop.
+
+</Problem>
+
+## Build the intuition
+
+Pole placement means choosing the closed-loop response instead of discovering it. The plant has one
+time constant, $\tau$, which is how long it takes to reach 63% of a new speed on its own. The
+controller is asked to make the closed loop have a different time constant, $\tau_{cl}$, and the
+design produces whatever coefficients that requires.
+
+<RstPolePlacement />
+
+The reference alternates every 1.6 s, because the interesting behaviour is on a **change** and not on
+the first move from rest. Drag `tauClosedLoop` and watch the readout: the green trace reaches 63% of
+each change in about the time you asked for, and the number is measured off the simulation rather than
+asserted. That is the whole appeal. `tauClosedLoop = 0.1` is a claim about the robot that a graph can
+confirm or refute, in a way that `kP = 0.004` is not.
+
+Two things are worth doing before reading the derivation:
+
+- **Drag `tauClosedLoop` down.** The lower plot is the price. The first-loop demand is
+  `(tau / tauClosedLoop)` times what holding the reference costs, so halving the time constant doubles
+  the voltage, and below about a third of the plant's own `tau` the trace flattens against the supply.
+  Once it saturates, the response stops matching the request no matter what the slider says.
+- **Compare the two traces.** They are the same poles on the same plant, differing only in how the
+  reference enters. Press **Slow the integral pole** and watch the pink one fall behind while the green
+  one does not move.
+
+<Theory title="Solve the controller from the plant and the response you want">
+
+### The plant a feedforward already describes
+
+The feedforward model says the voltage to hold velocity $v$ while accelerating at $a$ is
+$u = k_S\operatorname{sgn}(v) + k_V v + k_A a$. Set the static term aside for a moment, since it is
+not linear and is handled separately below, and rearrange what is left:
+
+$$
+\frac{k_A}{k_V}\,\dot v + v = \frac{1}{k_V}\,u
+$$
+
+That is a first-order lag, so the same measurement serves both purposes:
+
+$$
+\tau = \frac{k_A}{k_V}, \qquad k_{dc} = \frac{1}{k_V}
+$$
+
+<EquationLegend
+  items={[
+    {symbol: '\\tau', meaning: 'the plant time constant, how long the mechanism takes to reach 63% of a new speed under a fixed voltage', unit: 's'},
+    {symbol: 'k_{dc}', meaning: 'the steady-state gain, the speed one volt eventually buys', unit: 'velocity per volt'},
+    {symbol: 'u', meaning: 'applied voltage, not motor power', unit: 'V'},
+    {symbol: 'v', meaning: 'measured velocity in whatever unit the identification used'},
+  ]}
+/>
+
+Nothing new was measured here. A feedforward and a first-order plant are the same three numbers
+written two ways.
+
+### Discretise it once, in the loop
+
+The Control Hub runs a loop, not an integral, so the design happens in discrete time. For a
+first-order lag under a held voltage the discretisation is exact rather than approximate:
+
+$$
+v_k = a\,v_{k-1} + b\,u_{k-1},
+\qquad a = e^{-\Delta t/\tau},
+\qquad b = k_{dc}\,(1 - a)
+$$
+
+Written with $q^{-1}$ as a one-loop delay, that is $A(q^{-1})\,v = B(q^{-1})\,u$ with
+$A = 1 - a q^{-1}$ and $B = b q^{-1}$. See
+[Discretization](../software-architecture/discretization.mdx) for why the exponential appears where a
+naive Euler step would put $1 - \Delta t/\tau$.
+
+### The three polynomials
+
+An RST controller is one equation:
+
+$$
+S(q^{-1})\,u = T(q^{-1})\,v^{*} - R(q^{-1})\,v
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'v^{*}', meaning: 'the reference velocity, what the profile is asking for'},
+    {symbol: 'R', meaning: 'acts on the MEASUREMENT. This is the feedback path'},
+    {symbol: 'S', meaning: 'acts on the controller OUTPUT. Choosing it to contain the factor (1 - q^{-1}) is what gives integral action'},
+    {symbol: 'T', meaning: 'acts on the REFERENCE. It is free, and setting it well is the difference between a loop that tracks at the speed it was asked for and one that does not'},
+  ]}
+/>
+
+Two degrees of freedom, which a PID does not have: $R$ decides how disturbances are rejected and $T$
+decides how the reference is followed, separately. Substituting the plant into the controller gives
+the closed loop:
+
+$$
+\bigl(A S + B R\bigr)\,v = B\,T\,v^{*}
+$$
+
+So $A S + B R$ is the closed-loop denominator. Pole placement is choosing what it should be and then
+solving for $R$ and $S$, which is a Diophantine equation.
+
+### Placing two real poles
+
+Take $S = 1 - q^{-1}$ for integral action, and ask for two real closed-loop poles:
+
+$$
+A_{cl} = (1 - p_1 q^{-1})(1 - p_2 q^{-1}) = 1 + \alpha_1 q^{-1} + \alpha_2 q^{-2}
+$$
+
+with $p_1 = e^{-\Delta t/\tau_{cl}}$ the tracking pole and $p_2 = e^{-\Delta t/\tau_{i}}$ the integral
+pole, $\alpha_1 = -(p_1 + p_2)$ and $\alpha_2 = p_1 p_2$. Real poles rather than complex ones because
+a drivetrain that overshoots its velocity reference on a path is worse than one that arrives slightly
+late.
+
+Expanding $A S = 1 - (1 + a) q^{-1} + a q^{-2}$ and taking $R = r_0 + r_1 q^{-1}$, matching
+coefficients of $q^{-1}$ and $q^{-2}$ gives the whole controller in closed form:
+
+$$
+r_0 = \frac{\alpha_1 + 1 + a}{b},
+\qquad
+r_1 = \frac{\alpha_2 - a}{b}
+$$
+
+There is no iteration and nothing to search. Two time constants in, two coefficients out.
+
+### Why T is not just a gain
+
+$T$ is unconstrained by the pole placement, so the obvious choice is the scalar that makes the steady
+state come out right, $t_0 = A_{cl}(1)/B(1)$. That choice is wrong in a way that is easy to miss,
+because the closed-loop reference response is
+
+$$
+\frac{v}{v^{*}} = \frac{B\,T}{A_{cl}}
+$$
+
+and with a scalar $T$ both poles remain in it. The integral pole is deliberately slow, so it dominates.
+On the plant in the simulation above, a 0.08 s closed loop against a 0.4 s integral pole answers a
+change of reference in about 0.48 s, six times slower than asked, and the tests in
+`src/lib/domain/rst.test.ts` pin that ratio. The loop is not broken and disturbance rejection is fine.
+It simply does not track at the speed it was asked to, and the number you set does not describe the
+behaviour you get.
+
+Choosing $T$ to cancel the integral pole from the reference path fixes it:
+
+$$
+T = \frac{1 - p_1}{b}\,\bigl(1 - p_2 q^{-1}\bigr)
+\qquad\Longrightarrow\qquad
+\frac{v}{v^{*}} = \frac{(1 - p_1)\,q^{-1}}{1 - p_1 q^{-1}}
+$$
+
+Tracking is now first order with exactly the time constant asked for, while $A_{cl}$ still contains
+$p_2$, so the integral pole keeps doing the job it was there for: rejecting the steady offsets a model
+cannot know about. For a held reference the two versions of $T$ agree exactly, since $t_0(1 - p_2)$ is the scalar
+choice, which is why the error hides until the reference starts moving. A step response measured from
+rest cannot see it at all.
+
+<Exercise title="What the slow pole costs a scalar T">
+
+At $\Delta t = 0.02$ s, with $\tau_{cl} = 0.08$ s and $\tau_i = 0.4$ s, compute $p_1$ and $p_2$. Which
+is the slow mode, and roughly how long does a reference step take to settle if that mode is present in
+the tracking response?
+
+<Solution>
+
+$p_1 = e^{-0.25} = 0.779$ and $p_2 = e^{-0.05} = 0.951$. The pole nearer 1 is the slow one, so the
+response is governed by $\tau_i = 0.4$ s rather than the 0.08 s requested. The simulation above
+measures 0.48 s against 0.08 s, a factor of six.
+
+</Solution>
+
+</Exercise>
+
+### The loop, as a recurrence
+
+Because $S = 1 - q^{-1}$, the controller equation is $u_k - u_{k-1} = \ldots$, which rearranges into
+an incremental form:
+
+$$
+u_k = u_{k-1} + t_0\bigl(v^{*}_k - p_2 v^{*}_{k-1}\bigr) - r_0 v_k - r_1 v_{k-1}
+$$
+
+The previous output *is* the integrator state. That single observation is worth more than it looks,
+because it makes [anti-windup](./actuator-saturation-anti-windup.mdx) free: clamp the value before
+storing it and a saturated axis cannot accumulate a command it will later have to unwind. There is no
+separate integral term to freeze.
+
+</Theory>
+
+<Deploy title="One method, recomputed from the measured loop time">
+
+Every coefficient above depends on $\Delta t$, so all of them are computed inside the loop from the
+$\Delta t$ that actually elapsed. A fixed-coefficient discrete controller quietly retunes itself when
+the loop jitters, which is the failure mode a robot with a vision pipeline runs into first.
+
+<JavaCode label="One RST loop, coefficients solved from the measured dt">{`private double previousOutput;
+private double previousMeasurement;
+private double previousReference;
+private boolean primed;
+
+double calculate(double reference, double measurement, double dt) {
+    if (!Double.isFinite(dt) || dt <= 0 || dt > MAX_DT) dt = NOMINAL_DT;
+    if (!primed) {
+        previousMeasurement = measurement;
+        previousReference = reference;
+        primed = true;
+    }
+
+    double a = Math.exp(-dt / Math.max(tau, 1e-3));
+    double b = kDc * (1 - a);
+    if (Math.abs(b) < 1e-9) return previousOutput;
+
+    double p1 = Math.exp(-dt / Math.max(tauClosedLoop, 4 * dt));
+    double p2 = Math.exp(-dt / Math.max(tauIntegral, 1e-3));
+    double alpha1 = -(p1 + p2);
+    double alpha2 = p1 * p2;
+
+    double r0 = (alpha1 + 1 + a) / b;
+    double r1 = (alpha2 - a) / b;
+    double t0 = (1 - p1) / b;
+
+    double output = previousOutput
+            + t0 * (reference - p2 * previousReference)
+            - r0 * measurement - r1 * previousMeasurement;
+
+    output = clamp(output, -availableVolts, availableVolts);
+
+    previousOutput = output;
+    previousMeasurement = measurement;
+    previousReference = reference;
+    return output;
+}
+`}</JavaCode>
+
+Three of those lines are guards rather than algebra, and each one is a failure mode. The $b$ check is
+the interesting one: $b = k_{dc}(1 - a)$ goes to zero as $\Delta t$ does, so on an implausibly short
+loop, or with a mistyped $k_V$, every coefficient divides by something near zero. Returning the
+previous command is a better answer than an infinite gain. The `4 * dt` floor on $\tau_{cl}$ is the
+same idea applied to ambition: no pole placement usefully beats a handful of loop periods, however
+good the model.
+
+Storing the clamped `output` is the anti-windup, and it is the only anti-windup this controller needs.
+
+<Exercise title="How aggressive tauClosedLoop can be">
+
+A drivetrain measures $k_V = 0.15$ V per in/s and $k_A = 0.03$ V per in/s², so $\tau = 0.2$ s and
+$k_{dc} = 6.7$ in/s per volt. Holding 40 in/s therefore costs about 6 V. Matching the plant's own
+response to the one you asked for makes the first-loop demand $(\tau/\tau_{cl})$ times that steady
+voltage. On a 12 V pack, what is the smallest $\tau_{cl}$ that does not saturate on a step to 40 in/s?
+
+<Solution>
+
+$\tau/\tau_{cl} \le 12/6 = 2$, so $\tau_{cl} \ge 0.1$ s. Ask for 0.05 s and the loop wants 24 V, gets
+12, and tracks a response half as fast as the one specified while the integrator makes up the rest.
+
+</Solution>
+
+</Exercise>
+
+### Volts are the output, power is the boundary
+
+The controller returns volts, because volts are what $k_V$ and $k_S$ were measured in. Dividing by
+the battery is the last thing that happens, at the hardware boundary, for the reason
+[Voltage Compensation](./voltage-compensation.mdx) gives: a controller working in duty cycle silently
+retunes itself as the pack sags.
+
+<JavaCode league="FTC" label="Volts to wheel power, scaled rather than clipped">{`void applyVolts(double forwardVolts, double turnVolts) {
+    double battery = voltageSensor.getVoltage();
+    if (!Double.isFinite(battery) || battery < 6) return;
+
+    double f = forwardVolts / battery;
+    double t = turnVolts / battery;
+    double peak = Math.max(1, Math.max(Math.abs(f + t), Math.abs(f - t)));
+    setWheelPowers((f + t) / peak, (f - t) / peak);
+}
+`}</JavaCode>
+
+The `peak` division matters more than it looks. Clamping each wheel on its own changes the ratios
+between them, and the ratios are the direction: a robot asked for a fast diagonal answers with a
+command that is no longer diagonal, and the harder it is pushed the further off course the correction
+points. Scaling gives up speed and keeps the direction, which is the trade a follower can reason
+about.
+
+:::warning[Static friction is not part of this plant]
+The model solved above is linear, and $k_S$ is not: it is a fixed voltage that must be paid before
+anything moves at all, and no choice of poles produces it. The controller can only discover it by
+integrating error, which means waiting. Feed $k_S$ forward ahead of the loop and leave the rest to
+the design; the integrator absorbs whatever the estimate got wrong.
+
+On a holonomic drive, apply it as **one vector along the direction of travel**, not as
+$k_S\operatorname{sgn}(v)$ per axis. A robot driving down a path holds a small lateral correction that
+changes sign as it wanders across the line, and an independent lateral term answers every one of those
+crossings with the full lateral $k_S$. The correction that should have been an ounce of voltage becomes
+a shove, and the robot weaves at the frequency of its own sign changes.
+:::
+
+:::tip[Log the reference against the measurement]
+The one plot worth having is the velocity reference and the measured velocity on the same axes. A gap
+that persists means the loop cannot keep up, so either the constants are wrong or $\tau_{cl}$ is
+asking for more than the pack can supply. A gap that oscillates means $\tau_{cl}$ is too small for the
+loop rate. Nothing else distinguishes those two, and the three coefficients will not tell you.
+:::
+
+:::warning[The measurement sets a floor of its own]
+A velocity that comes from differencing encoder counts over a window lags by roughly half that window.
+That delay adds to the loop period when deciding how fast a pole can usefully be placed, so a 25 ms
+differencing window on a 20 ms loop leaves less headroom than the loop rate alone suggests. See
+[Low-Pass Filtering](../signal-processing/low-pass.mdx) for the trade between that lag and noise.
+:::
+
+</Deploy>
+
+## Check your understanding
+
+- $b = k_{dc}(1 - a)$ appears in the denominator of every coefficient. What happens to $r_0$, $r_1$
+  and $t_0$ as $\Delta t$ becomes small, and which guard in the block covers it?
+- Suppose you store the unclamped output and clamp only what you send to the motors. Describe what the
+  first command after a long saturated stretch looks like, and why the mechanism does not move at
+  first.
+- $\tau_i$ is deliberately slower than $\tau_{cl}$. What goes wrong if you set them equal, given that
+  $A_{cl}$ would then have a repeated pole and $T$ would cancel the only one you have?
+- Your velocity comes from a 25 ms differencing window and your loop runs at 20 ms. Argue for a
+  $\tau_{cl}$ and say what evidence would change your mind.
+
+## Sources and further reading
+
+- Landau, I. D. and Zito, G. (2006). *Digital Control Systems: Design, Identification and
+  Implementation*. Springer. The $R$, $S$, $T$ naming, the Diophantine design, and the treatment of
+  $T$ as a separate degree of freedom follow this text.
+- Åström, K. J. and Wittenmark, B. (1997). *Computer-Controlled Systems: Theory and Design*, 3rd
+  edition. Prentice Hall. Polynomial pole-placement design and the exact discretisation of a
+  first-order lag.
+- [System Identification](./system-identification.mdx): where $\tau$ and $k_{dc}$ come from, and why a
+  fit that scores well can still be unusable.
+- [Feedforward](./feedforward.mdx): the same three constants, and what $k_S$ is doing outside the
+  linear plant.
+- [State Feedback](../state-space-control/state-feedback.mdx): the same idea of placing closed-loop
+  poles, written in state space rather than in polynomials.
+- [Actuator Saturation and Anti-Windup](./actuator-saturation-anti-windup.mdx): what the clamped
+  `previousOutput` is standing in for.
