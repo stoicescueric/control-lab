@@ -204,6 +204,7 @@ export default function RstPolePlacement() {
           cancelIntegralPole: true,
         },
         CRUISE - SLOW,
+        DT,
       );
       readouts.demand.current.textContent = `${demand.toFixed(1)} V`;
     }
@@ -332,7 +333,7 @@ export default function RstPolePlacement() {
             </b>,
           ],
           [
-            'first-loop demand for this step',
+            'reference-step voltage increment',
             <b key="demand" ref={readouts.demand} className="text-white">
               0.0 V
             </b>,

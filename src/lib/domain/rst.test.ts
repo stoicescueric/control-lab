@@ -96,6 +96,13 @@ describe('solveRst', () => {
     expect(fast.a).toBeGreaterThan(slow.a);
     expect(fast.r0).not.toBeCloseTo(slow.r0, 3);
   });
+
+  it('rejects invalid timing and an unsolvable plant gain', () => {
+    expect(() => solveRst(PLANT, design(), Number.NaN)).toThrow(RangeError);
+    expect(() => solveRst(PLANT, design(), -DT)).toThrow(RangeError);
+    expect(() => solveRst({...PLANT, kDc: 0}, design(), DT)).toThrow(RangeError);
+    expect(() => solveRst(PLANT, design({tauIntegral: Number.NaN}), DT)).toThrow(RangeError);
+  });
 });
 
 describe('closed-loop behaviour', () => {
@@ -167,6 +174,14 @@ describe('closed-loop behaviour', () => {
     expect(saturatedSpeed).toBeGreaterThan(30);
     expect(loops).toBeLessThan(60);
   });
+
+  it('holds the previous command when the plant cannot be solved', () => {
+    const state = createRstState();
+    state.previousOutput = 3.5;
+    state.primed = true;
+    expect(stepRst(state, 30, 10, DT, {...PLANT, kDc: 0}, design(), 12)).toBe(3.5);
+    expect(stepRst(state, 30, 10, Number.NaN, PLANT, design(), 12)).toBe(3.5);
+  });
 });
 
 describe('stepPlant', () => {
@@ -184,15 +199,22 @@ describe('stepPlant', () => {
 });
 
 describe('firstLoopDemandVolts', () => {
-  it('scales with the ratio of the two time constants', () => {
-    const half = firstLoopDemandVolts(PLANT, design({tauClosedLoop: PLANT.tau / 2}), 40);
-    const quarter = firstLoopDemandVolts(PLANT, design({tauClosedLoop: PLANT.tau / 4}), 40);
-    expect(quarter).toBeCloseTo(2 * half, 6);
+  it('uses the same discrete coefficient as the controller', () => {
+    const d = design({tauClosedLoop: 0.1});
+    const expected = solveRst(PLANT, d, DT).t0 * 40;
+    expect(firstLoopDemandVolts(PLANT, d, 40, DT)).toBeCloseTo(expected, 12);
   });
 
-  it('matches the worked example in the lesson', () => {
-    // 40 in/s costs 6V to hold at kV = 0.15, so a 0.1s closed loop on a 0.2s plant
-    // asks for twice that on the first loop, which is exactly a 12V pack.
-    expect(firstLoopDemandVolts(PLANT, design({tauClosedLoop: 0.1}), 40)).toBeCloseTo(12, 6);
+  it('honours the controller floor of four loop periods', () => {
+    const floored = firstLoopDemandVolts(PLANT, design({tauClosedLoop: 4 * DT}), 40, DT);
+    const tooFast = firstLoopDemandVolts(PLANT, design({tauClosedLoop: 0.0001}), 40, DT);
+    expect(tooFast).toBeCloseTo(floored, 12);
+  });
+
+  it('matches the exact discrete value in the worked example', () => {
+    expect(firstLoopDemandVolts(PLANT, design({tauClosedLoop: 0.1}), 40, DT)).toBeCloseTo(
+      11.429,
+      3,
+    );
   });
 });

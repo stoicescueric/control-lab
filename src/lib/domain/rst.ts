@@ -67,27 +67,38 @@ export function clamp(value: number, min: number, max: number): number {
  * controller quietly retunes itself when the loop period moves.
  */
 export function solveRst(plant: FirstOrderPlant, design: RstDesign, dt: number): RstCoefficients {
+  if (!Number.isFinite(dt) || dt <= 0) {
+    throw new RangeError('dt must be a finite, positive number');
+  }
+
   const a = Math.exp(-dt / Math.max(plant.tau, 1e-4));
   const b = plant.kDc * (1 - a);
+
+  if (!Number.isFinite(b) || Math.abs(b) < 1e-9) {
+    throw new RangeError('the discrete plant gain b is too small to solve an RST controller');
+  }
 
   // A pole cannot usefully be placed faster than a handful of loop periods,
   // however good the model, so the request is floored rather than honoured.
   const p1 = Math.exp(-dt / Math.max(design.tauClosedLoop, 4 * dt));
   const p2 = Math.exp(-dt / Math.max(design.tauIntegral, 1e-4));
 
+  if (!Number.isFinite(p1) || !Number.isFinite(p2)) {
+    throw new RangeError('controller time constants must be finite numbers');
+  }
+
   const alpha1 = -(p1 + p2);
   const alpha2 = p1 * p2;
 
-  const safeB = Math.abs(b) < 1e-9 ? 1e-9 : b;
-  const t0 = design.cancelIntegralPole ? (1 - p1) / safeB : (1 + alpha1 + alpha2) / safeB;
+  const t0 = design.cancelIntegralPole ? (1 - p1) / b : (1 + alpha1 + alpha2) / b;
 
   return {
     a,
     b,
     p1,
     p2,
-    r0: (alpha1 + 1 + a) / safeB,
-    r1: (alpha2 - a) / safeB,
+    r0: (alpha1 + 1 + a) / b,
+    r1: (alpha2 - a) / b,
     t0,
   };
 }
@@ -120,7 +131,15 @@ export function stepRst(
     state.primed = true;
   }
 
-  const k = solveRst(plant, design, dt);
+  if (!Number.isFinite(voltLimit) || voltLimit < 0) return state.previousOutput;
+
+  let k: RstCoefficients;
+  try {
+    k = solveRst(plant, design, dt);
+  } catch (error) {
+    if (error instanceof RangeError) return state.previousOutput;
+    throw error;
+  }
   const referenceTerm = design.cancelIntegralPole
     ? k.t0 * (reference - k.p2 * state.previousReference)
     : k.t0 * reference;
@@ -167,18 +186,17 @@ export function stepPlant(
 }
 
 /**
- * Volts the first loop of a step asks for, before any clamp.
+ * Reference-driven voltage increment on the first loop of a step, before any clamp.
  *
- * Matching the plant's own response to the one requested gives a demand of
- * `(tau / tauClosedLoop)` times what holding the reference costs, which is the
- * price of the design parameter and the reason it cannot be made arbitrarily
- * small. Returned as a bare number so a caller can compare it with a supply.
+ * This uses the same discrete coefficients and four-loop floor as `stepRst`.
+ * The total command also includes the command at the previous operating point,
+ * so callers should describe this value as an increment rather than total volts.
  */
 export function firstLoopDemandVolts(
   plant: FirstOrderPlant,
   design: RstDesign,
-  reference: number,
+  referenceChange: number,
+  dt: number,
 ): number {
-  const steady = reference / Math.max(plant.kDc, 1e-9);
-  return (plant.tau / Math.max(design.tauClosedLoop, 1e-4)) * steady;
+  return solveRst(plant, design, dt).t0 * referenceChange;
 }

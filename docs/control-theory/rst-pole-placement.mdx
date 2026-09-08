@@ -24,7 +24,9 @@ your own robot. A PID loop then throws most of that away: it takes the error and
 more numbers, tuned by feel, whose units nobody states. The model you just measured is a complete
 description of the mechanism, and a controller can be solved for rather than tuned.
 
-<Problem title="A tuned gain is a number that only works where it was tuned">
+<Problem>
+
+## A tuned gain is a number that only works where it was tuned
 
 Tune a velocity PID on a drivetrain at a 20 ms loop and it behaves differently at 45 ms, because the
 integral is a running sum and the derivative a difference over a $\Delta t$ that changed. Tune it on a
@@ -54,15 +56,25 @@ confirm or refute, in a way that `kP = 0.004` is not.
 
 Two things are worth doing before reading the derivation:
 
-- **Drag `tauClosedLoop` down.** The lower plot is the price. The first-loop demand is
-  `(tau / tauClosedLoop)` times what holding the reference costs, so halving the time constant doubles
-  the voltage, and below about a third of the plant's own `tau` the trace flattens against the supply.
-  Once it saturates, the response stops matching the request no matter what the slider says.
+- **Drag `tauClosedLoop` down.** The lower plot is the price. For a reference change $\Delta v$, the
+  first-loop reference increment is
+
+  $$
+  \Delta u_{ref} = \frac{1 - e^{-\Delta t / \tau_{cl}}}{k_{dc}(1 - e^{-\Delta t / \tau})}\,\Delta v
+  $$
+
+  When $\Delta t$ is small relative to both time constants, that approaches
+  $(\tau/\tau_{cl})(\Delta v/k_{dc})$, so halving $\tau_{cl}$ roughly doubles the increment. The
+  readout uses the exact discrete coefficients, including the four-loop floor. The total command also
+  includes the voltage already holding the previous speed. Once it saturates, the response stops
+  matching the request no matter what the slider says.
 - **Compare the two traces.** They are the same poles on the same plant, differing only in how the
   reference enters. Press **Slow the integral pole** and watch the pink one fall behind while the green
   one does not move.
 
-<Theory title="Solve the controller from the plant and the response you want">
+<Theory>
+
+## Solve the controller from the plant and the response you want
 
 ### The plant a feedforward already describes
 
@@ -223,7 +235,9 @@ separate integral term to freeze.
 
 </Theory>
 
-<Deploy title="One method, recomputed from the measured loop time">
+<Deploy>
+
+## One method, recomputed from the measured loop time
 
 Every coefficient above depends on $\Delta t$, so all of them are computed inside the loop from the
 $\Delta t$ that actually elapsed. A fixed-coefficient discrete controller quietly retunes itself when
@@ -280,14 +294,23 @@ Storing the clamped `output` is the anti-windup, and it is the only anti-windup 
 <Exercise title="How aggressive tauClosedLoop can be">
 
 A drivetrain measures $k_V = 0.15$ V per in/s and $k_A = 0.03$ V per in/s², so $\tau = 0.2$ s and
-$k_{dc} = 6.7$ in/s per volt. Holding 40 in/s therefore costs about 6 V. Matching the plant's own
-response to the one you asked for makes the first-loop demand $(\tau/\tau_{cl})$ times that steady
-voltage. On a 12 V pack, what is the smallest $\tau_{cl}$ that does not saturate on a step to 40 in/s?
+$k_{dc} = 6.7$ in/s per volt. The loop runs every $\Delta t = 0.02$ s, and $k_S = 1.4$ V. For
+$\tau_{cl} = 0.1$ s, calculate the exact reference-step voltage increment for a settled step from 0 to
+40 in/s. Does the total command fit on a 12 V battery after adding the static-friction voltage?
 
 <Solution>
 
-$\tau/\tau_{cl} \le 12/6 = 2$, so $\tau_{cl} \ge 0.1$ s. Ask for 0.05 s and the loop wants 24 V, gets
-12, and tracks a response half as fast as the one specified while the integrator makes up the rest.
+$a = e^{-0.02/0.2} = 0.905$, $p_1 = e^{-0.02/0.1} = 0.819$, and
+$b = 6.7(1-a) = 0.634$. Therefore
+
+$$
+\Delta u_{ref} = \frac{1-p_1}{b}(40) = 11.43\ \text{V}
+$$
+
+Adding $k_S$ asks for about 12.83 V, so the command saturates. Solving
+$k_S + \Delta u_{ref} \le 12$ gives $\tau_{cl} \gtrsim 0.109$ s before leaving any extra margin. The
+continuous approximation gives a 12 V reference increment at $\tau_{cl} = 0.1$ s, but the discrete
+calculation is the value the implemented controller actually uses.
 
 </Solution>
 
