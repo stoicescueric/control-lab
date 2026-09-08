@@ -68,7 +68,9 @@ This is why "the IK answer" is not always a single answer. Sometimes there are t
 avoids collisions, respects joint limits, keeps the claw level, and does not jerk the mechanism between
 two distant configurations.
 
-<Problem title="Start with the picture">
+<Problem>
+
+## Start with the picture
 
 Drag the orange target. The software solves for two joint angles: the shoulder angle and the elbow angle.
 Try both elbow-up and elbow-down. They can reach the same point, which is the first important lesson:
@@ -87,7 +89,9 @@ continuous from the current pose, not just mathematically valid.
 
 </Problem>
 
-<Theory title="Forward kinematics: angles to position">
+<Theory>
+
+## Forward kinematics: angles to position
 
 It is easier to understand inverse kinematics if we first write the opposite direction. **Forward
 kinematics** means: if the joint angles are known, where is the claw?
@@ -256,7 +260,9 @@ that the actuator commands are wheel speeds instead of joint angles.
 
 </Theory>
 
-<Deploy title="A clean FTC implementation">
+<Deploy>
+
+## A clean FTC implementation
 
 Keep inverse kinematics out of your OpMode. Your OpMode should ask for a target; a kinematics class
 should return the joint angles. That separation makes the math testable and keeps hardware code from

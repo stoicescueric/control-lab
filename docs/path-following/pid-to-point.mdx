@@ -26,7 +26,9 @@ a [mecanum mixer](./mecanum-kinematics.mdx) that turns a chassis command
 into wheel powers, and [angle wrapping](./angle-wrapping.mdx) so heading errors behave. PID-to-point is
 the loop that connects them.
 
-<Problem title="Get to a target pose, with nothing but feedback">
+<Problem>
+
+## Get to a target pose, with nothing but feedback
 
 The task: drive from wherever the robot is to a target pose $(x^*, y^*, \theta^*)$ and stop there.
 No precomputed path, no velocity plan — just look at how far off you are and push toward the goal each
@@ -38,7 +40,9 @@ far, ease in when close, and hold the final heading without spinning the long wa
 
 </Problem>
 
-<Theory title="Feedback on the error, in the robot's frame">
+<Theory>
+
+## Feedback on the error, in the robot's frame
 
 Start with the **field-frame error**: how far the target is from the robot right now:
 
@@ -261,7 +265,9 @@ instead of chasing a point.
 
 </Theory>
 
-<Deploy title="A go-to-pose loop">
+<Deploy>
+
+## A go-to-pose loop
 
 ### Core checkpoint
 

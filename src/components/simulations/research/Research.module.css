@@ -318,6 +318,75 @@
   font-size: 0.68rem;
   line-height: 1.35;
 }
+.timeline {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin: 0.9rem 0;
+  color: #b9c5de;
+  font-size: 0.72rem;
+}
+.timeline div {
+  min-width: 72px;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.65rem;
+  border: 1px solid #31405f;
+  background: #101a2c;
+}
+.timeline div:first-child {
+  border-left: 4px solid #ffc66d;
+}
+.timeline div:nth-child(2) {
+  border-left: 4px solid #7b9cff;
+}
+.timeline strong {
+  color: white;
+  font-size: 0.86rem;
+}
+.timeline > span {
+  align-self: center;
+  max-width: 120px;
+  padding-left: 0.5rem;
+  line-height: 1.35;
+}
+.strategyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+.strategyGrid section {
+  padding: 0.85rem;
+  border: 1px solid #31405f;
+  border-radius: 8px;
+  background: #101a2c;
+}
+.strategyGrid section:first-child {
+  border-top: 3px solid #7b9cff;
+}
+.strategyGrid section:last-child {
+  border-top: 3px solid #ffc66d;
+}
+.strategyGrid span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #93a9cc;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+}
+.strategyGrid strong {
+  color: #fff;
+  font-size: 0.94rem;
+}
+.strategyGrid ol {
+  margin: 0.65rem 0 0;
+  padding-left: 1.25rem;
+  color: #b9c5de;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
 @media (max-width: 640px) {
   .split {
     grid-template-columns: 1fr;
@@ -352,6 +421,18 @@
   }
   .methodRail {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .timeline {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+  }
+  .timeline > span {
+    grid-column: 1 / -1;
+    max-width: none;
+    padding: 0.35rem 0 0;
+  }
+  .strategyGrid {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 640px) {

@@ -23,7 +23,9 @@ The low-pass filter is the most valuable line of code in embedded control: it re
 sensor jitter, costs one multiply and one add, and stores a single number. If a reading is too noisy
 to act on, this is the first thing to try.
 
-<Problem title="Fast noise rides on top of a slow signal">
+<Problem>
+
+## Fast noise rides on top of a slow signal
 
 Real signals usually change slowly; noise changes quickly. A raw distance-sensor reading or an
 AprilTag bearing carries both, and the fast component is what ruins downstream logic — most painfully a PID
@@ -39,7 +41,9 @@ The water level is the filtered output.
 
 </Problem>
 
-<Theory title="One step toward each new reading">
+<Theory>
+
+## One step toward each new reading
 
 Each loop, move the estimate a fraction $\alpha \in (0, 1)$ of the way from its current value toward
 the new measurement:
@@ -134,7 +138,9 @@ accumulated history — there is no setting that wins both.
 
 </Theory>
 
-<Deploy title="One line in the loop, tuned to dt">
+<Deploy>
+
+## One line in the loop, tuned to dt
 
 The implementation is trivial; the engineering is choosing $\alpha$ from a target time constant and
 the measured loop time, so behaviour is independent of how fast the loop happens to run.

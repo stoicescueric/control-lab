@@ -1,7 +1,7 @@
 ---
 title: "Elective Case Study: Reliable Shooting"
-description: "Follow a real FTC launcher from drag-aware flight prediction to robust shot selection and calibration."
-tags: [trajectory-generation, research, calibration]
+description: "Follow a real FTC launcher from drag-aware prediction and robust selection to calibration, moving-shot compensation, and an empirical LUT comparison."
+tags: [trajectory-generation, research, calibration, shoot-on-the-move]
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';
@@ -20,11 +20,13 @@ The robot launches a light, perforated ball through a raised opening. Its simula
 
 <Workflow />
 
-## Follow one shot through three lessons
+## Follow one shot through five lessons
 
 1. **[Predict Where the Ball Enters](./trajectory-simulation.mdx).** See why drag changes the crossing, and why the ball’s center needs clearance from both lips.
 2. **[Choose a Shot That Tolerates Errors](./robust-shot-selection.mdx).** Compare nearby speed–angle commands and find the one with the most successful perturbations.
 3. **[Turn the Model into Launcher Commands](./launcher-calibration.mdx).** Measure the wheel-to-ball transfer, interpolate calibrated settings, and recover after a shot.
+4. **[Aim While the Robot Moves](./shoot-on-the-move.mdx).** Shift a virtual target opposite inherited chassis velocity and iterate the distance-dependent flight time.
+5. **[Model-Guided Shot or Two Empirical LUTs?](./model-vs-empirical-lut.mdx).** Compare simulation-guided calibration with a denser physical wheel-and-hood campaign.
 
 The first two lessons share the paper’s **70-inch (1.778 m) front-lip distance** and its selected **5.25 m/s, 58°** command. Every experiment has a reset button so you can return to its worked example.
 
@@ -32,7 +34,7 @@ The first two lessons share the paper’s **70-inch (1.778 m) front-lip distance
 
 Start with vectors, [differential equations](../preface/why-math-matters/differential-equations.mdx), [measured loop timing](../software-architecture/discretization.mdx), and [feedforward with feedback](../control-theory/feedforward.mdx). The pictures and experiments come before the derivations. Expand the mathematics when you want to understand the implementation in more detail.
 
-By the end, you should be able to explain why a simulator can be numerically accurate yet still need calibration, why a wide stress box is not a probability model, and how synchronized measurements turn wheel speed into a trustworthy exit-speed map.
+By the end, you should be able to explain why a simulator can be numerically accurate yet still need calibration, why a wide stress box is not a probability model, how chassis velocity changes the aim point, and when additional empirical LUT data is worth the field time.
 
 ## Research paper
 

@@ -25,7 +25,9 @@ jitter but does nothing about drift. No amount of averaging fixes a sensor whose
 away from the truth. For drift you need a second sensor — one that never walks — and a rule for
 combining the two.
 
-<Problem title="The motor encoder is fast but lies slowly; the absolute encoder is honest but rough">
+<Problem>
+
+## The motor encoder is fast but lies slowly; the absolute encoder is honest but rough
 
 Put an arm on a robot and you usually have two ways to measure its angle:
 
@@ -43,7 +45,9 @@ is the whole trick.
 
 </Problem>
 
-<Theory title="Predict, then correct on the angle circle">
+<Theory>
+
+## Predict, then correct on the angle circle
 
 First predict from the motor encoder's relative motion. Then correct toward the absolute sensor through
 the shortest angular innovation:
@@ -117,7 +121,9 @@ three angle wraps per loop.
 
 </Theory>
 
-<Deploy title="One line per loop">
+<Deploy>
+
+## One line per loop
 
 The fast source enters as a *delta* (ticks moved since last loop), the honest source as an *absolute*
 reading. Seed the estimate from the absolute sensor so the filter starts true:

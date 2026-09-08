@@ -23,7 +23,9 @@ This is the shortest lesson in the module and the one that fixes the most baffli
 *turns* a robot to a target heading — `turnTo`, a heading-hold PID, the rotation term of a
 [PID-to-point](./pid-to-point.mdx) controller — depends on it.
 
-<Problem title="The robot spins 358° to turn 2°">
+<Problem>
+
+## The robot spins 358° to turn 2°
 
 Your robot is facing $179°$. You command it to $-179°$ — a gentle $2°$ nudge across "straight back."
 The controller computes its error the obvious way:
@@ -38,7 +40,9 @@ direction to reach a heading that was $2°$ away. Same bug, subtler symptom: nea
 
 </Problem>
 
-<Theory title="Angles are on a circle, not a number line">
+<Theory>
+
+## Angles are on a circle, not a number line
 
 Heading is **periodic**: $\theta$, $\theta + 360°$, and $\theta - 360°$ are the same direction. So
 $-179°$ and $+181°$ label the same heading — and now the error is an easy $+2°$. The subtraction wasn't
@@ -76,7 +80,9 @@ Wrapping only the target or only the measurement still leaves a difference that 
 
 </Theory>
 
-<Deploy title="One helper, used everywhere a heading appears">
+<Deploy>
+
+## One helper, used everywhere a heading appears
 
 <JavaCode league="FTC" label="Angle wrapping and a heading hold">{`// The angle in [-pi, pi) pointing the same way as a.
 static double wrap(double a) {

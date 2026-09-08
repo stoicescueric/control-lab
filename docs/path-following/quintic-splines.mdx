@@ -27,7 +27,9 @@ PID-to-point and predictive deceleration drive to *one* target. Real autonomous 
 many waypoints, and the path *between* them has to be drivable — smooth not just in position but in how
 sharply it bends. That bending is curvature, and curvature is where simple paths quietly fail.
 
-<Problem title="The robot jerks at every waypoint">
+<Problem>
+
+## The robot jerks at every waypoint
 
 Chain simple segments between waypoints and the path *looks* smooth: no kinks, continuous heading. But
 run a follower along it and the robot snaps its steering at each join. The reason is invisible in the
@@ -40,7 +42,9 @@ opposite philosophies.
 
 </Problem>
 
-<Theory title="Continuity: how smooth is smooth enough">
+<Theory>
+
+## Continuity: how smooth is smooth enough
 
 "Smoothness" is graded by how many derivatives match across a join:
 
@@ -237,7 +241,9 @@ coefficients.
 
 </Theory>
 
-<Deploy title="Evaluate either curve on the Control Hub">
+<Deploy>
+
+## Evaluate either curve on the Control Hub
 
 Both reduce to evaluating a polynomial (and its derivatives) per coordinate each loop.
 

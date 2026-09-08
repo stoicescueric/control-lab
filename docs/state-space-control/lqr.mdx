@@ -19,7 +19,9 @@ bill. Bryson's rule turns that pricing into two numbers any team can name: the e
 and the volts you have.
 </Abstract>
 
-<Problem title="A gain matrix is worse to hand-tune than three PID knobs">
+<Problem>
+
+## A gain matrix is worse to hand-tune than three PID knobs
 
 PID tuning is at least famous. Everyone knows the folklore: raise kP until it oscillates, add kD, add
 a little kI. A gain *matrix* has no folklore. For a two-state elevator, $K$ has two coupled entries,
@@ -32,7 +34,9 @@ tool that converts exactly those two sentences into a gain.
 
 </Problem>
 
-<Theory title="Price the error, price the effort, minimize the bill">
+<Theory>
+
+## Price the error, price the effort, minimize the bill
 
 LQR (the **l**inear-**q**uadratic **r**egulator) scores every possible controller by a running cost. This
 page designs directly for the robot's 20 ms sampled loop:
@@ -157,7 +161,9 @@ precisely optimal for a robot that does not exist. Garbage model in, optimal gar
 
 </Theory>
 
-<Deploy title="The full loop in WPILib, one line in FTC">
+<Deploy>
+
+## The full loop in WPILib, one line in FTC
 
 FRC ships the complete stack: the model, the Kalman filter that estimates the state, the LQR that
 computes $K$, and a wrapper that runs predict–correct–control every loop.

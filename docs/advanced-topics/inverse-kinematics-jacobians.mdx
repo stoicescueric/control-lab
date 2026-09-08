@@ -59,7 +59,9 @@ joint limits, a fixed wrist angle, "keep the claw parallel to the floor," "prefe
 the previous solution." A virtual four-bar is the hardware version of such a constraint: it removes a
 degree of freedom so the end of the mechanism stays parallel to the base.
 
-<Problem title="Keep the same picture, change the question">
+<Problem>
+
+## Keep the same picture, change the question
 
 In the demo below, the closed-form solver jumps directly to the exact two-link answer. A numerical IK
 solver would do something more iterative: start from the current arm pose, measure the claw error, use the
@@ -69,7 +71,9 @@ Jacobian to estimate a joint-angle correction, move a little, and repeat.
 
 </Problem>
 
-<Theory title="The Jacobian is a sensitivity matrix">
+<Theory>
+
+## The Jacobian is a sensitivity matrix
 
 For the same two-link arm, forward kinematics gives:
 
@@ -256,7 +260,9 @@ That is not just a math trick. It is a control loop in geometry space.
 
 </Theory>
 
-<Deploy title="A practical numerical IK skeleton">
+<Deploy>
+
+## A practical numerical IK skeleton
 
 This is intentionally a skeleton rather than a copy-paste subsystem. The point is the separation:
 geometry computes small angle corrections; your real subsystem still owns encoder offsets, feedforward,

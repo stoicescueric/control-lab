@@ -23,7 +23,9 @@ giving fast moves that don't overshoot.
 the question before it: *what should the target even be at this instant?* Instead of commanding the final
 position and hoping, you command a moving target that respects the mechanism's real limits.
 
-<Problem title="A step command asks for infinite acceleration">
+<Problem>
+
+## A step command asks for infinite acceleration
 
 Tell a lift "go to the top" and your controller sees the full error immediately. A proportional term
 applies full power all at once, the lift jerks, the current spikes, and feedforward — which is fed the *target*
@@ -34,7 +36,9 @@ means infinite acceleration. Real hardware has a top speed and a max acceleratio
 
 </Problem>
 
-<Theory title="The trapezoidal profile">
+<Theory>
+
+## The trapezoidal profile
 
 The simplest profile that respects both limits is the **trapezoid**: accelerate at the limit $a_\text{max}$
 until you hit the cruise speed $v_\text{max}$, hold it, then decelerate at $a_\text{max}$ to arrive at the
@@ -102,7 +106,9 @@ reach for S-curves only when jerk visibly hurts.
 
 </Theory>
 
-<Deploy title="Sample the profile each loop">
+<Deploy>
+
+## Sample the profile each loop
 
 Build the profile once from your limits, then ask it for the target state at the current time every loop
 and hand that to your feedforward + PID controller.

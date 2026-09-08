@@ -25,7 +25,9 @@ Every controller in this module — PID, feedforward, motion profiling — is an
 answering one question: *what voltage now?* So before any of that, you have to know what the motor **is**
 and what it does with that voltage. We'll build it up from the parts, not down from an equation.
 
-<Problem title="The mechanism that's fast empty and useless under load">
+<Problem>
+
+## The mechanism that's fast empty and useless under load
 
 A team gears a lift for very high speed. With no load on the bench, it races to the top. Hang a game
 element on it and it slows to a near stop, gets too hot to touch, and two matches later browns out (a
@@ -45,7 +47,9 @@ just slowly. The pedals (the motor) didn't change; the <em>load</em> did. There 
 
 </Problem>
 
-<Theory title="Build it from the parts up">
+<Theory>
+
+## Build it from the parts up
 
 ### What's inside
 
@@ -342,7 +346,9 @@ Learn the motor and the controllers stop being magic.
 
 </Theory>
 
-<Deploy title="Production extension: gearing, current, and code">
+<Deploy>
+
+## Production extension: gearing, current, and code
 
 You bolt a gearbox to the motor to *move the useful part of the curve* to where your mechanism lives. A
 reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (minus losses):

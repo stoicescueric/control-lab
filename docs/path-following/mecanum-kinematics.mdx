@@ -24,7 +24,9 @@ Good news: this is one of the easier topics in the whole curriculum. There is no
 matrix to invert — just some adding and subtracting, done sixty times a second. By the end you will be
 able to write a clean teleop drive from memory.
 
-<Problem title="Three numbers in, four motors out">
+<Problem>
+
+## Three numbers in, four motors out
 
 The driver gives you three numbers from two thumbsticks: how much to go **forward**, how much to
 **strafe** (slide sideways), and how much to **turn**. Your robot has four motors. Every loop you have to
@@ -38,7 +40,9 @@ We'll fix both.
 
 </Problem>
 
-<Theory title="One idea: each wheel pushes along a diagonal">
+<Theory>
+
+## One idea: each wheel pushes along a diagonal
 
 A mecanum wheel has little rollers wrapped around it at **45°**. Because of that angle, when the wheel
 spins it doesn't grip straight forward like a normal wheel — it grips along a **diagonal**. The four
@@ -212,7 +216,9 @@ is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills d
 
 </Theory>
 
-<Deploy title="A clean field-centric teleop drive">
+<Deploy>
+
+## A clean field-centric teleop drive
 
 The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
 
@@ -370,14 +376,18 @@ posts are one inverted motor.
 
 </Admonition>
 
-<Admonition type="info" title="Sources & references">
+<Admonition type="info" title="Sources and further reading">
 
-This lesson follows two excellent public tutorials, adapted to our curriculum's conventions
+This lesson follows three excellent public tutorials, adapted to our curriculum's conventions
 (+x forward, +y left, +ω CCW):
 
 - **Wheel kinematics and the mixing matrix**: ECAM Eurobot,
   [*Mecanum wheel kinematics*](https://ecam-eurobot.github.io/Tutorials/mechanical/mecanum.html).
 - **The FTC wheel-power equations, field-centric rotation, normalization, and the strafe correction** —
   gm0, [*Mecanum Drive*](https://gm0.org/en/latest/docs/software/tutorials/mecanum-drive.html).
+- **Joystick direction and magnitude, 45° roller-force intuition, sinusoidal wheel contributions,
+  turn superposition, and common-factor normalization** — SEA Monsters 2605,
+  [*How a Mecanum Drive Works*](https://seamonsters-2605.github.io/archive/mecanum/). Its interactive
+  diagrams are a useful second explanation before deriving the four-sign mixer by hand.
 
 </Admonition>

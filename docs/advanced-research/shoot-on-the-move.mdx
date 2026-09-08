@@ -1,0 +1,205 @@
+---
+title: Aim While the Robot Moves
+description: "Build a firing table, lead a virtual target with relative velocity, and use time-of-flight recursion to refine and judge a moving-shot solution."
+sidebar_position: 4
+tags: [research, shoot-on-the-move, fire-control, interpolation, fixed-point-iteration]
+---
+
+import ShootOnTheMove from '@site/src/components/simulations/research/ShootOnTheMove';
+
+# Aim While the Robot Moves
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Fire control by recursion follows one reusable pattern: guess the time of flight, lead a virtual target by the predicted relative motion, look up the new flight time, and adjust until it stops changing. The iteration produces both an aim point and evidence about whether that solution is stable enough to use.
+</Abstract>
+
+Throw a ball to someone who is running and you do not aim at where they are. You lead them. A launcher on a moving robot has the same problem even when the field target is fixed: the ball leaves with part of the chassis velocity, so the target moves relative to the projectile.
+
+The [WPILib Fire Control sequence](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) calls the solution **lead-and-adjust**. It is deliberately mechanism-independent because the physical shooter is already summarized by a firing table.
+
+## First build a firing table
+
+A stationary firing table maps target distance to three values:
+
+1. the flywheel command;
+2. the hood command;
+3. the measured or modeled time for the ball to reach the scoring event.
+
+The first two reproduce the shot. The time-of-flight column makes motion compensation possible. It lets the moving-shot solver reason only about geometry and time while the table carries the nonlinear launcher behavior, drag, spin, and contact effects measured during calibration.
+
+Choose one smooth **firing strategy** across neighboring distances. If nearby rows jump between unrelated high and low arcs, interpolation becomes unreliable and the recursion inherits those discontinuities. The WPILib [static firing-table article](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/static-shooting.html) recommends starting with a coarse table, increasing resolution where validation shows it is needed, and recording flight time during the same campaign.
+
+For this robot, the archived table stores the descending rim-event time:
+
+| Distance (in) | 50 | 60 | 76 | 85 | 95 | 110 | 130 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| Rim flight time (s) | 0.50 | 0.54 | 0.60 | 0.70 | 0.80 | 0.95 | 1.05 |
+
+These are the seven knots in `Sensors.java` at firmware commit `75db349d`. They describe time to the rim event, not the later time when a plotted path reaches the floor.
+
+## Lead, look up, and adjust
+
+The general recursion starts with relative target position $\mathbf q_0$ and relative velocity $\dot{\mathbf q}$. For a fixed field target and translating robot, $\dot{\mathbf q}=-\mathbf v_R$. This deployment also includes a fitted inherited-velocity gain $G$ and feeder delay $t_d$:
+
+$$
+\mathbf p_v=\mathbf p_g-G\mathbf v_R(t_d+t_f).
+$$
+
+Here $\mathbf p_s$ is the shooter, $\mathbf p_g$ is the real target, $\mathbf p_v$ is the virtual target, $\mathbf v_R$ is chassis velocity, $G=0.9$, and $t_d=0.05\ \mathrm{s}$. The minus sign shifts the aim point opposite the robot's motion. When $\mathbf v_R=\mathbf 0$, the correction vanishes.
+
+The four-step loop is:
+
+1. **Guess** flight time from the real-target distance.
+2. **Lead** by shifting the virtual target through the predicted platform displacement.
+3. **Adjust** by looking up flight time at the virtual distance.
+4. **Repeat** until successive flight times differ by less than the chosen tolerance.
+
+This is the [dynamic shooting recursion](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html), specialized to a fixed FTC target and the measured inheritance gain from the research system.
+
+:::tip[Predict the correction direction]
+Choose **Sideways** and predict which side of the real target becomes the virtual target. Compare **Approaching** and **Retreating**, then step through the rows. Direct approach and retreat change virtual distance strongly, so they also expose more of the time map.
+:::
+
+<ShootOnTheMove />
+
+## Worked example: the first shift is 1.1475 m
+
+At **95 inches**, the real-target lookup starts at $t_f=0.80\ \mathrm{s}$. For a sideways chassis speed of $1.5\ \mathrm{m/s}$,
+
+$$
+\lVert\Delta\mathbf p\rVert
+=0.9(1.5)(0.05+0.80)
+=\mathbf{1.1475\ m}.
+$$
+
+That first virtual target is farther from the shooter than the real target, so its lookup returns a longer time. The next update uses that time and moves the aim point again. Intermediate wheel and hood commands are unnecessary; only the converged virtual distance is used to query the final firing command.
+
+## Treat convergence as a shot-quality signal
+
+The scalar update is
+
+$$
+t_{k+1}=t_f\!\left(\left\lVert
+\mathbf p_g-G\mathbf v_R(t_d+t_k)-\mathbf p_s
+\right\rVert\right).
+$$
+
+The archived solver starts with the real-target time, stops when $|t_{k+1}-t_k|\le0.05\ \mathrm{s}$, and allows at most five updates. The final time increment is therefore a residual, not just a loop condition.
+
+When three useful iterates exist, estimate the local contraction rate with
+
+$$
+\widehat\rho=\left|\frac{t_{k+1}-t_k}{t_k-t_{k-1}}\right|.
+$$
+
+A small $\widehat\rho$ means the time error is shrinking quickly. A value near one means the solution is fragile: a small velocity or timing error can move the aim point substantially. Ignore ratios whose denominator is near machine precision. The interactive experiment reports this as a diagnostic, not a universal fire/no-fire threshold.
+
+The paper provides a conservative bound from the clamped time map. Its maximum slope is $M=0.4867\ \mathrm{s/m}$, so
+
+$$
+q=G\lVert\mathbf v_R\rVert M<1
+$$
+
+guarantees a unique fixed point. With $G=0.9$, the sufficient speed limit is **2.28 m/s**. An offline replay of 1,399,392 cases through 1.7 m/s met the deployed tolerance by update five; 170 cases used all five. These are deterministic grid checks, not physical scoring probabilities.
+
+Before releasing, check all of the following:
+
+- pose and velocity are finite, recent, and expressed in the same field frame;
+- the virtual distance remains inside the calibrated table or clamping is explicitly permitted;
+- the iteration converged within its budget and the final residual is below the tuned threshold;
+- chassis speed and estimated contraction rate lie inside a range validated on the real robot;
+- flywheel and hood have reached their final commands.
+
+There is no source-independent stability threshold. Tune the release gate from measured misses and entries at the velocities and approach angles your drivers use.
+
+## Next step: Newton can solve faster
+
+Fixed-point recursion is easy to implement and usually converges in three to five updates. In poorly conditioned directions it can converge slowly. The WPILib follow-on article reformulates the target as a root:
+
+$$
+E(t)=t-t_f(D(t))=0,
+$$
+
+then applies [Newton's method for dynamic shooting](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html). For an empirical table, it keeps the exact LUT residual but uses a smooth constant-projectile-speed derivative proxy instead of differentiating noisy knots.
+
+Newton reduces numerical iterations. It does **not** make a physically fragile shot less sensitive to velocity error, and it is more sensitive to the initial guess. Use it when the fixed five-update budget is the limiting failure, while keeping the same speed, residual, calibration-range, and stability guards.
+
+## Next step: decide how drag changes inherited motion
+
+The WPILib [linear-drag extension](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/linear-drag.html) replaces the platform displacement time $t$ with
+
+$$
+\alpha(t)=\frac{1-e^{-kt}}{k},
+$$
+
+so the inherited displacement becomes $\mathbf v_R\alpha(t)$. This is a useful first-order model for induced windage.
+
+The launcher in this case study uses a perforated ball and a quadratic-drag flight model. Its deployed controller used the fitted gain $G=0.9$ instead. The paper's transverse-drag calculation makes that value plausible, but does not prove it is interchangeable with a linear-drag constant. Choose one correction model, identify its parameter from moving-shot data, and validate it rather than stacking both formulas without evidence.
+
+The archived acceleration feed-forward coefficient was zero. If acceleration persists during the delay, the paper bounds its omitted first-order displacement by
+
+$$
+\lVert\delta\mathbf p_a\rVert\le
+\lVert\mathbf a_R\rVert\left(t_dt_f+\frac{t_d^2}{2}\right),
+$$
+
+or **2.6–5.4 cm per 1 m/s²** across the archived time table. This makes acceleration near release a measurement and gating problem before it becomes another term in the controller.
+
+## What the controlled launches establish
+
+The paper alternated compensation OFF and ON within each commanded-speed block, with 15 launches per state:
+
+| Chassis state | Stationary | 0.5 m/s | 0.8 m/s | 1.5 m/s | 1.7 m/s |
+|---|---:|---:|---:|---:|---:|
+| SOTM OFF | 15/15 | 13/15 | 10/15 | 5/15 | 2/15 |
+| SOTM ON | 15/15 | 15/15 | 15/15 | 13/15 | 11/15 |
+
+Stationary entry was 15/15 in both states, checking the zero-velocity behavior. Across moving conditions, entry increased from **30/60 to 54/60**. This supports the complete compensation method under those speed strata. It does not isolate the gain, delay, velocity filter, time map, or release gate. Source: research paper §8.3, Table 3.
+
+## Java: return the solution and its evidence
+
+<JavaCode league="FTC" label="Solve and report a moving-shot aim point">{`AimResult movingAim(Vec2 shooter, Vec2 target, Vec2 robotVelocity) {
+    double time = flightTime.getClamped(target.minus(shooter).norm());
+    Vec2 virtualTarget = target;
+    double residual = Double.POSITIVE_INFINITY;
+    boolean clamped = false;
+
+    for (int update = 0; update < 5; update++) {
+        double totalTime = 0.05 + time;
+        virtualTarget = target.minus(robotVelocity.times(0.9 * totalTime));
+
+        Lookup next = flightTime.lookup(virtualTarget.minus(shooter).norm());
+        residual = Math.abs(next.value() - time);
+        clamped |= next.clamped();
+        if (residual <= 0.05) {
+            return new AimResult(virtualTarget, true, clamped, residual, update + 1);
+        }
+        time = next.value();
+    }
+    return new AimResult(virtualTarget, false, clamped, residual, 5);
+}`}</JavaCode>
+
+The release command should consume the status as well as the point. A finite virtual target from a clamped or unconverged solve is still an unsafe command unless that condition was validated deliberately.
+
+<Exercise title="Choose the sign">
+The robot moves at $+1.0\ \mathrm{m/s}$ along the field's $y$ axis. The delay plus flight time is $0.75\ \mathrm{s}$ and $G=0.9$. What $y$ correction should be applied to the real target?
+<Solution>
+$-0.9(1.0)(0.75)=-0.675\ \mathrm{m}$. The virtual target moves 0.675 m in the negative $y$ direction, opposite the inherited chassis velocity.
+</Solution>
+</Exercise>
+
+<Admonition type="info" title="Sources and further reading">
+
+- [WPILib Fire Control](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) — the lead-and-adjust overview and reading order.
+- [Static Shooting via Look-Up Table](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/static-shooting.html) — how firing-table resolution, smooth strategy selection, and recorded flight time prepare dynamic shooting.
+- [Dynamic Shooting via Time-of-Flight Recursion](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html) — the mechanism-independent recursion and convergence-based quality diagnostics used to organize this lesson.
+- [Newton's Method for Dynamic Shooting](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html) — a faster root solver and the distinction between numerical convergence and physical sensitivity.
+- [Linear Drag](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/linear-drag.html) — an optional induced-windage correction for systems where a first-order drag model is justified.
+- [This elective's audited research paper](./index.mdx#research-paper) — the quadratic-drag model, archived controller constants, convergence audit, acceleration bound, and controlled FTC launch counts.
+- [Pinned season firmware `75db349d`](https://github.com/stoicescueric/YaoMing/tree/75db349d) — the deployed flight-time knots and five-update implementation state.
+
+</Admonition>
+
+**Next:** [compare model-guided selection with a two-LUT empirical campaign](./model-vs-empirical-lut.mdx).

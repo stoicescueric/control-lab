@@ -29,7 +29,9 @@ but the robot will silently deliver the nearest possible command.
 
 That one nonlinearity is enough to break textbook integral control.
 
-<Problem title="The controller asks for 19 volts. The motor gets 12.">
+<Problem>
+
+## The controller asks for 19 volts. The motor gets 12.
 
 The demo compares two identical position controllers. Both command the same saturated actuator. The pink
 controller keeps integrating while saturated, so its integral term stores a large command the motor never
@@ -40,7 +42,9 @@ integration when the actuator is already pinned in the same direction as the err
 
 </Problem>
 
-<Theory title="Saturation is the real actuator model">
+<Theory>
+
+## Saturation is the real actuator model
 
 Write the controller output before limits as:
 
@@ -213,7 +217,9 @@ conditional integration; start with only the pieces your logged failure requires
 
 </Theory>
 
-<Deploy title="A saturating PID controller with anti-windup">
+<Deploy>
+
+## A saturating PID controller with anti-windup
 
 This controller works in volts internally. That makes saturation physically meaningful: clamp the desired
 voltage to what the battery can deliver, then divide by measured battery voltage when commanding the

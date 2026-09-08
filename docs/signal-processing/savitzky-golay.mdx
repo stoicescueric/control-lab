@@ -20,7 +20,9 @@ keeps the shape of the signal, and hands you a clean velocity estimate as a side
 Your robot is closing on an AprilTag. The vision pose jitters a few centimetres frame to frame, so you
 smooth it. The jitter goes away, and so does something you wanted.
 
-<Problem title="The average of a curve is not a point on the curve">
+<Problem>
+
+## The average of a curve is not a point on the curve
 
 Forget noise for a moment. Take a signal with no noise at all, sampled five times, that happens to
 follow $y = 10 - x^2$ around the sample you care about:
@@ -51,7 +53,9 @@ blur cannot tell noise from a real edge, because both are places where neighbour
 
 </Problem>
 
-<Theory title="Fit the shape the signal actually has">
+<Theory>
+
+## Fit the shape the signal actually has
 
 ### A moving average is a least-squares fit
 
@@ -202,7 +206,9 @@ that produced the smoothed position, so it costs one more dot product and nothin
 
 </Theory>
 
-<Deploy title="Precompute the weights, then it is a dot product">
+<Deploy>
+
+## Precompute the weights, then it is a dot product
 
 Nothing about the derivation happens on the robot. The weights are constants, so the Control Hub only
 ever does the multiply-and-add.
