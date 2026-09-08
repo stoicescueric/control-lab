@@ -1,4 +1,34 @@
-import {useEffect, useState, type CSSProperties, type ReactNode, type Ref} from 'react';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from 'react';
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function isolateModal(panel: HTMLElement): () => void {
+  const changed: Array<{element: HTMLElement; inert: boolean}> = [];
+  let current: HTMLElement | null = panel;
+
+  while (current?.parentElement) {
+    for (const sibling of current.parentElement.children) {
+      if (sibling !== current && sibling instanceof HTMLElement) {
+        changed.push({element: sibling, inert: sibling.inert});
+        sibling.inert = true;
+      }
+    }
+    current = current.parentElement;
+  }
+
+  return () => {
+    for (const {element, inert} of changed) element.inert = inert;
+  };
+}
 
 /* The dark interactive-demo panel and its furniture. Used by the lesson sims
    (and directly in MDX where a sim is assembled inline):
@@ -23,21 +53,63 @@ export function Demo({
   className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
   // Closing is its own phase so the exit can play on the way out. The node is
   // never unmounted (see the note below), so there is nothing for an exit
   // transition to hang off otherwise.
   const [closing, setClosing] = useState(false);
 
-  // Fullscreen mode: lock page scroll and close on Escape.
+  // Fullscreen mode: isolate the panel, contain keyboard focus, and restore
+  // focus to the expand button after close. The panel stays in place so its
+  // canvases and their observers are never recreated.
   useEffect(() => {
     if (!expanded) return undefined;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setClosing(true);
+    const panel = panelRef.current;
+    if (!panel) return undefined;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const restoreIsolation = isolateModal(panel);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setClosing(true);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (element) => !element.hidden && element.getClientRects().length > 0,
+      );
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!panel.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => {
+      panel.querySelector<HTMLElement>('[aria-label="Close fullscreen demo"]')?.focus();
+    });
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      restoreIsolation();
+      previouslyFocused?.focus();
     };
   }, [expanded]);
 
@@ -75,6 +147,11 @@ export function Demo({
       }}
       onClick={expanded ? (e) => e.target === e.currentTarget && setClosing(true) : undefined}>
       <div
+        ref={panelRef}
+        role={expanded ? 'dialog' : undefined}
+        aria-modal={expanded ? true : undefined}
+        aria-labelledby={expanded && title ? titleId : undefined}
+        aria-label={expanded && !title ? 'Interactive demo' : undefined}
         className={`cl-demo not-prose rounded-[8px] bg-panel p-[18px] text-panel-ink shadow-card ${
           expanded
             ? `${closing ? 'cl-demo-panel--out' : 'cl-demo-panel--in'} max-h-full w-full max-w-5xl overflow-y-auto`
@@ -86,7 +163,7 @@ export function Demo({
               {pill}
             </span>
           )}
-          {title}
+          {title && <span id={titleId}>{title}</span>}
           <button
             type="button"
             aria-label={expanded ? 'Close fullscreen demo' : 'Expand demo to fullscreen'}

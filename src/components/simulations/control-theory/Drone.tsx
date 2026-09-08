@@ -6,9 +6,14 @@
    SSR note: every canvas/window touch happens inside effects or event handlers,
    so this renders an empty canvas shell on the server and comes alive on hydrate. */
 
-import {useRef, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Trace} from '@site/src/lib/visualization/plot';
-import {useDprCanvas, useRaf, usePlot} from '@site/src/lib/visualization/canvas';
+import {
+  useDprCanvas,
+  useRaf,
+  usePlot,
+  useReducedMotionPreference,
+} from '@site/src/lib/visualization/canvas';
 import {Demo, Stage, Controls, Buttons, Button, Legend} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
 import {ChallengeChip, type ChallengeStatus} from '@site/src/components/kit/Challenge';
@@ -43,6 +48,11 @@ export default function Drone() {
   const [Kd, setKd] = useState(5);
   const gains = useRef({Kp, Ki, Kd});
   gains.current = {Kp, Ki, Kd};
+  const reducedMotion = useReducedMotionPreference();
+  const [running, setRunning] = useState(false);
+  useEffect(() => {
+    if (reducedMotion !== null) setRunning(!reducedMotion);
+  }, [reducedMotion]);
 
   const droneRef = useRef<HTMLCanvasElement | null>(null);
   const plotCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -292,16 +302,29 @@ export default function Drone() {
     );
   }
 
-  useRaf((frameDt: number) => {
-    acc.current += Math.min(frameDt, 0.1);
-    let k = 0;
-    while (acc.current >= dt && k < 12) {
-      step();
-      acc.current -= dt;
-      k++;
-    }
+  useRaf(
+    (frameDt: number) => {
+      if (running) {
+        acc.current += Math.min(frameDt, 0.1);
+        let k = 0;
+        while (acc.current >= dt && k < 12) {
+          step();
+          acc.current -= dt;
+          k++;
+        }
+      }
+      draw();
+    },
+    droneRef,
+    running,
+  );
+
+  function stepExperiment() {
+    setRunning(false);
+    acc.current = 0;
+    for (let i = 0; i < 10; i++) step();
     draw();
-  }, droneRef);
+  }
 
   // dragging the target altitude
   function pointToTarget(ev: React.PointerEvent<HTMLCanvasElement>) {
@@ -437,6 +460,10 @@ export default function Drone() {
       </div>
 
       <Buttons>
+        <Button active={running} onClick={() => setRunning((value) => !value)}>
+          {running ? 'Pause' : 'Run'}
+        </Button>
+        <Button onClick={stepExperiment}>Step 0.2 s</Button>
         <Button onClick={() => setGains(8, 0, 0, 'p_only')}>P only</Button>
         <Button onClick={() => setGains(8, 0, 5, 'pd')}>PD</Button>
         <Button primary onClick={() => setGains(8, 2, 5, 'pid_tuned')}>
@@ -454,6 +481,13 @@ export default function Drone() {
         </Button>
         <Button onClick={reset}>↺ Reset</Button>
       </Buttons>
+
+      {reducedMotion && (
+        <div className="mt-2 text-[0.74rem] text-[#8294b8]">
+          Reduced motion starts this experiment paused. Run opts into continuous motion; Step
+          advances it by 0.2 seconds.
+        </div>
+      )}
 
       <ChallengeChip
         id="pid-gust-recovery"

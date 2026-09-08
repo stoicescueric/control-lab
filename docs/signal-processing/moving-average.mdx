@@ -22,7 +22,9 @@ The moving average is the filter you already use intuitively — a "7-day averag
 average." It is excellent at one job and instructively bad at another, which sets up why a smarter
 estimator is eventually required.
 
-<Problem title="Steady jitter needs averaging; bursts and lag do not forgive it">
+<Problem>
+
+## Steady jitter needs averaging; bursts and lag do not forgive it
 
 A signal buried in steady random jitter is best cleaned by averaging — but a simple average over *all*
 history can never track a moving signal. The fix is a **sliding window**: average only the most
@@ -37,7 +39,9 @@ average step count — all sliding-window averages that turn a spiky series into
 
 </Problem>
 
-<Theory title="The average of a sliding window">
+<Theory>
+
+## The average of a sliding window
 
 Hold the last N readings; report their mean. Next loop, the window slides one step forward.
 
@@ -119,7 +123,9 @@ the mechanism could not physically have produced since the last loop.
 
 </Theory>
 
-<Deploy title="A fixed-cost ring buffer">
+<Deploy>
+
+## A fixed-cost ring buffer
 
 On a Control Hub, implement the window as a ring buffer with a running sum, so each update is O(1)
 regardless of N. The cost to weigh against the low-pass is the N-value memory.

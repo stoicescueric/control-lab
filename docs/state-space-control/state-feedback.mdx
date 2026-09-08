@@ -27,7 +27,9 @@ from. The [Kalman filter](../signal-processing/kalman.mdx) shows up at the end.
 
 </Admonition>
 
-<Problem title="One error signal can't see two states">
+<Problem>
+
+## One error signal can't see two states
 
 An elevator has a position and a velocity, and both matter. Feed a PID only the position error and it
 is blind to how fast the carriage is moving until the error starts changing — the D term is a crude,
@@ -40,7 +42,9 @@ all of them, feed all of them back, and design the response once.
 
 </Problem>
 
-<Theory title="The model you already measured">
+<Theory>
+
+## The model you already measured
 
 ### From kV, kA to a differential equation
 
@@ -187,7 +191,9 @@ the states the controller needs. The full pattern is a loop within a loop: **pre
 
 </Theory>
 
-<Deploy title="Matrices in WPILib, arithmetic in FTC">
+<Deploy>
+
+## Matrices in WPILib, arithmetic in FTC
 
 FRC ships the whole stack. You hand WPILib the identified constants and it builds the model:
 

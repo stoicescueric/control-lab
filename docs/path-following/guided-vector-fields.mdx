@@ -30,7 +30,9 @@ unique-projection neighborhood stated below.
 
 <GuidedVectorField />
 
-<Problem title="Chasing a point is not the same as being on the path">
+<Problem>
+
+## Chasing a point is not the same as being on the path
 
 A lookahead follower only ever aims at a point ahead of itself. On a curve, the straight line to that point
 lies *inside* the curve, so the robot drifts to the inside and cuts the corner. Shorten the lookahead to hug
@@ -45,7 +47,9 @@ description of the behavior).
 
 </Problem>
 
-<Theory title="Two desires, blended into one direction">
+<Theory>
+
+## Two desires, blended into one direction
 
 At the robot's current position $\mathbf{p}$, find the **closest point** $\mathbf{c}$ on the path. That
 gives two local facts: the path's unit **tangent** $\hat{\mathbf{t}}$ (the along-track direction) and the
@@ -150,7 +154,9 @@ full $v_{\max}$; in a tight arc it clamps the speed down automatically.
 
 </Theory>
 
-<Deploy title="Sampling the field each loop">
+<Deploy>
+
+## Sampling the field each loop
 
 Three pieces every loop: **project** the robot onto the path (closest point + tangent + curvature), **blend**
 the field and cap the speed, then **rotate** the field-frame velocity into wheel commands.

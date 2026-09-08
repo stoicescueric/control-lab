@@ -11,7 +11,7 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 
 <Abstract>
 This page collects the external sources the curriculum draws on, grouped by kind, plus the best places
-to learn more. Each finished lesson should also carry its own local "Sources & references" admonition;
+to learn more. Each finished lesson should also carry its own local "Sources and further reading" admonition;
 this page is the master list.
 </Abstract>
 
@@ -36,6 +36,9 @@ complete setup path; adapt its output at the boundary instead of combining stack
   feedforward, filtering, and tuning.
 - **[FTC Tech Toolbox](https://ftc-tech-toolbox.vercel.app/)** - FTC autonomous movement walkthroughs and
   path-following framing.
+- **[SEA Monsters: How a Mecanum Drive Works](https://seamonsters-2605.github.io/archive/mecanum/)** -
+  interactive roller-force, joystick-vector, wheel-power, turning, and normalization explanation used by
+  the [Mecanum Kinematics](./path-following/mecanum-kinematics.mdx) lesson.
 - **[Controls Engineering in FRC](https://file.tavsys.net/control/controls-engineering-in-frc.pdf)**
   by Tyler Veness - rigorous open textbook for state-space control, feedback, modeling, and estimation in
   competitive robotics.
@@ -77,7 +80,10 @@ complete setup path; adapt its output at the boundary instead of combining stack
   pursuit. The algorithm itself is older, dating to Wallace et al., *First Results in Robot
   Road-Following* (IJCAI, 1985).
 - Team 1712 DAWGMA, **[Implementation of the Adaptive Pure Pursuit Controller](https://www.chiefdelphi.com/t/paper-implementation-of-the-adaptive-pure-pursuit-controller/166552)** -
-  curvature velocity profile and inject-and-smooth path generation.
+  curvature velocity profile and inject-and-smooth path generation. <a href={useBaseUrl('/papers/team-1712-adaptive-pure-pursuit.pdf')}>Open the attached whitepaper (PDF)</a>.
+- WPILib, **[Fire Control](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html)** -
+  static firing tables, lead-and-adjust time-of-flight recursion, convergence diagnostics, Newton's method,
+  and an optional linear-drag extension used by the [moving-shot lesson](./advanced-research/shoot-on-the-move.mdx).
 - A. Savitzky and M. J. E. Golay, **[Smoothing and Differentiation of Data by Simplified Least Squares
   Procedures](https://doi.org/10.1021/ac60214a047)**, Analytical Chemistry 36(8), 1964 - least-squares
   polynomial smoothing and its tabulated convolution coefficients, behind the
@@ -87,8 +93,7 @@ complete setup path; adapt its output at the boundary instead of combining stack
 - Vikramaditya Nishant, **[Introducing Torque-Current Control for FTC](https://medium.com/@vikramaditya.nishant/introducing-torque-current-control-for-ftc-3db75d281258)** -
   current, voltage, back-EMF, and current-limiting discussion.
 - Kou, E. & Haggenmiller, A., **[Extended Kalman Filter State Estimation for Autonomous Competition Robots](https://arxiv.org/abs/2310.04459)** -
-  FTC-oriented EKF paper used by the [Kalman](./signal-processing/kalman.mdx) lesson, and the place to
-  go for the nonlinear extension that lesson stops short of.
+  FTC-oriented EKF paper used by the [Kalman](./signal-processing/kalman.mdx) lesson. <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>Open the attached paper (PDF)</a>.
 - Y. A. Kapitanyuk, A. V. Proskurnikov & M. Cao,
   **[A guiding vector field algorithm for path following control of nonholonomic mobile robots](https://arxiv.org/abs/1610.04391)** -
   implicit/level-set GVF formulation and Lyapunov convergence proof.

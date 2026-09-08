@@ -23,7 +23,9 @@ Not every mechanism needs [PID](./pid.mdx). A shooter flywheel has huge rotation
 get back to speed fast after each shot. For that, the simplest possible controllers are not just adequate
 — they are often what the best teams actually run.
 
-<Problem title="A flywheel is easy to spin and impossible to stop quickly">
+<Problem>
+
+## A flywheel is easy to spin and impossible to stop quickly
 
 A flywheel's inertia is a blessing and a curse. It coasts through small disturbances, and this simple
 coast-only implementation cannot actively brake it — it only stops pushing and lets drag slow it. Reverse
@@ -34,7 +36,9 @@ recovers. That is literally bang-bang. The problem is what it does once it gets 
 
 </Problem>
 
-<Theory title="The on/off law">
+<Theory>
+
+## The on/off law
 
 Compare the measured speed to the target and choose one of two outputs:
 
@@ -78,7 +82,9 @@ converges onto the holding drive instead of bouncing across it.
 
 </Theory>
 
-<Deploy title="Bang-bang on the Control Hub">
+<Deploy>
+
+## Bang-bang on the Control Hub
 
 <JavaCode league="FTC" label="Bang-bang with a hysteresis band">{`// For high-inertia mechanisms like a flywheel.
 double bangBang(double measured, double target, double currentPower) {

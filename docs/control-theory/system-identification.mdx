@@ -24,7 +24,9 @@ and $k_A$ come from?* Guessing them, or copying another team's, gives a model th
 amount — and a wrong model means feedback has to cover the gap, which was the whole problem feedforward
 set out to solve. The honest answer is to **measure** them from your own robot.
 
-<Problem title="A model you guessed is a model you can't trust">
+<Problem>
+
+## A model you guessed is a model you can't trust
 
 You can hand-estimate $k_V \approx 12\,\text{V} \div v_\text{max}$ and call it a day, but real mechanisms
 have friction you didn't account for, a gearbox with its own losses, and a motor whose constants drift
@@ -52,7 +54,9 @@ to zero (which disables both voltage and velocity noise), run the accelerated di
 the real-time ramp rate times the plant lag rather than by the 12× presentation speed.
 :::
 
-<Theory title="Optional derivation: fit the motor model to measured data">
+<Theory>
+
+## Optional derivation: fit the motor model to measured data
 
 Recall the model from [feedforward](./feedforward.mdx): to hold velocity $v$ and accelerate at $a$,
 
@@ -130,7 +134,9 @@ at a time — not the math.
 
 </Theory>
 
-<Deploy title="Run the test, fit the line">
+<Deploy>
+
+## Run the test, fit the line
 
 The widget uses a real-time ramp of $0.10\ \mathrm{V/s}$ so its $0.35\ \mathrm{s}$ plant lag contributes
 at most about $0.035\ \mathrm{V}$ of intercept bias. Simulation time is displayed 12× faster only so the

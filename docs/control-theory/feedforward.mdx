@@ -23,7 +23,9 @@ Feedback is reactive by construction. Feedforward is the predictive half: a mode
 that supplies most of the required command immediately, leaving feedback to correct only the small
 residual. It is the difference between a sluggish velocity loop and a crisp one.
 
-<Problem title="A reactive controller must first fail to respond">
+<Problem>
+
+## A reactive controller must first fail to respond
 
 A pure feedback controller does nothing until an error exists, then scrambles to close it. On a
 velocity-controlled mechanism — a flywheel, a drivetrain at cruise — this guarantees lag and droop:
@@ -39,7 +41,9 @@ over-corrects. Feedforward is the anticipation; feedback only cleans up the diff
 
 </Problem>
 
-<Theory title="A physical model of the required voltage">
+<Theory>
+
+## A physical model of the required voltage
 
 To hold a target velocity $v$ (and optionally accelerate at $a$), the predicted voltage is:
 
@@ -217,7 +221,9 @@ the main benefit is lost. Accurate constants matter.</li>
 
 </Theory>
 
-<Deploy title="Volts on a battery that sags">
+<Deploy>
+
+## Volts on a battery that sags
 
 FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *measured* battery
 voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see

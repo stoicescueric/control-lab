@@ -26,7 +26,9 @@ setpoint.
 
 </Admonition>
 
-<Theory title="Settle without giving up recovery">
+<Theory>
+
+## Settle without giving up recovery
 
 Take-back-half keeps an accumulating drive like an integrator, but adds one trick. Each loop, integrate the
 error into the drive. When the error **crosses zero**: the moment you pass the setpoint — you have
@@ -64,7 +66,9 @@ converges geometrically. It is the cheapest possible way to find the steady comm
 
 </Theory>
 
-<Deploy title="Take-back-half on the Control Hub">
+<Deploy>
+
+## Take-back-half on the Control Hub
 
 <JavaCode league="FTC" label="Takeback-half velocity controller">{`private double drive;         // the current output
 private double driveAtZero;   // the output at the last error sign change

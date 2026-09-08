@@ -23,7 +23,9 @@ curves. The hardware does none of that. This page is the bridge between the anal
 embedded reality, and skipping it is the single most common reason "correct" control code
 misbehaves on a real robot.
 
-<Problem title="The hub runs discretely, in the wrong units, at a variable rate">
+<Problem>
+
+## The hub runs discretely, in the wrong units, at a variable rate
 
 Three hardware facts break the clean continuous math:
 
@@ -39,7 +41,9 @@ them wrong and even a perfect controller drifts, lags, or oscillates.
 
 </Problem>
 
-<Theory title="Discretization, units, and the sampling limit">
+<Theory>
+
+## Discretization, units, and the sampling limit
 
 **Time step.** Replace "an instant" with "one loop." A derivative becomes a difference; an integral
 becomes a running sum; a state is advanced with forward Euler:
@@ -114,7 +118,9 @@ of how well its gains are tuned.
 
 </Theory>
 
-<Deploy title="Measure dt; define the unit conversion once">
+<Deploy>
+
+## Measure dt; define the unit conversion once
 
 Read the true loop time every iteration, and centralize the tick conversion so every downstream
 controller speaks real units.

@@ -34,6 +34,8 @@ export function Workflow() {
     ['Test the opening', 'The ball’s center must clear both lips.'],
     ['Compare nearby shots', 'Choose the command with the most tolerance.'],
     ['Calibrate the launcher', 'Distance becomes wheel, hood, and flight-time settings.'],
+    ['Compensate motion', 'Velocity and flight time shift a virtual target.'],
+    ['Compare workflows', 'Balance model assumptions against physical trial count.'],
   ];
   return (
     <ol className={styles.pipeline}>

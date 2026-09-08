@@ -7,6 +7,7 @@ tags: [filter, kalman, state-estimation, sensor-fusion]
 
 import Kalman from '@site/src/components/simulations/signal-processing/Kalman';
 import {KalmanGainExplorer} from '@site/src/components/simulations/signal-processing/FilterMathDemos';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 
 # Kalman Filter
 
@@ -29,13 +30,20 @@ That last assumption is the one real sensors break. A camera with a bent mount o
 carries a *constant offset*, not zero-mean noise — and no value of $R$ fixes a bias. Only calibration
 does; feed a biased measurement in and the filter converges confidently onto the wrong answer.
 
-Kou and Haggenmiller's FTC-focused paper,
-[*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459),
-is the applied reference for this lesson. Their competition-robot setup is exactly the FTC pattern
-we care about: an external pose source gives frequent motion information, computer vision landmarks give less
-frequent absolute position information, and the filter fuses them by comparing their covariance.
+<Admonition type="info" title="Where this leads: the Extended Kalman Filter">
 
-<Problem title="A fixed blend is not the optimal blend">
+Kou and Haggenmiller's FTC-focused paper, *Extended Kalman Filter State Estimation for Autonomous
+Competition Robots*, starts from the same predict-correct loop and extends it to a mecanum robot whose
+body-to-field motion contains $\sin\theta$ and $\cos\theta$. That nonlinearity is enough to require an
+**Extended Kalman Filter (EKF)**: predict with nonlinear functions, then use their local Jacobians to
+propagate uncertainty. Finish the linear filter first; the EKF bridge later in this lesson shows exactly
+what changes.
+
+</Admonition>
+
+<Problem>
+
+## A fixed blend is not the optimal blend
 
 The complementary filter blends two sources with a *constant* weight $\alpha$. But the right amount
 to trust a measurement is not constant — it depends on how uncertain your prediction currently is
@@ -145,7 +153,9 @@ Set $R$ from the noise standard deviation you measured in
 [Signals and noise](./signals.mdx) — it is that number squared. $Q$ is the honest guess of the two:
 start with the drift you can actually observe between corrections and tune from there.
 
-<Theory title="Optional continuation: many states and the optimal gain">
+<Theory>
+
+## Optional continuation: many states and the optimal gain
 
 The filter maintains a state estimate $\hat{x}$ and a covariance $P$ (its uncertainty), and repeats
 two steps. **Predict** advances the state through the motion model; process noise $Q$ adds uncertainty:
@@ -274,7 +284,78 @@ the real process and sensor noise is the engineering of applying a Kalman filter
 
 </Theory>
 
-<Deploy title="On a robot: retain the scalar state">
+## Introduction to the Extended Kalman Filter
+
+A linear Kalman filter predicts with matrices $A$ and $B$ and predicts a measurement with matrix $H$.
+An EKF allows nonlinear functions instead:
+
+$$
+\hat{\mathbf x}^{-}_k=f(\hat{\mathbf x}_{k-1},\mathbf u_k),
+\qquad
+\hat{\mathbf z}_k=h(\hat{\mathbf x}^{-}_k).
+$$
+
+The mean follows the real nonlinear motion and sensor functions. Covariance still needs a linear map,
+so the EKF recalculates two Jacobians at the current estimate:
+
+$$
+F_k=\left.\frac{\partial f}{\partial\mathbf x}\right|_{\hat{\mathbf x}_{k-1}},
+\qquad
+H_k=\left.\frac{\partial h}{\partial\mathbf x}\right|_{\hat{\mathbf x}^{-}_k}.
+$$
+
+Then the familiar equations return with $F_k$ and $H_k$:
+
+$$
+P^-_k=F_kP_{k-1}F_k^\top+Q,
+$$
+
+$$
+K_k=P^-_kH_k^\top(H_kP^-_kH_k^\top+R)^{-1},
+$$
+
+$$
+\hat{\mathbf x}_k=\hat{\mathbf x}^{-}_k+K_k(\mathbf z_k-h(\hat{\mathbf x}^{-}_k)).
+$$
+
+The attached paper's example state contains field position and heading plus body-frame velocities:
+
+$$
+\mathbf x=[x,\ y,\ \theta,\ v_x^{body},\ v_y^{body},\ \omega]^\top.
+$$
+
+Body velocity is rotated into the field frame during prediction, making $f$ nonlinear. Odometry supplies
+frequent velocity measurements, while landmark detections supply intermittent absolute position. The EKF
+can predict through the gaps and reduce accumulated drift when a valid landmark returns.
+
+<Callout type="warn" title="An EKF is a local approximation, not a magic nonlinear optimum.">
+
+The Jacobians are tangent-plane approximations around the current estimate. Large time steps, a poor
+initial estimate, severe nonlinearity, biased sensors, or dishonest $Q$ and $R$ can make the covariance
+misleading or make the filter diverge. The paper reports that larger update intervals degrade its
+linearization and notes that body-frame velocities are less nonlinear than global velocities for the
+modeled mecanum motion. Recompute Jacobians at every step, keep timestamps honest, wrap angles in the
+innovation, and reject invalid vision before correction.
+
+</Callout>
+
+The conceptual change is compact:
+
+| Linear KF | Extended KF |
+|---|---|
+| $A\mathbf x+B\mathbf u$ | nonlinear $f(\mathbf x,\mathbf u)$ |
+| $H\mathbf x$ | nonlinear $h(\mathbf x)$ |
+| fixed or scheduled $A,H$ | Jacobians $F_k,H_k$ at the current estimate |
+| optimal under linear-Gaussian assumptions | approximate for nonlinear systems |
+
+For an FTC implementation, use a maintained pose-estimation library unless deriving and validating every
+frame, Jacobian, covariance, timestamp, and reset rule is itself the project. Read the attached paper after
+you can trace the matrix KF equations above; its simulation model, covariance choices, and fusion results
+make the EKF transition concrete.
+
+<Deploy>
+
+## On a robot: retain the scalar state
 
 This example consumes motion from an external pose source. Verify its frame, units, update cadence, and
 freshness with the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx) first.
@@ -290,19 +371,16 @@ In the demo the Kalman error is typically a fraction of the raw blip error — g
 recovery, not just smoothing. That is why it underpins GPS, drone, and robot localisation.
 </Callout>
 
-The basic filter assumes the motion and measurement models are **linear**, and that is the edge of
-what this lesson covers. Full field localisation is not linear — range, bearing, and heading involve
-trigonometry, and a camera divides by depth. Handling that means linearising the model at every step
-with a Jacobian, which is what an *extended* Kalman filter does and what the pose estimators inside
-Road Runner and Pedro Pathing already implement. Take your absolute pose from one of those, verified
-against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx), and use this
-lesson's filter for the one-dimensional signals you fuse yourself.
+Full field localisation is nonlinear, so take the maintained estimator's absolute pose only after
+verifying it against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx).
+Use this lesson's scalar filter for one-dimensional signals you intentionally fuse yourself.
 
 </Deploy>
 
-<Admonition type="info" title="Sources & references">
+<Admonition type="info" title="Sources and further reading">
 
-- Kou, E., & Haggenmiller, A. (2023). [*Extended Kalman Filter State Estimation for Autonomous Competition Robots*](https://arxiv.org/abs/2310.04459). *Journal of Student Research, 12*(1).
-- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) - official robotics reference for model + measurement fusion.
+- Kou, E., & Haggenmiller, A. (2023), *Extended Kalman Filter State Estimation for Autonomous Competition Robots* — <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>download the attached paper</a> or open the [arXiv record](https://arxiv.org/abs/2310.04459). Read §§III-B and IV first for the Jacobian transition and the FTC mecanum state model, then §§VI–VII for limitations and next steps.
+- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) — maintained FRC implementations and the practical relationship between observers and pose estimators.
+- R. E. Kalman, [*A New Approach to Linear Filtering and Prediction Problems*](https://doi.org/10.1115/1.3662552) — the original linear filter after the scalar intuition in this lesson is comfortable.
 
 </Admonition>

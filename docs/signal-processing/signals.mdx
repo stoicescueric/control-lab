@@ -22,7 +22,9 @@ A filter is only worth building if the raw data is untrustworthy. It is. This pa
 exactly *how* sensor data is corrupted, because the structure of the noise determines which filter
 you reach for next.
 
-<Problem title="Every sensor reports the truth plus garbage">
+<Problem>
+
+## Every sensor reports the truth plus garbage
 
 A **signal** is a value that changes over time — an arm angle, a distance to the wall, a wheel
 velocity. You never observe it directly; you observe a **sensor reading**, which is the true value
@@ -66,7 +68,9 @@ drift, and outlier rejection handles spikes.
 
 </Problem>
 
-<Theory title="Sampling, and what noise looks like">
+<Theory>
+
+## Sampling, and what noise looks like
 
 A Control Hub does not read sensors continuously; it **samples** them tens to hundreds of times per
 second (see [From Math to a Loop](../software-architecture/discretization.mdx) for why the rate
@@ -87,7 +91,9 @@ lines of code.
 
 </Theory>
 
-<Deploy title="Measure your sensor before you filter it">
+<Deploy>
+
+## Measure your sensor before you filter it
 
 Good filtering starts with knowing how noisy a sensor actually is. Sample it while the mechanism is
 held still and compute the standard deviation — that number sizes every filter that follows.

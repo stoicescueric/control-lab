@@ -23,7 +23,9 @@ This is the shortest lesson in the module and one of the most valuable: a few ch
 make every other controller — [feedforward](./feedforward.mdx), [PID](./pid.mdx),
 [profiles](./motion-profiling.mdx) — behave the same on a fresh pack and a tired one.
 
-<Problem title="The same command, quietly doing less">
+<Problem>
+
+## The same command, quietly doing less
 
 `motor.setPower(0.6)` does **not** apply a fixed voltage. It applies 60% of whatever the battery happens
 to read right now. A freshly charged 12 V pack typically reads somewhat above nominal — on the order of
@@ -36,7 +38,9 @@ feedforward gains are in **volts**: and they're being applied to a command that 
 
 </Problem>
 
-<Theory title="Divide by what you actually have">
+<Theory>
+
+## Divide by what you actually have
 
 Every controller in this module computes a desired *voltage* — feedforward's $k_S + k_V v + k_A a$, PID's
 output, a profile's command. To turn a desired voltage $V_\text{cmd}$ into the power fraction that will
@@ -67,7 +71,9 @@ on," which is never the voltage you compete on.
 
 </Theory>
 
-<Deploy title="One division, or one SDK call">
+<Deploy>
+
+## One division, or one SDK call
 
 Apply it at the very end, after the controller has produced a voltage. Read the battery once per loop
 (reading it is not free) and clamp the result to the legal power range.

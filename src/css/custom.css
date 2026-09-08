@@ -280,8 +280,8 @@
    2. Keep Infima's prose styles from leaking into our always-dark panels.
    --------------------------------------------------------------------------- */
 
-/* The numbered step heading sits tight under its kicker label. */
-.cl-step-title {
+/* A lesson section's Markdown heading sits tight under its divider. */
+.cl-step > h2:first-child {
   margin-top: 0.5rem !important;
   margin-bottom: 0.75rem !important;
 }

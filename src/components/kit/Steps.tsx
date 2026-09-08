@@ -11,19 +11,21 @@ import type {ReactNode} from 'react';
    three names are kept only as a light authoring convention for the usual
    why → math → code progression:
 
-     <Problem title="...">  the hook + visual intuition
-     <Theory  title="...">  the mathematical rigor
-     <Deploy  title="...">  the implementation + hardware reality */
+     <Problem>
+       ## Descriptive title
+       the hook + visual intuition
+     </Problem>
+
+   Theory and Deploy follow the same pattern for mathematical rigor and
+   implementation/hardware reality. */
 
 interface SectionProps {
-  title?: string;
   children?: ReactNode;
 }
 
-function Section({title, children}: SectionProps) {
+function Section({children}: SectionProps) {
   return (
     <section className="cl-step mt-12 border-t border-line pt-9 first:mt-2 first:border-0 first:pt-0">
-      {title && <h2 className="cl-step-title">{title}</h2>}
       {children}
     </section>
   );

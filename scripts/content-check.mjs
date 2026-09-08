@@ -128,6 +128,12 @@ for (const file of walk(path.join(root, 'docs'), (name) => name.endsWith('.mdx')
     fail(`${name} contains a raw iframe; use the consent-aware VideoEmbed component`);
   }
 
+  if (/<(?:Problem|Theory|Deploy)\s+title=/.test(source)) {
+    fail(
+      `${name} puts a section heading in a component title prop; use a Markdown ## heading inside the section so it appears in the table of contents`,
+    );
+  }
+
   if (
     /^#{1,6}\s+(?:The Hook|Physical Problem|Mathematical Solution|Enterprise Implementation)\s*$/im.test(
       source,

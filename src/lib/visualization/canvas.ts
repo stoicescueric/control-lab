@@ -3,7 +3,7 @@
    a requestAnimationFrame loop, and a self-resizing Plot) so a demo's
    physics/draw code can stay plain and imperative inside one callback. */
 
-import {useEffect, useRef, type RefObject} from 'react';
+import {useEffect, useRef, useState, type RefObject} from 'react';
 import {Plot, type PlotOptions} from './plot';
 
 export interface CanvasSize {
@@ -15,6 +15,19 @@ export interface CanvasSize {
 
 /** The per-frame callback: `dt` is seconds since the previous frame. */
 export type RafCallback = (dt: number, now: number) => void;
+
+/** The live OS preference, or null until it has been read in the browser. */
+export function useReducedMotionPreference(): boolean | null {
+  const [reduced, setReduced] = useState<boolean | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return reduced;
+}
 
 /**
  * Size a <canvas> for crisp HiDPI rendering and keep it sized to its container.
@@ -72,9 +85,14 @@ export function useDprCanvas(ref: RefObject<HTMLCanvasElement | null>, height: n
  * callback means an empty dark rectangle and a demo that cannot be used at all.
  *
  * A `matchMedia` change listener keeps this in sync if the user flips the
- * setting while the page is open.
+ * setting while the page is open. `runWhenReducedMotion` is reserved for an
+ * explicit Run control: it lets the reader opt into a time-based experiment.
  */
-export function useRaf(callback: RafCallback, targetRef?: RefObject<Element | null>): void {
+export function useRaf(
+  callback: RafCallback,
+  targetRef?: RefObject<Element | null>,
+  runWhenReducedMotion = false,
+): void {
   const cb = useRef<RafCallback>(callback);
   cb.current = callback;
   useEffect(() => {
@@ -92,7 +110,7 @@ export function useRaf(callback: RafCallback, targetRef?: RefObject<Element | nu
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      if (reduceMotion) {
+      if (reduceMotion && !runWhenReducedMotion) {
         if (painted !== cb.current) {
           painted = cb.current;
           cb.current(0, now);
@@ -170,7 +188,7 @@ export function useRaf(callback: RafCallback, targetRef?: RefObject<Element | nu
         }
       }
     };
-  }, [targetRef]);
+  }, [targetRef, runWhenReducedMotion]);
 }
 
 /**

@@ -127,9 +127,18 @@ Lessons are MDX. Shared components registered in `src/theme/MDXComponents.tsx` c
 ```mdx
 <Abstract>...</Abstract>
 <Difficulty level="Medium" />
-<Problem title="...">...</Problem>
-<Theory title="...">...</Theory>
-<Deploy title="...">...</Deploy>
+<Problem>
+## The engineering problem
+...
+</Problem>
+<Theory>
+## The model
+...
+</Theory>
+<Deploy>
+## The implementation
+...
+</Deploy>
 <Callout type="math" title="...">...</Callout>
 <JavaCode league="FTC" label="...">{`...`}</JavaCode>
 ```

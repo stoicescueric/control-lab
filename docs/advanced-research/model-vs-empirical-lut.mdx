@@ -1,0 +1,113 @@
+---
+title: Model-Guided Shot or Two Empirical LUTs?
+description: "Compare robust physics-guided shot selection with a wheel-and-hood lookup workflow built from a denser physical calibration campaign."
+sidebar_position: 5
+tags: [research, calibration, lookup-table, experimentation, tradeoffs]
+---
+
+import StrategyComparison from '@site/src/components/simulations/research/StrategyComparison';
+
+# Model-Guided Shot or Two Empirical LUTs?
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Both strategies can deploy as two cheap runtime lookups: distance to flywheel speed and distance to hood position. The engineering difference is how those table entries are chosen. A model narrows and explains the search; a pure empirical method replaces more of that prior structure with physical trials.
+</Abstract>
+
+The model-based selector is not the only reasonable way to calibrate an FTC launcher. A team can place the robot at many distances, sweep wheel and hood settings, repeat each pair, and store the best observed command in two lookup tables. That approach trades simulator assumptions for field time, controlled data collection, and careful validation.
+
+## Compare the complete workflows
+
+The two-LUT method still needs a definition of success, enough repeats to distinguish command pairs, an interpolation rule, and held-out shots. The model-guided method still needs physical calibration because drag geometry cannot predict wheel slip, compression, motor response, or ball wear.
+
+:::tip[Plan before collecting]
+Start with the default 15 distance stations. Increase the empirical candidate pairs from 9 to 15, then increase the repeats. Watch the multiplication. Next increase the model-guided local pairs: a weak model or changed mechanism also expands the physical search.
+:::
+
+<StrategyComparison />
+
+## Worked example: 307 versus 750 planned launches
+
+The default teaching plan uses 15 distance stations, five repeats per candidate pair, and five held-out validation shots per station.
+
+For a model-guided local search with three physical correction pairs per station plus seven setup launches:
+
+$$
+7+15(3\times5+5)=\mathbf{307\ launches}.
+$$
+
+For a nine-pair empirical sweep at every station:
+
+$$
+15(9\times5+5)=\mathbf{750\ launches}.
+$$
+
+These totals are planning arithmetic from adjustable assumptions. The paper did **not** run this head-to-head campaign, and the difference does not prove that either method is more accurate. The paper's seven-launch pilot estimates the wheel-to-ball transfer scale; seven launches alone do not establish a complete launcher map.
+
+## What each method knows
+
+| Question | Robust model + calibration | Dense empirical two-LUT campaign |
+|---|---|---|
+| How is a candidate proposed? | Drag-aware rim event and perturbation coverage identify promising exit speed and angle. | Physical wheel-hood pairs are swept at each distance. |
+| What gets deployed? | Calibrated distance-to-wheel and distance-to-hood maps. | Distance-to-wheel and distance-to-hood maps. |
+| Main data burden | Transfer identification, local corrections, repeats, and held-out validation. | Distance stations × candidate pairs × repeats, then held-out validation. |
+| Strong diagnostic | Separates flight geometry from launcher transfer and exposes sensitivity around a command. | Directly includes unmodeled contact, spin, wear, and assembly effects present during testing. |
+| Main failure mode | Wrong drag, geometry, transfer, or perturbation assumptions can narrow the search around the wrong region. | Sparse or noisy trials can select a lucky pair; the tables conflate every source of error. |
+| Outside the measured range | Recompute, recalibrate, and validate. | Add stations and validate. Do not extrapolate. |
+| Runtime cost | Two LUT queries after offline selection and calibration. | Two LUT queries. |
+
+The runtime simplicity is therefore almost identical. The model earns its value **before deployment**, by reducing the candidate space and revealing why a shot is fragile. The empirical method earns its value by measuring the assembled robot directly.
+
+## Build two empirical tables without fooling yourself
+
+1. **Choose distance stations before shooting.** Cover the intended range and add stations near mechanical regime changes. Record the true shooter-to-front-lip geometry.
+2. **Define the candidate search.** Sweep paired flywheel and hood commands. Changing one variable at a time can miss an interaction, while a full rectangular sweep can become expensive.
+3. **Randomize and repeat.** Interleave candidate pairs so battery state, wheel temperature, ball wear, and operator rhythm do not align with one command.
+4. **Separate outcomes.** Record geometric entry, bounce-out, and retained score. A hood pair that enters reliably but bounces out is a different problem from a geometric miss.
+5. **Select with uncertainty visible.** Keep counts, not only percentages. Five of five is less information than 45 of 50 even though both display 100%.
+6. **Fit shape-preserving tables.** Monotone interpolation prevents an unmeasured command reversal between knots. Clamp outside the calibrated range.
+7. **Validate on untouched launches.** Do not report the same trials used to choose a command as evidence that the chosen command generalizes.
+
+An adaptive experiment can reduce the field burden: run a coarse wheel-hood grid, keep the promising region, and refine locally. That is still empirical optimization; record every attempted command so the narrowing rule can be audited.
+
+## A practical hybrid
+
+For this launcher, the strongest workflow is usually hybrid:
+
+1. use the drag-aware event map to reject impossible and fragile speed-angle regions;
+2. translate the selected region into initial wheel-hood commands with transfer measurements;
+3. run a local empirical sweep at representative distances;
+4. build the two actuator LUTs with monotone interpolation;
+5. validate fixed-distance and moving shots with held-out balls and randomized order;
+6. expand the empirical search whenever residuals, ball changes, or mechanism changes show the model prior is no longer adequate.
+
+This keeps the simulator in the role supported by the paper: ranking feasible geometry before robot-specific calibration. It also keeps physical data in the role only physical data can fill.
+
+## Java: a transparent two-LUT deployment
+
+<JavaCode league="FTC" label="Query empirical wheel and hood maps">{`LauncherCommand empiricalCommand(double distanceInches) {
+    if (!Double.isFinite(distanceInches)) return LauncherCommand.invalid();
+
+    double usedDistance = clamp(distanceInches, MIN_CAL_DISTANCE, MAX_CAL_DISTANCE);
+    double wheelTicks = wheelLut.get(usedDistance);
+    double hoodPosition = hoodLut.get(usedDistance);
+
+    return new LauncherCommand(
+        wheelTicks,
+        hoodPosition,
+        usedDistance != distanceInches  // expose clamping to the caller
+    );
+}`}</JavaCode>
+
+This method is intentionally small. The hard work sits in the experiment that produced the knots, the interpolation that preserves their shape, and the validation that defines where the result is trusted.
+
+<Exercise title="Count the empirical campaign">
+A team tests 12 distance stations, 8 wheel-hood pairs per station, and 6 repeats per pair. It then reserves 10 held-out validation shots at each station. How many physical launches are planned?
+<Solution>
+Tuning uses $12\times8\times6=576$ launches. Validation uses $12\times10=120$. The total is **696 launches**, before warm-up shots, failed feeds, or retests.
+</Solution>
+</Exercise>
+
+**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper).
+
