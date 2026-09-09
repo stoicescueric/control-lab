@@ -1,49 +1,73 @@
 ---
 title: "Module 5 - State-Space Control"
-description: "Modern control for FTC and FRC: write the mechanism's physics as a state-space model, control every state at once with state feedback, and let LQR pick the gains from a cost you choose."
+description: "A decision-first path through state-space control: model the mechanism, inspect the state, estimate what sensors hide, choose feedback with LQR, and decide whether the result is worth deploying on an FTC Control Hub."
 sidebar_position: 0
-tags: [state-space, lqr, wpilib, modern-control]
+tags: [state-space, lqr, observers, wpilib, ftc, modern-control]
 ---
 
 # Module 5 · State-Space Control
 
 <Abstract>
-Everything so far tunes a controller against symptoms: raise kP until it oscillates, back off, add kD.
-This module designs the controller from the model instead. You write the mechanism's physics as a small
-matrix equation, feed back every state at once, and let LQR compute the gains from a cost you actually
-care about — how much error you can stand versus how many volts you have. This is how WPILib's
-state-space classes work, and the math ports to FTC in a handful of lines.
+State space is a way to make one model do four jobs: predict the mechanism, expose every state that
+matters, estimate what sensors cannot measure directly, and choose feedback gains from stated design
+goals. This module follows the same model–observer–controller structure used by WPILib, then reduces it
+to the arithmetic an FTC robot actually needs.
 </Abstract>
 
-This is an **optional modern-controls track**, not a prerequisite for PID, feedforward, or path following.
-Start it when you can check off these concrete artifacts:
+## Start with the decision, not the matrices
 
-- From the [state-space preface](../preface/why-math-matters/state-space.mdx), you can label the state,
-  input, output, and units of a one-state mechanism.
-- From [system identification](../control-theory/system-identification.mdx), you have validated $k_V$ and
-  $k_A$ in consistent physical units on a held-out run.
-- From [From Math to a Loop](../software-architecture/discretization.mdx), your code measures loop time,
-  converts encoder units once, and handles the first sample/long pauses.
-- If a state is not measured directly, you can run the persistent scalar
-  [Kalman predict/correct loop](../signal-processing/kalman.mdx) before attempting a matrix observer.
+State-space control is worth learning whenever a mechanism has coupled states, an important hidden
+state, or a model you want to test before the robot is assembled. It is often unnecessary for a
+single flywheel or elevator that already behaves well with feedforward plus PID.
 
-This module snaps them together:
+Use this gate before committing to the module:
 
-1. **[State-Space Models & State Feedback](./state-feedback.mdx)**: turn $k_V$/$k_A$ into
-   $\dot{x} = Ax + Bu$, discretize it, and control it with $u = K(r - x)$. Where the gain matrix $K$
-   comes from is left open on purpose.
-2. **[LQR — Flywheel Control](./lqr.mdx)**: the answer. State two tolerances, let the math solve for
-   the gain that balances them, and ship it on a flywheel.
+| Your mechanism | Start with | Move to state space when… |
+|---|---|---|
+| One measured velocity | feedforward + P/PID | model-based gain selection or filtering saves real tuning time |
+| Position and velocity | feedforward + PD/PID | the two gains need to be designed together |
+| Coupled axes or several states | state feedback | independent loops interact or fight |
+| A state is hidden or noisy | observer + feedback | raw differentiation or filtering adds too much lag |
+| Model changes often | model-based workflow | you can re-identify and recompute faster than retuning |
 
-The code examples lean on WPILib because FRC ships these tools as a library. FTC has no equivalent
-library, and does not need one for the systems in this module: the models are one or two states, the
-gains can be computed offline, and the runtime controller is a few lines of arithmetic.
+:::note[What this module promises]
+You will finish with a model you can step by hand, a plotted observer trace, an LQR design that respects
+voltage saturation, and an FTC deployment decision backed by measured loop timing. The goal is a
+working engineering chain, not familiarity with matrix vocabulary.
+:::
 
-<Admonition type="note" title="Where this pays off">
-For a plain flywheel, a well-tuned PIDF and an LQR land in nearly the same place. The payoff grows with
-the mechanism: two states, coupled states, states you estimate instead of measure. Learn it on the
-flywheel, where you can check every number by hand, and the harder mechanisms stop being special cases.
-State feedback is a useful prerequisite for tracking a reference that changes while the chassis moves.
-The elective’s [research paper](../advanced-research/index.mdx#research-paper) reports a deployed
-moving-shot comparison, but it does not isolate a full-state turret controller.
+## Four checkpoints
+
+1. **[Model and inspect the state](./state-feedback.mdx).** Choose $x$, $u$, and $y$; turn measured
+   $k_V$ and $k_A$ into $A$ and $B$; discretize for the real loop; inspect position and velocity as one
+   point in a phase plane.
+2. **[Estimate what the sensor hides](./observers.mdx).** Run predict and correct, expose model mismatch
+   and sensor noise, and understand why a controller must use the estimate rather than a raw derivative.
+3. **[Choose feedback with LQR](./lqr.mdx).** Convert error and voltage tolerances into a sampled gain,
+   then inspect response, effort, saturation, and timing assumptions.
+4. **[Decide whether it is worth it in FTC](./ftc-decision.mdx).** Compare the Control Hub and roboRIO
+   execution environments, count the runtime arithmetic, and use a deployment checklist rather than a
+   fashionable-controller rule.
+
+This ordering follows WPILib’s official state-space material: introduction, end-to-end controller,
+observers, then debugging. Control Lab adds the missing FTC translation and keeps every important
+graph driven by reader-controlled inputs.
+
+## Prerequisites that save time
+
+- You can name the state, input, output, and units from the
+  [state-space preface](../preface/why-math-matters/state-space.mdx).
+- You have validated $k_V$ and $k_A$ on held-out data using
+  [system identification](../control-theory/system-identification.mdx).
+- Your loop measures time, handles pauses, and applies voltage consistently as described in
+  [From Math to a Loop](../software-architecture/discretization.mdx).
+- You know the scalar predict/correct idea from the [Kalman lesson](../signal-processing/kalman.mdx).
+
+<Admonition type="info" title="Primary reference">
+
+- [WPILib: State-Space and Model Based Control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/index.html)
+- [WPILib: State-Space Controller Walkthrough](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-flywheel-walkthrough.html)
+- [WPILib: State Observers and Kalman Filters](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html)
+- [WPILib: Debugging State-Space Models and Controllers](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-debugging.html)
+
 </Admonition>

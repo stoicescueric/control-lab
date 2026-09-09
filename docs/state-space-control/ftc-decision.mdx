@@ -1,0 +1,169 @@
+---
+title: "Is State Space Worth It in FTC?"
+description: "A practical FTC decision guide: compare Control Hub and roboRIO execution environments, inspect state-space operation growth, and decide when model-based control earns its complexity."
+sidebar_position: 4
+tags: [state-space, ftc, control-hub, roborio, performance, deployment]
+---
+
+import {ComputeGrowthExplorer} from '@site/src/components/simulations/state-space/StateSpaceExplorers';
+
+# Is State Space Worth It in FTC?
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Yes, the Control Hub can run the small state-space controllers useful in FTC. Compute is rarely the
+deciding constraint. The real cost is engineering: identifying a trustworthy model, keeping units and
+timing consistent, estimating hidden states, handling saturation, and proving the combined loop on the
+robot. Use state space when those disciplines solve a mechanism problem you actually have.
+</Abstract>
+
+<Problem>
+
+## “Can the hub run it?” is the easy question
+
+A one-state flywheel controller is one gain multiplication plus feedforward. A two-state elevator adds
+a few matrix-vector products. Those operations are tiny beside camera processing, image transfer,
+telemetry formatting, garbage collection, and hardware I/O.
+
+The harder question is whether the model-based workflow reduces total team risk. A mathematically
+elegant controller built on weak characterization and unmeasured loop timing is worse than a plain PIDF
+whose limits the team understands.
+
+</Problem>
+
+<Theory>
+
+## Compare execution environments without comparing clock numbers blindly
+
+| Platform | Documented compute architecture | Runtime character | Implication for controls |
+|---|---|---|---|
+| REV Control Hub | RK3328 quad-core ARM Cortex-A53, separate Cortex-M4, 1 GB LPDDR3 | Android Robot Controller app; CPU is shared with user code, SDK work, networking, telemetry, and often vision | Small dense controllers and observers are practical. Measure timing under the full competition workload. |
+| roboRIO family | Dual-core real-time ARM Cortex-A9 plus a Xilinx FPGA | NI Linux Real-Time with FPGA-backed robot I/O; WPILib supplies the state-space stack | Predictable scheduling and library support reduce implementation work. The FPGA and real-time OS matter more than a direct CPU-clock comparison. |
+
+The processor descriptions come from the official
+[REV Control Hub specifications](https://docs.revrobotics.com/duo-control/control-system-overview/control-hub-basics)
+and [WPILib roboRIO introduction](https://docs.wpilib.org/en/stable/docs/software/roborio-info/roborio-introduction.html).
+The original NI roboRIO specification lists a 667 MHz dual-core Cortex-A9, while REV’s current Control
+Hub page does not publish a CPU clock. Core count, clock, CPU generation, operating system, and FPGA
+offload are different variables, so they do not support a defensible “times faster” claim without the
+same benchmark on both devices.
+
+:::note[The useful conclusion]
+For the one-to-four-state mechanisms typical in FTC, both platforms have ample arithmetic capacity.
+The Control Hub’s practical headroom depends on the rest of the OpMode—especially vision and allocation
+pressure. Profile the complete robot instead of benchmarking an isolated matrix multiply on a laptop.
+:::
+
+## Runtime arithmetic grows much slower when gains are precomputed
+
+Move the state and sensor counts. The bars show approximate scalar multiplication counts for dense,
+naive arithmetic. They are operation counts, not microseconds: converting them to time without a device
+benchmark would create false precision.
+
+<ComputeGrowthExplorer />
+
+State feedback with one motor input grows linearly with the state count. A fixed-gain observer is mainly
+matrix-vector arithmetic and grows quadratically. Updating a full Kalman covariance online includes
+cubic matrix work, but even that is small at two or four states. For a time-invariant mechanism, compute
+the steady-state Kalman gain and LQR gain offline when your design method permits it. The robot then runs
+the cheap fixed-gain form.
+
+## When state space earns its cost
+
+Use it when at least one of these is true:
+
+- Position and velocity must be controlled together and hand-tuned loops interact.
+- A critical state cannot be measured cleanly, but a model and available sensors make it observable.
+- Multiple inputs affect multiple states, such as coupled drivetrain or turret motion.
+- You need to simulate a mechanism and controller before hardware is available.
+- Mechanism changes are frequent enough that re-identifying and recomputing is cheaper than retuning.
+- You can log model prediction, measurement, estimate, reference, applied voltage, and loop time.
+
+Stay with feedforward plus PID/PD when:
+
+- One measured variable is the only state that matters.
+- The existing controller meets accuracy, recovery, and saturation requirements across battery voltage.
+- The plant changes discontinuously with game pieces, backlash, hard contact, or geometry that the chosen
+  linear model does not cover.
+- The team cannot yet validate units, sample timing, system identification, and failure behavior.
+
+This is an engineering maturity decision. State-space notation does not make an unvalidated system more
+advanced; it makes the assumptions more explicit.
+
+</Theory>
+
+<Deploy>
+
+## FTC deployment budget
+
+Perform the Riccati solve, discretization, and steady-state observer design off the robot. Store the
+resulting constants with their plant units and design period. At runtime:
+
+1. Read sensors once and convert to SI or one documented unit system.
+2. Correct the state estimate from current measurements.
+3. Compute feedback and feedforward voltage.
+4. Clamp to voltage the battery can provide.
+5. Send the normalized motor command.
+6. Predict the next state using the voltage actually applied.
+7. Log timing and innovation without allocating a new matrix each loop.
+
+<JavaCode league="FTC" label="Measure the controller inside the real OpMode workload">{`long started = System.nanoTime();
+
+observer.correct(positionMeters);
+double requestedVolts = controller.calculate(reference, observer.state()) + gravityVolts;
+double appliedVolts = clampToBattery(requestedVolts);
+motor.setPower(appliedVolts / batteryVolts());
+observer.predict(appliedVolts);
+
+long controllerNanos = System.nanoTime() - started;
+timingStats.add(controllerNanos); // preallocated rolling statistics; no per-loop arrays
+
+// Report percentiles slowly, outside the control path.
+if (reportTimer.seconds() >= 1.0) {
+    telemetry.addData("controller p95", "%.3f ms", timingStats.p95() / 1e6);
+    telemetry.addData("whole-loop p95", "%.3f ms", loopStats.p95() / 1e6);
+    reportTimer.reset();
+}`}</JavaCode>
+
+Measure the controller and the whole loop. Run the test with the camera, localization, telemetry, and
+every subsystem enabled. A tiny controller time does not compensate for a loop stalled by synchronous
+I/O or image processing.
+
+## Launch checklist for one mechanism
+
+- The identified model predicts held-out data in both directions and across the operating range.
+- Every state, input, output, matrix entry, and gain has documented units.
+- The sampled design uses the measured loop period, with a defined response to overruns.
+- Controllability and observability are checked offline.
+- Simulation includes voltage saturation, battery sag, sensor noise, and plausible model error.
+- Logs contain reference, measurement, estimate, innovation, requested/applied voltage, and loop time.
+- A simpler PIDF baseline is tested against the same acceptance criteria.
+- The mechanism fails safely when a sensor becomes invalid or timing exceeds the validated bound.
+
+<Exercise title="Make the worth-it decision">
+
+Your flywheel has one encoder, a validated feedforward, and a P controller that recovers inside the shot
+requirement without saturation. Your elevator has position feedback only, noisy derived velocity, and
+overshoots differently depending on its load. Which mechanism should receive the first state-space work?
+
+<Solution>
+
+The elevator. Its hidden/noisy velocity and load-dependent two-state response create a problem an
+observer plus jointly designed feedback can address. The flywheel already meets its requirement; an LQR
+implementation there may be a useful learning exercise, but it is not yet justified production work.
+
+</Solution>
+
+</Exercise>
+
+</Deploy>
+
+<Admonition type="info" title="Sources & references">
+
+- [REV Control Hub specifications](https://docs.revrobotics.com/duo-control/control-system-overview/control-hub-basics) — processor architecture and memory.
+- [WPILib roboRIO introduction](https://docs.wpilib.org/en/stable/docs/software/roborio-info/roborio-introduction.html) — real-time processor and FPGA architecture.
+- [NI roboRIO specifications](https://download.ni.com/support/manuals/374661a.pdf) — original roboRIO processor clock and core count.
+- [WPILib: Debugging State-Space Models and Controllers](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-debugging.html) — model, input, and timing checks.
+
+</Admonition>

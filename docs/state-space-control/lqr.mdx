@@ -1,7 +1,7 @@
 ---
 title: LQR — Flywheel Control
 description: "Stop guessing gains. State two tolerances — how much velocity error you can stand, how many volts you have — and the linear-quadratic regulator solves for the gain that balances them. Shipped on a flywheel, in WPILib and in plain FTC Java."
-sidebar_position: 2
+sidebar_position: 3
 tags: [lqr, optimal-control, flywheel, bryson, wpilib, riccati]
 ---
 
@@ -12,8 +12,8 @@ import {LqrExplorer} from '@site/src/components/simulations/state-space/StateSpa
 <Difficulty level="Hard" />
 
 <Abstract>
-The previous lesson ended on a question: state feedback needs a gain matrix $K$, so where does it come
-from? LQR answers by reframing the problem. Instead of picking gains, you price the two things you
+The modeling checkpoint introduced a gain matrix $K$, and the observer checkpoint supplied the state
+estimate it acts on. Where should the gains come from? LQR answers by reframing the problem. Instead of picking gains, you price the two things you
 actually care about — error and effort — and the math solves for the $K$ that minimizes the total
 bill. Bryson's rule turns that pricing into two numbers any team can name: the error you can tolerate
 and the volts you have.

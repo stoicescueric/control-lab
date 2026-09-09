@@ -1,0 +1,194 @@
+---
+title: "State Observers - Estimate What Sensors Hide"
+description: "Combine a state-space prediction with encoder measurements to estimate position and velocity, then expose the trade between sensor noise, model mismatch, and correction strength."
+sidebar_position: 2
+tags: [state-space, observer, kalman-filter, estimation, encoder, ftc]
+---
+
+import {ObserverExplorer} from '@site/src/components/simulations/state-space/StateSpaceExplorers';
+
+# State Observers · Estimate What Sensors Hide
+
+<Difficulty level="Hard" />
+
+<Abstract>
+An encoder can report elevator position without directly reporting a clean velocity. An observer fills
+that gap by running the mechanism model forward, comparing the predicted sensor value with the real
+measurement, and feeding the difference back into the state estimate. The controller then acts on one
+coherent estimate instead of a raw position plus a noisy derivative.
+</Abstract>
+
+<Problem>
+
+## Filtering position and differentiating it solves the wrong problem
+
+A low-pass filter can quiet an encoder, but it delays the signal. Differentiating raw position avoids
+that lag but amplifies quantization and vibration. A controller that needs both position and velocity
+then receives two signals with different errors and timing.
+
+The model already knows that position changes according to velocity and that voltage changes velocity.
+An observer uses those relationships as information rather than treating each sensor sample in isolation.
+
+</Problem>
+
+<Theory>
+
+## Prediction supplies continuity; correction supplies reality
+
+Start from the sampled plant:
+
+$$
+\hat{\mathbf{x}}_{k+1}^{-}=A_d\hat{\mathbf{x}}_k^{+}+B_d\mathbf{u}_k
+$$
+
+The minus superscript means “predicted, before seeing the next measurement.” Convert that prediction
+into the sensor space and subtract it from the real measurement:
+
+$$
+\mathbf{e}_{y,k}=\mathbf{y}_k-C\hat{\mathbf{x}}_k^{-}
+$$
+
+That difference is the **innovation**. It is the new information the sensor contributes. A fixed-gain
+observer corrects the state with
+
+$$
+\hat{\mathbf{x}}_k^{+}=\hat{\mathbf{x}}_k^{-}+L\mathbf{e}_{y,k}.
+$$
+
+<EquationLegend
+  items={[
+    {symbol: 'x̂⁻', meaning: 'the state predicted by the model before the new sensor sample'},
+    {symbol: 'x̂⁺', meaning: 'the corrected estimate after the new sensor sample'},
+    {symbol: 'C x̂⁻', meaning: 'what the model predicts the sensor should have reported'},
+    {symbol: 'innovation', meaning: 'measurement minus predicted measurement; the part the model did not already explain'},
+    {symbol: 'L', meaning: 'observer correction gain. Larger values follow measurements more strongly; smaller values trust the model longer'},
+  ]}
+/>
+
+The viewer below uses a deterministic fixed-gain position/velocity observer so every slider movement is
+repeatable. It is deliberately simpler than a Kalman filter: the purpose is to expose the prediction
+and correction trade. A Kalman filter computes the corresponding gain from process and measurement
+covariances.
+
+<ObserverExplorer />
+
+:::tip[Three experiments that reveal the design]
+1. Raise encoder noise while keeping correction strong: the estimate begins to inherit the measurement.
+2. Add model mismatch while keeping correction weak: the estimate drifts because it trusts the wrong plant.
+3. Increase correction until the estimate recovers without copying every measurement spike. That balance
+   is what $Q$ and $R$ express in a Kalman design.
+:::
+
+## The estimator and controller are separate designs
+
+The feedback controller chooses input from estimated state:
+
+$$
+\mathbf{u}_k=K(\mathbf{r}_k-\hat{\mathbf{x}}_k)+\mathbf{u}_{ff,k}.
+$$
+
+The observer chooses how the estimate reacts to measurement error. $K$ and $L$ have different jobs and
+different failure modes. Fast controller poles cannot repair a slow or biased estimate. An aggressive
+observer cannot repair the wrong units or an encoder that slips.
+
+For controllable and observable linear systems, controller and observer gains can be designed
+independently under the separation principle. Deployment still couples them through saturation,
+timing, quantization, and model error, so the combined loop must be simulated and logged.
+
+## Where the Kalman filter fits
+
+A Kalman filter carries an uncertainty matrix $P$. Prediction increases uncertainty using process-noise
+covariance $Q$; correction decreases it using measurement-noise covariance $R$. The resulting Kalman
+gain changes according to confidence. WPILib accepts state and measurement **standard deviations** and
+constructs the covariance matrices internally.
+
+Use the full [Kalman lesson](../signal-processing/kalman.mdx) for the covariance derivation. The state-space
+module needs one operational idea: **predict whenever the model advances; correct whenever a new
+measurement arrives**. A slow camera can therefore correct less often than fast encoders without
+stopping the prediction loop.
+
+</Theory>
+
+<Deploy>
+
+## The runtime order is part of the controller
+
+WPILib packages the plant, Kalman filter, LQR, voltage limit, and reference in `LinearSystemLoop`. Its
+documented flywheel walkthrough corrects from the encoder and predicts the next state each 20 ms cycle.
+
+For FTC, precompute $A_d$, $B_d$, $K$, and either a steady Kalman gain or fixed observer gain offline.
+The loop then contains small matrix-vector products:
+
+<JavaCode league="FTC" label="Two-state fixed-gain observer and feedback skeleton">{`double xPos;
+double xVel;
+
+void update(double referencePosition, double measuredPosition, double dt) {
+    if (!Double.isFinite(dt) || Math.abs(dt - DESIGN_DT) > DT_TOLERANCE) {
+        motor.setPower(0);
+        return;
+    }
+
+    // Correct: compare the encoder with what the observer predicted.
+    double innovation = measuredPosition - xPos;
+    xPos += L_POS * innovation;
+    xVel += L_VEL * innovation;
+
+    // Control from the corrected state estimate.
+    double requestedVolts = K_POS * (referencePosition - xPos)
+            + K_VEL * (0.0 - xVel)
+            + kG;
+    double appliedVolts = clampToBattery(requestedVolts);
+    motor.setPower(appliedVolts / batteryVolts());
+
+    // Predict with the voltage that was actually applied, including saturation.
+    double nextPos = AD_00 * xPos + AD_01 * xVel + BD_0 * appliedVolts;
+    double nextVel = AD_10 * xPos + AD_11 * xVel + BD_1 * appliedVolts;
+    xPos = nextPos;
+    xVel = nextVel;
+}`}</JavaCode>
+
+Using requested voltage in the prediction after the battery clamp teaches the observer that the plant
+received an input it never received. The estimate then diverges precisely during the hardest part of
+the move. Feed the predictor the applied voltage.
+
+<Exercise title="A measurement arrives late">
+
+An AprilTag result describes the robot 120 ms in the past. Why is correcting the current estimate as if
+the measurement were current inconsistent, and what history would a latency-aware estimator need?
+
+<Solution>
+
+The innovation compares states from different times. During a fast move, the difference contains real
+motion as well as sensor error, so the correction pulls the current estimate backward. A latency-aware
+estimator retains recent states and inputs, corrects the estimate at the measurement timestamp, then
+replays predictions to the present.
+
+</Solution>
+
+</Exercise>
+
+<Exercise title="The estimate is smooth but consistently wrong">
+
+The encoder trace is clean and the observer estimate is smooth, but logged predicted position drifts
+from measured position in the same direction during every upward move. Which evidence should you inspect
+before changing observer noise values?
+
+<Solution>
+
+Inspect units, sign, applied-voltage logging, gravity/feedforward, battery sag, and the identified plant.
+A repeatable direction-dependent innovation is evidence of bias or model error, not random measurement
+noise. Changing $Q$ or $R$ can hide the symptom without fixing the cause.
+
+</Solution>
+
+</Exercise>
+
+</Deploy>
+
+<Admonition type="info" title="Sources & references">
+
+- [WPILib: State Observers and Kalman Filters](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) — prediction, correction, covariance, and tuning conventions.
+- [WPILib: State-Space Controller Walkthrough](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-flywheel-walkthrough.html) — the complete plant, observer, LQR, and loop pattern.
+- [Kalman Filtering](../signal-processing/kalman.mdx) — Control Lab’s scalar-to-matrix estimation path.
+
+</Admonition>
