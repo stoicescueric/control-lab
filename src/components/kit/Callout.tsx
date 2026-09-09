@@ -36,7 +36,7 @@ export function Callout({type = 'note', icon, title, children}: CalloutProps) {
       <span className="mt-0.5 shrink-0 rounded-[5px] border border-current/20 px-2 py-0.5 font-mono text-[0.68rem] font-bold uppercase leading-tight text-ink-soft">
         {icon ?? LABELS[type]}
       </span>
-      <div>
+      <div className="min-w-0 flex-1">
         {title && <strong className="text-ink">{title} </strong>}
         {children}
       </div>

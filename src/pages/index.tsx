@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState, type ComponentType, type ReactNode} from 'react';
+import Head from '@docusaurus/Head';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
@@ -80,6 +81,51 @@ const ELECTIVE: Module = {
   description:
     'Trajectory generation, launcher calibration, flywheel control, and dynamic targeting.',
   to: '/docs/advanced-research',
+};
+
+const STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://stoicescueric.github.io/control-lab/#website',
+      url: 'https://stoicescueric.github.io/control-lab/',
+      name: 'Control Lab',
+      description:
+        'Interactive lessons in control theory, state estimation, and FTC robotics, with derivations, simulations, and Java implementations.',
+      inLanguage: 'en',
+      license: 'https://opensource.org/license/mit',
+    },
+    {
+      '@type': 'Course',
+      '@id': 'https://stoicescueric.github.io/control-lab/#course',
+      url: 'https://stoicescueric.github.io/control-lab/',
+      name: 'Control Lab: Control Theory and FTC Robotics',
+      description:
+        'A free, interactive curriculum that teaches control theory, state estimation, signal processing, path following, and robotics implementation in Java.',
+      provider: {
+        '@type': 'Person',
+        name: 'Eric Stoicescu',
+        url: 'https://github.com/stoicescueric',
+      },
+      isAccessibleForFree: true,
+      inLanguage: 'en',
+      educationalLevel: 'Intermediate',
+      audience: {
+        '@type': 'EducationalAudience',
+        educationalRole: 'student',
+      },
+      teaches: [
+        'control theory',
+        'state estimation',
+        'FTC robotics',
+        'signal processing',
+        'path following',
+        'state-space control',
+      ],
+      license: 'https://opensource.org/license/mit',
+    },
+  ],
 };
 
 function SectionLabel({children}: {children: ReactNode}) {
@@ -346,6 +392,9 @@ export default function Home(): ReactNode {
     <Layout
       title={siteConfig.title}
       description="Interactive lessons in control theory, state estimation, and FTC robotics, with derivations, simulations, and Java implementations.">
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(STRUCTURED_DATA)}</script>
+      </Head>
       <main>
         <ControlResponseHero />
         <ReaderEntry />

@@ -161,10 +161,11 @@ Stationary entry was 15/15 in both states, checking the zero-velocity behavior. 
 ## Java: return the solution and its evidence
 
 <JavaCode league="FTC" label="Solve and report a moving-shot aim point">{`AimResult movingAim(Vec2 shooter, Vec2 target, Vec2 robotVelocity) {
-    double time = flightTime.getClamped(target.minus(shooter).norm());
+    Lookup initial = flightTime.lookup(target.minus(shooter).norm());
+    double time = initial.value();
     Vec2 virtualTarget = target;
     double residual = Double.POSITIVE_INFINITY;
-    boolean clamped = false;
+    boolean clamped = initial.clamped();
 
     for (int update = 0; update < 5; update++) {
         double totalTime = 0.05 + time;

@@ -58,6 +58,15 @@ const config: Config = {
   },
 
   headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'alternate',
+        type: 'text/plain',
+        href: `/${REPO}/llms.txt`,
+        title: 'Control Lab overview for language models',
+      },
+    },
     ...(IS_PRODUCTION_BUILD
       ? [
           {

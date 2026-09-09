@@ -14,13 +14,42 @@ type Data = {
 const KEY = 'cl-progress-v1';
 const EVT = 'cl-progress-change';
 
+function isTrueRecord(value: unknown): value is Record<string, true> {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => entry === true)
+  );
+}
+
+function isLastVisited(value: unknown): value is LastVisited {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.title === 'string' &&
+    typeof candidate.path === 'string'
+  );
+}
+
 function read(): Data {
   if (typeof window === 'undefined') return {completed: {}};
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return {completed: {}};
-    const parsed = JSON.parse(raw) as Data;
-    return parsed && typeof parsed === 'object' && parsed.completed ? parsed : {completed: {}};
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {completed: {}};
+    }
+
+    const candidate = parsed as Record<string, unknown>;
+    const data: Data = {
+      completed: isTrueRecord(candidate.completed) ? candidate.completed : {},
+    };
+    if (isTrueRecord(candidate.challenges)) data.challenges = candidate.challenges;
+    if (isLastVisited(candidate.last)) data.last = candidate.last;
+    return data;
   } catch {
     return {completed: {}};
   }

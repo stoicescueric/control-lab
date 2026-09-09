@@ -199,9 +199,13 @@ $$
 
 Tracking is now first order with exactly the time constant asked for, while $A_{cl}$ still contains
 $p_2$, so the integral pole keeps doing the job it was there for: rejecting the steady offsets a model
-cannot know about. For a held reference the two versions of $T$ agree exactly, since $t_0(1 - p_2)$ is the scalar
-choice, which is why the error hides until the reference starts moving. A step response measured from
-rest cannot see it at all.
+cannot know about. For a held reference after the transient, the two versions of $T$ have the same DC
+gain, since $t_0(1 - p_2)$ is the scalar choice. They do **not** produce the same step response. For a
+genuine zero-to-step change of size $\Delta v^{*}$, the scalar filter contributes an initial increment
+of $(1-p_1)(1-p_2)\Delta v^{*}/b$, while the polynomial filter contributes
+$(1-p_1)\Delta v^{*}/b$. The difference can be hidden at controller startup if `previousReference` is
+primed to the current reference, because that initialization deliberately avoids treating the first
+sample as a real command step. Test tracking with a reference change after the controller is primed.
 
 <Exercise title="What the slow pole costs a scalar T">
 
@@ -376,8 +380,10 @@ differencing window on a 20 ms loop leaves less headroom than the loop rate alon
 - Suppose you store the unclamped output and clamp only what you send to the motors. Describe what the
   first command after a long saturated stretch looks like, and why the mechanism does not move at
   first.
-- $\tau_i$ is deliberately slower than $\tau_{cl}$. What goes wrong if you set them equal, given that
-  $A_{cl}$ would then have a repeated pole and $T$ would cancel the only one you have?
+- $\tau_i$ is deliberately slower than $\tau_{cl}$. If you set them equal, $A_{cl}$ has a repeated
+  pole and $T$ cancels one copy from the reference path. What pole remains in the tracking response,
+  and what design freedom do you lose by giving tracking and disturbance rejection the same time
+  constant?
 - Your velocity comes from a 25 ms differencing window and your loop runs at 20 ms. Argue for a
   $\tau_{cl}$ and say what evidence would change your mind.
 

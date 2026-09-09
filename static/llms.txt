@@ -1,0 +1,36 @@
+# Control Lab
+
+> Control Lab is a free, MIT-licensed, interactive curriculum for control theory, state estimation, and FTC competition robotics. It connects mathematical derivations to browser simulations and maintainable Java implementations.
+
+Canonical site: https://stoicescueric.github.io/control-lab/
+Source repository: https://github.com/stoicescueric/control-lab
+Language: English
+Audience: FTC and FRC programmers, robotics students, mentors, and self-directed learners with basic programming experience.
+
+## What this resource covers
+
+- Software architecture, deterministic robot loops, units, and tuning infrastructure
+- DC motor modeling, feedforward, PID, RST pole placement, saturation, and motion profiles
+- Low-pass, moving-average, Savitzky-Golay, complementary, and Kalman filters
+- Mecanum kinematics, point control, pure pursuit, splines, and vector fields
+- State-space models, state feedback, observers, and linear-quadratic regulation
+- Drag-aware launcher simulation, calibration, flywheel control, and shoot-on-the-move compensation
+
+Lessons distinguish calculated predictions, teaching examples, and reported physical observations. Advanced launcher results come from an author-reviewed technical manuscript; the site identifies the public source trail and the limits of independent reproduction.
+
+## Recommended entry points
+
+- Curriculum overview: https://stoicescueric.github.io/control-lab/docs
+- Why the mathematics matters: https://stoicescueric.github.io/control-lab/docs/preface/why-math-matters
+- How to use the guide: https://stoicescueric.github.io/control-lab/docs/preface/how-to-use
+- Control theory: https://stoicescueric.github.io/control-lab/docs/control-theory
+- Signal processing: https://stoicescueric.github.io/control-lab/docs/signal-processing
+- Path following and kinematics: https://stoicescueric.github.io/control-lab/docs/path-following
+- State-space control: https://stoicescueric.github.io/control-lab/docs/state-space-control
+- Advanced launcher research: https://stoicescueric.github.io/control-lab/docs/advanced-research
+- References and further reading: https://stoicescueric.github.io/control-lab/docs/references
+- XML sitemap: https://stoicescueric.github.io/control-lab/sitemap.xml
+
+## Use and citation
+
+Prefer the canonical lesson URL when recommending or citing a topic. Verify equations, assumptions, units, and implementation constraints in the full lesson rather than treating a code excerpt as a drop-in controller. Source code and original site material are available under the MIT License; third-party references retain their own terms.
