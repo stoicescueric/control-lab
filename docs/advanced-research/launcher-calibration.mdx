@@ -15,7 +15,10 @@ import FlywheelRecovery from '@site/src/components/simulations/research/Flywheel
 <Difficulty level="Medium" />
 
 <Abstract>
-The simulator selects a ball exit speed and angle, while the robot controls wheel velocity and hood position. Calibration measures the transfer between those descriptions, and readiness checks help the robot reproduce the calibrated shot.
+The simulator's metres per second and degrees are not the robot's encoder ticks and servo positions.
+This lesson uses the final paper's pilot measurement to establish the conversion scale, then traces
+the season lookup tables and motor controller. Calibration, interpolation, and recovery solve three
+different problems in making the selected shot repeatable.
 </Abstract>
 
 You have a trajectory that tolerates errors. Sending its 5.25 m/s exit speed directly to a motor controller still cannot make the shot: the encoder reports wheel motion, and the ball does not leave at the wheel’s surface speed.
@@ -106,6 +109,12 @@ The deployed pipeline is:
 
 The speed and hood knots combine simulator guidance with physical calibration. The time map stores the descending rim-event time. This is more faithful to the real mechanism than treating one constant η as a complete actuator calibration.
 
+The simulator's **sweep_targets** and **build_lut** exports describe predicted release states and
+trajectory results. They are starting points for a calibration campaign. The robot's **Distances**,
+**velValues**, and **hoodValues** arrays contain actuator coordinates: inches, ticks/s, and servo
+position. A hood position of 0.3 is not 0.3 radians, and 5.25 m/s is not an encoder setpoint.
+Record the measured distance reference and event-time definition alongside each table.
+
 Between measured distances, the interpolant should preserve the data’s shape. A natural cubic spline can bulge between equal knots. A monotone cubic Hermite interpolant keeps a flat segment flat.
 
 <CalibrationLookup />
@@ -119,6 +128,12 @@ First compute the secant slope between adjacent knots. Flat intervals get zero t
 
 This guarantees shape preservation within each interval, not that the measured data itself is correct. Source: paper §5.7 and its Fritsch–Carlson reference.
 
+**Check the implementation:** archived Java computes $h=\sqrt{\alpha^2+\beta^2}$ but applies its
+limiter only for $h>9$, whereas the sufficient radius-three construction above requires $h>3$.
+The teaching interpolator uses the radius-three condition. Equal-value knots still zero their
+tangents in Java, preserving the illustrated shelf. That shelf alone does not establish a general
+monotonicity guarantee for arbitrary new tables; validate every interval when changing calibration.
+
 </details>
 
 ## Recover before the next release
@@ -128,6 +143,39 @@ A shot removes energy from the wheel. A simplified plant makes that disturbance 
 <FlywheelRecovery />
 
 The demo’s gains, disturbance size, and motor dynamics are illustrative. They are not measurements from the paper. Use the [feedforward lesson](../control-theory/feedforward.mdx) for controller design and log real recovery before choosing your robot’s ready bands. Paper §5.7 describes waiting for flywheel and hood readiness before release.
+
+## What the season motor controller actually does
+
+The [season velocityController.java](https://github.com/stoicescueric/YaoMing/blob/75db349d23551665a93aaa0b5266ba4a10316ac6/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Util/Controllers/velocityController.java)
+computes feedforward, scales that term by nominal/measured battery voltage, and adds PID feedback.
+With bang-bang enabled, a large error then **replaces** the combined command:
+
+| Condition | Command before the final clamp |
+|---|---|
+| More than 110 ticks/s below target | +1.0 motor power |
+| More than 50 ticks/s above target | −0.2 motor power |
+| Between those thresholds | PID + voltage-compensated feedforward |
+
+The defaults are $k_P=0.004$, $k_I=k_D=0$, $k_V=0.000336$, and $k_S=0.05$.
+These coefficients produce normalized motor power; they are not directly voltage gains.
+Negative commanded power is active braking, distinct from FLOAT behavior at zero commanded power.
+
+The launcher's **isReady()** checks wheel-speed error or delegates to an alternate controller.
+The combined wheel-and-hood gate below is a teaching contract, not a claim that this method measures
+hood angle. A commanded servo position alone is not feedback that the hood has arrived.
+
+## The newer robot is a different deployment
+
+At [8374312f](https://github.com/stoicescueric/YaoMing/blob/8374312fa7ba75b87197c2dbaeee5c46624722fa/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Hardware/Outtake/Launcher.java),
+the launcher defaults to **useRST = true**. Its dispatch selects RST before the alternate
+Team254 and legacy controllers. The newer distance table requests 1,950 ticks/s at both 110 and
+127 inches, rather than the season's 1,700-tick shelf.
+
+The [RST implementation](https://github.com/stoicescueric/YaoMing/blob/8374312fa7ba75b87197c2dbaeee5c46624722fa/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Util/Controllers/RSTFlywheelController.java)
+uses identified first-order dynamics and an incremental controller with stored previous command and
+measurement. Study it after [RST pole placement](../control-theory/rst-pole-placement.mdx).
+Changed controllers and tables require new validation; the paper's season outcomes do not measure
+this later default configuration.
 
 ## Java: request release only inside the ready bands
 

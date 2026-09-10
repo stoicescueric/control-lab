@@ -11,6 +11,24 @@ describe('motionStep', () => {
 });
 
 describe('planConstrainedMotion', () => {
+  it.each([
+    {position: 2, velocity: 0.2},
+    {position: 0, velocity: -0.2},
+    {position: 2.01, velocity: -0.2},
+  ])('rejects a limit violation even when endpoints return inside: %o', (state) => {
+    const plan = planConstrainedMotion({
+      state,
+      targetPosition: 1,
+      horizon: 1,
+      dtSeconds: 0.2,
+      maxAcceleration: 2,
+      minPosition: 0,
+      maxPosition: 2,
+    });
+    expect(plan.feasibleCount).toBe(0);
+    expect(plan.feasible).toBe(false);
+  });
+
   it('checks every discrete input sequence', () => {
     const plan = planConstrainedMotion({
       state: {position: 0.2, velocity: 0},

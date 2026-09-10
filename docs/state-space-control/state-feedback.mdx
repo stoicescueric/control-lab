@@ -180,6 +180,11 @@ Read the rows: the first says $\dot{p}=v$; the second is the same motor equation
 matrix form lets one input respond to both state errors. Now $K$ has a position gain and a velocity
 gain; structurally, that resembles PD control.
 
+These linear matrices omit gravity and static friction. For a vertical elevator, interpret their input
+as motor voltage minus the gravity-hold voltage, or add gravity explicitly as an affine model term.
+The [observer example](./observers.mdx) uses the first convention. Adding gravity feedforward to the
+motor command without representing gravity in the predictor would make the model accelerate even at rest.
+
 Substitute the law into the model and the closed-loop system becomes
 
 $$

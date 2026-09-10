@@ -94,6 +94,7 @@ export function fitVelocityModel(samples: VelocitySample[]): VelocityModelFit | 
   let meanV = 0;
   let meanVoltage = 0;
   for (const {velocity, voltage} of samples) {
+    if (!Number.isFinite(velocity) || !Number.isFinite(voltage)) return null;
     meanV += velocity;
     meanVoltage += voltage;
   }
@@ -110,5 +111,5 @@ export function fitVelocityModel(samples: VelocitySample[]): VelocityModelFit | 
 
   const kV = sxy / sxx;
   const kS = meanVoltage - kV * meanV;
-  return {kS, kV};
+  return Number.isFinite(kS) && Number.isFinite(kV) ? {kS, kV} : null;
 }

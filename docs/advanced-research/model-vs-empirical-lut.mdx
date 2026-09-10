@@ -1,21 +1,68 @@
 ---
-title: Model-Guided Shot or Two Empirical LUTs?
-description: "Compare robust physics-guided shot selection with a wheel-and-hood lookup workflow built from a denser physical calibration campaign."
+title: Validate the Complete Shooting System
+description: "Interpret the final paper's entry and retention evidence, compare model-guided and empirical calibration, and design a reproducible follow-up campaign."
 sidebar_position: 5
 tags: [research, calibration, lookup-table, experimentation, tradeoffs]
 ---
 
 import StrategyComparison from '@site/src/components/simulations/research/StrategyComparison';
 
-# Model-Guided Shot or Two Empirical LUTs?
+# Validate the Complete Shooting System
 
 <Difficulty level="Medium" />
 
 <Abstract>
-Both strategies can deploy as two cheap runtime lookups: distance to flywheel speed and distance to hood position. The engineering difference is how those table entries are chosen. A model narrows and explains the search; a pure empirical method replaces more of that prior structure with physical trials.
+The complete system must be judged with physical launches. This lesson reads the final paper's
+development, controlled, and operational evidence, then compares two ways to build the calibration
+tables. The goal is to choose the next experiment from the observed failure mode.
 </Abstract>
 
-The model-based selector is not the only reasonable way to calibrate an FTC launcher. A team can place the robot at many distances, sweep wheel and hood settings, repeat each pair, and store the best observed command in two lookup tables. That approach trades simulator assumptions for field time, controlled data collection, and careful validation.
+## What the final paper actually measured
+
+| Record | Target entries | Retained scores | Interpretation |
+|---|---:|---:|---|
+| Initial development calibration | 70/100 | Not separately reported here | Sequential baseline |
+| After make-window calibration | 93/100 | Not separately reported here | Integrated workflow result |
+| Solo operational record | 94/97 | 84/97 | 10 bounce-outs and 3 geometric misses |
+| Selected complete MTI match | 105/110 | 101/110 | 4 bounce-outs and 5 geometric misses |
+
+Paper §§7–8 reports Wilson 95% intervals for the proportions. The 70/100 to 93/100 change is
+23 percentage points, with a Newcombe interval of 12.5–33.2 points. Because those stages were
+sequential, it does not isolate the effect of caching, the drag coefficient, or a single controller
+change. A faster cache that selects the same command receives no separate physical-performance credit.
+
+The controlled moving-shot experiment is stronger evidence for the compensation condition:
+ON/OFF was alternated within commanded-speed blocks, producing 54/60 versus 30/60 moving entries.
+The [previous lesson](./shoot-on-the-move.mdx#what-the-controlled-launches-establish) gives the
+complete count table and the limits of the preserved aggregate record.
+
+The selected MTI video documents one complete match. Its 105/110 entry count is not an estimate of
+every match or every mechanism configuration. The model does not predict retention after contact.
+
+## Let the failure category choose the next experiment
+
+In the solo record, 10 of 13 non-retained launches had already entered. Moving the simulated entry
+window cannot by itself explain those bounce-outs. The paper identifies marked-ball spin measurement
+and goal-contact analysis as appropriate next work.
+
+| Observed failure | Inspect next |
+|---|---|
+| Repeatable front/back miss while stationary | release speed/angle, distance reference, systematic map error |
+| Good stationary shots, misses during motion | velocity frame, delay, TOF range, acceleration and solver residual |
+| Entry followed by bounce-out | spin, entry velocity, impact geometry and retention |
+| First shot works, rapid next shot fails | wheel recovery, feeder timing and actual release readiness |
+| Simulation looks precise but video disagrees | camera calibration, units and physical model assumptions |
+
+The paper's pilot camera sequence establishes a transfer scale, not a drag measurement. Numerical
+agreement with an independent solver establishes the implementation of the equations, not the
+truth of every physical assumption.
+
+## Model-guided shot or two empirical LUTs?
+
+A model narrows the candidate search before field testing. An empirical method places the robot at
+many distances, sweeps paired wheel and hood commands, and stores successful settings. Both can
+finish with two actuator tables. Moving shots additionally require an event-time table, irrespective
+of how the actuator settings were chosen.
 
 ## Compare the complete workflows
 
@@ -66,7 +113,7 @@ The runtime simplicity is therefore almost identical. The model earns its value 
 3. **Randomize and repeat.** Interleave candidate pairs so battery state, wheel temperature, ball wear, and operator rhythm do not align with one command.
 4. **Separate outcomes.** Record geometric entry, bounce-out, and retained score. A hood pair that enters reliably but bounces out is a different problem from a geometric miss.
 5. **Select with uncertainty visible.** Keep counts, not only percentages. Five of five is less information than 45 of 50 even though both display 100%.
-6. **Fit shape-preserving tables.** Monotone interpolation prevents an unmeasured command reversal between knots. Clamp outside the calibrated range.
+6. **Fit and verify shape-preserving tables.** Check every interval for overshoot. Record out-of-range queries explicitly; a clamped value is not a calibrated shot at the requested distance.
 7. **Validate on untouched launches.** Do not report the same trials used to choose a command as evidence that the chosen command generalizes.
 
 An adaptive experiment can reduce the field burden: run a coarse wheel-hood grid, keep the promising region, and refine locally. That is still empirical optimization; record every attempted command so the narrowing rule can be audited.
@@ -109,5 +156,21 @@ Tuning uses $12\times8\times6=576$ launches. Validation uses $12\times10=120$. T
 </Solution>
 </Exercise>
 
-**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper).
+## A reproducible handoff to the next team
 
+Publish the command tables with units, calibrated range, robot commit, simulator parameters,
+controller configuration, release-delay definition, and the criterion used to label a shot.
+Preserve raw launch counts and distinguish tuning trials from held-out validation.
+
+For moving shots, record time-synchronized pose, velocity, acceleration, virtual distance, TOF
+iterations, requested/measured wheel speed, hood setting, and the physical release event. The final
+paper's SOTM record lacks this shot-level telemetry; this is a proposed improvement, not reconstructed
+data from its aggregate totals.
+
+The numerical source is public, but the final paper's supplementary audit archive is not bundled with
+Control Lab. Its DOI paragraph still describes a future authenticated deposit. Link a verified
+public archive when it exists; do not invent a DOI or claim all experiments are independently replayable.
+
+**Sources:** final paper §§7–11 and the [versioned source map](./index.mdx#freeze-the-version-before-interpreting-a-result).
+
+**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper).

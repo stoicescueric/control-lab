@@ -338,12 +338,9 @@ export default function ControlResponseHero() {
     <header className="cl-home-hero relative overflow-hidden bg-bg">
       <div className="cl-hero-gradient" aria-hidden="true" />
       <FlylineSweep />
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[0.86fr_1.14fr] lg:items-center lg:gap-14 lg:py-20">
+      <div className="relative mx-auto grid max-w-6xl gap-10 px-6 py-14 lg:grid-cols-[1fr_1.08fr] lg:items-center lg:gap-14 lg:py-20">
         <div className="cl-home-enter">
-          <p className="m-0 font-mono text-xs font-semibold text-accent-text">
-            Interactive FTC controls textbook
-          </p>
-          <h1 className="m-0 mt-5 max-w-3xl text-[clamp(2.75rem,5vw,4.35rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-ink">
+          <h1 className="m-0 max-w-3xl text-[clamp(2.4rem,3.5vw,3.25rem)] font-extrabold leading-[1.02] tracking-[-0.032em] text-ink">
             Understand why your robot moves, estimates, and corrects itself.
           </h1>
           <p className="m-0 mt-6 max-w-xl text-lg leading-relaxed text-ink-soft">
@@ -362,9 +359,6 @@ export default function ControlResponseHero() {
               Browse curriculum
             </a>
           </div>
-          <p className="m-0 mt-7 font-mono text-xs leading-relaxed text-ink-faint">
-            Open source · interactive simulations · Java implementations
-          </p>
         </div>
 
         <div className="cl-home-enter cl-home-enter--model">

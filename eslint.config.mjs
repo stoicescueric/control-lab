@@ -13,7 +13,14 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['build/**', '.docusaurus/**', 'node_modules/**', 'static/**'],
+    // Third-party design tooling is maintained upstream, outside the site runtime.
+    ignores: [
+      'build/**',
+      '.docusaurus/**',
+      'node_modules/**',
+      'static/**',
+      '.github/skills/impeccable/**',
+    ],
   },
 
   js.configs.recommended,

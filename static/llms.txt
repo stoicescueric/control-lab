@@ -20,7 +20,7 @@ Lessons distinguish calculated predictions, teaching examples, and reported phys
 
 ## Recommended entry points
 
-- Curriculum overview: https://stoicescueric.github.io/control-lab/docs
+- Curriculum overview: https://stoicescueric.github.io/control-lab/#curriculum
 - Why the mathematics matters: https://stoicescueric.github.io/control-lab/docs/preface/why-math-matters
 - How to use the guide: https://stoicescueric.github.io/control-lab/docs/preface/how-to-use
 - Control theory: https://stoicescueric.github.io/control-lab/docs/control-theory

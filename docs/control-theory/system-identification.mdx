@@ -95,11 +95,13 @@ $$
   ]}
 />
 
-The **intercept is $k_S$** (the voltage that produces motion at zero speed — pure friction) and the
+The **intercept is $k_S$** (the moving model's friction-voltage estimate, extrapolated to zero speed) and the
 **slope is $k_V$** (extra volts per unit speed — the back-EMF term). Below is the ramp test: each blue dot
 is one logged sample, the amber line is the least-squares fit, and the green dot where it crosses $v = 0$
-is $k_S$. Crank the noise up and watch the estimate wobble — then notice the fit still recovers the truth
-on average, which is the point of using *many* samples instead of two.
+is $k_S$. Crank the noise up and watch the estimate wobble. More samples reduce random variation,
+but do not remove every bias: ordinary least squares assumes the velocity regressor is effectively
+noise-free. This viewer adds noise to both axes, so velocity noise can bias the slope toward zero.
+Turn noise off to compare with the disclosed ramp-lag tolerance; validate a real fit on separate runs.
 
 <SystemId />
 
@@ -149,7 +151,7 @@ void rampStep(double elapsedSeconds) {
     motor.setPower(applied);
 
     double v = motor.getVelocity() * UNITS_PER_TICK;   // real units, not ticks/s
-    double volts = applied * vbat;                     // what was ACTUALLY applied
+    double volts = applied * vbat;                     // estimated applied voltage
     samples.add(new Sample(v, volts));
 }`}</JavaCode>
 
@@ -234,10 +236,10 @@ Setting $\partial/\partial k_S = 0$ gives $k_S = \bar V - k_V \bar v$ immediatel
 into $\partial/\partial k_V = 0$ leaves $k_V = S_{xy}/S_{xx}$. Those are the normal equations, and
 they are the two lines above.
 
-$k_S$ is volts at zero speed — pure static friction, the voltage that buys you nothing but breaking the
-mechanism loose. $k_V$ is volts per unit of speed, which is what back-EMF costs you. A fitted $k_S$ of
-zero would mean the mechanism starts moving at any voltage above nothing, which no real gearbox does;
-in practice it means you fitted samples from before the mechanism broke free.
+$k_S$ is the moving model's friction offset in volts. Breakaway stiction can differ from this fitted
+moving-friction term. $k_V$ is volts per unit of speed. A fitted $k_S$ near zero can reflect low friction,
+measurement uncertainty, or a poor fit; it does not prove that the mechanism has no breakaway threshold.
+Inspect residuals and check that the samples represent motion across a useful velocity range.
 
 </Solution>
 
@@ -250,10 +252,9 @@ below it, and why refusing to fit beats returning the number anyway.
 
 <Solution>
 
-Zero spread means every sample had the same velocity, and there is no line through a single point.
-Dividing by it gives $\pm\infty$ or `NaN`, and `kS = meanVolts - kV * meanV` inherits it — so both
-gains become `NaN`, the feedforward becomes `NaN`, and `setPower(NaN)` is a silent dead motor with no
-error anywhere. A `null` return is a fit you can notice failed.
+Zero spread means every sample had the same velocity: the data cannot identify a unique slope and
+intercept. Division by zero produces a non-finite fit that can propagate into invalid motor commands.
+A `null` return makes the failure explicit so the caller can reject it before commanding hardware.
 
 </Solution>
 
@@ -276,7 +277,8 @@ clearly nonzero velocity.
 Three ways a fit goes wrong: velocity not converted to real units (so $k_V$ is in nonsense per tick — see
 [units](../software-architecture/discretization.mdx)); mixing forward and reverse samples (the
 $k_S\,\mathrm{sign}(v)$ flips, so fit each direction separately); and a sagging battery during the test
-(always log the voltage *actually applied*, `power × batteryVoltage`, not the nominal 12 V).
+(log `power × batteryVoltage`, not nominal 12 V). This is an applied-voltage estimate: driver losses,
+current limiting, and mismatched measurement timestamps can make it differ from motor-terminal voltage.
 
 </Admonition>
 

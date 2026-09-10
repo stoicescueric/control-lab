@@ -64,6 +64,12 @@ braking.
 
 <MpcHorizonExplorer />
 
+Dots mark the control samples, 0.2 seconds apart; the connecting curves show constant-acceleration
+motion between them. Feasibility checks the initial position, sample endpoints, and any turning point
+inside each interval. An outward-moving elevator can cross a limit and return before the next dot,
+so checking dots alone would miss a violation. This checks the ideal model over the finite horizon,
+not hardware safety or whether a feasible continuation exists beyond that horizon.
+
 :::note[What this viewer simplifies]
 The discrete choices make the search visible; they are not a production optimizer. Linear MPC normally
 allows continuous inputs and solves a constrained quadratic program. The essential behavior is the
@@ -162,7 +168,7 @@ forcing infeasible requests and solver timeouts in simulation.
 
 <Exercise title="When does looking ahead change the answer?">
 
-An elevator is 5 cm below its upper limit, moving upward quickly, and commanded to a target 20 cm below
+An elevator is 20 cm below its upper limit, moving upward quickly, and commanded to a target 5 cm below
 the limit. A position-only P controller still sees an error toward the target. What information lets MPC
 choose a safer first action?
 

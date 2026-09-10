@@ -1,7 +1,7 @@
 import {useId, useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
-import {planConstrainedMotion} from '@site/src/lib/domain/mpc';
+import {motionStep, planConstrainedMotion} from '@site/src/lib/domain/mpc';
 import {elevatorPlantStep, stateSpaceOperationEstimate} from '@site/src/lib/domain/stateSpace';
 
 const W = 760;
@@ -264,8 +264,10 @@ export function ObserverExplorer() {
         Math.min(12, 10 * (target - estimated.position) + 3.5 * (0 - estimated.velocity)),
       );
       peakVolts = Math.max(peakVolts, Math.abs(volts));
-      actual = elevatorPlantStep(actual, volts, -3 * (1 + modelError / 100), 1.5, dt);
-      estimated = elevatorPlantStep(estimated, volts, -3, 1.5, dt);
+      if (step < duration / dt) {
+        actual = elevatorPlantStep(actual, volts, -3 * (1 + modelError / 100), 1.5, dt);
+        estimated = elevatorPlantStep(estimated, volts, -3, 1.5, dt);
+      }
     }
 
     return {
@@ -401,6 +403,18 @@ export function MpcHorizonExplorer() {
     sy(state.position, minPosition, maxPosition),
   ]) as Array<[number, number]>;
   const firstInput = plan.inputs[0];
+  // Draw the constant-acceleration arcs, retaining dots at control samples.
+  const trajectoryPoints = plan.inputs.flatMap((input, step) =>
+    Array.from({length: 21}, (_, sample) => {
+      const fraction = sample / 20;
+      const state =
+        fraction === 0 ? plan.states[step] : motionStep(plan.states[step], input, fraction * dt);
+      return [sx(step + fraction, 0, horizon), sy(state.position, minPosition, maxPosition)] as [
+        number,
+        number,
+      ];
+    }),
+  );
 
   return (
     <Demo title="Plan a few moves, use one, then plan again" pill="MPC viewer">
@@ -427,7 +441,7 @@ export function MpcHorizonExplorer() {
           strokeDasharray="7 6"
         />
         <path
-          d={linePath(points)}
+          d={linePath(trajectoryPoints)}
           fill="none"
           stroke={plan.feasible ? '#6f8bff' : '#ff6f9c'}
           strokeWidth="4"

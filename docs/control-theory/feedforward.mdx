@@ -27,10 +27,11 @@ residual. It is the difference between a sluggish velocity loop and a crisp one.
 
 ## A reactive controller must first fail to respond
 
-A pure feedback controller does nothing until an error exists, then scrambles to close it. On a
-velocity-controlled mechanism — a flywheel, a drivetrain at cruise — this guarantees lag and droop:
-the controller can only hold a speed by *maintaining* the error that produces the command. You can
-mask it with a large gain, but high feedback gain makes the system twitchy and prone to overshoot.
+A proportional-only controller needs an error to produce a command. On a velocity-controlled
+mechanism — a flywheel or drivetrain at cruise — it therefore needs a steady error to supply the
+holding voltage. Integral feedback can remove that steady error by retaining an accumulated command;
+feedforward supplies the expected voltage immediately, reducing the correction feedback must learn.
+Raising proportional gain alone reduces the error but can increase sensitivity to noise and overshoot.
 The information to do better already exists: you *know* roughly what voltage a given speed requires.
 
 <Analogy>
@@ -68,6 +69,9 @@ inertia, $\tau = J\alpha$ (that is $k_A a$).
 | **kS**: static | friction / stiction | the minimum voltage to start motion |
 | **kV**: velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
 | **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target's velocity is changing — zero during cruise |
+
+The usual $k_S$ model combines friction into one offset. A fit from moving samples estimates
+effective moving friction; actual breakaway stiction can be larger and direction-dependent.
 
 ## Core checkpoint: calculate one velocity command
 
@@ -378,8 +382,9 @@ past your measured range would command, and why holding the endpoint value is th
 Extrapolation continues the last segment's slope forever, so a height a little past the top of your
 table produces a voltage a little past the last one — and a sensor glitch reading far past it produces
 an arbitrarily large voltage, from a model that has no evidence out there at all. Clamping caps the
-error at "the hold voltage of the nearest height you actually measured," which is wrong by a known,
-small amount instead of unbounded.
+command at the hold voltage of the nearest measured height. This prevents unbounded extrapolation;
+it does **not** bound the physical modeling error outside the calibrated range. Extend the calibration
+before relying on feedforward there, and enforce mechanism travel and voltage limits separately.
 
 </Solution>
 

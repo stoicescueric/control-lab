@@ -12,7 +12,9 @@ import RobustSelection from '@site/src/components/simulations/research/RobustSel
 <Difficulty level="Medium" />
 
 <Abstract>
-A nominal trajectory only answers whether one exact command enters the opening. Robust selection tests a neighborhood of speed and angle errors, then chooses the scoring command that survives the largest fraction of those tests.
+The final paper's selector asks which nominal scoring command survives the largest fraction of a
+declared speed–angle error box. We will follow that decision from the event map to the Python search,
+then examine why its simulated coverage can differ from the robot's measured entry rate.
 </Abstract>
 
 A recovered flywheel can still release slightly faster or slower than expected. Compression changes, the hood settles differently, and the ball leaves at a slightly different angle. We want to compare commands under those variations before spending practice time on the robot.
@@ -49,11 +51,30 @@ The stress box gives equal weight to every point across a deliberately wide rang
 
 The ±0.7 m/s and ±1.5° limits are engineering stress allowances. In particular, variation across the seven pilot calibration configurations is not a measurement of repeated-shot scatter at one fixed command.
 
+## Why these bounds, and how much do they matter?
+
+Paper §5.5 relates the speed allowance to the roughly 12% spread of the scalar transfer estimate
+across different configurations. Over the observed speed range, that corresponds to roughly
+0.56–0.79 m/s. The angle allowance exceeds the approximately 0.3° variation of repeated video
+annotation to allow for hood and release variation as well. This explains a stress-test choice;
+it does not turn the bounds into fitted noise parameters.
+
+The paper repeated selection at 19 distances from 60 to 105 inches using four half-width pairs:
+$(0.3\ \mathrm{m/s},0.5^\circ)$, $(0.5,1.0^\circ)$, $(0.7,1.5^\circ)$, and
+$(0.9,2.0^\circ)$. Relative to the deployed box, selected speed changed by at most 0.125 m/s and
+angle by at most 0.7°. This is evidence that the command trend survives those tested choices,
+not proof that every possible uncertainty model gives the same answer.
+
 ## Reuse the flight calculation
 
 For fixed physical parameters, the descending crossing $X(v,\theta)$ depends on the command, not on where we place the goal. Moving the goal changes only the entry interval. The experiment therefore calculates the expanded event map once, then applies the new interval to the cached crossings.
 
 A **prefix sum** makes the rectangular count cheap: store cumulative entry counts, then add and subtract four corners to obtain the count inside any box. This is a faster way to evaluate the same selection rule; it does not change which command wins.
+
+The important optimization is reuse, not a different definition of success. A target-distance change
+invalidates the entry mask and prefix sum, but not the flight events. A change to release height, wind,
+or the physics invalidates the events too. The Python module keeps physical constants outside its
+runtime cache key; restart the simulator after editing those constants, as its README instructs.
 
 <details>
 <summary>Why the map extends beyond the command envelope</summary>
@@ -63,6 +84,22 @@ Nominal commands lie within the measured 4.70–6.61 m/s, 42–58° envelope. Th
 The event map therefore covers 4.00–7.30 m/s and 40.5–59.5°. Every deployed perturbation box fits inside it. The browser performs integration in a worker so the page remains usable while the map is prepared. Source: paper §5.4.
 
 </details>
+
+## Trace the exported recommendation
+
+Read [physics.py](https://github.com/stoicescueric/Trajectory-Simulation/blob/09663d6868fd0cc781dc28448cc3f6ace828da1a/backend/physics.py):
+**_event_grid** supplies cached crossings, **_made_grid** applies the opening, and
+**_best_make_window_on_grid** ranks equal-sized windows. **find_optimal** wraps the winner in
+shot parameters, while **sweep_targets** evaluates a distance series for export.
+
+The response retains a legacy field named **p_make**, but it contains coverage. Likewise, some
+legacy **sigma** fields contain engineering half-widths. Follow the implementation's stated meaning,
+not a probability interpretation suggested by an old field name. Auxiliary geometric margins do not
+replace the maximum-coverage selection rule.
+
+The browser adaptation evaluates the same objective with the paper's rounded geometry. It uses a
+worker so integrating the event map does not block the controls. The Python program uses NumPy
+vectorization; its millisecond timings are not a benchmark of this browser or an FTC Control Hub.
 
 ## Java: compare scoring candidates
 

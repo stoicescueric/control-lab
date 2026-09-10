@@ -40,6 +40,12 @@ describe('discretizeScalarPlant', () => {
 });
 
 describe('elevatorPlantStep', () => {
+  it.each([-1e-16, 1e-16, -1e-8, 1e-8])('approaches constant acceleration at a=%s', (a) => {
+    const next = elevatorPlantStep({position: 1, velocity: 2}, 3, a, 4, 0.5);
+    expect(next.position).toBeCloseTo(3.5, 7);
+    expect(next.velocity).toBeCloseTo(8, 7);
+  });
+
   it('uses the constant-acceleration limit when damping is zero', () => {
     expect(elevatorPlantStep({position: 1, velocity: 2}, 3, 0, 4, 0.5)).toEqual({
       position: 3.5,

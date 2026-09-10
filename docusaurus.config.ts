@@ -95,7 +95,7 @@ const config: Config = {
   markdown: {
     mermaid: false,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 
@@ -145,6 +145,8 @@ const config: Config = {
       logo: {
         alt: 'Control Lab',
         src: 'img/logo.svg',
+        width: 32,
+        height: 32,
       },
       items: [
         {

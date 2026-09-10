@@ -7,6 +7,15 @@ import {
 } from './systemId';
 
 describe('fitVelocityModel', () => {
+  it.each([Number.NaN, Infinity, -Infinity])('rejects non-finite measurements: %s', (bad) => {
+    const samples = [
+      {velocity: 10, voltage: 1},
+      {velocity: 20, voltage: 2},
+    ];
+    expect(fitVelocityModel([...samples, {velocity: 30, voltage: bad}])).toBeNull();
+    expect(fitVelocityModel([...samples, {velocity: bad, voltage: 3}])).toBeNull();
+  });
+
   it('recovers known kS/kV from a noiseless linear dataset', () => {
     const kS = 0.9;
     const kV = 0.035;

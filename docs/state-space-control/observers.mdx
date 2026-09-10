@@ -141,15 +141,19 @@ void update(double referencePosition, double measuredPosition, double dt) {
     motor.setPower(appliedVolts / batteryVolts());
 
     // Predict with the voltage that was actually applied, including saturation.
-    double nextPos = AD_00 * xPos + AD_01 * xVel + BD_0 * appliedVolts;
-    double nextVel = AD_10 * xPos + AD_11 * xVel + BD_1 * appliedVolts;
+    double modelVolts = appliedVolts - kG;
+    double nextPos = AD_00 * xPos + AD_01 * xVel + BD_0 * modelVolts;
+    double nextVel = AD_10 * xPos + AD_11 * xVel + BD_1 * modelVolts;
     xPos = nextPos;
     xVel = nextVel;
 }`}</JavaCode>
 
 Using requested voltage in the prediction after the battery clamp teaches the observer that the plant
 received an input it never received. The estimate then diverges precisely during the hardest part of
-the move. Feed the predictor the applied voltage.
+the move. Feed the predictor the applied voltage, expressed in the model's input convention.
+Here the elevator matrices describe $\dot v=-(k_V/k_A)v+(V-k_G)/k_A$, so the predictor subtracts
+the gravity-hold voltage from the clamped motor voltage. If gravity is instead included as an explicit
+affine term in the predictor, supply the full applied voltage and do not subtract gravity twice.
 
 <Exercise title="A measurement arrives late">
 

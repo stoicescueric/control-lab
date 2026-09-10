@@ -52,9 +52,12 @@ export function elevatorPlantStep(
     };
   }
 
-  const expm1 = Math.expm1(a * dtSeconds);
-  const velocityIntegral =
-    (state.velocity * expm1) / a + ((b * input) / a) * (expm1 / a - dtSeconds);
+  const z = a * dtSeconds;
+  const expm1 = Math.expm1(z);
+  const phi1 = expm1 / z;
+  // Avoid subtracting nearly equal numbers in the acceleration integral.
+  const phi2 = Math.abs(z) < 1e-4 ? 0.5 + z / 6 + z ** 2 / 24 + z ** 3 / 120 : (expm1 - z) / z ** 2;
+  const velocityIntegral = state.velocity * dtSeconds * phi1 + b * input * dtSeconds ** 2 * phi2;
   return {
     position: state.position + velocityIntegral,
     velocity: (expm1 + 1) * state.velocity + (b * input * expm1) / a,

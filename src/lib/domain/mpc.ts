@@ -74,15 +74,22 @@ export function planConstrainedMotion(options: MpcPlanOptions): MpcPlan {
     const states = [state];
     let current = state;
     let cost = 0;
-    let violation = 0;
+    const positionViolation = (position: number) =>
+      Math.max(0, minPosition - position) ** 2 + Math.max(0, position - maxPosition) ** 2;
+    let violation = positionViolation(state.position);
 
     for (const input of inputs) {
+      // With constant acceleration, an interior turning point can cross a
+      // limit even when both sample endpoints lie inside the allowed range.
+      const turningTime = input === 0 ? 0 : -current.velocity / input;
+      if (turningTime > 0 && turningTime < dtSeconds) {
+        violation += positionViolation(motionStep(current, input, turningTime).position);
+      }
       current = motionStep(current, input, dtSeconds);
       states.push(current);
       const error = current.position - targetPosition;
       cost += error ** 2 + 0.06 * current.velocity ** 2 + 0.025 * (input / maxAcceleration) ** 2;
-      violation += Math.max(0, minPosition - current.position) ** 2;
-      violation += Math.max(0, current.position - maxPosition) ** 2;
+      violation += positionViolation(current.position);
     }
 
     const terminal = states.at(-1)!;

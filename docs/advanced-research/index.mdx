@@ -1,15 +1,21 @@
 ---
-title: "Elective Case Study: Reliable Shooting"
-description: "Follow a real FTC launcher from drag-aware prediction and robust selection to calibration, moving-shot compensation, and an empirical LUT comparison."
+title: "Elective Case Study: From Model to Moving Launcher"
+description: "Trace the final launcher paper through its verified Python simulator, archived FTC deployment, newer robot code, and physical validation records."
 tags: [trajectory-generation, research, calibration, shoot-on-the-move]
 ---
 
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import {Workflow} from '@site/src/components/simulations/research/ResearchFigures';
 
-# From One Successful Shot to Reliable Shooting
+# From Model to Moving Launcher
 
-A ball can enter once and still be a poor shot to repeat. This elective follows the Quantum Robotics launcher through a more useful question: **which command will keep working when the speed and angle change a little?**
+<Abstract>
+A simulator chooses projectile speed and angle. The robot commands wheel speed, hood position, and
+turret heading. This elective follows the work that connects those descriptions: predict an entry,
+choose a tolerant command, calibrate the mechanism, compensate platform motion, and examine physical
+outcomes. The final research paper supplies the evidence; the simulator and robot repositories make
+the implementation inspectable.
+</Abstract>
 
 <figure>
   <img src={useBaseUrl('/img/research/launcher-deployment.jpg')} alt="Quantum Robotics launcher on the competition field, with a purple projectile in flight" width="1170" height="755" loading="lazy" />
@@ -26,7 +32,7 @@ The robot launches a light, perforated ball through a raised opening. Its simula
 2. **[Choose a Shot That Tolerates Errors](./robust-shot-selection.mdx).** Compare nearby speed–angle commands and find the one with the most successful perturbations.
 3. **[Turn the Model into Launcher Commands](./launcher-calibration.mdx).** Measure the wheel-to-ball transfer, interpolate calibrated settings, and recover after a shot.
 4. **[Aim While the Robot Moves](./shoot-on-the-move.mdx).** Shift a virtual target opposite inherited chassis velocity and iterate the distance-dependent flight time.
-5. **[Model-Guided Shot or Two Empirical LUTs?](./model-vs-empirical-lut.mdx).** Compare simulation-guided calibration with a denser physical wheel-and-hood campaign.
+5. **[Validate the Complete Shooting System](./model-vs-empirical-lut.mdx).** Read the entry and retention records, compare calibration strategies, and design the next experiment.
 
 The first two lessons share the paper’s **70-inch (1.778 m) front-lip distance** and its selected **5.25 m/s, 58°** command. Every experiment has a reset button so you can return to its worked example.
 
@@ -35,6 +41,39 @@ The first two lessons share the paper’s **70-inch (1.778 m) front-lip distance
 Start with vectors, [differential equations](../preface/why-math-matters/differential-equations.mdx), [measured loop timing](../software-architecture/discretization.mdx), and [feedforward with feedback](../control-theory/feedforward.mdx). The pictures and experiments come before the derivations. Expand the mathematics when you want to understand the implementation in more detail.
 
 By the end, you should be able to explain why a simulator can be numerically accurate yet still need calibration, why a wide stress box is not a probability model, how chassis velocity changes the aim point, and when additional empirical LUT data is worth the field time.
+
+## Follow the data, not just the equations
+
+| Stage | Input → output | Where to inspect it |
+|---|---|---|
+| Flight | exit speed and angle → descending rim event | Python `physics.py`: `_integrate`, `_hermite_root` |
+| Selection | event map and target distance → tolerant nominal command | `_event_grid`, `_best_make_window_on_grid`, `find_optimal` |
+| Calibration | ideal release state → distance-indexed wheel, hood, and TOF maps | `Launcher.java`, `Sensors.java`, `InterpLUT.java` |
+| Motion compensation | pose, velocity, and TOF → virtual target | archived `Sensors.update()` |
+| Actuation | target wheel speed → motor power; hood/heading → servo commands | launcher controller and subsystem state machine |
+| Validation | physical launches → retained, bounced out, or missed | final paper §§7–10 |
+
+The physics work happens offline. A CSV containing ideal ball speed and angle is not a ready-to-import
+FTC motor table. Calibration must supply the actuator conversion and verify the event-time column.
+
+## Freeze the version before interpreting a result
+
+The simulator snapshot inspected here is [09663d68](https://github.com/stoicescueric/Trajectory-Simulation/tree/09663d6868fd0cc781dc28448cc3f6ace828da1a).
+Its `backend/physics.py` and `backend/verify.py` match both SHA-256 hashes printed in the final paper.
+The paper's older `decode_sim/decode_sim` directory reference now corresponds to `backend/`.
+
+The **season results** belong to robot revision **75db349d**, explicitly frozen by paper §6.
+The newer [8374312f robot snapshot](https://github.com/stoicescueric/YaoMing/tree/8374312fa7ba75b87197c2dbaeee5c46624722fa)
+has different tables, radial/lateral motion weights, and an RST controller enabled by default. The
+lessons explain these changes without assigning the season's measured success rates to untested newer
+settings. Checked-in defaults also do not prove which Dashboard values ran in a match.
+
+:::note[Three results that must stay separate]
+**Numerical verification** asks whether the program solves the chosen equations.
+**Target entry** asks whether a physical ball reaches the opening.
+**Retained score** asks whether it stays scored afterward. A bounce-out is an entry, and the flight
+model does not simulate the contact that caused it.
+:::
 
 ## Research paper
 

@@ -66,7 +66,7 @@ function truePos(tt: number): [number, number] {
 }
 
 export default function Kalman() {
-  const [kfR, setKfR] = useState(3.5);
+  const [kfR, setKfR] = useState(1.9);
   const [kfQ, setKfQ] = useState(18);
   const [hideTruth, setHideTruth] = useState(false);
   const ctrl = useRef({kfR, kfQ, hideTruth});
@@ -109,7 +109,7 @@ export default function Kalman() {
   function step() {
     const s = st.current;
     if (!s.axX || !s.axY) return;
-    const R = (ctrl.current.kfR * ctrl.current.kfR) / 3.5;
+    const R = ctrl.current.kfR * ctrl.current.kfR;
     const Q = ctrl.current.kfQ;
     s.t += dt;
     const [tx, ty] = truePos(s.t);
@@ -252,7 +252,7 @@ export default function Kalman() {
       <div className="mt-4 grid gap-x-[22px] gap-y-3.5 [grid-template-columns:repeat(auto-fit,minmax(210px,1fr))]">
         <div>
           <Slider
-            label="Measurement noise"
+            label="Measurement standard deviation σ"
             value={kfR}
             min={0.5}
             max={9}
@@ -260,11 +260,13 @@ export default function Kalman() {
             onChange={setKfR}
             format={(v) => v.toFixed(1)}
           />
-          <div className="mt-1 text-[0.74rem] text-[#8294b8]">How blurry the radar blips are.</div>
+          <div className="mt-1 text-[0.74rem] text-[#8294b8]">
+            Sets both simulated sensor noise and the filter's R = σ².
+          </div>
         </div>
         <div>
           <Slider
-            label="Process noise Q"
+            label="Assumed acceleration variance q"
             value={kfQ}
             min={0.3}
             max={40}

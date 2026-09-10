@@ -13,7 +13,9 @@ import FlightExplorer, {IntegratorExperiment} from '@site/src/components/simulat
 <Difficulty level="Medium" />
 
 <Abstract>
-A launcher needs to predict where the ball crosses the goal opening on its way down. This lesson connects that visible event to a drag-aware flight model and a numerical method that finds it between stored samples.
+A launch command becomes useful when it predicts the right event: the ball descending through the
+opening. This lesson follows the final paper's force model into the Python integrator, explains why
+event location needs its own calculation, and separates numerical accuracy from physical accuracy.
 </Abstract>
 
 A shot aimed at the front lip can look correct as a line on a screen and still clip the goal. The ball has a radius. Its **center** must pass far enough inside both edges, and it must be descending.
@@ -64,11 +66,23 @@ $$
 
 The model uses a 0.0748 kg ball, air density 1.204 kg/m³, and frontal area $A=\pi(0.127/2)^2$. The constant $C_D$ is an effective modeling choice, not a drag measurement from the tracking video. Spin, lateral forces, and goal contact are outside this flight model.
 
+For horizontal wind $v_w$, use $\mathbf u=(v_x-v_w,v_z)$ in the drag term. Keep $v_x$ in
+$\dot x=v_x$: the position is measured relative to the ground, while drag depends on air-relative
+motion. Mixing those two frames changes the trajectory even when the force equation looks familiar.
+
+Paper §4 provides two useful sensitivity checks at the representative command. Varying $C_D$ from
+0.40 to 0.55 shifts the crossing by 6.3 cm; varying measured ball diameter from 0.124 to 0.127 m
+shifts it by 0.9 cm. These compare model assumptions at one command. They do not measure the
+distribution of physical misses.
+
 ## Find the event between samples
 
 RK4 advances the state in 20 ms steps. Scoring happens at the instant the ball descends through the rim plane, which usually lies **between** two samples. Cubic Hermite interpolation uses both endpoint positions and velocities to reconstruct that short segment. Sixteen binary-search halvings locate the crossing inside the known bracket.
 
 The same crossing supplies the horizontal coordinate, flight time, and entry velocity. The time when the ball later hits the floor describes a different event and cannot replace it.
+
+A small bisection bracket only controls the root search inside the reconstructed segment. It cannot
+remove the integration error in the segment's endpoints or uncertainty in the drag coefficient.
 
 <details>
 <summary>Explore the integration method</summary>
@@ -87,6 +101,33 @@ $$
 Here $h$ is the step duration and $\tau$ runs from zero to one inside the step. Apply this formula to height to find the root $H_z(\tau)=z_{\rm rim}$, then use that same $\tau$ for horizontal position. Source: paper §5.2, Figure 4.
 
 </details>
+
+## Read the Python implementation
+
+In the [pinned physics engine](https://github.com/stoicescueric/Trajectory-Simulation/blob/09663d6868fd0cc781dc28448cc3f6ace828da1a/backend/physics.py),
+follow the calculation in this order:
+
+1. **ShotParams** describes speed, angle, release geometry, target geometry, wind, and drag enablement.
+2. **_accel_np** evaluates the same gravity/drag law over arrays of active trajectories.
+3. **_integrate** advances them with RK4 and detects a descending height bracket.
+4. **_hermite_root** bisects that bracket; **_hermite_derivative** gives the entry velocity.
+5. **_made_from** compares the event coordinate with the radius-shrunk opening.
+6. **simulate** exposes event time separately from the end of the displayed path.
+
+The source uses 0.98425 m rim height and 0.46482 m depth; the paper and teaching examples round
+these to 0.984 m and 0.465 m. State the geometry when comparing last-decimal results. The source's
+spin parameters are compatibility fields; they do not add Magnus forces to the equations.
+
+## Verify the mathematics before calibrating the hardware
+
+Paper §5.6 reports 993 vacuum comparisons with an analytic parabola and 158 drag-event comparisons
+with an independently implemented DOP853 solver. Maximum position errors are approximately
+$7.11\times10^{-7}$ m and $5.41\times10^{-7}$ m respectively. Those are numerical comparisons,
+not sub-micrometre physical aiming accuracy.
+
+The [verification harness](https://github.com/stoicescueric/Trajectory-Simulation/blob/09663d6868fd0cc781dc28448cc3f6ace828da1a/backend/verify.py)
+also checks caching, exhaustive selection, input validation, and concurrent requests. Its DOP853
+comparison is optional and requires SciPy; a skipped comparison is not a passed independent check.
 
 ## Java: turn the crossing into an entry test
 
