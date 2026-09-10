@@ -27,14 +27,15 @@ true state, and tracks its own uncertainty while doing so. It is the principled 
 hand-tuned complementary filter.
 
 That last assumption is the one real sensors break. A camera with a bent mount or a miscalibrated tag
-carries a *constant offset*, not zero-mean noise — and no value of $R$ fixes a bias. Only calibration
-does; feed a biased measurement in and the filter converges confidently onto the wrong answer.
+carries a *constant offset*, not zero-mean noise — changing $R$ alone does not estimate that bias.
+Calibrate the sensor, or explicitly model an observable bias state with enough independent information
+to estimate it. The unmodified filter can converge confidently onto a biased answer.
 
 <Admonition type="info" title="Where this leads: the Extended Kalman Filter">
 
 Kou and Haggenmiller's FTC-focused paper, *Extended Kalman Filter State Estimation for Autonomous
 Competition Robots*, starts from the same predict-correct loop and extends it to a mecanum robot whose
-body-to-field motion contains $\sin\theta$ and $\cos\theta$. That nonlinearity is enough to require an
+body-to-field motion contains $\sin\theta$ and $\cos\theta$. One way to handle that nonlinearity is an
 **Extended Kalman Filter (EKF)**: predict with nonlinear functions, then use their local Jacobians to
 propagate uncertainty. Finish the linear filter first; the EKF bridge later in this lesson shows exactly
 what changes.
@@ -137,13 +138,14 @@ $$
 
 For the $Q = 1$, $R = 4$ used above that is $p = 2.562$ and $K_\infty = 0.390$ — exactly where the
 three-loop table is heading (0.556, 0.446, 0.410). **That is where $\alpha$ came from.** A settled
-Kalman filter *is* a first-order low-pass filter; the difference is that its blend factor was computed
+scalar random-walk Kalman filter with $A = H = 1$ *is* a first-order low-pass filter; its blend factor was computed
 from your noise estimates instead of guessed.
 
 Now set $Q = 0$. Nothing re-inflates $P$ after each correction shrinks it, so $1/P_k = 1/P_0 + k/R$ and
-$K \to 0$: the filter grows steadily more confident until it stops listening to its sensor entirely.
-That is the classic over-confident-$Q$ failure, and it needs $Q = 0$ — a constant, nonzero $Q$ will not
-produce it.
+$K \to 0$: each new measurement receives progressively less weight. That is appropriate for a truly
+constant state, but makes the filter increasingly slow to follow unmodeled changes. The gain approaches
+zero asymptotically; it does not stop updating after a finite number of measurements. A positive $Q$
+keeps a nonzero steady gain in this scalar model, although an underestimated $Q$ can still cause lag.
 
 </Solution>
 
@@ -269,8 +271,15 @@ measurement noise $R$, every step:
 - shaky prediction (large $P^-$) → large $K$ → jump toward the measurement.
 
 In the demo, a target follows a smooth path reported only as noisy blips. The filter recovers a
-smooth estimate plus an uncertainty bubble. The two tuning parameters are $R$
-(measurement noise) and $Q$ (process noise — how wrong you expect the motion model to be each loop).
+smooth estimate plus an uncertainty bubble. The sensor slider sets standard deviation $\sigma$
+in simulation distance units and sets the filter's $R = \sigma^2$ to match. It changes both the
+measurements and the filter's assumption, so this is not a test of an incorrectly specified $R$.
+The other slider sets assumed acceleration variance $q$. For each position/velocity axis, the demo
+uses $Q = q\begin{bmatrix}\Delta t^4/4 & \Delta t^3/2 \\\Delta t^3/2 & \Delta t^2\end{bmatrix}$,
+with $\Delta t = 0.06$ s: random acceleration held constant over one interval. The target follows a
+deterministic curved path, so this process model is an approximation.
+The bubble radius is twice the estimated position standard deviation (with a 4-pixel display minimum);
+it illustrates model uncertainty, not a guaranteed containment region or a 95% two-dimensional bound.
 
 <Kalman />
 

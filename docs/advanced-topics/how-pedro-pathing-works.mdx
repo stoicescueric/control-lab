@@ -60,6 +60,11 @@ This is not a line-by-line source-code audit of Pedro Pathing. It explains the c
 the level a strong FTC programmer needs before tuning or modifying a follower: what the follower is
 trying to compute, why the terms exist, and where the math sits underneath the API.
 
+The braking comparison below records the whitepaper and Pedro 2.1.x implementation. The maintained
+documentation now describes [Pedro 3](https://pedropathing.com/docs/pathing/pedro3), including Foresight,
+new configuration objects, and a redesigned path API. Use documentation matching your installed
+version; the historical comparison is not a claim about current Pedro 3 source.
+
 </Admonition>
 
 ## The FTC problem Pedro is solving
@@ -372,7 +377,7 @@ The braking-distance regression data behind this comes from Pedro Pathing, colle
 
 There are two ways to use the fit:
 
-- **The form Pedro ships today** (since v2.1.0) runs a position controller and simply subtracts the
+- **The Pedro 2.1.x form** (introduced in v2.1.0) runs a position controller and simply subtracts the
   braking distance from the error:
   $e = \lVert \mathbf{x}_{\text{target}} - \mathbf{x} \rVert - D(v)$. When the remaining distance
   equals the stopping distance, the error reads zero and the controller stops pushing.
@@ -384,8 +389,8 @@ v_{\text{desired}} = \frac{-b + \sqrt{b^2 + 4ad}}{2a}
 $$
 
   then track that speed with a velocity PID. Same fit, used as a speed plan instead of an error offset.
-  As of v2.1.2 this form is not in the released library — the whitepaper describes inverting $D(v)$ to
-  recover a target speed, but what ships is the error-offset controller above.
+  In v2.1.2 this form was not in the released library: the whitepaper described inverting $D(v)$ to
+  recover a target speed, while that release used the error-offset controller above.
 
 :::warning[The coefficients depend on how you brake]
 Pedro brakes actively, at roughly $-0.2$ motor power. A driver who lets go of the sticks brakes at
@@ -624,8 +629,8 @@ tunes.
 
 - Havish Sripada and Baron Henderson, <em>Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints</em>, Pedro Pathing, 2026. Preprint, [Zenodo](https://zenodo.org/records/20725319), DOI [10.5281/zenodo.20725319](https://doi.org/10.5281/zenodo.20725319).
 - Pedro Pathing documentation, [Introduction](https://pedropathing.com/docs/pathing): Bezier curves, PIDF control, centripetal force correction, localization prerequisites, and tuning overview.
-- Pedro Pathing documentation, [PedroPathing vs Road Runner](https://pedropathing.com/docs/pathing/pedro-v-roadrunner): speed, disturbance correction, centripetal force correction, and command-base options.
-- Pedro Pathing documentation, [Constraints](https://pedropathing.com/docs/pathing/reference/constraints): completion criteria used by `follower.isBusy()`.
+- Pedro Pathing documentation, [What's new with Pedro 3](https://pedropathing.com/docs/pathing/pedro3): current Foresight, path API, tuning, and logging changes.
+- Pedro Pathing documentation, [End Constraints](https://pedropathing.com/docs/pathing/reference/endconstraints): current completion criteria used by `follower.isBusy()`.
 - The $D(v) = av^2 + bv$ braking model, the Pedro 2 vs Pedro 3 braking implementations, and the
   active-braking caveat are from correspondence with Havish Sripada (Pedro Pathing); the
   braking-distance regression data was collected by Jacob Ophoven (Pedro Pathing).

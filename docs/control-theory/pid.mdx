@@ -14,7 +14,7 @@ import Drone from '@site/src/components/simulations/control-theory/Drone';
 <Abstract>
 PID is the most widely used feedback controller: it sums three reactions to the error — proportional to its
 present value, its accumulated past, and its rate of change — into a single command. This lesson builds
-each term from intuition — including *why* the derivative term lands you on the target with zero velocity —
+each term from intuition — including how derivative feedback damps motion near the target —
 then upgrades the loop to the controller the FTC community calls "PDFL": a constant feedforward and a static-friction floor
 that replace the integral entirely, plus a low-pass-filtered derivative.
 </Abstract>
@@ -66,11 +66,13 @@ $$
 <Callout type="idea" title="What the three terms really are: a mass on a spring.">
 <ul>
 <li><strong>P is the spring.</strong> It pulls toward the target with a force proportional to how far off
-you are. A spring on its own overshoots and oscillates forever.</li>
+you are. An ideal mass on a spring with no damping oscillates indefinitely; real mechanisms also have
+friction and other damping.</li>
 <li><strong>D is the shock absorber.</strong> It opposes <em>motion</em>. Because the well-behaved version
 differentiates the measurement, $u_D = -K_d\,\dot m$ is literally <strong>velocity feedback</strong>: the
-faster you're moving, the harder it brakes. So D does more than "reduce overshoot" — it makes the system
-<strong>arrive at the target with ≈ zero velocity</strong> instead of racing past it. P + D forms a
+faster you're moving, the harder it brakes. With suitable gains, D helps the system
+<strong>settle at the target with near-zero velocity</strong>; it does not guarantee a zero-velocity first
+arrival. P + D forms a
 mass-spring-damper, but it is critically damped only for a particular gain-to-plant relationship. For an
 ideal mass $m$, that boundary is $K_d = 2\sqrt{mK_p}$; less damping overshoots and more damping settles
 without overshoot but more slowly.</li>

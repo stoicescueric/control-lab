@@ -6,6 +6,7 @@ tags: [state-space, state-feedback, pole-placement, wpilib, modeling]
 ---
 
 import {ScalarStateStepExplorer} from '@site/src/components/simulations/state-space/StateSpaceDemos';
+import {StateVectorExplorer} from '@site/src/components/simulations/state-space/StateSpaceExplorers';
 
 # State-Space Models & State Feedback
 
@@ -13,17 +14,17 @@ import {ScalarStateStepExplorer} from '@site/src/components/simulations/state-sp
 
 <Abstract>
 A state-space controller feeds back every state of the mechanism at once: $u = K(r - x)$. For a
-two-state elevator that means one gain on position error and one on velocity error, working together
-by design instead of by cascaded tuning. The model comes cheap — the $k_V$ and $k_A$ you measured in
-system identification are the matrix entries. The open question this lesson leaves behind is how to
-choose $K$, and the next lesson answers it.
+two-state elevator that means one gain on position error and one on velocity error, chosen jointly from
+a model. The model comes cheap — the $k_V$ and $k_A$ you measured in system identification are the
+matrix entries. The LQR checkpoint later in this module answers how to choose $K$.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites">
 
 Read the [state-space preface](../preface/why-math-matters/state-space.mdx) for the vocabulary and
 [system identification](../control-theory/system-identification.mdx) for where $k_V$ and $k_A$ come
-from. The [Kalman filter](../signal-processing/kalman.mdx) shows up at the end.
+from. The [observer checkpoint](./observers.mdx) builds on the scalar
+[Kalman filter](../signal-processing/kalman.mdx).
 
 </Admonition>
 
@@ -31,16 +32,32 @@ from. The [Kalman filter](../signal-processing/kalman.mdx) shows up at the end.
 
 ## One error signal can't see two states
 
-An elevator has a position and a velocity, and both matter. Feed a PID only the position error and it
-is blind to how fast the carriage is moving until the error starts changing — the D term is a crude,
-noisy estimate of a state you actually know. Teams patch this with cascaded loops (a position PID
-commanding a velocity PID) and it works, but now there are two loops fighting through each other, six
-gains, and no principled way to trade them off.
+An elevator has a position and a velocity, and both matter. Feed a P or PI controller only the position
+error and it is blind to how fast the carriage is moving. A derivative term can recover velocity
+information, but raw differentiation amplifies encoder noise. A well-designed cascaded position and
+velocity controller is a valid solution, though it requires bandwidth separation and validation of the
+two interacting loops. State space offers another route: expose both states and design their feedback
+together from one model.
 
 The state-space view removes the patchwork. The mechanism *is* a vector of states. Measure or estimate
-all of them, feed all of them back, and design the response once.
+all of them, feed all of them back, and design the response as one system.
 
 </Problem>
+
+## See the state before naming the matrices
+
+An elevator state $\mathbf{x}=[p\;v]^\top$ is one point whose horizontal coordinate is position and
+whose vertical coordinate is velocity. Two elevators can be at the same height and still require
+opposite commands because one is rising and the other is falling. Change the point, voltage, and loop
+period below. The arrow is one complete sampled model update.
+
+<StateVectorExplorer />
+
+:::tip[Read the graph as a controller]
+Place the elevator near the target with a large positive velocity. Position error alone says “keep
+driving up”; the full state says “brake now.” That second coordinate is the reason state feedback can
+act before position error changes sign.
+:::
 
 <Theory>
 
@@ -110,8 +127,8 @@ feedback gain and clips the voltage to $\pm12$ V before taking the same exact st
 
 :::tip[Predict, change, observe]
 **Predict:** whether a longer measured loop step moves the same state farther under a fixed voltage.
-**Change:** adjust $v$, $V$, and $\Delta t$, then enable the illustrative feedback command. **Observe:**
-compare the exact open-loop step with the clamped feedback step and identify when the voltage limit wins.
+**Change:** adjust $v$, $V$, and $\Delta t$. **Observe:** compare the exact open-loop step with the
+clamped feedback readout and identify when the voltage limit wins.
 :::
 
 ### State feedback: u = K(r − x)
@@ -139,7 +156,7 @@ If you can calculate one sampled update, form `requestedVolts = K * (reference -
 and clamp it to the available voltage, you have the required artifact. The rest shows how the same idea
 expands to multiple states and how designers interpret the resulting dynamics.
 
-### Optional continuation: multiple states, poles, and observers
+### Multiple states and closed-loop poles
 
 An elevator needs two states, position and velocity, so $A$ and $B$ grow into matrices:
 
@@ -163,6 +180,11 @@ Read the rows: the first says $\dot{p}=v$; the second is the same motor equation
 matrix form lets one input respond to both state errors. Now $K$ has a position gain and a velocity
 gain; structurally, that resembles PD control.
 
+These linear matrices omit gravity and static friction. For a vertical elevator, interpret their input
+as motor voltage minus the gravity-hold voltage, or add gravity explicitly as an affine model term.
+The [observer example](./observers.mdx) uses the first convention. Adding gravity feedforward to the
+motor command without representing gravity in the predictor would make the model accelerate even at rest.
+
 Substitute the law into the model and the closed-loop system becomes
 
 $$
@@ -178,7 +200,7 @@ $$
 For a constant reference, choose the equilibrium feedforward so $A\mathbf r+B u_{ff}=0$ and define
 $\mathbf e=\mathbf x-\mathbf r$. Then $\dot{\mathbf e}=(A-BK)\mathbf e$. The eigenvalues of $A-BK$ are
 the closed-loop *poles*: they describe convergence and overshoot. Picking them directly is pole placement;
-the [next lesson](./lqr.mdx) instead derives $K$ from an error-versus-effort cost.
+the [LQR checkpoint](./lqr.mdx) instead derives $K$ from an error-versus-effort cost.
 
 ### When you can't measure a state
 
@@ -186,8 +208,8 @@ The elevator encoder gives position. Velocity has to be estimated, and different
 amplifies noise — the same problem the [filter module](../signal-processing/index.mdx) solved. The
 clean answer is an observer: run the model forward as a prediction, correct it with the measurement,
 weighted by trust. That is exactly a [Kalman filter](../signal-processing/kalman.mdx), now estimating
-the states the controller needs. The full pattern is a loop within a loop: **predict** the state,
-**correct** with the sensor, **control** with $K$.
+the states the controller needs. The [next checkpoint](./observers.mdx) makes that predict–correct loop
+visible before LQR chooses the feedback gains.
 
 </Theory>
 
@@ -205,8 +227,8 @@ LinearSystem<N1, N1, N1> flywheel =
 LinearSystem<N2, N1, N1> elevator =
     LinearSystemId.identifyPositionSystem(kV, kA);`}</JavaCode>
 
-FTC has no such library, and for one or two states you do not need it. Compute the gains offline (next
-lesson), then the runtime controller is plain arithmetic:
+FTC has no such library, and for one or two states you do not need it. Compute the gains offline in the
+[LQR checkpoint](./lqr.mdx), then the runtime controller is plain arithmetic:
 
 <JavaCode league="FTC" label="Two-state elevator feedback, gains precomputed offline">{`// K_POS and K_VEL are computed offline. velocity is a FILTERED encoder
 // derivative, not a raw difference.
@@ -224,12 +246,11 @@ double update(double targetPosition, double position, double velocity) {
 }
 `}</JavaCode>
 
-<Exercise title="State feedback, not PD">
+<Exercise title="Why state feedback can look like PD">
 
-The velocity term is what makes this state feedback rather than a P controller with a D term bolted on.
-Work out the difference: a PD controller differentiates the *error*, while this multiplies a measured
-*state* by its own gain, chosen jointly with `K_POS` from the model. What is the reference velocity
-here, and why is zero the right choice for a hold?
+For a fixed position target, two-state feedback and PD can reduce to similar arithmetic. Identify the
+reference velocity in this controller, explain why zero is right for a hold, and then state what the
+state-space design adds beyond the formula itself.
 
 <Solution>
 
@@ -237,10 +258,10 @@ Zero, because a hold wants the elevator to arrive stopped — the desired veloci
 nothing. So the velocity error is $0 - v$, and the term is pure damping proportional to how fast the
 mechanism is currently moving.
 
-The structural difference is where the two gains come from. A PD controller's `kD` is tuned
-independently of `kP`; here `K_POS` and `K_VEL` are solved together from one model, so they are
-guaranteed consistent with each other. Bolt a D term onto a P controller and nothing enforces that
-relationship.
+The structural difference is the state definition and design method. A PD controller can also be
+model based and its gains can be chosen jointly; for a constant position reference, PD and
+position/velocity state feedback can even have the same algebraic form. State-space design makes the
+velocity state explicit and extends the same method to more states, inputs, and observers.
 
 </Solution>
 

@@ -1,4 +1,5 @@
 import {useEffect, useRef, useState, type ComponentType, type ReactNode} from 'react';
+import Head from '@docusaurus/Head';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
@@ -82,8 +83,70 @@ const ELECTIVE: Module = {
   to: '/docs/advanced-research',
 };
 
-function SectionLabel({children}: {children: ReactNode}) {
-  return <p className="m-0 font-mono text-xs font-semibold text-accent-text">{children}</p>;
+const STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'WebSite',
+      '@id': 'https://stoicescueric.github.io/control-lab/#website',
+      url: 'https://stoicescueric.github.io/control-lab/',
+      name: 'Control Lab',
+      description:
+        'Interactive lessons in control theory, state estimation, and FTC robotics, with derivations, simulations, and Java implementations.',
+      inLanguage: 'en',
+      license: 'https://opensource.org/license/mit',
+    },
+    {
+      '@type': 'Course',
+      '@id': 'https://stoicescueric.github.io/control-lab/#course',
+      url: 'https://stoicescueric.github.io/control-lab/',
+      name: 'Control Lab: Control Theory and FTC Robotics',
+      description:
+        'A free, interactive curriculum that teaches control theory, state estimation, signal processing, path following, and robotics implementation in Java.',
+      provider: {
+        '@type': 'Person',
+        name: 'Eric Stoicescu',
+        url: 'https://github.com/stoicescueric',
+      },
+      isAccessibleForFree: true,
+      inLanguage: 'en',
+      educationalLevel: 'Intermediate',
+      audience: {
+        '@type': 'EducationalAudience',
+        educationalRole: 'student',
+      },
+      teaches: [
+        'control theory',
+        'state estimation',
+        'FTC robotics',
+        'signal processing',
+        'path following',
+        'state-space control',
+      ],
+      license: 'https://opensource.org/license/mit',
+    },
+  ],
+};
+
+/* One drawn arrow, one stroke weight, used wherever a link points onward.
+   A glyph from the text font would shift with the typeface and carries no
+   consistent optical weight against the label beside it. */
+function ArrowRight() {
+  return (
+    <svg
+      className="ml-2 shrink-0"
+      width="15"
+      height="15"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true">
+      <path d="M2.75 8h10.5M9.25 4l4 4-4 4" />
+    </svg>
+  );
 }
 
 function ReaderEntry() {
@@ -102,7 +165,7 @@ function ReaderEntry() {
     <section aria-label="Your next lesson" className="border-y border-line bg-surface">
       <div className="mx-auto grid max-w-6xl gap-4 px-6 py-5 sm:grid-cols-[1fr_auto] sm:items-center">
         <div className="min-w-0">
-          <p className="m-0 font-mono text-xs font-semibold text-accent-text">
+          <p className="m-0 text-sm font-semibold text-accent-text">
             {state.last ? 'Continue where you left off' : 'Start from first principles'}
           </p>
           <p className="m-0 mt-1 truncate text-lg font-bold text-ink">{title}</p>
@@ -136,9 +199,7 @@ function ModuleRow({module, kind = 'Module'}: {module: Module; kind?: string}) {
           {module.description}
         </span>
       </span>
-      <span className="hidden pt-0.5 font-mono text-xs text-ink-faint sm:block" aria-hidden="true">
-        {kind} →
-      </span>
+      <span className="hidden pt-1 text-xs text-ink-faint sm:block">{kind}</span>
     </Link>
   );
 }
@@ -148,10 +209,9 @@ function Curriculum() {
     <section id="curriculum" aria-labelledby="curriculum-heading" className="scroll-mt-20 bg-bg">
       <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20 lg:py-24">
         <div>
-          <SectionLabel>Curriculum / 00–05</SectionLabel>
           <h2
             id="curriculum-heading"
-            className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
+            className="m-0 text-3xl font-bold leading-tight text-ink sm:text-4xl">
             Learn in the order the robot depends on it.
           </h2>
           <p className="m-0 mt-5 max-w-lg leading-relaxed text-ink-soft">
@@ -236,10 +296,9 @@ function InteractiveExample() {
       <div className="mx-auto max-w-6xl px-6 py-16 lg:py-24">
         <div className="grid gap-6 lg:grid-cols-[0.72fr_1.28fr] lg:items-end lg:gap-20">
           <div>
-            <SectionLabel>Inside a lesson</SectionLabel>
             <h2
               id="example-heading"
-              className="m-0 mt-4 text-3xl font-bold leading-tight text-ink sm:text-4xl">
+              className="m-0 text-3xl font-bold leading-tight text-ink sm:text-4xl">
               Change the geometry. Watch the follower respond.
             </h2>
           </div>
@@ -256,7 +315,8 @@ function InteractiveExample() {
         <Link
           to="/docs/path-following/pure-pursuit"
           className="cl-home-action mt-6 inline-flex min-h-11 items-center rounded-[10px] border border-line bg-surface px-5 py-2.5 font-semibold text-ink no-underline hover:border-accent-text hover:text-accent-text">
-          Read the Pure Pursuit lesson →
+          Read the Pure Pursuit lesson
+          <ArrowRight />
         </Link>
       </div>
     </section>
@@ -268,8 +328,7 @@ function GuideNotes() {
     <section aria-labelledby="method-heading" className="bg-bg">
       <div className="mx-auto grid max-w-6xl gap-12 px-6 py-16 lg:grid-cols-2 lg:gap-20 lg:py-24">
         <div>
-          <SectionLabel>How lessons work</SectionLabel>
-          <h2 id="method-heading" className="m-0 mt-4 text-3xl font-bold leading-tight text-ink">
+          <h2 id="method-heading" className="m-0 text-3xl font-bold leading-tight text-ink">
             See it. Derive it. Ship it.
           </h2>
           <p className="m-0 mt-4 max-w-xl leading-relaxed text-ink-soft">
@@ -292,8 +351,7 @@ function GuideNotes() {
         </div>
 
         <div>
-          <SectionLabel>Before you start</SectionLabel>
-          <h2 className="m-0 mt-4 text-3xl font-bold leading-tight text-ink">
+          <h2 className="m-0 text-3xl font-bold leading-tight text-ink">
             Built for programmers who want the reasoning, not only the recipe.
           </h2>
           <p className="m-0 mt-5 max-w-xl leading-relaxed text-ink-soft">
@@ -305,13 +363,14 @@ function GuideNotes() {
             <p className="m-0 font-semibold text-ink">The guide assumes</p>
             <p className="m-0 mt-2 leading-relaxed text-ink-soft">
               Variables, methods, classes, loops, conditionals, motors, sensors, and ordinary FTC
-              debugging—not prior controls coursework.
+              debugging, not prior controls coursework.
             </p>
           </div>
           <Link
             to="/docs/preface/how-to-use"
             className="cl-home-action mt-6 inline-flex min-h-11 items-center rounded-[10px] border border-line bg-surface px-5 py-2.5 font-semibold text-ink no-underline hover:border-accent-text hover:text-accent-text">
-            See how to use the guide →
+            See how to use the guide
+            <ArrowRight />
           </Link>
         </div>
       </div>
@@ -346,6 +405,9 @@ export default function Home(): ReactNode {
     <Layout
       title={siteConfig.title}
       description="Interactive lessons in control theory, state estimation, and FTC robotics, with derivations, simulations, and Java implementations.">
+      <Head>
+        <script type="application/ld+json">{JSON.stringify(STRUCTURED_DATA)}</script>
+      </Head>
       <main>
         <ControlResponseHero />
         <ReaderEntry />

@@ -58,6 +58,15 @@ const config: Config = {
   },
 
   headTags: [
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'alternate',
+        type: 'text/plain',
+        href: `/${REPO}/llms.txt`,
+        title: 'Control Lab overview for language models',
+      },
+    },
     ...(IS_PRODUCTION_BUILD
       ? [
           {
@@ -86,7 +95,7 @@ const config: Config = {
   markdown: {
     mermaid: false,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: 'throw',
     },
   },
 
@@ -136,6 +145,8 @@ const config: Config = {
       logo: {
         alt: 'Control Lab',
         src: 'img/logo.svg',
+        width: 32,
+        height: 32,
       },
       items: [
         {

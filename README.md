@@ -32,7 +32,7 @@ The goal is not to replace libraries like Road Runner, Pedro Pathing, FTCLib, or
 
 Requirements:
 
-- Node.js 20+
+- Node.js 24 LTS (the CI version in `.nvmrc`)
 - npm
 
 Install the exact locked dependencies and run:

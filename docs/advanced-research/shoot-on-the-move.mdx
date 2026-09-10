@@ -12,7 +12,9 @@ import ShootOnTheMove from '@site/src/components/simulations/research/ShootOnThe
 <Difficulty level="Medium" />
 
 <Abstract>
-Fire control by recursion follows one reusable pattern: guess the time of flight, lead a virtual target by the predicted relative motion, look up the new flight time, and adjust until it stops changing. The iteration produces both an aim point and evidence about whether that solution is stable enough to use.
+The final paper freezes one season controller: gain 0.9, a 50 ms feeder delay, seven flight-time knots,
+and at most five updates. This lesson derives its virtual target, distinguishes numerical convergence
+from a reliable physical shot, and compares that design with the newer robot implementation.
 </Abstract>
 
 Throw a ball to someone who is running and you do not aim at where they are. You lead them. A launcher on a moving robot has the same problem even when the field target is fixed: the ball leaves with part of the chassis velocity, so the target moves relative to the projectile.
@@ -114,6 +116,41 @@ Before releasing, check all of the following:
 
 There is no source-independent stability threshold. Tune the release gate from measured misses and entries at the velocities and approach angles your drivers use.
 
+## Read the residual in metres as well as seconds
+
+Paper §6.3 reports a conservative theorem bound of 0.146 s and 0.223 m at 1.7 m/s with the
+0.05 s stopping threshold. A convergence proof does not guarantee millimetre aim accuracy.
+The archived-loop replay gives a different, empirical numerical summary: 8.3 cm at the 99th grid
+percentile and 17.1 cm in the worst grid case relative to its converged target.
+
+Keep the **successive TOF increment**, the **fixed-point residual**, and the **virtual-target position
+error** separate. The paper reports a maximum returned fixed-point residual of 0.031 s; that is not
+the same quantity as the last increment tested by the early-exit condition.
+
+The browser exposes iterations of the simplified SI-unit formulation. The archived Java obtains
+distance from **getX()/getY()**, assigns the virtual target, and checks early exit before updating
+its cached distance and time. The lesson's result object exposes status explicitly; it is not a
+literal port of every robot state mutation.
+
+## What changed in the newer robot?
+
+The [newer Sensors.java](https://github.com/stoicescueric/YaoMing/blob/8374312fa7ba75b87197c2dbaeee5c46624722fa/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Hardware/Sensors.java)
+splits velocity along the target line and perpendicular to it. Radial drift changes the virtual
+distance used for wheel/hood commands; lateral drift changes turret lead.
+
+| Setting | Paper's season snapshot | Newer snapshot defaults |
+|---|---|---|
+| Inheritance gain | 0.9 | 1.30 |
+| TOF at 95 inches | 0.80 s | 0.70 s |
+| TOF at 130 inches | 1.05 s | 0.90 s |
+| Flight-time weighting | one full TOF | 0.55 radial, 0.7 lateral |
+| Acceleration correction | disabled | radial factor 0.17; lateral factor 0 |
+| Position reference in the update | robot getters | shooter world position with turret offset |
+
+Both keep a 0.05 s feeder delay and default to five updates, but the newer formula is a different
+mapping. Its two direction signs default to −1. Recompute convergence bounds and repeat physical
+tests before transferring the season's 2.28 m/s bound or entry counts to these settings.
+
 ## Next step: Newton can solve faster
 
 Fixed-point recursion is easy to implement and usually converges in three to five updates. In poorly conditioned directions it can converge slowly. The WPILib follow-on article reformulates the target as a root:
@@ -158,13 +195,19 @@ The paper alternated compensation OFF and ON within each commanded-speed block, 
 
 Stationary entry was 15/15 in both states, checking the zero-velocity behavior. Across moving conditions, entry increased from **30/60 to 54/60**. This supports the complete compensation method under those speed strata. It does not isolate the gain, delay, velocity filter, time map, or release gate. Source: research paper §8.3, Table 3.
 
+The preserved record contains cell totals, not shot-level timestamps, distance assignments, or
+measured release-state logs. The paper reports a 40 percentage-point difference, with 95% interval
+24.1–53.4 points, and an exact speed-stratified test. These support the ON/OFF comparison under the
+reported protocol; they cannot identify which individual missed shot had an acceleration or pose error.
+
 ## Java: return the solution and its evidence
 
 <JavaCode league="FTC" label="Solve and report a moving-shot aim point">{`AimResult movingAim(Vec2 shooter, Vec2 target, Vec2 robotVelocity) {
-    double time = flightTime.getClamped(target.minus(shooter).norm());
+    Lookup initial = flightTime.lookup(target.minus(shooter).norm());
+    double time = initial.value();
     Vec2 virtualTarget = target;
     double residual = Double.POSITIVE_INFINITY;
-    boolean clamped = false;
+    boolean clamped = initial.clamped();
 
     for (int update = 0; update < 5; update++) {
         double totalTime = 0.05 + time;

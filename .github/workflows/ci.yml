@@ -2,7 +2,8 @@ name: CI
 
 # Build the site on every PR and on pushes to non-main branches. Pushes to
 # main are handled by deploy.yml, which builds before publishing. Because
-# `onBrokenLinks: 'throw'`, a successful build also guarantees no broken links.
+# `onBrokenLinks: 'throw'`, unresolved internal links detected by Docusaurus fail
+# the build. External destinations require a separate check.
 on:
   pull_request:
     branches: [main]
@@ -37,7 +38,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 20
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run check:architecture

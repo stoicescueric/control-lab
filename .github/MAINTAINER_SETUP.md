@@ -74,16 +74,21 @@ merge requirement. GitHub describes this relationship in
 
 ## Verify the Rule
 
+GitHub does not allow authors to approve their own pull requests. With only
+`@stoicescueric` in CODEOWNERS, requiring code-owner approval prevents that owner's
+own PRs from satisfying the rule. Add another qualified collaborator with write
+access to CODEOWNERS before enabling that requirement, or explicitly choose a
+single-maintainer policy that requires checks without unavailable approvals.
+
 After saving the active ruleset:
 
 1. Open a draft pull request from a test branch.
 2. Mark it ready for review and confirm the code owner is requested.
 3. Confirm merge is blocked before approval.
 4. Confirm merge remains blocked while a required check fails or is pending.
-5. Approve from the maintainer account and confirm the merge gate clears only
+5. Approve from an eligible code-owner account other than the PR author and confirm the merge gate clears only
    after all checks pass.
 6. Close the test pull request without merging.
 
 Repeat this check whenever ownership, required workflow job names, or the
 default branch changes.
-
