@@ -28,6 +28,7 @@ Lessons distinguish calculated predictions, teaching examples, and reported phys
 - Path following and kinematics: https://stoicescueric.github.io/control-lab/docs/path-following
 - State-space control: https://stoicescueric.github.io/control-lab/docs/state-space-control
 - State observers: https://stoicescueric.github.io/control-lab/docs/state-space-control/observers
+- Model predictive control (MPC): https://stoicescueric.github.io/control-lab/docs/state-space-control/mpc
 - State-space decision guide for FTC: https://stoicescueric.github.io/control-lab/docs/state-space-control/ftc-decision
 - Advanced launcher research: https://stoicescueric.github.io/control-lab/docs/advanced-research
 - References and further reading: https://stoicescueric.github.io/control-lab/docs/references

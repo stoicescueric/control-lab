@@ -1,6 +1,7 @@
 import {useId, useMemo, useState} from 'react';
 import {Controls, Demo, Legend, Readout} from '@site/src/components/kit/Demo';
 import {Slider} from '@site/src/components/kit/Slider';
+import {planConstrainedMotion} from '@site/src/lib/domain/mpc';
 import {elevatorPlantStep, stateSpaceOperationEstimate} from '@site/src/lib/domain/stateSpace';
 
 const W = 760;
@@ -366,6 +367,147 @@ export function ObserverExplorer() {
           {color: '#5ce08a', label: 'true position'},
           {color: '#6f8bff', label: 'observer estimate'},
           {color: '#ff6f9c', label: 'noisy encoder'},
+        ]}
+      />
+    </Demo>
+  );
+}
+
+export function MpcHorizonExplorer() {
+  const [position, setPosition] = useState(0.35);
+  const [velocity, setVelocity] = useState(0.8);
+  const [target, setTarget] = useState(1.65);
+  const [horizon, setHorizon] = useState(4);
+  const [maxAcceleration, setMaxAcceleration] = useState(2);
+  const dt = 0.2;
+  const minPosition = 0;
+  const maxPosition = 2;
+
+  const plan = useMemo(
+    () =>
+      planConstrainedMotion({
+        state: {position, velocity},
+        targetPosition: target,
+        horizon,
+        dtSeconds: dt,
+        maxAcceleration,
+        minPosition,
+        maxPosition,
+      }),
+    [horizon, maxAcceleration, position, target, velocity],
+  );
+  const points = plan.states.map((state, step) => [
+    sx(step, 0, horizon),
+    sy(state.position, minPosition, maxPosition),
+  ]) as Array<[number, number]>;
+  const firstInput = plan.inputs[0];
+
+  return (
+    <Demo title="Plan a few moves, use one, then plan again" pill="MPC viewer">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="block h-auto w-full rounded-xl"
+        role="img"
+        aria-label={`Predicted elevator position over ${horizon} steps. The optimizer tests ${plan.candidateCount} input sequences and chooses ${firstInput.toFixed(1)} meters per second squared as its first acceleration. ${plan.feasible ? 'The selected plan respects the position limits.' : 'No tested plan can respect the position limits.'}`}>
+        <PlotGrid
+          xLabel="future step k"
+          yLabel="predicted position (m)"
+          xMin={0}
+          xMax={horizon}
+          yMin={minPosition}
+          yMax={maxPosition}
+        />
+        <line
+          x1={P.l}
+          x2={W - P.r}
+          y1={sy(target, minPosition, maxPosition)}
+          y2={sy(target, minPosition, maxPosition)}
+          stroke="#ffc24d"
+          strokeWidth="2"
+          strokeDasharray="7 6"
+        />
+        <path
+          d={linePath(points)}
+          fill="none"
+          stroke={plan.feasible ? '#6f8bff' : '#ff6f9c'}
+          strokeWidth="4"
+        />
+        {points.map(([x, y], step) => (
+          <circle
+            key={step}
+            cx={x}
+            cy={y}
+            r={step === 0 ? 6 : 4}
+            fill={step === 0 ? '#5ce08a' : plan.feasible ? '#aebcff' : '#ff9cbb'}
+          />
+        ))}
+      </svg>
+      <Controls>
+        <Slider
+          label="Current position"
+          min={0.05}
+          max={1.95}
+          step={0.05}
+          value={position}
+          onChange={setPosition}
+          format={(v) => `${v.toFixed(2)} m`}
+        />
+        <Slider
+          label="Current velocity"
+          min={-1.5}
+          max={1.5}
+          step={0.1}
+          value={velocity}
+          onChange={setVelocity}
+          format={(v) => `${v.toFixed(1)} m/s`}
+        />
+        <Slider
+          label="Target position"
+          min={0.1}
+          max={1.9}
+          step={0.05}
+          value={target}
+          onChange={setTarget}
+          format={(v) => `${v.toFixed(2)} m`}
+        />
+        <Slider
+          label="Prediction horizon N"
+          min={1}
+          max={6}
+          step={1}
+          value={horizon}
+          onChange={setHorizon}
+          format={(v) => `${v.toFixed(0)} steps`}
+        />
+        <Slider
+          label="Acceleration limit"
+          min={0.5}
+          max={3}
+          step={0.5}
+          value={maxAcceleration}
+          onChange={setMaxAcceleration}
+          format={(v) => `±${v.toFixed(1)} m/s²`}
+        />
+      </Controls>
+      <Readout
+        items={[
+          ['candidate input sequences', `${plan.candidateCount.toLocaleString()} = 3^${horizon}`],
+          ['plans inside 0–2 m', `${plan.feasibleCount.toLocaleString()}`],
+          ['first action to apply', `${firstInput > 0 ? '+' : ''}${firstInput.toFixed(1)} m/s²`],
+          ['next loop', 'measure the new state and solve again'],
+          [
+            'constraint result',
+            plan.feasible
+              ? 'a legal plan exists'
+              : 'infeasible: change the request or safety response',
+          ],
+        ]}
+      />
+      <Legend
+        items={[
+          {color: '#5ce08a', label: 'measured state now'},
+          {color: plan.feasible ? '#6f8bff' : '#ff6f9c', label: 'selected prediction'},
+          {color: '#ffc24d', label: 'target'},
         ]}
       />
     </Demo>

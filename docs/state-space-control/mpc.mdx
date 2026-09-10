@@ -1,0 +1,186 @@
+---
+title: "Model Predictive Control"
+description: "An introductory MPC lesson for robotics: predict a mechanism, score possible inputs, enforce constraints, apply one action, and decide where online optimization is useful."
+sidebar_position: 4
+tags: [mpc, state-space, optimization, constraints, frc, ftc]
+---
+
+import {MpcHorizonExplorer} from '@site/src/components/simulations/state-space/StateSpaceExplorers';
+
+# Model Predictive Control
+
+<Difficulty level="Medium" />
+
+<Abstract>
+Model predictive control, or MPC, asks a model to look a short distance into the future. It scores many
+possible input sequences, rejects sequences that break constraints, applies the first input from the
+best plan, and repeats from the next measurement. That repeated replanning is the central idea. This
+lesson builds it from an elevator example before discussing solvers or advanced proofs.
+</Abstract>
+
+<Problem>
+
+## A controller that can see the stop coming
+
+Imagine an elevator moving upward toward a target near its hard upper limit. A feedback controller sees
+the error now and commands a correction. An MPC controller also predicts where the current velocity and
+each possible motor command will put the elevator several loop iterations later. It can begin braking
+before the present error becomes small.
+
+This matters when the request has more structure than “reduce the error”:
+
+- voltage, current, speed, acceleration, or mechanism travel must stay inside a limit;
+- several motors or axes affect one another;
+- a reference path is already known over the next few moments;
+- arriving with a particular velocity matters as much as arriving at the position;
+- the best action now depends on a future corner, obstacle, or game task.
+
+MPC is a framework, not one formula. The model may be linear or nonlinear, and the optimizer may solve a
+quadratic program or a more general numerical problem. We will begin with the small linear case.
+
+</Problem>
+
+<Theory>
+
+## The whole algorithm in five verbs
+
+1. **Measure** or estimate the current state $x_k$.
+2. **Predict** future states with $x_{i+1}=A_d x_i+B_d u_i$.
+3. **Score** each plan for tracking error and control effort.
+4. **Constrain** the states and inputs to values the robot can safely produce.
+5. **Apply** only $u_0$, then measure and solve again on the next loop.
+
+The last step is why MPC is also called **receding-horizon control**. The optimizer may return
+$[u_0,u_1,\ldots,u_{N-1}]$, but only the first move survives contact with the real robot. A disturbance,
+model error, or new target changes the next optimization.
+
+## Drive the prediction yourself
+
+The viewer uses a position-and-velocity elevator model. At each future step it tries three acceleration
+choices: full down, zero, or full up. It evaluates all $3^N$ sequences, keeps the ones inside the
+0–2 m travel range, and chooses the lowest-cost plan. Move the elevator near a limit with velocity
+pointing outward, then increase the horizon. Watch when the first action changes from accelerating to
+braking.
+
+<MpcHorizonExplorer />
+
+:::note[What this viewer simplifies]
+The discrete choices make the search visible; they are not a production optimizer. Linear MPC normally
+allows continuous inputs and solves a constrained quadratic program. The essential behavior is the
+same: predict, minimize a cost, obey bounds, use the first input, and replan.
+:::
+
+## What the optimizer minimizes
+
+A common linear MPC objective is
+
+$$
+J=\sum_{i=0}^{N-1}\left[(x_i-r_i)^TQ(x_i-r_i)+u_i^TRu_i\right]
+ +(x_N-r_N)^TQ_N(x_N-r_N).
+$$
+
+Read it from left to right:
+
+- $N$ is the prediction horizon.
+- $x_i-r_i$ is the predicted tracking error.
+- $Q$ says which state errors are expensive.
+- $u_i$ is the planned motor input, often voltage.
+- $R$ charges for aggressive control effort.
+- $Q_N$ makes the state at the end of the horizon especially important.
+
+The optimization is subject to the model and limits such as
+
+$$
+x_{i+1}=A_dx_i+B_du_i,\qquad x_{min}\le x_i\le x_{max},\qquad
+u_{min}\le u_i\le u_{max}.
+$$
+
+For a linear model, quadratic cost, and linear bounds, this becomes a quadratic program. OSQP’s
+official MPC example uses this exact pattern: state and input limits, a finite-horizon quadratic cost,
+and a repeated solve whose first input advances the plant.
+
+## MPC, LQR, and motion profiles
+
+| Method | Work done during the robot loop | Handles hard constraints directly? | A good first use |
+|---|---|---:|---|
+| Feedforward + PID/PD | evaluate a few formulas | No; add clamps and anti-windup separately | one well-understood mechanism |
+| Motion profile + feedback | advance a precomputed reference, then correct error | The profile can limit speed and acceleration | point-to-point elevator or arm motion |
+| LQR | multiply the current state error by a fixed gain | No; saturation is handled around the controller | coupled state feedback with a linear model |
+| MPC | solve a finite-horizon optimization repeatedly | Yes, when limits are included in the problem | coupled motion or future references with active limits |
+
+LQR and MPC are close relatives. For a time-invariant linear system with quadratic cost, no active
+constraints, and a suitable terminal cost, the first action from a long-horizon MPC problem approaches
+linear-quadratic feedback. MPC earns its extra machinery when the finite future or the constraints
+change the action you should take now.
+
+## Where it might be used on a competition robot
+
+**Promising uses** include an arm that must avoid its frame while coordinating joints, a drivetrain that
+tracks a time-indexed path under wheel-force or current limits, and a launcher or catapult whose final
+position and velocity matter while voltage and acceleration are bounded. For the catapult, a useful
+objective could penalize terminal position error and acceleration near release while enforcing the
+battery-voltage limit.
+
+**Weak first uses** include a single flywheel that already meets its recovery requirement with
+feedforward plus P, or an elevator that only needs an ordinary trapezoidal profile. In the referenced
+Chief Delphi experiment, ideal flywheel MPC matched a well-tuned traditional controller while costing
+more computation. That is a useful baseline result: an optimizer does not create value merely because
+it is more advanced.
+
+## Is MPC practical in FTC?
+
+The small model predictions are cheap. The expensive part is the online solve, and its cost depends on
+the number of states, inputs, horizon steps, constraints, solver, warm start, and required accuracy. The
+viewer demonstrates the scaling problem directly: three choices across six steps already create
+$3^6=729$ candidate sequences. Production solvers exploit the quadratic problem structure instead of
+enumerating them.
+
+For FTC, start with MPC only when constraints or coupled motion are central to the task and the team can
+already validate a model. A Control Hub may have enough compute for a small, carefully implemented
+problem, but a statement about feasibility needs measurements on the complete OpMode. Vision,
+localization, hardware access, telemetry, memory allocation, and the solver all share the runtime. Use
+the [FTC deployment decision guide](./ftc-decision.mdx) to profile the whole loop and compare against a
+simpler baseline.
+
+</Theory>
+
+<Deploy>
+
+## A safe path from lesson to robot
+
+1. Begin in simulation with a one- or two-state mechanism and measured units.
+2. Reuse the discretized plant and observer already validated for state feedback.
+3. Write the objective and every constraint in plain language before choosing a solver.
+4. Test unreachable references and define what happens when the problem is infeasible.
+5. Warm-start the solver, cap its work, and check its status before using a result.
+6. Log solve time percentiles, constraint margin, requested input, applied input, and tracking error.
+7. Run the same acceptance test against feedforward plus PID/PD or LQR.
+
+Never assume the optimizer returned a usable command. A production loop needs a deadline, status check,
+last-known-safe or simpler fallback controller, and an output clamp after the solve. Test that path by
+forcing infeasible requests and solver timeouts in simulation.
+
+<Exercise title="When does looking ahead change the answer?">
+
+An elevator is 5 cm below its upper limit, moving upward quickly, and commanded to a target 20 cm below
+the limit. A position-only P controller still sees an error toward the target. What information lets MPC
+choose a safer first action?
+
+<Solution>
+
+MPC includes velocity in the state and propagates it through the model. Candidate plans that keep moving
+upward cross the position constraint, so the optimizer rejects them or makes their cost very large. It
+can command braking now even though the current position error alone does not demand it.
+
+</Solution>
+
+</Exercise>
+
+## Further reading
+
+- Start with [WPILib’s introduction to state-space control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/index.html) for the model, discretization, observer, and feedback prerequisites.
+- Read the [Chief Delphi MPC build thread](https://www.chiefdelphi.com/t/controlling-frc-mechanisms-with-model-predictive-control/522539) for an evolving FRC experiment and practical discussion.
+- Work through the [OSQP linear MPC example](https://osqp.org/docs/examples/mpc.html) after the objective and constraints on this page feel familiar.
+- Use [Rawlings, Mayne, and Diehl, _Model Predictive Control: Theory, Computation, and Design_](https://sites.chemengr.ucsb.edu/~jbraw/mpc/) for rigorous theory, stability, estimation, and numerical methods.
+
+</Deploy>
