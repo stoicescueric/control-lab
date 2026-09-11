@@ -35,6 +35,8 @@ Three hardware facts break the clean continuous math:
   downstream, including PID gains, feedforward, and odometry, is meaningful until those counts are converted.
 - **The loop time wobbles.** Vision frames, logging, and garbage collection make each iteration take
   a slightly different amount of time. Assuming a fixed period silently corrupts every time-based term.
+- **Hardware I/O costs time.** Encoder, IMU, and sensor reads travel to a hub; motor and servo commands
+  travel back. Before blaming the math, measure the control period and count avoidable hub transactions.
 
 Get these three things right and the rest of the site's math drops onto hardware unchanged. Get
 them wrong and even a perfect controller drifts, lags, or oscillates.
@@ -222,6 +224,97 @@ interval. Neither produces an error message, and the pair is easy to misread as 
 is the opposite. Measuring <code>dt</code> costs almost nothing.
 </Callout>
 
+## Treat loop time as a measured hardware budget
+
+The `dt` above belongs inside every controller calculation. It does **not** tell you whether the robot
+is consistently responsive. For that, record a short window of complete control periods. A single slow
+loop may be harmless; a high average, a high worst case, or a wide gap between them is evidence to
+investigate.
+
+<JavaCode league="FTC" label="Loop-time window: average and worst period">{`private static final int LOOP_WINDOW = 100;
+private final ElapsedTime loopTimer = new ElapsedTime();
+private boolean haveLoopPeriod;
+private int loopSamples;
+private double loopSumMs, loopWorstMs;
+
+@Override
+public void start() {
+    loopTimer.reset();                 // do not count init time as a control period
+    haveLoopPeriod = false;
+}
+
+void loop() {
+    double periodMs = loopTimer.milliseconds(); // duration since the previous loop began
+    loopTimer.reset();
+    if (haveLoopPeriod) recordLoopPeriod(periodMs);
+    haveLoopPeriod = true;
+
+    // One hardware cycle: refresh -> read -> compute -> write.
+    updateRobot();
+}
+
+void recordLoopPeriod(double periodMs) {
+    if (!Double.isFinite(periodMs) || periodMs <= 0) return;
+
+    loopSamples++;
+    loopSumMs += periodMs;
+    loopWorstMs = Math.max(loopWorstMs, periodMs);
+
+    if (loopSamples == LOOP_WINDOW) {
+        telemetry.addData("loop avg / worst ms", "%.1f / %.1f",
+                loopSumMs / LOOP_WINDOW, loopWorstMs);
+        loopSamples = 0;
+        loopSumMs = 0;
+        loopWorstMs = 0;
+    }
+}`}</JavaCode>
+
+This is a diagnostic, not a controller clock: keep using the individual measured `dt` for derivatives,
+integrals, observers, and rate limits. The window is for finding jitter and regressions after adding
+vision, logging, or a new subsystem.
+
+### Bulk caching has one owner
+
+Many loop-time problems are hub communication, not arithmetic. Eligible reads from the same REV hub can
+share a bulk-read cache; I2C devices are a separate case. The simplest starting point is SDK
+`BulkCachingMode.AUTO`. Use `MANUAL` only when one well-defined robot root owns the cache and clears it
+before **every** hardware cycle. If Road Runner, Pedro, or another framework already owns this policy,
+do not configure it again inside a subsystem.
+
+<JavaCode league="FTC" label="Manual bulk caching: one clear at the start of each cycle">{`private List<LynxModule> hubs;
+
+// import com.qualcomm.hardware.lynx.LynxModule;
+// import java.util.List;
+
+void initBulkCaching() {
+    hubs = hardwareMap.getAll(LynxModule.class);
+    for (LynxModule hub : hubs) {
+        hub.setBulkCachingMode(LynxModule.BulkCachingMode.MANUAL);
+    }
+}
+
+void updateRobot() {
+    for (LynxModule hub : hubs) {
+        hub.clearBulkCache();          // exactly once, before this cycle's reads
+    }
+
+    readSensors();                     // eligible hub reads now share fresh cached data
+    computeCommands();
+    writeActuators();
+}`}</JavaCode>
+
+Forgetting the clear is worse than being slow: the next loop can consume stale encoder or IMU data.
+Do not hide `clearBulkCache()` in several subsystem updates, and do not switch to `MANUAL` merely because
+it sounds faster. First profile, then make one component responsible for the cache lifecycle.
+
+### Optimize writes only after profiling
+
+Repeatedly sending an unchanged motor power or servo position can add hub traffic without changing the
+robot. That makes command caching a possible later optimization, but it also introduces a deadband if a
+wrapper ignores small changes. Keep the direct command path until measurements identify writes as the
+bottleneck; then document the threshold, test its effect on a closed-loop mechanism, and keep the
+wrapper at the hardware boundary rather than scattering it through controllers.
+
 With the bridge built - discrete time, real units, adequate rate - the rest of the curriculum is
 deployable. The most useful controller of all comes next: [PID](../control-theory/pid.mdx).
 
@@ -235,6 +328,11 @@ deployable. The most useful controller of all comes next: [PID](../control-theor
   encoder usage, and practical robot-code organization.
 - [WPILib: Sampling, controllers, and motion profiles](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/index.html) -
   competition-robotics reference for discrete control, profiles, and units.
+- [Dairy Foundation Cookbook: Improving Loop Times](https://cookbook.dairy.foundation/improving_loop_times/improving_loop_times.html) -
+  FTC-specific measurements, bulk-read reasoning, and motor-write caching tradeoffs that informed the
+  operational guidance above.
+- [FTC SDK Javadoc: `LynxModule.BulkCachingMode`](https://javadoc.io/static/org.firstinspires.ftc/Hardware/10.1.0/com/qualcomm/hardware/lynx/LynxModule.BulkCachingMode.html) -
+  the contract for `AUTO`, `MANUAL`, and clearing the manual cache before another bulk read.
 - 24033 Alphatronic,
   [*Advanced Motion Control & Loop Time Optimization*](https://www.youtube.com/watch?v=EqF2Zp8R9qM&t=912s) -
   FTC workshop companion for loop-time budgeting and motion-control implementation details.
