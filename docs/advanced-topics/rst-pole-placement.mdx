@@ -19,19 +19,19 @@ already measured, and a description of the response you want, expressed as a tim
 then solves for its own coefficients from those.
 </Abstract>
 
-[System identification](../control-theory/system-identification.mdx) ends with $k_S$, $k_V$ and $k_A$ measured from
-your own robot. A PID loop then throws most of that away: it takes the error and asks you for three
-more numbers, tuned by feel, whose units nobody states. The model you just measured is a complete
-description of the mechanism, and a controller can be solved for rather than tuned.
+[System identification](../control-theory/system-identification.mdx) measures $k_S$, $k_V$, and $k_A$
+from your robot. A velocity PID can use those constants as feedforward and use feedback to correct the
+remaining error. RST is an optional alternative when you want to specify and verify a closed-loop response
+with a time constant instead of selecting controller coefficients directly.
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
 RST is a discrete-time polynomial controller, so it is a **next step**, not a PID replacement for a
 first mechanism. Start in this order:
 
-1. [System Identification](../control-theory/system-identification.mdx): measure $k_S$, $k_V$, and
-   $k_A$ from your mechanism.
-2. [Feedforward](../control-theory/feedforward.mdx): see how those constants describe the plant.
+1. [Feedforward](../control-theory/feedforward.mdx): what $k_S$, $k_V$, and $k_A$ describe.
+2. [System Identification](../control-theory/system-identification.mdx): measure them on your
+   mechanism.
 3. [From Math to a Loop](../software-architecture/discretization.mdx): understand sampled time,
    measured $\Delta t$, and one-loop delay.
 
@@ -40,21 +40,25 @@ ago.” If not, finish those pages first; the RST derivation will then have a ph
 of becoming polynomial manipulation.
 
 **Math used:** exponential decay for discretization, algebra on first-order polynomials, and the idea
-that a closed-loop pole sets response speed. Treat transfer functions, poles, and unit delays as required
-background for the full derivation. You do not need complex-plane pole calculations for this real,
+that a closed-loop pole sets response speed. If transfer functions and poles are new, watch Brian
+Douglas's [Transfer Functions](https://www.youtube.com/watch?v=RJleGwXorUk) lecture, then read the
+“Continuous to discrete pole mapping” section of Tyler Veness's
+[*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) for why
+a sampled pole is $e^{-\Delta t / \tau}$. You do not need complex-plane pole calculations for this real,
 first-order plant.
 
 </Admonition>
 
 <Problem>
 
-## A tuned gain is a number that only works where it was tuned
+## A response target is easier to verify than a gain
 
-Tune a velocity PID on a drivetrain at a 20 ms loop and it behaves differently at 45 ms, because the
-integral is a running sum and the derivative a difference over a $\Delta t$ that changed. Tune it on a
-fresh battery and it softens as the pack sags, because a duty cycle is not a unit of force. Neither
-failure announces itself. The loop keeps working, slightly worse, and nothing in the three numbers
-tells you which of them to move.
+Velocity PID can work well with measured $\Delta t$, suitable feedforward, and validation on the real
+mechanism. The problem starts when a gain is chosen only by feel: `kP = 0.004` does not say how quickly
+the mechanism should settle or how much overshoot is acceptable. If code assumes a fixed loop period,
+then its integral and derivative scaling also change when the loop time changes. A duty-cycle-only
+feedforward similarly changes physical effect as battery voltage changes. Those are implementation and
+modeling problems to catch by measurement, not flaws inherent to PID.
 
 The symptom on a real robot is a mechanism that was tuned crisply on Friday, feels sluggish in the
 third match on Saturday, and rings when a teammate adds a vision pipeline to the loop.
@@ -206,10 +210,9 @@ $$
 
 and with a scalar $T$ both poles remain in it. The integral pole is deliberately slow, so it dominates.
 On the plant in the simulation above, a 0.08 s closed loop against a 0.4 s integral pole answers a
-change of reference in about 0.48 s, six times slower than asked, and the tests in
-`src/lib/domain/rst.test.ts` pin that ratio. The loop is not broken and disturbance rejection is fine.
-It simply does not track at the speed it was asked to, and the number you set does not describe the
-behaviour you get.
+change of reference in about 0.48 s, six times slower than asked. The loop is not broken and disturbance
+rejection is fine. It simply does not track at the speed it was asked to, and the number you set does not
+describe the behaviour you get.
 
 Choosing $T$ to cancel the integral pole from the reference path fixes it:
 

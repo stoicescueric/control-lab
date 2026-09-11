@@ -16,8 +16,8 @@ before you control it*, and it comes in two distinct halves.
 A filter takes a single noisy stream and smooths it, trading a little lag for a lot of calm. Boolean
 signals need a different first tool: wait for an input to stay changed before treating it as an event.
 
-- **[Signals & Noise](./signals.mdx)**: what sensor noise actually looks like, which sensors carry
-  it (and which, like encoders, don't), and how to measure it before filtering anything.
+- **[Signals & Noise](./signals.mdx)**: what sensor noise actually looks like, including encoder
+  quantization and velocity noise, and how to measure it before filtering anything.
 - **[Debouncer](./debouncer.mdx)**: make a limit switch or beam break prove a boolean transition
   before it can advance your state machine.
 - **[Low-pass filtering](./low-pass.mdx)**: the exponential moving average, the one-line filter you
@@ -42,10 +42,10 @@ Fusion combines two imperfect sensors whose failures point in opposite direction
 <Admonition type="tip" title="Filters and controllers are a team">
 
 A controller is only as good as the signal it sees. The cleanest controller code in the world will
-still oscillate on a noisy distance sensor. Master this module before you trust the controllers in
-[Module 2](../control-theory/index.mdx).
+still oscillate on a noisy distance sensor. Add the appropriate filtering or fusion tool when a measured
+signal limits a controller; you do not need to complete this module before using the core controllers.
 
 </Admonition>
 
-Start with [Signals & Noise](./signals.mdx), work through the two filters, then cross into fusion
-with the complementary filter and the Kalman filter.
+Start with [Signals & Noise](./signals.mdx), choose from the filtering tools when a sensor needs one,
+then cross into fusion with the complementary filter and the Kalman filter.

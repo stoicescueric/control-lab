@@ -123,15 +123,17 @@ void update(double x) {
 <Exercise title="Why not sum and sum-of-squares?">
 
 That is Welford's algorithm. The obvious alternative — accumulate $\sum x$ and $\sum x^2$, then use
-$\operatorname{Var} = E[x^2] - E[x]^2$ — is numerically awful when the mean is large relative to the
-spread. Work out what happens for readings around 3000 with a spread of 0.5.
+$\operatorname{Var} = E[x^2] - E[x]^2$ — can suffer catastrophic cancellation when the mean is much
+larger than the spread, especially in lower-precision arithmetic. Compare readings around 3000 with a
+spread of 0.5 in `float` and `double`.
 
 <Solution>
 
-$E[x^2] \approx 9{,}000{,}000$ and $E[x]^2 \approx 9{,}000{,}000$. You subtract two nearly equal
-eight-digit numbers to recover a variance around 0.25, and most of what survives is rounding error —
-`double` has about 16 significant digits, and you have just spent seven of them. Welford never forms
-either large quantity. Look up "catastrophic cancellation".
+$E[x^2] \approx 9{,}000{,}000$ and $E[x]^2 \approx 9{,}000{,}000$, while the variance is about 0.25.
+Those are seven-digit quantities. Java `double` has roughly 15–16 decimal digits, so this particular
+example still resolves the variance well. A `float` has only about seven decimal digits, so subtracting
+the two large terms can erase it. Even `double` becomes vulnerable when the mean is much larger relative
+to the spread. Welford is the stable default because it never forms that large, nearly equal subtraction.
 
 </Solution>
 
