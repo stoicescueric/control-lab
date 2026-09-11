@@ -1,6 +1,7 @@
 # --- Local AI/tooling state (not part of the public project) ---
 .claude/
 .agents/
+.local/
 skills-lock.json
 .cursorrules
 CLAUDE.md
