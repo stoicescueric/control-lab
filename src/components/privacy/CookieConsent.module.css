@@ -5,8 +5,7 @@
   bottom: max(1rem, env(safe-area-inset-bottom));
   width: min(32rem, calc(100vw - 2rem));
   padding: 1.15rem;
-  border: 1px solid var(--color-line);
-  border-left: 4px solid var(--color-brand);
+  border: 0;
   border-radius: 8px;
   background: var(--color-surface);
   color: var(--color-ink);

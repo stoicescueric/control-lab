@@ -335,10 +335,10 @@
   background: #101a2c;
 }
 .timeline div:first-child {
-  border-left: 4px solid #ffc66d;
+  border-top: 2px solid #ffc66d;
 }
 .timeline div:nth-child(2) {
-  border-left: 4px solid #7b9cff;
+  border-top: 2px solid #7b9cff;
 }
 .timeline strong {
   color: white;

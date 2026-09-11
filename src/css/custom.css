@@ -598,7 +598,6 @@ h4 {
    palette so :::tip and :::warning read like first-class documentation blocks. */
 .theme-admonition {
   border: 1px solid var(--color-line) !important;
-  border-left-width: 4px !important;
   border-radius: 8px !important;
   box-shadow: none !important;
 }
@@ -732,7 +731,7 @@ pre code {
 }
 
 .cl-home-plot {
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 /* A static wash separates the hero without competing with the response curve. */
@@ -753,7 +752,7 @@ pre code {
   height: 0.55rem;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--color-teal-text);
+  background: var(--color-brand);
 }
 
 .cl-home-action {

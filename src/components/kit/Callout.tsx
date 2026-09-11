@@ -46,7 +46,7 @@ export function Callout({type = 'note', icon, title, children}: CalloutProps) {
 
 export function Analogy({children}: {children?: ReactNode}) {
   return (
-    <div className="cl-callout my-5 border-l-4 border-brand bg-brand/10 px-[18px] py-3.5 text-ink [&>:last-child]:mb-0">
+    <div className="cl-callout my-5 border-y border-brand/25 bg-brand/10 px-[18px] py-3.5 text-ink [&>:last-child]:mb-0">
       {children}
     </div>
   );

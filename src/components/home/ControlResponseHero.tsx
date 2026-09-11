@@ -265,7 +265,7 @@ function ClosedLoopResponse() {
         <div className="flex items-center gap-3">
           <span className="cl-status-marker" aria-hidden="true" />
           <div>
-            <p className="m-0 font-mono text-[0.7rem] font-semibold text-teal-text">
+            <p className="m-0 font-mono text-[0.7rem] font-semibold text-ink-soft">
               {playing ? 'Running model' : 'Model paused'}
             </p>
             <p className="m-0 mt-0.5 text-sm font-bold text-ink">Closed-loop step response</p>
@@ -275,7 +275,7 @@ function ClosedLoopResponse() {
           type="button"
           onClick={() => setPlaying((value) => !value)}
           aria-pressed={!playing}
-          className="cl-model-toggle min-h-11 rounded-[8px] border border-line bg-bg px-4 text-sm font-semibold text-ink">
+          className="cl-model-toggle min-h-11 rounded-[8px] border border-line bg-bg px-4 py-2.5 text-sm font-semibold text-ink">
           {playing ? 'Pause' : 'Play'}
         </button>
       </div>
