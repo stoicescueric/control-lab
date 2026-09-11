@@ -17,6 +17,15 @@ which is why it flattens every peak it touches. Fitting a parabola instead costs
 keeps the shape of the signal, and hands you a clean velocity estimate as a side effect.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+Start with [Moving Average](./moving-average.mdx) and [Low-Pass Filtering](./low-pass.mdx).
+**Math used:** a small polynomial, least-squares fitting, and a derivative read from that fit. The
+five-point implementation is already derived below; you do not need to solve normal equations or invert
+matrices before using it.
+
+</Admonition>
+
 Your robot is closing on an AprilTag. The vision pose jitters a few centimetres frame to frame, so you
 smooth it. The jitter goes away, and so does something you wanted.
 

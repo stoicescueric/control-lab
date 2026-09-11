@@ -11,7 +11,7 @@ tags: [preface, calculus, linear-algebra, differential-equations, state-space]
 
 <Abstract>
 Every robot bug hands you one symptom and a dozen candidate causes. Math narrows that list by naming the quantities involved and stating how each one depends on the others.
-This preface shows how four tools — calculus, linear algebra, differential equations, and state space — turn robot behavior from mystery into something you can predict and debug.
+This preface shows how four tools — calculus, linear algebra, differential equations, and state space — turn robot behavior from mystery into something you can predict and debug. Two short bridge pages also introduce the extra vocabulary that the advanced RST and Kalman lessons require.
 </Abstract>
 
 You can write a working autonomous without naming a derivative, a matrix, or a state vector. Many teams
@@ -78,6 +78,16 @@ State space wraps the previous tools into one architecture: choose the variables
 system, model how they update, and use sensors to keep the estimate honest.
 
 Read next: [State Space](./state-space.mdx).
+
+### Before an advanced controller
+
+Two optional bridge pages make the vocabulary in the hard lessons explicit. Read them when a lesson
+points to them; neither is required for the core PID, motion-profile, or mecanum material.
+
+- [Transfer Functions & Poles](./transfer-functions-poles.mdx) explains one-pole response, sampled
+  delay, and the words *transfer function*, *denominator*, and *pole* used by RST.
+- [Probability, Variance & Gaussians](./probability-variance.mdx) explains spread, variance,
+  covariance, and the bell curve used by the Kalman lesson.
 
 <Admonition type="tip" title="Read this like an engineer">
 
