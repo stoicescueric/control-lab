@@ -1,6 +1,6 @@
 ---
-title: Turn the Model into Launcher Commands
-description: "Measure wheel-to-ball transfer, recover release speed from high-speed video, and connect the model to calibrated launcher settings."
+title: Convert the Model into Robot Commands
+description: "Measure launcher transfer, build bounded calibration tables, and define the release contract used on the robot."
 sidebar_position: 3
 tags: [research, calibration, flywheel, interpolation, implementation]
 ---
@@ -10,20 +10,40 @@ import {TransferExperiment, CalibrationLookup} from '@site/src/components/simula
 import TransferEstimation from '@site/src/components/simulations/research/TransferEstimation';
 import FlywheelRecovery from '@site/src/components/simulations/research/FlywheelRecovery';
 
-# Turn the Model into Launcher Commands
+# Convert the Model into Robot Commands
 
 <Difficulty level="Medium" />
 
 <Abstract>
 The simulator's metres per second and degrees are not the robot's encoder ticks and servo positions.
-This lesson uses the final paper's pilot measurement to establish the conversion scale, then traces
-the season lookup tables and motor controller. Calibration, interpolation, and recovery solve three
-different problems in making the selected shot repeatable.
+This lesson turns a selected trajectory into bounded wheel, hood, and flight-time tables, then defines
+the readiness evidence required before the feeder releases a ball.
 </Abstract>
+
+<Admonition type="note" title="Builder outcome and prerequisites">
+
+Build three bounded lookup tables: distance to wheel target, hood target, and rim-event flight time.
+Every query must return both a value and whether it was clamped. Add measured wheel and hood ready
+bands. The full analysis can use high-speed video, least-squares fitting, and Hermite interpolation;
+an FTC implementation mainly needs explicit units, table bounds, synchronized measurements, and
+honest validation.
+
+</Admonition>
 
 You have a trajectory that tolerates errors. Sending its 5.25 m/s exit speed directly to a motor controller still cannot make the shot: the encoder reports wheel motion, and the ball does not leave at the wheel’s surface speed.
 
 <LauncherMechanism />
+
+## Build the static layer first
+
+1. Measure the shooter-to-target geometry and define the distance reference.
+2. Collect stationary shots and create wheel, hood, and rim-time knots.
+3. Query them with bounded, shape-preserving interpolation that reports clamping.
+4. Measure wheel and hood readiness instead of assuming a command has been reached.
+5. Log the requested values, measured values, release time, and result for every shot.
+
+Motion compensation depends on this layer. A moving-shot solver cannot repair a stationary table
+whose units, distance reference, or release timing are wrong.
 
 ## Worked example: encoder ticks to ball speed
 
@@ -115,6 +135,10 @@ trajectory results. They are starting points for a calibration campaign. The rob
 position. A hood position of 0.3 is not 0.3 radians, and 5.25 m/s is not an encoder setpoint.
 Record the measured distance reference and event-time definition alongside each table.
 
+Treat a lookup as a data contract. Return `distance`, `wheelTarget`, `hoodTarget`,
+`rimTofSeconds`, `clamped`, and `calibrationRevision` together so downstream code can reject an
+unsupported request and logs can identify exactly which calibration produced a shot.
+
 Between measured distances, the interpolant should preserve the data’s shape. A natural cubic spline can bulge between equal knots. A monotone cubic Hermite interpolant keeps a flat segment flat.
 
 <CalibrationLookup />
@@ -189,6 +213,13 @@ this later default configuration.
 
 The bands are measured on the mechanism, in the same units as their signals. Equality to one exact encoder value is not a practical readiness condition. Validate map outputs before this check and account for the feeder delay after it; a readiness check is only one part of the release decision.
 
+### The combined release gate
+
+The command that starts the feeder should require a valid in-range lookup, fresh pose and velocity
+when shooting on the move, a converged aim solution, measured wheel and hood readiness, turret
+readiness, and an allowed robot state. Log which condition blocked each attempted shot. This turns a
+vague “shooter was not ready” report into evidence the team can diagnose.
+
 <Exercise title="Read a point on the shelf">
 The measured targets at 100, 110, and 120 inches are all 1,700 ticks/s. What should a monotone table return at 105 inches? Does that tell you the ball’s exact exit speed?
 <Solution>
@@ -196,4 +227,4 @@ The measured targets at 100, 110, and 120 inches are all 1,700 ticks/s. What sho
 </Solution>
 </Exercise>
 
-**Next:** [aim while the robot moves](./shoot-on-the-move.mdx).
+**Next:** [compensate for robot motion](./shoot-on-the-move.mdx).

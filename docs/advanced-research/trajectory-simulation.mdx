@@ -1,6 +1,6 @@
 ---
-title: Predict Where the Ball Enters
-description: "See drag change a projectile’s descending rim crossing, then learn how RK4 and Hermite interpolation locate the entry event."
+title: Build the Offline Flight Model
+description: "Implement and verify the drag-aware rim-event solver that supplies every later shooter decision."
 sidebar_position: 1
 tags: [research, rk4, air-drag, projectile, numerical-integration]
 ---
@@ -8,15 +8,24 @@ tags: [research, rk4, air-drag, projectile, numerical-integration]
 import {EntryGeometry} from '@site/src/components/simulations/research/ResearchFigures';
 import FlightExplorer, {IntegratorExperiment} from '@site/src/components/simulations/research/FlightExplorer';
 
-# Predict Where the Ball Enters
+# Build the Offline Flight Model
 
 <Difficulty level="Medium" />
 
 <Abstract>
 A launch command becomes useful when it predicts the right event: the ball descending through the
-opening. This lesson follows the final paper's force model into the Python integrator, explains why
-event location needs its own calculation, and separates numerical accuracy from physical accuracy.
+opening. This lesson turns the paper's force model into an offline solver with a clear input/output
+contract, then separates numerical accuracy from physical accuracy.
 </Abstract>
+
+<Admonition type="note" title="Builder outcome and prerequisites">
+
+Build an offline `simulateShot(...)` function that returns the descending rim crossing, entry
+velocity, time of flight, and geometric entry result. The full derivation uses vectors, ordinary
+differential equations, RK4, and cubic Hermite interpolation. You can implement a tested solver
+without deriving each method, but you must keep the event definition and units explicit.
+
+</Admonition>
 
 A shot aimed at the front lip can look correct as a line on a screen and still clip the goal. The ball has a radius. Its **center** must pass far enough inside both edges, and it must be descending.
 
@@ -102,7 +111,7 @@ Here $h$ is the step duration and $\tau$ runs from zero to one inside the step. 
 
 </details>
 
-## Read the Python implementation
+## Implement the solver in this order
 
 In the [pinned physics engine](https://github.com/stoicescueric/Trajectory-Simulation/blob/09663d6868fd0cc781dc28448cc3f6ace828da1a/backend/physics.py),
 follow the calculation in this order:
@@ -129,6 +138,16 @@ The [verification harness](https://github.com/stoicescueric/Trajectory-Simulatio
 also checks caching, exhaustive selection, input validation, and concurrent requests. Its DOP853
 comparison is optional and requires SciPy; a skipped comparison is not a passed independent check.
 
+### Acceptance checks before you trust the solver
+
+| Check | Expected result |
+|---|---|
+| Disable drag and compare with an analytic parabola | Crossing position converges to the analytic answer. |
+| Repeat with a smaller integration step | Rim position and time stabilize within a declared tolerance. |
+| Use a command that never descends through rim height | The solver returns no event, rather than a fabricated range. |
+| Cross outside the radius-shrunk opening | The event exists, but the geometric result is a miss. |
+| Continue the display path to the floor | Rim-event time remains distinct from ground-impact time. |
+
 ## Java: turn the crossing into an entry test
 
 Once the solver has found a descending event, the geometric test is small:
@@ -151,4 +170,4 @@ The valid interval is [1.8415, 2.1795] m. The 1.830 m crossing misses the front 
 </Solution>
 </Exercise>
 
-**Next:** [choose a command that tolerates speed and angle errors](./robust-shot-selection.mdx).
+**Next:** [choose a shot with error margin](./robust-shot-selection.mdx).

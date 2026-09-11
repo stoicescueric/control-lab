@@ -1,21 +1,30 @@
 ---
-title: Aim While the Robot Moves
-description: "Build a firing table, lead a virtual target with relative velocity, and use time-of-flight recursion to refine and judge a moving-shot solution."
+title: Compensate for Robot Motion
+description: "Implement a loop-safe virtual-target solver, expose its health, and connect it to the shooter release gate."
 sidebar_position: 4
 tags: [research, shoot-on-the-move, fire-control, interpolation, fixed-point-iteration]
 ---
 
 import ShootOnTheMove from '@site/src/components/simulations/research/ShootOnTheMove';
 
-# Aim While the Robot Moves
+# Compensate for Robot Motion
 
 <Difficulty level="Medium" />
 
 <Abstract>
-The final paper freezes one season controller: gain 0.9, a 50 ms feeder delay, seven flight-time knots,
-and at most five updates. This lesson derives its virtual target, distinguishes numerical convergence
-from a reliable physical shot, and compares that design with the newer robot implementation.
+The paper freezes one season controller: gain 0.9, a 50 ms feeder delay, seven flight-time knots, and
+at most five updates. This lesson turns that idea into a loop-safe result object, release gates, and
+tests that an FTC team can reproduce on its own robot.
 </Abstract>
+
+<Admonition type="note" title="Builder outcome and prerequisites">
+
+Build a `movingAim()` function that returns virtual target, virtual distance, flight time, residual,
+iteration count, and clamped/converged status. You need field-frame vectors, fresh chassis velocity,
+a bounded time-of-flight table, feeder delay, and the basic idea of fixed-point iteration. The
+optional derivation uses contraction bounds; the deployable loop does not require proving them.
+
+</Admonition>
 
 Throw a ball to someone who is running and you do not aim at where they are. You lead them. A launcher on a moving robot has the same problem even when the field target is fixed: the ball leaves with part of the chassis velocity, so the target moves relative to the projectile.
 
@@ -78,7 +87,14 @@ $$
 
 That first virtual target is farther from the shooter than the real target, so its lookup returns a longer time. The next update uses that time and moves the aim point again. Intermediate wheel and hood commands are unnecessary; only the converged virtual distance is used to query the final firing command.
 
-## Treat convergence as a shot-quality signal
+## Decide whether the iteration is trustworthy
+
+The archived solver starts with the real-target time, stops when successive estimates differ by at
+most 0.05 s, and allows at most five updates. Treat the final difference as evidence: report it with
+the result and block the shot when the solver does not converge inside the validated range.
+
+<details>
+<summary>Optional math: why the fixed-point update converges</summary>
 
 The scalar update is
 
@@ -88,7 +104,7 @@ t_{k+1}=t_f\!\left(\left\lVert
 \right\rVert\right).
 $$
 
-The archived solver starts with the real-target time, stops when $|t_{k+1}-t_k|\le0.05\ \mathrm{s}$, and allows at most five updates. The final time increment is therefore a residual, not just a loop condition.
+The final time increment is a convergence diagnostic, not merely a loop condition.
 
 When three useful iterates exist, estimate the local contraction rate with
 
@@ -105,6 +121,8 @@ q=G\lVert\mathbf v_R\rVert M<1
 $$
 
 guarantees a unique fixed point. With $G=0.9$, the sufficient speed limit is **2.28 m/s**. An offline replay of 1,399,392 cases through 1.7 m/s met the deployed tolerance by update five; 170 cases used all five. These are deterministic grid checks, not physical scoring probabilities.
+
+</details>
 
 Before releasing, check all of the following:
 
@@ -226,6 +244,21 @@ reported protocol; they cannot identify which individual missed shot had an acce
 
 The release command should consume the status as well as the point. A finite virtual target from a clamped or unconverged solve is still an unsafe command unless that condition was validated deliberately.
 
+## Put it in the robot loop in this order
+
+1. Verify pose and velocity timestamps, units, and field frame.
+2. Compute the shooter world position, including its offset from the robot center.
+3. Solve the virtual target and expose convergence, clamping, residual, and iteration count.
+4. Reject invalid, stale, out-of-range, or unconverged results.
+5. Use virtual distance for wheel and hood; use virtual bearing for turret aim.
+6. Require wheel, hood, turret, and robot-state gates before feeding.
+7. Log the solution and the measured release event.
+
+Before field testing, assert that zero velocity returns the real target, reversing velocity reverses
+the lead, stale velocity blocks release, an out-of-range time lookup reports clamping, and one fixed
+numerical example matches a hand calculation. These tests catch sign and frame mistakes that can look
+like bad tuning on the field.
+
 <Exercise title="Choose the sign">
 The robot moves at $+1.0\ \mathrm{m/s}$ along the field's $y$ axis. The delay plus flight time is $0.75\ \mathrm{s}$ and $G=0.9$. What $y$ correction should be applied to the real target?
 <Solution>
@@ -240,9 +273,9 @@ $-0.9(1.0)(0.75)=-0.675\ \mathrm{m}$. The virtual target moves 0.675 m in the ne
 - [Dynamic Shooting via Time-of-Flight Recursion](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html) — the mechanism-independent recursion and convergence-based quality diagnostics used to organize this lesson.
 - [Newton's Method for Dynamic Shooting](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html) — a faster root solver and the distinction between numerical convergence and physical sensitivity.
 - [Linear Drag](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/linear-drag.html) — an optional induced-windage correction for systems where a first-order drag model is justified.
-- [This elective's audited research paper](./index.mdx#research-paper) — the quadratic-drag model, archived controller constants, convergence audit, acceleration bound, and controlled FTC launch counts.
+- [This elective's audited research paper](./index.mdx#research-paper-and-source) — the quadratic-drag model, archived controller constants, convergence audit, acceleration bound, and controlled FTC launch counts.
 - [Pinned season firmware `75db349d`](https://github.com/stoicescueric/YaoMing/tree/75db349d) — the deployed flight-time knots and five-update implementation state.
 
 </Admonition>
 
-**Next:** [compare model-guided selection with a two-LUT empirical campaign](./model-vs-empirical-lut.mdx).
+**Next:** [test, diagnose, and hand off the system](./model-vs-empirical-lut.mdx).
