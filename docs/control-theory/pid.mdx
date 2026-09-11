@@ -1,6 +1,6 @@
 ---
 title: PID Control
-description: The three-term feedback controller — present, past, and future of an error signal — with the mass-spring-damper insight (the D term brakes you to a zero-velocity arrival) and the upgrades that make a competition-grade PDFL controller.
+description: The three-term feedback controller — present, past, and future of an error signal — with the mass-spring-damper insight (the D term helps the mechanism settle with low velocity) and the upgrades that make a competition-grade PDFL controller.
 sidebar_position: 4
 tags: [pid, pidf, pdfl, feedforward, derivative-filter, anti-windup, feedback, control]
 ---
@@ -220,7 +220,8 @@ $k_G$ and $k_S$ you meet in [feedforward](./feedforward.mdx), rearranged to repl
 - **P**: proportional to the error, exactly as before.
 - **D**: the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
   ruin it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
-  It is still the velocity feedback that brings you in at zero velocity.
+  It is still velocity feedback that helps the mechanism settle with low velocity; it does not guarantee
+  a zero-velocity first arrival.
 - **F**: a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
   It does the integral's old job instantly, with nothing to wind up. On a **slide** that really is one
   constant. On an **arm** the hold varies as $\cos\theta$, so a constant `kF` is only right near the angle
@@ -249,7 +250,8 @@ $$
 <Callout type="idea" title="How to actually find F and L.">
 $k_F$ is the term you'd like to tune first, but it is hard to read off directly. The method: slowly raise the
 command by hand until you find the power <strong>just as the mechanism starts to move up</strong>
-($u_\text{up}$), then the power <strong>just as it starts to move down</strong> ($u_\text{down}$). Going
+($u_\text{up}$), then lower that positive-up command until it is <strong>just about to move down</strong>
+($u_\text{down}$). Going
 up you fight gravity <em>and</em> friction ($u_\text{up} = k_F + k_L$); going down gravity helps while
 friction still resists ($u_\text{down} = k_F - k_L$). Solve the pair:
 $$
@@ -259,7 +261,7 @@ $$
 <EquationLegend
   items={[
     {symbol: 'u_up', meaning: 'the smallest command that just moves the mechanism UP, found by experiment. Gravity and friction both oppose you here'},
-    {symbol: 'u_down', meaning: 'the smallest command that just moves it DOWN. Now gravity helps while friction still resists, which is why the two differ'},
+    {symbol: 'u_down', meaning: 'the positive-up command at the downward breakaway threshold. Gravity helps while friction still resists, which is why it is below the hold command'},
   ]}
 />
 The <strong>average</strong> is the gravity hold; <strong>half the difference</strong> is the friction.

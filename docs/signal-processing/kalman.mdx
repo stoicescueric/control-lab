@@ -29,10 +29,11 @@ idea with a fixed blend. Here, a **Gaussian** is simply the bell-shaped uncertai
 its mean and variance. The matrix form later in the lesson is optional depth; first make the one-state
 predict/correct loop work.
 
-**Math used:** mean, variance, and a bell-shaped Gaussian in the scalar route; matrix multiplication and
-transpose in the matrix route. Treat probability, variance, and covariance as required background for
-the full matrix derivation. The Extended Kalman Filter section additionally uses **partial derivatives** and
-**Jacobians**; it is optional after the linear filter.
+**Math used:** mean, variance, and a bell-shaped Gaussian in the scalar route; matrix multiplication,
+transpose, and covariance in the matrix route. If variance or the normal distribution is new, read
+[Essential background I](https://kalmanfilter.net/background.html) on kalmanfilter.net; for covariance,
+read [Essential background II](https://kalmanfilter.net/background2.html). The Extended Kalman Filter
+section also uses partial derivatives and Jacobians; it is optional after the linear filter.
 
 </Admonition>
 
@@ -313,9 +314,11 @@ the real process and sensor noise is the engineering of applying a Kalman filter
 
 <Admonition type="note" title="Extra prerequisite for the EKF extension">
 
-The next section needs [Calculus](../preface/why-math-matters/calculus.mdx) for partial derivatives and
-[Linear Algebra](../preface/why-math-matters/linear-algebra.mdx) for Jacobian matrices. Stop here if the
-linear Kalman loop is your goal; it is complete and practical on its own.
+The next section uses partial derivatives and Jacobian matrices. If they are new, Khan Academy's videos
+on [partial derivatives](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/partial-derivatives/v/partial-derivatives-and-graphs)
+and [the Jacobian matrix](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/jacobian/v/the-jacobian-matrix)
+cover what this section needs. Stop here if the linear Kalman loop is your goal; it is complete and
+practical on its own.
 
 </Admonition>
 
@@ -351,7 +354,7 @@ $$
 \hat{\mathbf x}_k=\hat{\mathbf x}^{-}_k+K_k(\mathbf z_k-h(\hat{\mathbf x}^{-}_k)).
 $$
 
-The attached paper's example state contains field position and heading plus body-frame velocities:
+The cited FTC EKF paper's example state contains field position and heading plus body-frame velocities:
 
 $$
 \mathbf x=[x,\ y,\ \theta,\ v_x^{body},\ v_y^{body},\ \omega]^\top.
@@ -382,9 +385,9 @@ The conceptual change is compact:
 | optimal under linear-Gaussian assumptions | approximate for nonlinear systems |
 
 For an FTC implementation, use a maintained pose-estimation library unless deriving and validating every
-frame, Jacobian, covariance, timestamp, and reset rule is itself the project. Read the attached paper after
-you can trace the matrix KF equations above; its simulation model, covariance choices, and fusion results
-make the EKF transition concrete.
+frame, Jacobian, covariance, timestamp, and reset rule is itself the project. Read the cited FTC EKF paper
+after you can trace the matrix KF equations above; its simulation model, covariance choices, and fusion
+results make the EKF transition concrete.
 
 <Deploy>
 
@@ -412,7 +415,7 @@ Use this lesson's scalar filter for one-dimensional signals you intentionally fu
 
 <Admonition type="info" title="Sources and further reading">
 
-- Kou, E., & Haggenmiller, A. (2023), *Extended Kalman Filter State Estimation for Autonomous Competition Robots* — <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>download the attached paper</a> or open the [arXiv record](https://arxiv.org/abs/2310.04459). Read §§III-B and IV first for the Jacobian transition and the FTC mecanum state model, then §§VI–VII for limitations and next steps.
+- Kou, E., & Haggenmiller, A. (2023), *Extended Kalman Filter State Estimation for Autonomous Competition Robots* — <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>download the paper PDF</a> or open the [arXiv record](https://arxiv.org/abs/2310.04459). Read §§III-B and IV first for the Jacobian transition and the FTC mecanum state model, then §§VI–VII for limitations and next steps.
 - [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) — maintained FRC implementations and the practical relationship between observers and pose estimators.
 - R. E. Kalman, [*A New Approach to Linear Filtering and Prediction Problems*](https://doi.org/10.1115/1.3662552) — the original linear filter after the scalar intuition in this lesson is comfortable.
 
