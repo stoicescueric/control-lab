@@ -9,6 +9,15 @@ updates:
       timezone: Europe/Bucharest
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
+    # These major updates require compatibility work before they can be merged:
+    # TypeScript 7 is outside typescript-eslint 8's supported peer range, and
+    # react-hooks 7 enables compiler rules with existing violations. Keep
+    # receiving smaller updates while the tracked remediation work is done.
+    ignore:
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      - dependency-name: eslint-plugin-react-hooks
+        update-types: ['version-update:semver-major']
     groups:
       docusaurus:
         patterns:
