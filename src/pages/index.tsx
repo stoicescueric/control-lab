@@ -282,7 +282,7 @@ function LazyPurePursuit() {
       {Simulator ? (
         <Simulator />
       ) : (
-        <div className="grid min-h-[420px] place-items-center bg-panel font-mono text-sm text-panel-ink/70">
+        <div className="grid min-h-[420px] place-items-center bg-panel p-4 font-mono text-sm text-panel-ink/70">
           Loading the path follower
         </div>
       )}
@@ -308,7 +308,7 @@ function InteractiveExample() {
           </p>
         </div>
 
-        <div className="mt-10 overflow-hidden rounded-[12px] border border-line bg-panel p-2 shadow-card">
+        <div className="mt-10 [&_.cl-demo]:my-0">
           <LazyPurePursuit />
         </div>
 
