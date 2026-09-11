@@ -1,242 +1,66 @@
 # Control Lab
 
-**Control theory, state estimation, and FTC robotics - from the math to the metal.**
+Control Lab is a free, interactive curriculum for FTC programmers learning the
+control theory behind reliable autonomous robots. Lessons connect a real robot
+behavior to a visual model, the math, and deployable Java.
 
-Control Lab is an interactive open-source curriculum for competitive robotics programmers who want to understand the mathematics and software architecture underneath modern FTC autonomy. It is built for students who already know basic Java and robot programming, but who are ready to move beyond black-box libraries into controllers, estimators, kinematics, and deployable engineering practice.
+**Read it:** [stoicescueric.github.io/control-lab](https://stoicescueric.github.io/control-lab/)
 
-Live site: [stoicescueric.github.io/control-lab](https://stoicescueric.github.io/control-lab/)
+## What you will find
 
-## What This Project Is
+- Software architecture and loop optimization
+- Motor dynamics, feedforward, feedback, and motion profiles
+- Signal processing, sensor fusion, and Kalman filtering
+- Path following and mecanum kinematics
+- State-space control, observers, and LQR
+- A drag-aware launcher case study and advanced references
 
-Control Lab teaches robotics control as a chain from intuition to implementation:
+The guide assumes basic Java and FTC robot-programming experience. It does not
+assume prior controls coursework.
 
-- A concrete FTC engineering failure or use case.
-- A visual model or live simulation before formal math.
-- A rigorous derivation using properly rendered LaTeX.
-- Clean Java patterns that can survive real OpMode loops.
-- Hardware reality notes for latency, voltage sag, wheel slip, back-EMF, loop time, and noisy sensors.
+## Run it locally
 
-The goal is not to replace libraries like Road Runner, Pedro Pathing, FTCLib, or SolversLib. The goal is to make the ideas behind those tools visible enough that a serious FTC programmer can debug, tune, extend, and defend their own robot code.
-
-## Tech Stack
-
-- [Docusaurus v3](https://docusaurus.io/) with TypeScript
-- React 19
-- MDX lessons
-- Math rendering with `remark-math`, `rehype-katex`, and KaTeX
-- Tailwind CSS v4 utilities layered over Docusaurus/Infima
-- Prism code highlighting with Java support
-- GitHub Pages deployment through GitHub Actions
-
-## Local Development
-
-Requirements:
-
-- Node.js 24 LTS (the CI version in `.nvmrc`)
-- npm
-
-Install the exact locked dependencies and run:
+Control Lab uses Node.js 24 and npm.
 
 ```bash
 npm ci --ignore-scripts
 npm start
 ```
 
-The dev server opens at:
+Open <http://localhost:3000/control-lab/>.
 
-```text
-http://localhost:3000/control-lab/
-```
-
-Common commands:
+Before opening a pull request, run:
 
 ```bash
-npm run check:architecture # directory and dependency-boundary checks
-npm run check:content      # lesson structure and repository-quality checks
-npm run check:contributor  # governance and contribution-workflow checks
-npm run lint               # ESLint, including the React Hooks rules
-npm run format             # apply Prettier to source (docs/ prose is excluded)
-npm run format:check       # fail if any source file is unformatted
-npm run typecheck          # TypeScript check
-npm test                   # unit tests
-npm run build              # production Docusaurus build into build/
-npm run serve              # preview the production build
-npm run security           # workflow, lockfile, and built-output checks (run after build)
-npm run size               # enforce the production bundle budget (run after build)
-npm run new:lesson -- ...  # scaffold a lesson in an existing module
-npm run verify             # run the complete pre-PR verification sequence
+npm run verify
 ```
 
-CI and deployment require architecture and content checks, linting, formatting,
-typechecking, unit tests, a production build, security checks, and the
-bundle-size budget to pass.
+This runs architecture, content, contributor, lint, formatting, type, test,
+build, security, and bundle-size checks.
 
-## Repository Layout
+## Project map
 
 ```text
-docs/                              MDX curriculum, grouped by module
-src/components/home/               home-page-only presentation
-src/components/kit/                reusable lesson and demo primitives
-src/components/privacy/            consent and privacy UI
-src/components/simulations/        interactive models, grouped by subject
-src/lib/domain/                    framework-independent mathematics and physics
-src/lib/visualization/             canvas and plotting infrastructure
-src/lib/platform/                  analytics, consent, progress, and URL safety
-src/theme/                         focused Docusaurus integration and overrides
-src/pages/                         standalone route entry points
-src/css/custom.css                 tokens, typography, and theme overrides
-scripts/                           architecture, content, security, and size checks
-templates/                         copyable source templates for contributions
-static/                            assets copied directly into the built site
-docusaurus.config.ts               site, plugin, navigation, math, and PWA config
-sidebars.ts                        autogenerated curriculum sidebar
+docs/                       MDX lessons, grouped by module
+src/components/simulations/ interactive models and visualizations
+src/components/kit/         shared lesson and demo components
+src/lib/domain/             testable mathematics and physics
+src/lib/platform/           progress, consent, analytics, and URL utilities
+scripts/                    repository quality checks
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the dependency rules, the purpose of
-each directory, and step-by-step extension paths.
+For dependency boundaries and extension paths, read
+[ARCHITECTURE.md](ARCHITECTURE.md). For simulation conventions, read the
+[simulation guide](src/components/simulations/README.md).
 
-## Curriculum
+## Contribute
 
-The current curriculum is organized as a filesystem-driven Docusaurus sidebar:
+Corrections and lesson proposals are welcome. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md), then follow the repository's
+[Code of Conduct](CODE_OF_CONDUCT.md) and [governance](GOVERNANCE.md).
 
-- Preface: Why Math Matters
-- Module 1: Software Architecture & Loop Optimization
-- Module 2: Motor Dynamics & Control Theory
-- Module 3: Signal Processing
-- Module 4: Path Following & Kinematics
-- Module 5: State-Space Control
-- Elective case study: Drag-Aware Launcher
-- Advanced Topics & Misc
-- References & Resources
+AI assistance is used for editorial and implementation work; technical claims,
+derivations, and Java examples are checked before publication.
 
-Core topics include calculus, linear algebra, differential equations, state space, state machines, command-based programming, filtering, sensor fusion and Kalman filtering, DC motor modeling, feedforward, PID/PDFL, voltage compensation, motion profiling, mecanum kinematics, pure pursuit, splines, guided vector fields, RK4 integration, air drag, and trajectory simulation.
-
-## Lesson Standard
-
-Every substantive lesson should follow the Control Lab teaching pattern:
-
-1. Metadata and abstract: frontmatter plus a concise `<Abstract>`.
-2. Real engineering context: an FTC failure, mechanism behavior, or hardware/software pain point.
-3. Visual intuition: a live React demo or illustration before the derivation.
-4. Mathematical rigor: equations in `$...$` or `$$...$$`, with variables explained.
-5. Engineering implementation: clean Java, interfaces where useful, no blocking sleeps, clear telemetry.
-6. Hardware reality: Docusaurus admonitions for constraints that matter on the real robot.
-
-Lessons are MDX. Shared components registered in `src/theme/MDXComponents.tsx` can be used directly:
-
-```mdx
-<Abstract>...</Abstract>
-<Difficulty level="Medium" />
-<Problem>
-## The engineering problem
-...
-</Problem>
-<Theory>
-## The model
-...
-</Theory>
-<Deploy>
-## The implementation
-...
-</Deploy>
-<Callout type="math" title="...">...</Callout>
-<JavaCode league="FTC" label="...">{`...`}</JavaCode>
-```
-
-Use native Docusaurus admonitions for hardware reality:
-
-```mdx
-:::warning
-Encoder velocity is a derivative, so it amplifies noise.
-:::
-
-:::tip
-Measure loop time before tuning gains.
-:::
-```
-
-## Interactive Demos
-
-Interactive widgets live under `src/components/simulations/<domain>/` as
-standalone `.tsx` files. A lesson imports the widget at the top of its MDX file
-and renders it before the math section.
-
-Guidelines:
-
-- Keep browser-only APIs inside `useEffect` or event handlers.
-- Prefer typed props, typed state, and small helper functions.
-- Use the kit components in `src/components/kit/Demo.tsx` for consistent controls.
-- Make controls useful: sliders for numeric parameters, toggles for binary modes, buttons for explicit actions.
-- Keep canvas and SVG demos readable in both light and dark Docusaurus themes.
-- Respect reduced-motion preferences when animation is decorative.
-
-Deterministic equations and physical models belong in `src/lib/domain/`, where
-they can be unit tested without rendering a React component. See
-[the simulation guide](src/components/simulations/README.md) for the directory
-contract.
-
-## Design Direction
-
-Control Lab should feel like serious technical documentation:
-
-- Minimal, high-contrast, accessible, and calm.
-- No gamer/hacker visual language.
-- No neon green, matrix backgrounds, noisy gradients, or decorative clutter.
-- Prefer diagrams, plots, and live systems over generic illustrations.
-- Use icons and UI controls where they clarify function, not as decoration.
-- Keep typography and spacing consistent across pages.
-
-## Deployment
-
-GitHub Actions builds and deploys the site on every push to `main`:
-
-```text
-.github/workflows/deploy.yml
-```
-
-The repository must have GitHub Pages configured once:
-
-```text
-Settings -> Pages -> Build and deployment -> Source: GitHub Actions
-```
-
-The configured project site is:
-
-```text
-https://stoicescueric.github.io/control-lab/
-```
-
-For a fork or renamed repository, update `ORG` and `REPO` in `docusaurus.config.ts` — `url`,
-`baseUrl`, and the edit links are derived from them. Also replace `ANALYTICS_ID` in
-`src/lib/platform/analytics.ts`, or your fork will report into this project's analytics property.
-
-## Security and Privacy
-
-GitHub Actions are pinned to immutable commits, deployment authority is isolated to the Pages job,
-dependency install scripts are disabled in CI, and CodeQL, dependency review, Dependabot, and built
-output checks cover changes continuously.
-
-Google Analytics is optional and is not requested until a visitor grants consent. Fonts and KaTeX are
-self-hosted, and YouTube videos are click-to-load privacy-enhanced embeds. See the
-[security policy](SECURITY.md) for private reporting.
-
-## Development Process
-
-Curriculum decisions are author-led. Technical claims, derivations, and Java examples are checked
-against cited sources, unit tests, and the behavior of the interactive models before publication.
-AI assistance is used for implementation and editorial iteration, and is never treated as a source.
-
-## Contributing
-
-Community lessons and corrections are welcome through pull requests. New
-substantive lessons should start with a proposal, and every accepted change
-requires maintainer approval before merge.
-
-- [CONTRIBUTING.md](CONTRIBUTING.md): human workflow and authoring standards.
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): expected conduct, and how to report a problem.
-- [GOVERNANCE.md](GOVERNANCE.md): maintainer authority and merge policy.
-- [ARCHITECTURE.md](ARCHITECTURE.md): repository boundaries and extension paths.
-
-## License
-
-Control Lab is released under the [MIT License](LICENSE).
+Security reports belong in [SECURITY.md](SECURITY.md). The project is released
+under the [MIT License](LICENSE).
