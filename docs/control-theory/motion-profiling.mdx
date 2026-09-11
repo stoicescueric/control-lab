@@ -19,6 +19,15 @@ every instant — lets feedforward do the heavy lifting and leaves feedback only
 giving fast moves that don't overshoot.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+Start with [PID Control](./pid.mdx) and [Feedforward](./feedforward.mdx). You need to recognize
+position, velocity, acceleration, and physical units; this page supplies the profile mathematics.
+Do not begin by copying a trapezoid’s limits—measure a safe maximum velocity and acceleration on the
+real mechanism first.
+
+</Admonition>
+
 [PID](./pid.mdx) and [feedforward](./feedforward.mdx) answer "what command *now*?" Motion profiling answers
 the question before it: *what should the target even be at this instant?* Instead of commanding the final
 position and hoping, you command a moving target that respects the mechanism's real limits.

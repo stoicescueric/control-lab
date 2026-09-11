@@ -19,6 +19,15 @@ The intercept of the fit is $k_S$, the slope is $k_V$, and a separate accelerati
 the same procedure FRC's SysId tool automates.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+Read [Feedforward](./feedforward.mdx) first, then [Signals & Noise](../signal-processing/signals.mdx)
+for the difference between repeatable variation, random noise, and bias. This lesson uses
+least-squares fitting, but you can begin by planning a safe voltage sweep and logging units correctly;
+the viewer explains the regression steps.
+
+</Admonition>
+
 The [feedforward](./feedforward.mdx) lesson left one thing on a promissory note: *where do $k_S$, $k_V$,
 and $k_A$ come from?* Guessing them, or copying another team's, gives a model that is wrong by an unknown
 amount — and a wrong model means feedback has to cover the gap, which was the whole problem feedforward
