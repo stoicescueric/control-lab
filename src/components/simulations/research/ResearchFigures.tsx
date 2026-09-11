@@ -30,12 +30,24 @@ export function ResearchFigure({
 }
 export function Workflow() {
   const steps = [
-    ['Predict flight', 'Speed and angle become a descending rim crossing.'],
-    ['Test the opening', 'The ball’s center must clear both lips.'],
-    ['Compare nearby shots', 'Choose the command with the most tolerance.'],
-    ['Calibrate the launcher', 'Distance becomes wheel, hood, and flight-time settings.'],
-    ['Compensate motion', 'Velocity and flight time shift a virtual target.'],
-    ['Compare workflows', 'Balance model assumptions against physical trial count.'],
+    ['Model one shot', 'Exit speed and angle become a descending rim crossing and flight time.'],
+    ['Classify entry', 'The ball’s center must clear both the front and rear lips.'],
+    [
+      'Search nearby commands',
+      'Choose a scoring command that survives the largest declared error box.',
+    ],
+    [
+      'Calibrate hardware',
+      'Convert the selected release state into wheel, hood, and time-of-flight tables.',
+    ],
+    [
+      'Compensate motion',
+      'Shift a virtual target using robot velocity, release delay, and flight time.',
+    ],
+    [
+      'Gate and validate',
+      'Release only from a valid solution and diagnose entry separately from retention.',
+    ],
   ];
   return (
     <ol className={styles.pipeline}>

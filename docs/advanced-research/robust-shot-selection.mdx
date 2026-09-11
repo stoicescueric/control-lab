@@ -1,21 +1,30 @@
 ---
-title: Choose a Shot That Tolerates Errors
-description: "Use a speed-angle map to compare nominal scoring shots and select the command with the highest bounded perturbation coverage."
+title: Choose a Shot with Error Margin
+description: "Build an offline selector that ranks scoring commands by their tolerance to declared speed and angle errors."
 sidebar_position: 2
 tags: [research, robustness, trajectory-generation, optimization]
 ---
 
 import RobustSelection from '@site/src/components/simulations/research/RobustSelection';
 
-# Choose a Shot That Tolerates Errors
+# Choose a Shot with Error Margin
 
 <Difficulty level="Medium" />
 
 <Abstract>
-The final paper's selector asks which nominal scoring command survives the largest fraction of a
-declared speed–angle error box. We will follow that decision from the event map to the Python search,
-then examine why its simulated coverage can differ from the robot's measured entry rate.
+The selector asks which nominal scoring command survives the largest fraction of a declared
+speed–angle error box. This lesson turns that rule into an offline search, defines the artifact the
+robot receives, and explains why simulated coverage differs from measured entry rate.
 </Abstract>
+
+<Admonition type="note" title="Builder outcome and prerequisites">
+
+Build an offline selector that accepts a reusable rim-event map, target distance, measured command
+envelope, and declared speed-angle error bounds. It returns an eligible nominal command, success
+count, tested count, and bounds. The full optimization uses a two-dimensional grid and prefix sums;
+the rule itself is simply “count nearby entries and keep the largest eligible count.”
+
+</Admonition>
 
 A recovered flywheel can still release slightly faster or slower than expected. Compression changes, the hood settles differently, and the ball leaves at a slightly different angle. We want to compare commands under those variations before spending practice time on the robot.
 
@@ -65,6 +74,16 @@ $(0.9,2.0^\circ)$. Relative to the deployed box, selected speed changed by at mo
 angle by at most 0.7°. This is evidence that the command trend survives those tested choices,
 not proof that every possible uncertainty model gives the same answer.
 
+## Build it in two passes
+
+Start with a correctness version: visit each nominal command, reject nominal misses, enumerate every
+speed-angle perturbation, and count entries. Keep this version as an oracle for small grids.
+
+Then optimize the same calculation. Cache the rim event for every speed-angle pair, turn those events
+into an entry mask for the requested distance, and use a prefix sum to count rectangular error boxes.
+Both versions must select the same command and apply the same tie rule. This search runs on a laptop;
+the FTC Control Hub only reads the resulting calibration artifact.
+
 ## Reuse the flight calculation
 
 For fixed physical parameters, the descending crossing $X(v,\theta)$ depends on the command, not on where we place the goal. Moving the goal changes only the entry interval. The experiment therefore calculates the expanded event map once, then applies the new interval to the cached crossings.
@@ -101,7 +120,7 @@ The browser adaptation evaluates the same objective with the paper's rounded geo
 worker so integrating the event map does not block the controls. The Python program uses NumPy
 vectorization; its millisecond timings are not a benchmark of this browser or an FTC Control Hub.
 
-## Java: compare scoring candidates
+## Reference logic: rank candidates offline
 
 Visit commands in ascending speed, then ascending angle. Updating only for a strictly larger count preserves the tie rule:
 
@@ -118,6 +137,13 @@ Visit commands in ascending speed, then ascending angle. Updating only for a str
 
 Every candidate must use the same number of perturbations. A null result means no nominal scoring command was found; it is not a request to extrapolate the motor command.
 
+### Export the evidence with the command
+
+For each target distance, save the selected exit speed and angle, rim-event time, successful and
+tested perturbation counts, speed-angle bounds, geometry revision, and model revision. Also save
+whether any input was clamped and whether the nominal shot was valid. Keep the legacy `p_make` name
+only when compatibility requires it; label the value as coverage rather than a probability.
+
 <Exercise title="Which command wins?">
 A and B both enter and each has 1,767 perturbations. A succeeds on 410 and B on 494. C succeeds on 520, but its nominal trajectory misses. Which should the selector return?
 <Solution>
@@ -125,4 +151,4 @@ B. C is ineligible because the nominal command misses. Among the eligible comman
 </Solution>
 </Exercise>
 
-**Next:** [connect the chosen shot to the launcher’s calibrated commands](./launcher-calibration.mdx).
+**Next:** [convert the model into robot commands](./launcher-calibration.mdx).

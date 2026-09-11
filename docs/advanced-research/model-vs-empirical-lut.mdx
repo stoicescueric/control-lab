@@ -1,23 +1,33 @@
 ---
-title: Validate the Complete Shooting System
-description: "Interpret the final paper's entry and retention evidence, compare model-guided and empirical calibration, and design a reproducible follow-up campaign."
+title: Test, Diagnose, and Hand Off
+description: "Validate the shooter in stages, use failure categories to choose the next experiment, and preserve a reproducible handoff."
 sidebar_position: 5
 tags: [research, calibration, lookup-table, experimentation, tradeoffs]
 ---
 
 import StrategyComparison from '@site/src/components/simulations/research/StrategyComparison';
 
-# Validate the Complete Shooting System
+# Test, Diagnose, and Hand Off
 
 <Difficulty level="Medium" />
 
 <Abstract>
-The complete system must be judged with physical launches. This lesson reads the final paper's
-development, controlled, and operational evidence, then compares two ways to build the calibration
-tables. The goal is to choose the next experiment from the observed failure mode.
+The complete system must be judged with physical launches. This lesson gives an FTC team a staged
+validation plan, uses the paper as a worked record, and defines the evidence the next programmers
+need to reproduce, diagnose, and improve the shooter.
 </Abstract>
 
-## What the final paper actually measured
+## Validate in five stages
+
+| Stage | What to test | Exit criterion |
+|---|---|---|
+| Software | Event solver, selector oracle, bounded interpolation, frame signs, and solver status | Known cases pass and optimized selection matches exhaustive selection. |
+| Bench | Wheel tracking, hood repeatability, recovery, and feeder delay | Ready bands and delay come from synchronized measurements. |
+| Stationary field | Randomized distance sweep with untouched validation balls | Entry and retention meet a declared target across the calibrated range. |
+| Controlled motion | Alternate compensation OFF and ON inside speed and direction blocks | Motion improves entry without changing zero-velocity behavior. |
+| Competition | Entry, retention, gate rejections, and release-state telemetry | Failures can be assigned to geometry, retention, calibration, state estimation, or readiness. |
+
+## Use the paper as a worked validation record
 
 | Record | Target entries | Retained scores | Interpretation |
 |---|---:|---:|---|
@@ -162,6 +172,11 @@ Publish the command tables with units, calibrated range, robot commit, simulator
 controller configuration, release-delay definition, and the criterion used to label a shot.
 Preserve raw launch counts and distinguish tuning trials from held-out validation.
 
+The handoff should also include the exact code commit, calibration revision, timestamp source,
+coordinate-frame and sign convention, LUT bounds and clamping behavior, complete release-gate logic,
+and known failure cases. A table of final values without those contracts is difficult to audit and
+easy to misuse on the next robot.
+
 For moving shots, record time-synchronized pose, velocity, acceleration, virtual distance, TOF
 iterations, requested/measured wheel speed, hood setting, and the physical release event. The final
 paper's SOTM record lacks this shot-level telemetry; this is a proposed improvement, not reconstructed
@@ -171,6 +186,6 @@ The numerical source is public, but the final paper's supplementary audit archiv
 Control Lab. Its DOI paragraph still describes a future authenticated deposit. Link a verified
 public archive when it exists; do not invent a DOI or claim all experiments are independently replayable.
 
-**Sources:** final paper §§7–11 and the [versioned source map](./index.mdx#freeze-the-version-before-interpreting-a-result).
+**Sources:** final paper §§7–11 and the [versioned source map](./index.mdx#freeze-the-source-before-comparing-results).
 
-**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper).
+**Finish:** [return to the elective overview and research paper](./index.mdx#research-paper-and-source).
