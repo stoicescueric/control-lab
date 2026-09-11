@@ -21,6 +21,15 @@ closest-point form you'll code, and the implicit level-set form used in the proo
 endpoint speed caps, and ship a working FTC follower.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+Begin with [Pure Pursuit](./pure-pursuit.mdx) and [Splines](./quintic-splines.mdx), then confirm that
+your localization meets the [Pose Estimation Contract](./pose-estimation-contract.mdx). The closest-point
+implementation is the starting point; implicit curves, gradients, and convergence proofs are optional
+mathematical depth.
+
+</Admonition>
+
 [Pure pursuit](./pure-pursuit.mdx) follows a path by chasing a carrot a fixed distance ahead. It works, but
 it tracks the *carrot*, not the path, so it cuts corners and its behavior swings with the lookahead
 distance. Guided vector fields reframe following entirely: instead of a point to chase, build a field of

@@ -1,7 +1,7 @@
 ---
 title: RST Pole Placement
 description: Turn measured feedforward constants into a velocity controller by asking for a closed-loop time constant in seconds instead of guessing three gains, then solving the controller polynomials for it.
-sidebar_position: 6.5
+sidebar_position: 4
 tags: [rst, pole-placement, discrete-control, velocity-control, diophantine, feedforward]
 ---
 
@@ -14,15 +14,32 @@ import RstPolePlacement from '@site/src/components/simulations/control-theory/Rs
 <Abstract>
 An RST controller is discrete pole placement written as three polynomials, $R$, $S$ and $T$, acting on
 the measurement, the past command, and the reference. Instead of three gains with no physical meaning
-it asks for a description of the plant, which [system identification](./system-identification.mdx)
+it asks for a description of the plant, which [system identification](../control-theory/system-identification.mdx)
 already measured, and a description of the response you want, expressed as a time constant in seconds,
 then solves for its own coefficients from those.
 </Abstract>
 
-[System identification](./system-identification.mdx) ends with $k_S$, $k_V$ and $k_A$ measured from
+[System identification](../control-theory/system-identification.mdx) ends with $k_S$, $k_V$ and $k_A$ measured from
 your own robot. A PID loop then throws most of that away: it takes the error and asks you for three
 more numbers, tuned by feel, whose units nobody states. The model you just measured is a complete
 description of the mechanism, and a controller can be solved for rather than tuned.
+
+<Admonition type="note" title="Prerequisites and a starting path">
+
+RST is a discrete-time polynomial controller, so it is a **next step**, not a PID replacement for a
+first mechanism. Start in this order:
+
+1. [System Identification](../control-theory/system-identification.mdx): measure $k_S$, $k_V$, and
+   $k_A$ from your mechanism.
+2. [Feedforward](../control-theory/feedforward.mdx): see how those constants describe the plant.
+3. [From Math to a Loop](../software-architecture/discretization.mdx): understand sampled time,
+   measured $\Delta t$, and one-loop delay.
+
+You should recognize a first-order time constant and be comfortable reading $q^{-1}$ as “one loop
+ago.” If not, finish those pages first; the RST derivation will then have a physical meaning instead
+of becoming polynomial manipulation.
+
+</Admonition>
 
 <Problem>
 
@@ -233,7 +250,7 @@ u_k = u_{k-1} + t_0\bigl(v^{*}_k - p_2 v^{*}_{k-1}\bigr) - r_0 v_k - r_1 v_{k-1}
 $$
 
 The previous output *is* the integrator state. That single observation is worth more than it looks,
-because it makes [anti-windup](./actuator-saturation-anti-windup.mdx) free: clamp the value before
+because it makes [anti-windup](../control-theory/actuator-saturation-anti-windup.mdx) free: clamp the value before
 storing it and a saturated axis cannot accumulate a command it will later have to unwind. There is no
 separate integral term to freeze.
 
@@ -324,7 +341,7 @@ calculation is the value the implemented controller actually uses.
 
 The controller returns volts, because volts are what $k_V$ and $k_S$ were measured in. Dividing by
 the battery is the last thing that happens, at the hardware boundary, for the reason
-[Voltage Compensation](./voltage-compensation.mdx) gives: a controller working in duty cycle silently
+[Voltage Compensation](../control-theory/voltage-compensation.mdx) gives: a controller working in duty cycle silently
 retunes itself as the pack sags.
 
 <JavaCode league="FTC" label="Volts to wheel power, scaled rather than clipped">{`void applyVolts(double forwardVolts, double turnVolts) {
@@ -395,11 +412,11 @@ differencing window on a 20 ms loop leaves less headroom than the loop rate alon
 - Åström, K. J. and Wittenmark, B. (1997). *Computer-Controlled Systems: Theory and Design*, 3rd
   edition. Prentice Hall. Polynomial pole-placement design and the exact discretisation of a
   first-order lag.
-- [System Identification](./system-identification.mdx): where $\tau$ and $k_{dc}$ come from, and why a
+- [System Identification](../control-theory/system-identification.mdx): where $\tau$ and $k_{dc}$ come from, and why a
   fit that scores well can still be unusable.
-- [Feedforward](./feedforward.mdx): the same three constants, and what $k_S$ is doing outside the
+- [Feedforward](../control-theory/feedforward.mdx): the same three constants, and what $k_S$ is doing outside the
   linear plant.
 - [State Feedback](../state-space-control/state-feedback.mdx): the same idea of placing closed-loop
   poles, written in state space rather than in polynomials.
-- [Actuator Saturation and Anti-Windup](./actuator-saturation-anti-windup.mdx): what the clamped
+- [Actuator Saturation and Anti-Windup](../control-theory/actuator-saturation-anti-windup.mdx): what the clamped
   `previousOutput` is standing in for.

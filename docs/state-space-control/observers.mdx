@@ -18,6 +18,15 @@ measurement, and feeding the difference back into the state estimate. The contro
 coherent estimate instead of a raw position plus a noisy derivative.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+Start with [State-Space Models & State Feedback](./state-feedback.mdx): you need to know what $A_d$,
+$B_d$, $C$, state, input, and output mean. Then use the scalar
+[Kalman Filter](../signal-processing/kalman.mdx) to build intuition for prediction, innovation, and
+correction. You do not need to derive an observer gain by hand before reading this page.
+
+</Admonition>
+
 <Problem>
 
 ## Filtering position and differentiating it solves the wrong problem

@@ -20,6 +20,17 @@ minimises variance, all while tracking its own uncertainty. This lesson derives 
 cycle and the gain that decides how far to trust the model versus the measurement.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+You do **not** need a probability course before starting. Begin with
+[Signals & Noise](./signals.mdx) to learn mean, standard deviation, and what a sensor measurement
+actually contains; then read the [Complementary Filter](./complementary.mdx) for the predict/correct
+idea with a fixed blend. Here, a **Gaussian** is simply the bell-shaped uncertainty model summarized by
+its mean and variance. The matrix form later in the lesson is optional depth; first make the one-state
+predict/correct loop work.
+
+</Admonition>
+
 The Kalman filter is the optimal linear state estimator when the model is linear, the noise is
 Gaussian, the covariances are honest, and that noise is **zero-mean and uncorrelated from loop to
 loop**: given a motion model and noisy measurements, it produces the minimum-variance estimate of the

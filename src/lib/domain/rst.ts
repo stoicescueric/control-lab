@@ -1,7 +1,7 @@
 /* RST pole placement on a first-order plant, and the plant itself.
 
    Pure model, no framework and no rendering. The lesson at
-   docs/control-theory/rst-pole-placement.mdx derives every equation here, and the
+   docs/advanced-topics/rst-pole-placement.mdx derives every equation here, and the
    simulation in src/components/simulations/control-theory/ only drives it. */
 
 export interface FirstOrderPlant {

@@ -1,7 +1,7 @@
 ---
 title: Advanced Topics & Misc
-description: "Optional deep-dives that extend the core curriculum: inverse kinematics with Jacobians, Pedro Pathing internals, and take-back-half flywheel control."
-tags: [advanced, optional, theory, inverse-kinematics, pedro-pathing, takeback-half]
+description: "Optional deep-dives that extend the core curriculum: Jacobian inverse kinematics, RST pole placement, Pedro Pathing internals, and take-back-half flywheel control."
+tags: [advanced, optional, theory, inverse-kinematics, rst, pole-placement, pedro-pathing, takeback-half]
 ---
 
 # Advanced Topics & Misc
@@ -24,10 +24,14 @@ and every page below names the core lesson it builds on.
   heading control, and completion constraints. Extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx).
 - **[Take-Back-Half](./takeback-half.mdx)** - the one-line upgrade that turns a chattering bang-bang
   flywheel into a steady, ripple-free hold. Extends [Bang-Bang Control](../control-theory/bang-bang.mdx).
+- **[RST Pole Placement](./rst-pole-placement.mdx)** - solve a sampled velocity controller from a
+  measured first-order plant and a stated response time. Extends
+  [System Identification](../control-theory/system-identification.mdx) and
+  [From Math to a Loop](../software-architecture/discretization.mdx).
 
 <Admonition type="tip" title="Read the core lesson first">
 
-Each page assumes you have read the lesson it extends. They are written as the "next layer," not as
-standalone introductions.
+Each page begins with its exact prerequisite path. Follow those links before tackling a derivation;
+these pages are written as the “next layer,” not as standalone introductions.
 
 </Admonition>

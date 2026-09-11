@@ -20,6 +20,15 @@ Pure pursuit turns a planned path into smooth steering with one geometric rule: 
 requires and shows how the look-ahead distance trades tracking tightness against smoothness.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+First meet the [Pose Estimation Contract](./pose-estimation-contract.mdx) and
+[Mecanum Kinematics](./mecanum-kinematics.mdx), then read [Splines](./quintic-splines.mdx) to understand
+the curve being followed. This lesson derives curvature, but the first pass only requires a field pose,
+a path, and robot-relative drive commands.
+
+</Admonition>
+
 <Admonition type="info" title="Reading map for the attached Team 1712 whitepaper">
 
 This lesson's adaptive extension follows Team 1712 DAWGMA's *Implementation of the Adaptive Pure

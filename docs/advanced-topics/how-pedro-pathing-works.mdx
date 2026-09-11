@@ -21,6 +21,15 @@ mental model: projection, path progress, cross-track correction, centripetal fee
 control, and completion logic.
 </Abstract>
 
+<Admonition type="note" title="Prerequisites and a starting path">
+
+First implement the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx), then
+read [Guided Vector Fields](../path-following/guided-vector-fields.mdx) and
+[Mecanum Kinematics](../path-following/mecanum-kinematics.mdx). The calculus and whitepaper notation
+are optional: start by naming the robot-frame command, pose, tangent, and cross-track error.
+
+</Admonition>
+
 ## Builder checkpoint: four vectors, then tune by symptom
 
 This page is an **architecture explainer**, not drop-in Pedro source. Each loop can be understood as four
