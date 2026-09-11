@@ -29,6 +29,11 @@ idea with a fixed blend. Here, a **Gaussian** is simply the bell-shaped uncertai
 its mean and variance. The matrix form later in the lesson is optional depth; first make the one-state
 predict/correct loop work.
 
+**Math used:** mean, variance, and a bell-shaped Gaussian in the scalar route; matrix multiplication and
+transpose in the matrix route. Read [Probability, Variance & Gaussians](../preface/why-math-matters/probability-variance.mdx)
+if those words are new. The Extended Kalman Filter section additionally uses **partial derivatives** and
+**Jacobians**; it is optional after the linear filter.
+
 </Admonition>
 
 The Kalman filter is the optimal linear state estimator when the model is linear, the noise is
@@ -305,6 +310,14 @@ the real process and sensor noise is the engineering of applying a Kalman filter
 </Theory>
 
 ## Introduction to the Extended Kalman Filter
+
+<Admonition type="note" title="Extra prerequisite for the EKF extension">
+
+The next section needs [Calculus](../preface/why-math-matters/calculus.mdx) for partial derivatives and
+[Linear Algebra](../preface/why-math-matters/linear-algebra.mdx) for Jacobian matrices. Stop here if the
+linear Kalman loop is your goal; it is complete and practical on its own.
+
+</Admonition>
 
 A linear Kalman filter predicts with matrices $A$ and $B$ and predicts a measurement with matrix $H$.
 An EKF allows nonlinear functions instead:

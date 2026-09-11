@@ -1,0 +1,75 @@
+---
+title: Transfer Functions & Poles
+description: A practical bridge to transfer functions, one-pole response, sampled delay, and the pole vocabulary used by advanced robot controllers.
+sidebar_position: 5.5
+tags: [preface, transfer-function, poles, discrete-control, rst]
+---
+
+# Transfer Functions & Poles
+
+<Difficulty level="Medium" />
+
+<Abstract>
+A transfer function is a compact description of how an input becomes an output over time. A pole is the
+part of that description that sets how quickly a response fades or settles. This bridge gives those
+words a physical meaning before an advanced controller uses them.
+</Abstract>
+
+## Start with a motor response you can see
+
+Apply a step in voltage to an unloaded flywheel. Its speed does not jump to the final value. It rises
+quickly at first, then slows as it approaches the new steady speed. A first-order model writes that as
+
+$$
+\tau\frac{dv}{dt}+v=k u.
+$$
+
+Here, $u$ is input voltage, $v$ is speed, $k$ is the final speed per volt, and $\tau$ is the **time
+constant**. After one time constant, the response has completed about 63% of its total change. A smaller
+$\tau$ means a faster mechanism.
+
+The **transfer function** is another notation for that same input-to-output rule. For this one-pole
+mechanism, it has one denominator term that controls the settling rate. You do not need to manipulate
+the fraction to use the idea: the denominator describes the mechanism's own dynamics, while the
+controller changes the closed-loop dynamics you observe on the robot.
+
+## What a pole means on a robot
+
+A **pole** is a number associated with a response mode. For a stable first-order system, it describes
+an error that shrinks every instant or every loop. In a sampled controller, the same idea appears as
+
+$$
+e_k = p e_{k-1}, \qquad p=e^{-\Delta t/\tau}.
+$$
+
+Here, $e_k$ is the remaining error this loop, $\Delta t$ is the measured loop time, and $p$ is the
+discrete-time pole. When $0<p<1$, the error shrinks. A pole closer to zero settles faster; one close to
+one settles slowly. A pole outside that stable range makes the response grow or alternate instead of
+dying out.
+
+That is all *pole placement* means in the first-order case: choose a stable closed-loop pole that
+matches a desired time constant, then solve the controller coefficients that produce it.
+
+## The sampled delay in RST notation
+
+Advanced discrete-control lessons often write $q^{-1}$. Read it as a memory operation:
+
+$$
+q^{-1}v_k=v_{k-1}.
+$$
+
+It means “the value from one measured loop ago,” not a new physical quantity. A polynomial such as
+$1-aq^{-1}$ is just a compact way to say “combine this value and the previous one.” The RST lesson
+uses this notation to describe a controller with memory.
+
+## Ready for the next step
+
+You are ready to read [RST Pole Placement](../../advanced-topics/rst-pole-placement.mdx) when you can
+say, in plain language:
+
+- a time constant describes response speed;
+- a stable discrete pole makes error shrink each loop; and
+- $q^{-1}$ means one-loop delay.
+
+The RST lesson then adds controller polynomials and the coefficient solve. It labels those derivations
+as advanced; you do not need complex-plane analysis for the first-order FTC example.

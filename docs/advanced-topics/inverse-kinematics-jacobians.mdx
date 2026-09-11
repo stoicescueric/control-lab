@@ -27,6 +27,11 @@ the two-link forward equations and the difference between task space $(x, y)$ an
 $(\theta_1, \theta_2)$. The arm widget below deliberately reuses the closed-form solver as a visual
 prerequisite recap; the numerical correction is calculated in the text, not animated by that widget.
 
+**Math used:** trigonometry for the two-link model; **partial derivatives** to build each Jacobian entry;
+and matrix-vector multiplication and transpose for one correction step. Damped least squares, matrix
+inverses, and gradient descent are later optional depth. Use the supplied small solver before trying to
+derive those operations by hand.
+
 </Admonition>
 
 The closed-form two-link solution is beautiful because it collapses into one triangle. Real mechanisms
