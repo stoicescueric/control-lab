@@ -11,11 +11,23 @@ person.
 
 ## How Contributions Are Accepted
 
-All published changes go through a pull request and require maintainer approval.
-The repository's `CODEOWNERS` file automatically requests `@stoicescueric`.
-The one-time maintainer setup activates a `main`-branch ruleset so that
-code-owner approval is required before merge. See
-[GOVERNANCE.md](GOVERNANCE.md) for the decision and merge policy.
+All published changes go through a pull request. The active `main` ruleset
+requires successful CI, dependency review, resolved conversations, and blocks
+force pushes and branch deletion. `CODEOWNERS` requests `@stoicescueric`.
+
+An author cannot approve their own pull request. Until another qualified code
+owner is added, the ruleset deliberately does not require an unavailable
+approval. For substantive changes, seek an independent review before merging;
+the maintainer setup guide explains how to make that review mandatory once a
+second code owner is available.
+
+See [GOVERNANCE.md](GOVERNANCE.md) for the repository's decision and merge
+policy.
+
+Use a focused branch name such as `docs/observer-example`,
+`feat/launcher-model`, `fix/encoder-units`, or `chore/dependency-policy`. Delete
+the branch after its pull request is merged. Run `git fetch --prune` regularly
+to remove stale remote-tracking branches from your checkout.
 
 For a substantive new lesson or simulation:
 
