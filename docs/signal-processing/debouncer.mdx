@@ -1,0 +1,204 @@
+---
+title: Debouncer
+description: Make a digital sensor change only after it has remained changed for a measured time, so switch bounce and brief optical glitches do not become robot actions.
+sidebar_position: 2
+tags: [filter, debouncer, digital-input, limit-switch, ftc]
+---
+
+# Debouncer
+
+<Difficulty level="Easy" />
+
+<Abstract>
+A debouncer filters a boolean signal, not a number. It accepts a new `true` or `false` value only
+after that value has persisted for a chosen time. Use it for a noisy limit switch, beam break, or
+digital sensor when a brief transition must not trigger an action.
+</Abstract>
+
+A low-pass filter answers “what number should I believe?” A debouncer answers “has this event really
+happened?” It is small, cheap, and one of the best protections against a robot acting on a one-loop
+glitch.
+
+<Problem>
+
+## One press can look like many
+
+A physical switch does not close cleanly. Its contacts can vibrate between open and closed for a few
+milliseconds. Optical and magnetic sensors can also flicker because of electrical noise, a reflective
+surface, or a mechanism passing their edge. If an intake starts a state transition on every raw edge,
+one real event can look like several events.
+
+<Analogy>
+<strong>A receptionist waits for a complete answer.</strong> If someone says “yes—no—yes” in quick
+succession, the receptionist does not act on the first syllable. They wait until the answer has stayed
+the same long enough to be credible.
+</Analogy>
+
+</Problem>
+
+<Theory>
+
+## Require an uninterrupted dwell time
+
+Let $u(t)$ be the raw boolean input and $y(t)$ the debounced output. When $u$ differs from $y$, start
+a timer. Change $y$ only if the input stays at that new value for the full debounce time $T_d$:
+
+$$
+y(t) \leftarrow u(t) \quad \text{only when } u \text{ has been unchanged for at least } T_d
+$$
+
+Every bounce resets the timer. The resulting output has an intentional delay of up to $T_d$, but it
+never toggles on a shorter pulse.
+
+| Raw input | Has it stayed changed for $T_d$? | Output |
+|---|---:|---|
+| `false → true` for 8 ms, then `false` | No | stays `false` |
+| `false → true` for 50 ms with $T_d = 30$ ms | Yes | becomes `true` after 30 ms |
+| already `true` | n/a | stays `true` |
+
+### Choose which transition needs proof
+
+WPILib names three useful modes. They describe the **output transition that waits**:
+
+| Mode | Waits before | Changes immediately | FTC example |
+|---|---|---|---|
+| Rising | `false → true` | `true → false` | confirm a beam break sees a pixel |
+| Falling | `true → false` | `false → true` | confirm a released limit switch is truly released |
+| Both | either transition | neither | make the displayed state stable in both directions |
+
+Choose the transition whose false trigger is costly. A rising-only debouncer is often right for a
+beam break: wait before declaring an object present, but clear the state as soon as it leaves. Use
+both edges only when the extra delay in both directions is safe.
+
+<Callout type="warn" title="A debouncer is not a one-shot.">
+It produces a stable **level**. To run an action once, detect the debounced edge by comparing this
+loop’s output with the previous loop’s output. Do not repeatedly start the action while the output
+remains `true`.
+</Callout>
+
+</Theory>
+
+<Deploy>
+
+## A time-based FTC implementation
+
+Pass a monotonic timestamp in seconds on every robot loop. The constructor takes the sensor's current
+reading so startup does not invent an edge. This implementation is time-based, so a slow loop does not
+quietly make a 30 ms setting mean a fixed number of iterations.
+
+<JavaCode league="FTC" label="Debounce a boolean input with rising, falling, or both edges">{`public final class BooleanDebouncer {
+    public enum Mode { RISING, FALLING, BOTH }
+
+    private final double debounceSeconds;
+    private final Mode mode;
+    private boolean output;
+    private boolean candidate;
+    private double candidateSinceSeconds;
+
+    public BooleanDebouncer(boolean initialValue, double debounceSeconds, Mode mode) {
+        if (debounceSeconds < 0.0) {
+            throw new IllegalArgumentException("debounceSeconds must be nonnegative");
+        }
+        this.output = initialValue;
+        this.candidate = initialValue;
+        this.debounceSeconds = debounceSeconds;
+        this.mode = mode;
+    }
+
+    public boolean update(boolean input, double nowSeconds) {
+        if (input == output) {
+            // The candidate disappeared before it was accepted: cancel its timer.
+            candidate = output;
+            candidateSinceSeconds = nowSeconds;
+            return output;
+        }
+
+        if (input != candidate) {
+            candidate = input;
+            candidateSinceSeconds = nowSeconds;
+        }
+
+        if (!shouldWait(output, candidate)
+                || nowSeconds - candidateSinceSeconds >= debounceSeconds) {
+            output = candidate;
+            candidateSinceSeconds = nowSeconds;
+        }
+        return output;
+    }
+
+    private boolean shouldWait(boolean from, boolean to) {
+        return switch (mode) {
+            case BOTH -> true;
+            case RISING -> !from && to;
+            case FALLING -> from && !to;
+        };
+    }
+}`}</JavaCode>
+
+Use exactly one debouncer instance per signal; construct it during initialization, then call `update`
+once per loop. Here a beam-break input is active-low, so `!beamBreak.getState()` gives the more useful
+meaning “a pixel is present.”
+
+<JavaCode league="FTC" label="Trigger once when a debounced beam break becomes true">{`private final ElapsedTime runtime = new ElapsedTime();
+private DigitalChannel beamBreak;
+private BooleanDebouncer pixelDebouncer;
+private boolean hadPixel;
+
+public void init() {
+    beamBreak = hardwareMap.get(DigitalChannel.class, "beamBreak");
+    beamBreak.setMode(DigitalChannel.Mode.INPUT);
+
+    boolean pixelPresent = !beamBreak.getState(); // invert only if your wiring is active-low
+    pixelDebouncer = new BooleanDebouncer(
+            pixelPresent, 0.030, BooleanDebouncer.Mode.RISING);
+    hadPixel = pixelPresent;
+}
+
+public void loop() {
+    boolean rawPixelPresent = !beamBreak.getState();
+    boolean pixelPresent = pixelDebouncer.update(rawPixelPresent, runtime.seconds());
+
+    if (pixelPresent && !hadPixel) {
+        advanceIntakeState(); // runs once, after 30 ms of continuous detection
+    }
+    hadPixel = pixelPresent;
+}`}</JavaCode>
+
+<Exercise title="Size the delay from evidence">
+
+Log the raw input while you deliberately trigger the sensor many times. Suppose the longest false
+high pulse is 12 ms and real object detections remain high for at least 80 ms. Pick a starting
+debounce time, explain why it rejects the glitch, and name the response-time cost.
+
+<Solution>
+
+Try 20–30 ms. It is longer than the 12 ms false pulse, so that pulse cannot be accepted, while it
+still leaves at least 50 ms of margin before the shortest real detection ends. The cost is that the
+robot waits 20–30 ms after a real object arrives before acting. Test the complete mechanism; do not
+copy a delay merely because it worked on another robot.
+
+</Solution>
+
+</Exercise>
+
+### Do not hide a wiring or state-machine bug
+
+Debouncing removes short, unwanted transitions. It cannot fix a loose connector, incorrect active-low
+logic, or a sensor that never reaches a reliable state. First display the raw value and verify which
+physical condition maps to `true`. Then choose a delay from recorded glitches and the mechanism's
+time budget. For safety limits, make the conservative transition fast enough for the mechanism to
+remain safe; a long both-edge delay can be the wrong trade.
+
+</Deploy>
+
+<Admonition type="info" title="Sources & references">
+
+- [WPILib: Debouncer](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/filters/debouncer.html) -
+  the source for the rising, falling, and both-edge definitions used here.
+- [Signals & Noise](./signals.mdx) - identify whether a digital input is bouncing, electrically noisy,
+  or being read with the wrong polarity before adding a filter.
+- [Low-Pass Filter](./low-pass.mdx) - use a numeric smoother for continuously valued sensor jitter;
+  use this lesson's debouncer for a boolean event.
+
+</Admonition>
+
