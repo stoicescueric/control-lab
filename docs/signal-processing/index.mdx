@@ -13,10 +13,13 @@ before you control it*, and it comes in two distinct halves.
 
 ## Part 1 — Filtering: one sensor, less noise
 
-A filter takes a single noisy stream and smooths it, trading a little lag for a lot of calm:
+A filter takes a single noisy stream and smooths it, trading a little lag for a lot of calm. Boolean
+signals need a different first tool: wait for an input to stay changed before treating it as an event.
 
 - **[Signals & Noise](./signals.mdx)**: what sensor noise actually looks like, which sensors carry
   it (and which, like encoders, don't), and how to measure it before filtering anything.
+- **[Debouncer](./debouncer.mdx)**: make a limit switch or beam break prove a boolean transition
+  before it can advance your state machine.
 - **[Low-pass filtering](./low-pass.mdx)**: the exponential moving average, the one-line filter you
   will reach for most.
 - **[Moving average](./moving-average.mdx)**: the windowed alternative, and when its latency is
