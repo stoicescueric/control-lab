@@ -12,23 +12,23 @@ import ShootOnTheMove from '@site/src/components/simulations/research/ShootOnThe
 <Difficulty level="Medium" />
 
 <Abstract>
-The paper freezes one season controller: gain 0.9, a 50 ms feeder delay, seven flight-time knots, and
-at most five updates. This lesson turns that idea into a loop-safe result object, release gates, and
-tests that an FTC team can reproduce on its own robot.
+When the robot is moving, the ball keeps some of the robot's velocity, so you have to aim somewhere
+other than the goal. This lesson builds the aim correction the paper's robot used (a gain of 0.9, a
+50 ms feeder delay, seven flight-time values, and up to five update steps) and the checks that decide
+whether it's safe to fire.
 </Abstract>
 
 <Admonition type="note" title="Builder outcome and prerequisites">
 
-Build a `movingAim()` function that returns virtual target, virtual distance, flight time, residual,
-iteration count, and clamped/converged status. You need field-frame vectors, fresh chassis velocity,
-a bounded time-of-flight table, feeder delay, and the basic idea of fixed-point iteration. The
-optional derivation uses contraction bounds; the deployable loop does not require proving them.
+You'll build a `movingAim()` function that returns where to aim, how far that is, the flight time, and
+whether the calculation settled. You need field-frame vectors, an up-to-date robot velocity, a flight-time
+table, and the feeder delay. The optional math section explains why the calculation settles.
 
 </Admonition>
 
 Throw a ball to someone who is running and you do not aim at where they are. You lead them. A launcher on a moving robot has the same problem even when the field target is fixed: the ball leaves with part of the chassis velocity, so the target moves relative to the projectile.
 
-The [WPILib Fire Control sequence](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) calls the solution **lead-and-adjust**. It is deliberately mechanism-independent because the physical shooter is already summarized by a firing table.
+A draft series of WPILib articles on fire control, [currently only on a preview build](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) and not yet in the published docs, calls this **lead-and-adjust**. It works for any shooter, because the shooter's behavior is already captured in a firing table.
 
 ## First build a firing table
 
@@ -38,9 +38,9 @@ A stationary firing table maps target distance to three values:
 2. the hood command;
 3. the measured or modeled time for the ball to reach the scoring event.
 
-The first two reproduce the shot. The time-of-flight column makes motion compensation possible. It lets the moving-shot solver reason only about geometry and time while the table carries the nonlinear launcher behavior, drag, spin, and contact effects measured during calibration.
+The first two make the shot happen. The flight time is what makes aiming on the move possible: the moving-shot calculation only needs geometry and time, and everything messy about the launcher, like drag, spin, and contact, is already baked into the measured table.
 
-Choose one smooth **firing strategy** across neighboring distances. If nearby rows jump between unrelated high and low arcs, interpolation becomes unreliable and the recursion inherits those discontinuities. The WPILib [static firing-table article](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/static-shooting.html) recommends starting with a coarse table, increasing resolution where validation shows it is needed, and recording flight time during the same campaign.
+Keep neighboring distances on the same kind of shot. If nearby rows jump between a high arc and a low one, interpolating between them gives nonsense, and so does the moving-shot calculation built on them. The draft WPILib [static firing-table article](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/static-shooting.html) suggests starting with a coarse table, adding rows where testing shows you need them, and recording flight time while you're at it.
 
 For this robot, the archived table stores the descending rim-event time:
 
@@ -52,22 +52,22 @@ These are the seven knots in `Sensors.java` at firmware commit `75db349d`. They 
 
 ## Lead, look up, and adjust
 
-The general recursion starts with relative target position $\mathbf q_0$ and relative velocity $\dot{\mathbf q}$. For a fixed field target and translating robot, $\dot{\mathbf q}=-\mathbf v_R$. This deployment also includes a fitted inherited-velocity gain $G$ and feeder delay $t_d$:
+The ball leaves with part of the robot's velocity, so during the feeder delay $t_d$ plus the flight time $t_f$, it drifts by about the robot's velocity $\mathbf v_R$ times that time. Aim that far the other way. This robot also used a measured gain $G$ for how much of the robot's velocity the ball actually keeps:
 
 $$
 \mathbf p_v=\mathbf p_g-G\mathbf v_R(t_d+t_f).
 $$
 
-Here $\mathbf p_s$ is the shooter, $\mathbf p_g$ is the real target, $\mathbf p_v$ is the virtual target, $\mathbf v_R$ is chassis velocity, $G=0.9$, and $t_d=0.05\ \mathrm{s}$. The minus sign shifts the aim point opposite the robot's motion. When $\mathbf v_R=\mathbf 0$, the correction vanishes.
+$\mathbf p_g$ is the real goal and $\mathbf p_v$ is the adjusted aim point, the "virtual target." $G=0.9$ and $t_d=0.05\ \mathrm{s}$. The minus sign moves the aim point opposite to the robot's motion, and with the robot stopped the correction is zero.
 
-The four-step loop is:
+There's a catch: the flight time depends on the distance, and the distance depends on where you aim. So it goes in a loop:
 
 1. **Guess** flight time from the real-target distance.
 2. **Lead** by shifting the virtual target through the predicted platform displacement.
 3. **Adjust** by looking up flight time at the virtual distance.
 4. **Repeat** until successive flight times differ by less than the chosen tolerance.
 
-This is the [dynamic shooting recursion](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html), specialized to a fixed FTC target and the measured inheritance gain from the research system.
+This is the [dynamic shooting method](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html) from the draft WPILib articles, with a fixed FTC goal and this robot's measured gain.
 
 :::tip[Predict the correction direction]
 Choose **Sideways** and predict which side of the real target becomes the virtual target. Compare **Approaching** and **Retreating**, then step through the rows. Direct approach and retreat change virtual distance strongly, so they also expose more of the time map.
@@ -85,13 +85,13 @@ $$
 =\mathbf{1.1475\ m}.
 $$
 
-That first virtual target is farther from the shooter than the real target, so its lookup returns a longer time. The next update uses that time and moves the aim point again. Intermediate wheel and hood commands are unnecessary; only the converged virtual distance is used to query the final firing command.
+That first aim point is farther from the shooter than the real goal, so its flight time is longer, and the next step moves the aim point a bit more. You don't need wheel and hood settings for the in-between steps. Only the final distance is used to look up the actual shot.
 
 ## Decide whether the iteration is trustworthy
 
-The archived solver starts with the real-target time, stops when successive estimates differ by at
-most 0.05 s, and allows at most five updates. Treat the final difference as evidence: report it with
-the result and block the shot when the solver does not converge inside the validated range.
+The robot's code starts from the real goal's flight time, stops when two estimates in a row differ by
+0.05 s or less, and gives up after five steps. Report that last difference with the result, and don't
+fire if it didn't settle.
 
 <details>
 <summary>Optional math: why the fixed-point update converges</summary>
@@ -104,23 +104,21 @@ t_{k+1}=t_f\!\left(\left\lVert
 \right\rVert\right).
 $$
 
-The final time increment is a convergence diagnostic, not merely a loop condition.
-
-When three useful iterates exist, estimate the local contraction rate with
+Once you have three estimates, you can see how fast they're closing in:
 
 $$
 \widehat\rho=\left|\frac{t_{k+1}-t_k}{t_k-t_{k-1}}\right|.
 $$
 
-A small $\widehat\rho$ means the time error is shrinking quickly. A value near one means the solution is fragile: a small velocity or timing error can move the aim point substantially. Ignore ratios whose denominator is near machine precision. The interactive experiment reports this as a diagnostic, not a universal fire/no-fire threshold.
+A small $\widehat\rho$ means the estimates are settling fast. Close to one means the answer is fragile, and a small error in velocity or timing can move the aim point a lot. (Skip this when the bottom of the fraction is basically zero.) The demo shows it as information, not a fire or no-fire rule.
 
-The paper provides a conservative bound from the clamped time map. Its maximum slope is $M=0.4867\ \mathrm{s/m}$, so
+The paper also gives a guaranteed bound. The steepest part of the flight-time table changes by $M=0.4867\ \mathrm{s/m}$, so
 
 $$
 q=G\lVert\mathbf v_R\rVert M<1
 $$
 
-guarantees a unique fixed point. With $G=0.9$, the sufficient speed limit is **2.28 m/s**. An offline replay of 1,399,392 cases through 1.7 m/s met the deployed tolerance by update five; 170 cases used all five. These are deterministic grid checks, not physical scoring probabilities.
+guarantees the loop settles on one answer. With $G=0.9$ that holds up to **2.28 m/s**. A computer check of 1,399,392 cases up to 1.7 m/s all settled within five steps, and 170 of them needed all five. That's a check of the math, not of how often shots go in.
 
 </details>
 
@@ -132,23 +130,21 @@ Before releasing, check all of the following:
 - chassis speed and estimated contraction rate lie inside a range validated on the real robot;
 - flywheel and hood have reached their final commands.
 
-There is no source-independent stability threshold. Tune the release gate from measured misses and entries at the velocities and approach angles your drivers use.
+There's no universal threshold for these. Set them from real shots at the speeds and angles your drivers actually use.
 
 ## Read the residual in metres as well as seconds
 
-Paper §6.3 reports a conservative theorem bound of 0.146 s and 0.223 m at 1.7 m/s with the
-0.05 s stopping threshold. A convergence proof does not guarantee millimetre aim accuracy.
-The archived-loop replay gives a different, empirical numerical summary: 8.3 cm at the 99th grid
-percentile and 17.1 cm in the worst grid case relative to its converged target.
+Stopping at a 0.05 s difference doesn't mean the aim point is exact. At 1.7 m/s, the paper's worst-case
+bound is 0.146 s, or 0.223 m. In practice, running the robot's code over a grid of cases, the aim point
+was within 8.3 cm of the fully settled answer 99% of the time and 17.1 cm in the worst case.
 
-Keep the **successive TOF increment**, the **fixed-point residual**, and the **virtual-target position
-error** separate. The paper reports a maximum returned fixed-point residual of 0.031 s; that is not
-the same quantity as the last increment tested by the early-exit condition.
+Three different numbers get called "error" here, so keep them apart: the change between the last two
+flight-time estimates, how far the final estimate is from satisfying the equation exactly (at most
+0.031 s in the paper), and how far the aim point is from where it would settle.
 
-The browser exposes iterations of the simplified SI-unit formulation. The archived Java obtains
-distance from **getX()/getY()**, assigns the virtual target, and checks early exit before updating
-its cached distance and time. The lesson's result object exposes status explicitly; it is not a
-literal port of every robot state mutation.
+The demo shows each step of a simplified version in metric units. The robot's Java differs in small
+ways, like reading distance from `getX()`/`getY()`, and the lesson's code returns the status
+explicitly instead of copying every detail.
 
 ## What changed in the newer robot?
 
@@ -165,42 +161,45 @@ distance used for wheel/hood commands; lateral drift changes turret lead.
 | Acceleration correction | disabled | radial factor 0.17; lateral factor 0 |
 | Position reference in the update | robot getters | shooter world position with turret offset |
 
-Both keep a 0.05 s feeder delay and default to five updates, but the newer formula is a different
-mapping. Its two direction signs default to −1. Recompute convergence bounds and repeat physical
-tests before transferring the season's 2.28 m/s bound or entry counts to these settings.
+Both use a 0.05 s feeder delay and five steps, but the newer formula is different enough that the
+season's 2.28 m/s bound and scoring results don't carry over. Recheck both before relying on them.
 
 ## Next step: Newton can solve faster
 
-Fixed-point recursion is easy to implement and usually converges in three to five updates. In poorly conditioned directions it can converge slowly. The WPILib follow-on article reformulates the target as a root:
+The repeat-until-it-settles loop is easy to write and usually takes three to five steps, but in some directions it settles slowly. A follow-on draft WPILib article turns it into a root-finding problem:
 
 $$
 E(t)=t-t_f(D(t))=0,
 $$
 
-then applies [Newton's method for dynamic shooting](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html). For an empirical table, it keeps the exact LUT residual but uses a smooth constant-projectile-speed derivative proxy instead of differentiating noisy knots.
+and solves it with [Newton's method](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html). For a measured table, it uses a smooth estimate of the slope instead of differentiating the noisy table values.
 
-Newton reduces numerical iterations. It does **not** make a physically fragile shot less sensitive to velocity error, and it is more sensitive to the initial guess. Use it when the fixed five-update budget is the limiting failure, while keeping the same speed, residual, calibration-range, and stability guards.
+Newton's method takes fewer steps. It doesn't make a fragile shot any less fragile, and it depends more on a good starting guess. Use it if running out of steps is actually your problem, and keep all the same safety checks.
 
 ## Next step: decide how drag changes inherited motion
 
-The WPILib [linear-drag extension](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/linear-drag.html) replaces the platform displacement time $t$ with
+The draft WPILib [linear-drag article](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/linear-drag.html) replaces the time $t$ in the drift calculation with
 
 $$
 \alpha(t)=\frac{1-e^{-kt}}{k},
 $$
 
-so the inherited displacement becomes $\mathbf v_R\alpha(t)$. This is a useful first-order model for induced windage.
+so the drift becomes $\mathbf v_R\alpha(t)$, which accounts for air slowing the ball's sideways motion.
 
-The launcher in this case study uses a perforated ball and a quadratic-drag flight model. Its deployed controller used the fitted gain $G=0.9$ instead. The paper's transverse-drag calculation makes that value plausible, but does not prove it is interchangeable with a linear-drag constant. Choose one correction model, identify its parameter from moving-shot data, and validate it rather than stacking both formulas without evidence.
+This robot's ball has holes in it and is modeled with drag that grows with speed squared, and its code
+used the measured gain $G=0.9$ instead of that formula. The paper shows 0.9 is a reasonable value, but
+that doesn't make the two approaches interchangeable. Pick one, measure its setting from moving shots,
+and test it, rather than stacking both.
 
-The archived acceleration feed-forward coefficient was zero. If acceleration persists during the delay, the paper bounds its omitted first-order displacement by
+The season code didn't correct for acceleration. If the robot is still speeding up or slowing down
+during the delay, the paper bounds the extra drift by
 
 $$
 \lVert\delta\mathbf p_a\rVert\le
 \lVert\mathbf a_R\rVert\left(t_dt_f+\frac{t_d^2}{2}\right),
 $$
 
-or **2.6–5.4 cm per 1 m/s²** across the archived time table. This makes acceleration near release a measurement and gating problem before it becomes another term in the controller.
+which is **2.6 to 5.4 cm for every 1 m/s²** across the robot's flight-time table. So the first thing to do about acceleration is measure it and avoid firing while it's large, before adding another term to the controller.
 
 ## What the controlled launches establish
 
@@ -211,12 +210,14 @@ The paper alternated compensation OFF and ON within each commanded-speed block, 
 | SOTM OFF | 15/15 | 13/15 | 10/15 | 5/15 | 2/15 |
 | SOTM ON | 15/15 | 15/15 | 15/15 | 13/15 | 11/15 |
 
-Stationary entry was 15/15 in both states, checking the zero-velocity behavior. Across moving conditions, entry increased from **30/60 to 54/60**. This supports the complete compensation method under those speed strata. It does not isolate the gain, delay, velocity filter, time map, or release gate. Source: research paper §8.3, Table 3.
+Standing still, both scored 15/15, so turning compensation on didn't break the stationary shot. While
+moving, entries went from **30/60 to 54/60**. That supports the method as a whole, though it can't say
+which part (the gain, the delay, the velocity filter, the table, or the firing checks) mattered most.
+Source: research paper §8.3, Table 3.
 
-The preserved record contains cell totals, not shot-level timestamps, distance assignments, or
-measured release-state logs. The paper reports a 40 percentage-point difference, with 95% interval
-24.1–53.4 points, and an exact speed-stratified test. These support the ON/OFF comparison under the
-reported protocol; they cannot identify which individual missed shot had an acceleration or pose error.
+Only the totals were kept, not a log of each shot. The paper reports a 40-point difference in percentage
+(95% interval 24.1 to 53.4 points). That's good evidence compensation helps, but it can't tell you why any
+individual shot missed.
 
 ## Java: return the solution and its evidence
 
@@ -242,7 +243,8 @@ reported protocol; they cannot identify which individual missed shot had an acce
     return new AimResult(virtualTarget, false, clamped, residual, 5);
 }`}</JavaCode>
 
-The release command should consume the status as well as the point. A finite virtual target from a clamped or unconverged solve is still an unsafe command unless that condition was validated deliberately.
+The firing logic should check the status, not just the aim point. An aim point from a calculation that
+didn't settle, or that ran off the end of the table, shouldn't be trusted unless you've tested that case.
 
 ## Put it in the robot loop in this order
 
@@ -254,10 +256,9 @@ The release command should consume the status as well as the point. A finite vir
 6. Require wheel, hood, turret, and robot-state gates before feeding.
 7. Log the solution and the measured release event.
 
-Before field testing, assert that zero velocity returns the real target, reversing velocity reverses
-the lead, stale velocity blocks release, an out-of-range time lookup reports clamping, and one fixed
-numerical example matches a hand calculation. These tests catch sign and frame mistakes that can look
-like bad tuning on the field.
+Before field testing, check that zero velocity gives the real goal, reversing the velocity reverses the
+correction, old velocity data blocks firing, a distance off the table reports clamping, and one example
+matches a hand calculation. These catch sign and frame mistakes that otherwise look like bad tuning.
 
 <Exercise title="Choose the sign">
 The robot moves at $+1.0\ \mathrm{m/s}$ along the field's $y$ axis. The delay plus flight time is $0.75\ \mathrm{s}$ and $G=0.9$. What $y$ correction should be applied to the real target?
@@ -268,7 +269,7 @@ $-0.9(1.0)(0.75)=-0.675\ \mathrm{m}$. The virtual target moves 0.675 m in the ne
 
 <Admonition type="info" title="Sources and further reading">
 
-- [WPILib Fire Control](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) — the lead-and-adjust overview and reading order.
+- [WPILib Fire Control (draft)](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/index.html) — the lead-and-adjust overview. These articles are on a preview build of the WPILib docs and may move when published.
 - [Static Shooting via Look-Up Table](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/static-shooting.html) — how firing-table resolution, smooth strategy selection, and recorded flight time prepare dynamic shooting.
 - [Dynamic Shooting via Time-of-Flight Recursion](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/dynamic-shooting.html) — the mechanism-independent recursion and convergence-based quality diagnostics used to organize this lesson.
 - [Newton's Method for Dynamic Shooting](https://frc-docs--3242.org.readthedocs.build/en/3242/docs/software/advanced-controls/fire-control/newton-shooting.html) — a faster root solver and the distinction between numerical convergence and physical sensitivity.

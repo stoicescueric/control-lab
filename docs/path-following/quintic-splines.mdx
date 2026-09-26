@@ -1,6 +1,6 @@
 ---
 title: Splines
-description: The ways to describe a smooth FTC path — Bézier curves shaped by control points (approximation), quintic Hermite splines pinned to waypoints and derivatives (interpolation), and natural cubic interpolation — and the continuous curvature a follower needs.
+description: Three ways to describe a smooth path for an FTC robot. Bézier curves shaped by control points, quintic Hermite splines pinned to waypoints, and natural cubic splines, plus why a follower needs smooth curvature.
 sidebar_position: 7
 tags: [splines, bezier, quintic, natural-cubic, curvature, c2-continuity, trajectory]
 ---
@@ -15,48 +15,42 @@ import NaturalCubicSpline from '@site/src/components/simulations/path-following/
 <Difficulty level="Hard" />
 
 <Abstract>
-This lesson is about *describing* a smooth path. Three families do it: a Bézier curve, shaped by dragging
-control points that pull the curve toward them; a quintic Hermite spline, pinned to waypoints with specified
-velocity and acceleration; and a natural cubic spline, which threads every point and solves for the slopes
-itself. Béziers are intuitive to author by feel; quintic and natural-cubic splines pass exactly through your
-points and, when their tangent stays nonzero, can provide continuous curvature. Here we build the curves; *following* them at speed (resampling,
-speed planning, centripetal feedforward) is covered in [Pure Pursuit](./pure-pursuit.mdx).
+This lesson is about describing a smooth path. There are three common ways. A Bézier curve is shaped by
+control points that pull on it. A quintic Hermite spline passes through your waypoints with the speed
+and acceleration you set at each one. A natural cubic spline passes through every point and works out
+the slopes itself. Béziers are easy to shape by eye, and the other two go exactly through your points
+with smoothly changing curvature. Following these paths at speed is covered in
+[Pure Pursuit](./pure-pursuit.mdx).
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-Start with [PID to a Point](./pid-to-point.mdx) to see why a route needs a continuous target, then
-review [Linear Algebra](../preface/why-math-matters/linear-algebra.mdx) for vectors and
-[Calculus](../preface/why-math-matters/calculus.mdx) for derivatives. You can use the Bézier viewer
-without deriving a quintic polynomial; the derivative notation is the advanced layer.
-
-**Math used:** polynomial functions plus first and second derivatives. Solving a multi-point
-interpolation system is optional; use the viewer and a maintained library for that step.
+Read [PID-to-Point](./pid-to-point.mdx) first. This lesson uses polynomials and derivatives (rates of
+change, as in [From Math to a Loop](../software-architecture/discretization.mdx)). You can use the Bézier
+viewer without any of the derivations, and solving for a many-point spline is best left to a library.
 
 </Admonition>
 
-PID-to-point and predictive deceleration drive to *one* target. Real autonomous routines thread through
-many waypoints, and the path *between* them has to be drivable — smooth not just in position but in how
-sharply it bends. That bending is curvature, and curvature is where simple paths quietly fail.
+PID-to-point drives to one target at a time. A real autonomous goes through many waypoints, and the path
+between them has to be drivable: smooth in position, and also smooth in how sharply it bends.
 
 <Problem>
 
 ## The robot jerks at every waypoint
 
-Chain simple segments between waypoints and the path *looks* smooth: no kinks, continuous heading. But
-run a follower along it and the robot snaps its steering at each join. The reason is invisible in the
-drawing — **curvature** (how tightly the path turns, the second derivative) is *discontinuous* at the
-waypoints. The follower must change steering angle instantly, which means infinite angular acceleration,
-which the robot answers with a jerk and a tracking error exactly where the segments meet.
+Picture a straight line that joins a circle of radius 20 in, heading in the same direction. There's no
+corner, so the path looks smooth. But on the straight the robot turns at zero degrees per inch, and the
+moment it enters the circle it has to turn at a steady rate. That sudden change in how tightly the path
+bends, its **curvature**, means the robot has to change its turning instantly at the join. It can't, so
+it jerks and drifts off the path right where the pieces meet.
 
-The cure is a curve description that controls curvature, not just position. Two families do it, from two
-opposite philosophies.
+So a good path description has to control curvature, not just position and direction.
 
 </Problem>
 
 <Theory>
 
-## Continuity: how smooth is smooth enough
+## How smooth is smooth enough?
 
 "Smoothness" is graded by how many derivatives match across a join:
 
@@ -66,114 +60,78 @@ opposite philosophies.
 | C¹ | + first derivative | heading (tangent direction) | a sudden curvature change — a jerk |
 | C² | + second derivative | second derivative; curvature on a regular curve | smooth, followable steering |
 
-C² means that position, first derivative, and second derivative match across each join. If the path is
-**regular** there (its tangent is nonzero), the curvature formula has a nonzero denominator and curvature
-is continuous, so the follower never has to change steering instantly. The path families below offer
-different authoring trade-offs.
+C² means position, first derivative, and second derivative all match at each join. As long as the path
+never stops dead (its first derivative isn't zero), that makes the curvature continuous, so the follower
+never has to change its turning instantly.
 
 <VideoEmbed
   title="The Continuity of Splines"
   src="https://www.youtube.com/embed/jvPPXbo87ds"
   href="https://www.youtube.com/watch?v=jvPPXbo87ds">
-  Freya Holmér walks the same C⁰/C¹/C² ladder visually, then goes further than this lesson does — into
-  geometric continuity and how the Bézier, Hermite, and B-spline families relate. Long, and worth it before
-  you pick a representation below.
+  Freya Holmér explains the same C⁰, C¹, C² idea visually and then goes further, into how Bézier,
+  Hermite, and B-splines relate. It's long, and worth watching.
 </VideoEmbed>
 
-### Core checkpoint: choose a regular quintic Hermite path
+### Bézier curves
 
-For a first follower, use the **quintic Hermite** representation below: each segment is pinned to its
-endpoint poses and shares first and second derivatives at joins. Verify that its tangent never becomes
-zero, then resample it for the follower. Bézier authoring and the natural-cubic solve are useful optional
-comparisons, not prerequisites for that artifact.
-
-### Optional comparison: Bézier control-point paths
-
-A cubic Bézier is built from four **control points** $P_0, P_1, P_2, P_3$ and a weighted blend called
-the Bernstein basis:
+A cubic Bézier curve is built from four **control points**, $P_0$ through $P_3$. The curve starts at $P_0$
+and ends at $P_3$, and the middle two act like handles that pull it. At each value of $t$ from 0 to 1,
+the point on the curve is a weighted average of the four control points:
 
 $$
 \mathbf{B}(t) = (1-t)^3\,P_0 + 3(1-t)^2 t\,P_1 + 3(1-t)t^2\,P_2 + t^3\,P_3,
 \qquad t \in [0,1]
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'P_0 \u2026 P_3', meaning: 'the four control points. Here the subscript numbers a control point, not a loop or a path sample'},
-    {symbol: 't', meaning: 'the curve parameter, running 0 to 1 along ONE segment. It is not time, and it is not distance along the curve'},
-    {symbol: 'B(t)', meaning: 'the point on the curve at parameter t'},
-    {symbol: '(1\u2212t) and t powers', meaning: 'the Bernstein weights. At any t the four of them are non-negative and sum to exactly 1, which together are what keep the curve inside its control points'},
-  ]}
-/>
-
-The weights are never negative and always sum to $1$, so the curve stays inside the control polygon's
-convex hull. It passes through
-**only the endpoints** $P_0$ and $P_3$; the interior points $P_1, P_2$ are *handles* that pull the curve
-without touching it. They set the endpoint tangents directly:
+$t$ isn't time or distance. It just runs from 0 at the start of the segment to 1 at the end. At
+$t = 0.5$ the weights are 0.125, 0.375, 0.375, and 0.125. They're never negative and always add up to 1,
+so the curve stays inside the shape formed by the control points. It only touches $P_0$ and $P_3$; the
+handles $P_1$ and $P_2$ pull without touching, and they set the direction at each end:
 
 $$
 \mathbf{B}'(0) = 3(P_1 - P_0), \qquad \mathbf{B}'(1) = 3(P_3 - P_2)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'B\u2032(0), B\u2032(1)', meaning: 'the derivative of the curve with respect to t at each end: the tangent direction there, scaled by 3'},
-  ]}
-/>
-
-That is why Béziers feel good to author — drag a handle and the curve leans that way. The point on the
-curve at any $t$ is found by **de Casteljau's algorithm**: repeatedly interpolate along the control
-polygon. Scrub $t$ in the demo to watch it, and drag the handles to feel how $P_1, P_2$ steer the ends:
+That's why Béziers are nice to draw with: drag a handle and the curve leans toward it. You can also find
+the point at any $t$ by **de Casteljau's algorithm**, which repeatedly takes the point a fraction $t$ of
+the way along each line between control points. Scrub $t$ in the demo to watch it, and drag the handles
+to see how they steer the ends:
 
 <BezierExplorer />
 
-The problem shows up when you chain Béziers. Matching the tangent across a join (C¹) forces the next
-segment's first handle to mirror the previous one, $Q_1 - Q_0 = P_3 - P_2$; demanding C² pins the second
-handle too ($Q_2 = P_1 - 4P_2 + 4P_3$). So in a Bézier *chain*, continuity steals exactly the handles
-that made Béziers convenient — you no longer get to place them freely.
+The trouble comes when you chain Béziers together. For C¹, the next segment's first handle has to mirror
+the previous one: $Q_1 - Q_0 = P_3 - P_2$. For C², the second handle is pinned too:
+$Q_2 = P_1 - 4P_2 + 4P_3$. So in a chain, smoothness takes away exactly the handles that made Béziers
+easy to shape.
 
-### Core representation: Quintic Hermite waypoints and derivatives
+### Quintic Hermite splines
 
-The other philosophy: instead of points that pull the curve, specify the curve's own state at each
-**waypoint**: position, velocity, and acceleration — and let one polynomial satisfy all of it. Because
-you pin the values, the curve passes *through* every waypoint. This is the difference in one picture —
-the same four points, used as Bézier control points versus Hermite waypoints:
+A different approach: instead of handles, say what the curve should be doing at each **waypoint**, its
+position, velocity, and acceleration, and find a polynomial that does all of it. Since you pin the
+positions, the curve goes *through* every waypoint. Here are the same four points used both ways:
 
 <SplineCompare />
 
-The green curve hits all four points; the blue one only the ends. A drivetrain routine usually wants the
-green behavior: "go through these poses," not "go near them."
+The green curve goes through all four points and the blue one only through the ends. For a drivetrain
+you usually want green: "go through these poses," not "go near them."
 
-How many degrees of freedom does it take? Matching position, velocity, and acceleration at *both* ends of
-a segment is six conditions, so you need a degree-5 — **quintic** — polynomial per coordinate:
+Matching position, velocity, and acceleration at both ends of a segment is six conditions. A polynomial
+with six coefficients can meet six conditions, and that's a degree-5, or **quintic**, polynomial, one
+for $x$ and one for $y$:
 
 $$
 x(t) = c_5 t^5 + c_4 t^4 + c_3 t^3 + c_2 t^2 + c_1 t + c_0
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'c_0 \u2026 c_5', meaning: 'the six polynomial coefficients being solved for, one per power of t. Six unknowns is exactly what six constraints can pin down'},
-    {symbol: 'x(t)', meaning: 'ONE coordinate of the curve. A 2-D path runs this whole construction twice, once for x and once for y'},
-  ]}
-/>
-
-Evaluating it and its derivatives at $t = 0$ fixes the low coefficients straight from the start
-conditions:
+At $t = 0$ every term with a $t$ in it vanishes, so the start conditions give the first three
+coefficients directly:
 
 $$
 c_0 = x(0), \qquad c_1 = x'(0), \qquad c_2 = \tfrac{1}{2}x''(0)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'x(0)', meaning: 'the position at the start of the segment'},
-    {symbol: 'x\u2032(0)', meaning: 'the velocity there: the first derivative with respect to t'},
-    {symbol: 'x\u2032\u2032(0)', meaning: 'the acceleration there. The one-half appears because differentiating c\u2082t\u00b2 twice gives 2c\u2082'},
-  ]}
-/>
-
-and the endpoint-at-$t{=}1$ conditions give the top three:
+The $\tfrac12$ is there because the second derivative of $c_2 t^2$ is $2c_2$. The end conditions at
+$t = 1$ give the other three:
 
 $$
 \begin{bmatrix} c_3 \\ c_4 \\ c_5 \end{bmatrix}
@@ -190,74 +148,61 @@ x''(1) - 2c_2
 \end{bmatrix}
 $$
 
-Now the C² join is automatic: set each interior waypoint's ending acceleration equal to the next
-segment's starting acceleration, $x''_\text{seg}|_{t=1} = x''_\text{next}|_{t=0}$, and the curvature is
-continuous through every regular join — no handles sacrificed. Apply the same matching of position,
-first derivative, and second derivative to both $x(t)$ and $y(t)$.
+Chaining segments is then easy: give each waypoint one velocity and one acceleration, and use them as
+the end of one segment and the start of the next. Position, velocity, and acceleration all match at the
+join, which is C², with no handles lost. Do the same for $x(t)$ and $y(t)$.
 
-### Optional alternative: natural cubic interpolation
+### Natural cubic splines
 
-Quintic Hermite asks *you* for the velocity and acceleration at each waypoint. What if you only have the
-points and want the smoothest curve through them? A **natural cubic spline** keeps one cubic per interval
-but, instead of being handed the slopes, *solves for them* by demanding curvature match everywhere: C⁰ at
-the endpoints, and C¹ **and** C² across every interior knot. That is two conditions short of unique, and the
-**natural** boundary closes the gap by setting the component second derivatives to zero at the two ends
-($S''(x_0) = S''(x_n) = 0$)
-— the spline leaves the path straight, like a drafting spline released at its tips.
+Quintic Hermite asks you for the velocity and acceleration at every waypoint. If you only have the
+points, a **natural cubic spline** uses one cubic per gap and works out the slopes itself, by requiring
+the first and second derivatives to match at every interior waypoint. That leaves two conditions
+missing, and the "natural" choice is to make the second derivative zero at both ends, so the path
+leaves each end straight, like a flexible drafting strip held only at the points.
 
-Demanding C² everywhere collapses into a single **tridiagonal** system in the knots' second derivatives,
-which the **Thomas algorithm** solves in $O(n)$ — no general matrix inversion.
+All those matching conditions turn into one system of equations with a simple banded shape
+(tridiagonal), which the Thomas algorithm solves quickly without a general matrix inverse.
 
-Drag the waypoints below: the spline always threads through every point. Where the 2-D tangent remains
-nonzero, its C² joins make the curvature comb continuous, and zero component second derivatives make the
-comb approach zero at the ends.
+Drag the waypoints below. The spline always passes through every point, the curvature comb stays
+continuous, and it tapers to zero at the ends.
 
 <NaturalCubicSpline />
 
-The trade against quintic Hermite: a natural cubic is **already C²**. On regular portions, curvature is
-continuous across every interior knot — with the *fewest* degrees of freedom and no slope input required.
-What you give up is control of the ends: the natural boundary pins component second derivatives to zero
-(and therefore zero endpoint curvature when the tangent is nonzero) rather than letting you
-choose it. A quintic's two extra coefficients per segment let you **prescribe** velocity and acceleration
-(hence curvature) at every waypoint. Both are C²; the quintic just gives you the boundary controls. (And since a spline written as a
-function $S(x)$ needs $x$ strictly increasing, a path that doubles back is fit as **two** splines
-$x(t)$ and $y(t)$, each against the parameter $t$.)
+Compared with quintic Hermite, a natural cubic is already C² without you supplying any slopes. What you
+give up is control: the ends are forced straight, and you can't choose the velocity or acceleration at
+each waypoint. The quintic's extra coefficients are what let you set those. (A path that doubles back
+can't be written as $y$ as a function of $x$, so it's fit as two splines, $x(t)$ and $y(t)$.)
 
 <SplineContinuityIllustration />
 
-Whichever family you use, the quantity a [pure-pursuit](./pure-pursuit.mdx) or feedforward follower
-actually consumes is the **curvature** at each sample:
+Whichever kind you use, what a [pure-pursuit](./pure-pursuit.mdx) or feedforward follower actually needs
+is the **curvature** at each point, one over the radius of the circle that best fits the path there:
 
 $$
 \kappa(t) = \frac{x'y'' - y'x''}{\left(x'^2 + y'^2\right)^{3/2}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03ba(t)', meaning: 'curvature at parameter t: 1 divided by the radius of the circle that best fits the curve there', unit: '1/in'},
-    {symbol: 'x\u2032, y\u2032', meaning: 'first derivatives of each coordinate with respect to t'},
-    {symbol: 'x\u2032\u2032, y\u2032\u2032', meaning: 'second derivatives with respect to t'},
-    {symbol: 'the 3/2 power', meaning: 'this is what makes curvature independent of how fast t sweeps the curve. Reparameterize the same shape and \u03ba is unchanged'},
-  ]}
-/>
+The primes are derivatives with respect to $t$. Check it on a circle of radius 10,
+$x = 10\cos t$, $y = 10\sin t$: then $x'y'' - y'x'' = 100$ and $(x'^2 + y'^2)^{3/2} = 1000$, so
+$\kappa = 0.1$, one over the radius. The $3/2$ power is what makes the answer not depend on how fast $t$
+moves along the curve.
 
 <Callout type="idea" title="Which one should you use?">
-**Bézier** when a human authors the path by eye — the handles are a great editor, and Pedro
-Pathing-style tools expose them directly. **Quintic Hermite** when you have exact poses to hit (Road
-Runner's `splineTo` is quintic internally) and want C² for free. **Natural cubic** when you have only
-points (no slopes) and want the cheapest C² interpolation — one tridiagonal solve, at the cost of zero
-component second derivatives at the ends. Bézier and Hermite are convertible: a cubic Bézier *is* a cubic Hermite with
-$m_0 = 3(P_1-P_0)$, $m_1 = 3(P_3-P_2)$ — so editors can show handles while the math runs on Hermite
-coefficients.
+**Bézier** when someone draws the path by eye. The handles make a good editor, and Pedro Pathing's tools
+use them. **Quintic Hermite** when you have exact poses to hit. Road Runner's `splineTo` uses quintics.
+**Natural cubic** when you only have points and want the simplest smooth curve through them, and
+straight ends are fine. Béziers and Hermite splines can be converted: a cubic Bézier is a cubic Hermite
+with end slopes $3(P_1-P_0)$ and $3(P_3-P_2)$, so an editor can show handles while the math uses Hermite
+form.
 </Callout>
 
 </Theory>
 
 <Deploy>
 
-## Evaluate either curve on the Control Hub
+## Evaluating the curves
 
-Both reduce to evaluating a polynomial (and its derivatives) per coordinate each loop.
+Either way, it comes down to evaluating a polynomial, and its derivatives, for each coordinate.
 
 <JavaCode label="Cubic Bezier segment, one coordinate at a time">{`// Four control points, t running 0 -> 1. Returns one coordinate at t.
 double bezier(double p0, double p1, double p2, double p3, double t) {
@@ -299,18 +244,14 @@ double acc(double t) { ... }   // the derivative of vel
 
 <Exercise title="Check the Bezier weights">
 
-Those four weights are the binomial coefficients $1, 3, 3, 1$ with powers of $u$ and $t$ that always sum
-to 3. Check the identity: at any $t$, the four weights add to exactly 1. Try $t = 0$, $t = 1$, and
-$t = 0.5$ by hand.
+Check that the four weights always add up to 1. Try $t = 0$, $t = 1$, and $t = 0.5$ by hand, then see if
+you can show it for every $t$.
 
 <Solution>
 
-They are the terms of $(u + t)^3$, and $u + t = 1$ by construction — so the sum is $1^3 = 1$ for every
-$t$. At $t = 0$ the weights are $(1,0,0,0)$ and the curve is at `p0`; at $t = 1$ they are $(0,0,0,1)$
-and it is at `p3`; at $t = 0.5$ they are $(0.125, 0.375, 0.375, 0.125)$. Because the weights are
-non-negative and sum to 1, every point on the curve is a weighted average of the control points, which
-is why the curve never leaves their convex hull. Look up "Bernstein polynomial" and "de Casteljau's
-algorithm."
+At $t = 0$ the weights are $(1,0,0,0)$ and the curve is at `p0`. At $t = 1$ they're $(0,0,0,1)$ and it's
+at `p3`. At $t = 0.5$ they're $(0.125, 0.375, 0.375, 0.125)$. For every $t$: the four weights are the
+terms you get when you expand $(u + t)^3$, and $u + t = 1$, so they add up to $1^3 = 1$.
 
 </Solution>
 
@@ -318,52 +259,47 @@ algorithm."
 
 <Exercise title="Derive the six coefficients">
 
-Start with the easy half. Write `pos(t)`, `vel(t)` and `acc(t)` as general polynomials, substitute
-$t = 0$, and read off $c_0$, $c_1$, $c_2$. Then the hard half: substitute $t = 1$ into all three, which
-gives three equations in $c_3$, $c_4$, $c_5$. Solving that $3\times3$ system is where the $10$, $-15$
-and $6$ come from. Do it once by hand and you will never mistrust the numbers again.
+Write out `pos(t)`, `vel(t)`, and `acc(t)`, set $t = 0$, and read off $c_0$, $c_1$, and $c_2$. Then set
+$t = 1$ in all three to get three equations in $c_3$, $c_4$, and $c_5$. Solving those is where the $10$,
+$-15$, and $6$ come from.
 
 </Exercise>
 
 <Exercise title="Why quintic and not cubic?">
 
-Count the constraints. A cubic pins position and velocity at both ends — four constraints, four
-coefficients. Work out what that leaves free at every junction, and what it feels like on a robot.
+A cubic segment has four coefficients, enough to match position and velocity at both ends. If each
+segment is built that way, what doesn't match at the joins, and what does the robot feel?
 
 <Solution>
 
-Acceleration. With only position and velocity matched, acceleration can jump discontinuously at every
-junction between segments. Acceleration is proportional to commanded force, so a jump is a step change
-in wheel torque: the robot lurches at each waypoint, the wheels slip, and the odometry that slip
-corrupts is the same odometry the follower is using to decide where it is. Pinning acceleration too
-needs six constraints, which needs a quintic. Look up "Hermite interpolation" and "quintic Hermite
-basis functions."
+Acceleration. It can jump at every join. Acceleration takes force, so a jump is a sudden change in wheel
+torque: the robot lurches at each waypoint, the wheels can slip, and that slip throws off the odometry
+the follower depends on. Matching acceleration too takes six conditions, so a quintic. (A natural cubic
+spline gets matching accelerations a different way, by solving for the slopes instead of letting you
+pick them.)
 
 </Solution>
 
 </Exercise>
 
-Build one curve for $x$ and one for $y$ per segment. For a quintic chain, sharing endpoint velocity and
-acceleration between adjacent segments is what makes the whole path C².
+Build one curve for $x$ and one for $y$ per segment. For a chain of quintics, sharing each waypoint's
+velocity and acceleration between the two segments that meet there makes the whole path C².
 
-For a **natural cubic**, solve the tridiagonal moment system once, then evaluate whichever piece $i$ the
-parameter falls in with its own cubic
-$S_i(t) = a_i + b_i(t - t_i) + c_i(t - t_i)^2 + d_i(t - t_i)^3$ — twice, for $x(t)$ and $y(t)$, on a 2-D
-path.
+For a **natural cubic**, solve the system once, then evaluate whichever piece $i$ the parameter falls in,
+$S_i(t) = a_i + b_i(t - t_i) + c_i(t - t_i)^2 + d_i(t - t_i)^3$, once for $x(t)$ and once for $y(t)$.
 
-Once you have a curve you don't follow it as a continuous function — you **resample it into a list of
-points** by arc length (the warning below) and feed that to a follower. Doing that *at speed* — tagging each
-point with a curvature-limited velocity and a centripetal feedforward — is the velocity-planning job covered
-in [Pure Pursuit → Following a spline at speed](./pure-pursuit.mdx#following-a-spline-at-speed).
+Robots don't usually follow the curve as a formula. You **turn it into a list of evenly spaced points**
+(see the warning below) and give that to a follower. Planning the speed at each point is covered in
+[Pure Pursuit → Following a spline at speed](./pure-pursuit.mdx#following-a-spline-at-speed).
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: t is not distance">
+<Admonition type="warning" title="t is not distance">
 
-For these curves, the parameter $t$ is not arc length — equal steps in $t$ are unequal steps in metres,
-fast on straights and bunched in tight turns. Before a follower uses the path, **reparameterize by arc
-length** (integrate $\sqrt{x'^2 + y'^2}$ and resample) or your speed control will surge and stall around
-curves.
+Equal steps in $t$ are not equal distances along the curve. They tend to be spread out on straight parts
+and bunched up in turns. Before a follower uses the path, **resample it by distance**: add up
+$\sqrt{x'^2 + y'^2}$ along the curve to measure length, and place points at equal lengths. Otherwise
+speed control surges and stalls around curves.
 
 </Admonition>
 

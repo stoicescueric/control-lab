@@ -1,37 +1,26 @@
 ---
 title: Advanced Topics & Misc
-description: "Optional deep-dives that extend the core curriculum: Jacobian inverse kinematics, RST pole placement, Pedro Pathing internals, and take-back-half flywheel control."
+description: "Optional deeper lessons that extend the core curriculum: Jacobian inverse kinematics, RST pole placement, how Pedro Pathing works, and take-back-half flywheel control."
 tags: [advanced, optional, theory, inverse-kinematics, rst, pole-placement, pedro-pathing, takeback-half]
 ---
 
 # Advanced Topics & Misc
 
-These are **optional deep-dives**. Each one extends a core lesson with the heavier mathematics or a
-specialized technique that would slow a first read of the main path. Come here once you are already
-comfortable with [PID](../control-theory/pid.mdx), a reliable pose estimate, and
-[kinematics](../path-following/mecanum-kinematics.mdx). This section also holds useful side quests
-that are too specialized for the main sequence. Nothing in the core curriculum depends on this section,
-and every page below names the core lesson it builds on.
+These lessons are optional. Each one goes further into something from the main lessons, with heavier
+math or a more specialized technique that would slow down a first read. Nothing in the main curriculum
+depends on them, and each page says which lesson to read first.
 
 ## What's here
 
-- **[Inverse Kinematics: Jacobians & Numerical Solvers](./inverse-kinematics-jacobians.mdx)** - the
-  advanced form of IK: use a Jacobian to translate small end-effector errors into joint-angle corrections,
-  then stabilize the solve with damping near singularities. Extends
-  [Inverse Kinematics](../path-following/inverse-kinematics.mdx).
-- **[How does Pedro Pathing work?](./how-pedro-pathing-works.mdx)** - a research-to-robot bridge from
-  Bezier curves and closest-point projection to guided-vector-field correction, centripetal feedforward,
-  heading control, and completion constraints. Extends [Guided Vector Fields](../path-following/guided-vector-fields.mdx).
-- **[Take-Back-Half](./takeback-half.mdx)** - the one-line upgrade that turns a chattering bang-bang
-  flywheel into a steady, ripple-free hold. Extends [Bang-Bang Control](../control-theory/bang-bang.mdx).
-- **[RST Pole Placement](./rst-pole-placement.mdx)** - solve a sampled velocity controller from a
-  measured first-order plant and a stated response time. Extends
+- **[Inverse Kinematics: Jacobians & Numerical Solvers](./inverse-kinematics-jacobians.mdx)**: solve arm
+  angles a small step at a time, for mechanisms without a tidy geometric answer, and stay stable near
+  awkward poses. Builds on [Inverse Kinematics](../path-following/inverse-kinematics.mdx).
+- **[How Does Pedro Pathing Work?](./how-pedro-pathing-works.mdx)**: the ideas inside Pedro Pathing's
+  follower, from Bézier paths and closest-point search to centripetal correction, heading control, and
+  knowing when a path is done. Builds on [Guided Vector Fields](../path-following/guided-vector-fields.mdx).
+- **[Take-Back-Half](./takeback-half.mdx)**: a small change to bang-bang that lets a flywheel settle on a
+  steady speed. Builds on [Bang-Bang Control](../control-theory/bang-bang.mdx).
+- **[RST Pole Placement](./rst-pole-placement.mdx)**: build a velocity controller from your measured
+  feedforward constants and the response time you want. Builds on
   [System Identification](../control-theory/system-identification.mdx) and
   [From Math to a Loop](../software-architecture/discretization.mdx).
-
-<Admonition type="tip" title="Read the core lesson first">
-
-Each page begins with its exact prerequisite path. Follow those links before tackling a derivation;
-these pages are written as the “next layer,” not as standalone introductions.
-
-</Admonition>

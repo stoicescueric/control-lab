@@ -13,31 +13,23 @@ import {EmaWeightsExplorer} from '@site/src/components/simulations/signal-proces
 <Difficulty level="Medium" />
 
 <Abstract>
-A low-pass filter (the exponential moving average) smooths a noisy signal by blending each new reading
-with a fraction of the running estimate — one multiply, one add, one stored number. This lesson derives
-that update, makes it correct across a varying loop time, and shows the direct trade-off between
+A low-pass filter, also called an exponential moving average, smooths a noisy signal by moving its
+estimate part of the way toward each new reading. It takes one multiply, one add, and one stored number.
+This lesson builds the update, makes it work when the loop time varies, and shows the tradeoff between
 smoothness and lag.
 </Abstract>
 
-The low-pass filter is the most valuable line of code in embedded control: it removes most
-sensor jitter, costs one multiply and one add, and stores a single number. If a reading is too noisy
-to act on, this is the first thing to try.
+If a sensor reading is too jumpy to act on, this is the first thing to try. It's one line of code and
+it removes most of the jitter.
 
 <Problem>
 
 ## Fast noise rides on top of a slow signal
 
-Real signals usually change slowly; noise changes quickly. A raw distance-sensor reading or an
-AprilTag bearing carries both, and the fast component is what ruins downstream logic — most painfully a PID
-**derivative** term, which differentiates and therefore *amplifies* high-frequency jitter into motor
-chatter. We need to admit the slow, real component and reject the fast, noisy one — to let **low**
-frequencies **pass**.
-
-<Analogy>
-<strong>A bucket with a small hole.</strong> Pour noisy readings in; the water level cannot jump
-instantly — it rises and falls gradually, ignoring quick splashes but tracking the overall trend.
-The water level is the filtered output.
-</Analogy>
+Real signals usually change slowly and noise changes quickly. A distance-sensor reading or an AprilTag
+bearing has both, and the fast part causes the trouble, especially for a PID derivative term, which
+reacts to how fast things change and turns jitter into motor chatter. You want to keep the slow, real
+changes and drop the fast, noisy ones. Letting the low frequencies pass is where the name comes from.
 
 </Problem>
 
@@ -45,52 +37,45 @@ The water level is the filtered output.
 
 ## One step toward each new reading
 
-Each loop, move the estimate a fraction $\alpha \in (0, 1)$ of the way from its current value toward
-the new measurement:
+Start with numbers. Your estimate is 50.0 cm and a new reading comes in at 52.0 cm. Instead of jumping
+to 52, move 20% of the way there: the gap is 2.0, 20% of it is 0.4, so the new estimate is 50.4. Next
+loop the reading is 49.0. The gap is now −1.4, 20% of that is −0.28, and the estimate becomes 50.12. One
+noisy reading only moves the estimate a little, but if the readings really do stay at 52, the estimate
+keeps closing 20% of the gap every loop and gets there.
+
+That 20% is called $\alpha$, a number between 0 and 1. Each loop:
 
 $$
 \hat{x}_k = \hat{x}_{k-1} + \alpha\,(z_k - \hat{x}_{k-1})
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'x\u0302_k', meaning: 'the filtered ESTIMATE this loop. The hat marks it as something computed, never something measured'},
-    {symbol: 'z_k', meaning: 'the raw sensor reading this loop'},
-    {symbol: '\u03b1', meaning: 'the blend factor between 0 and 1: what fraction of the way to move toward the new reading. Near 0 is heavy smoothing and slow response; near 1 barely filters at all'},
-  ]}
-/>
-
-The term $(z_k - \hat{x}_{k-1})$ is the *innovation* — how surprising the new reading is. You accept
-a fraction $\alpha$ of each surprise. This is the **exponential moving average**: past readings fade
-geometrically, so it remembers everything while storing only one number.
+where $z_k$ is this loop's reading and $\hat{x}$ is the estimate (the hat means "estimated, not
+measured"). The gap in brackets is sometimes called the *innovation*: how different the new reading is
+from what you expected.
 
 | α | Behaviour | Character |
 |---|---|---|
 | near 0 | tiny steps → very smooth, slow, laggy | a heavy flywheel |
 | near 1 | big steps → snappy, barely filters | a twitchy needle |
 
-The name "exponential" is literal. Unroll the update a few steps and the filter turns out to hold a
-weighted average of *every* past reading, with geometrically fading weights:
+Where does "exponential" come from? With $\alpha = 0.2$, the newest reading gets a weight of 0.2. The
+reading before it has been multiplied by $0.8$ once since then, so its weight is $0.2 \times 0.8 = 0.16$.
+The one before that gets $0.2 \times 0.8^2 = 0.128$, and so on. Every old reading is still in there, with
+a weight that keeps shrinking by the same factor:
 
 $$
 \hat{x}_k = \alpha\,z_k + \alpha(1-\alpha)\,z_{k-1} + \cdots
 + (1-\alpha)^{k+1}\hat{x}_{-1}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '(1\u2212\u03b1) powers', meaning: 'the weight each older reading still carries. Because it is a fraction raised to a power, influence decays geometrically, which is what makes the filter "exponential"'},
-    {symbol: 'x\u0302_{-1}', meaning: 'the value the filter was seeded with. Its weight also fades, which is why a bad seed eventually washes out but a good one saves you the wait'},
-  ]}
-/>
+The last term is the starting value, $\hat{x}_{-1}$, and its weight fades too. That's why the filter
+should start from the first real reading. Starting from zero makes it spend its first second or so
+crawling up from a value that was never measured.
 
-The final term carries the actual initial estimate. On hardware, seed $\hat{x}_{-1}$ from the first valid
-measurement so the filter does not invent a transient from zero.
+### Picking α from a time constant
 
-### Optional derivation: connect $\alpha$ to a time constant
-
-That fade sets the filter's **time constant** $\tau$ — how long it takes to absorb a change. Matching
-the sampled filter exactly to an exponential response gives
+The same fade sets how long the filter takes to catch up with a change. That time is its **time
+constant** $\tau$, in seconds. Matching the loop-by-loop filter exactly to a smooth exponential gives
 
 $$
 \alpha = 1 - e^{-\Delta t/\tau},
@@ -98,42 +83,31 @@ $$
 \tau = -\frac{\Delta t}{\ln(1-\alpha)}.
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03c4 (tau)', meaning: 'the time constant, in SECONDS: roughly how long the filter takes to absorb 63% of a step change. Unlike \u03b1 it does not change meaning when the loop rate does', unit: 's'},
-    {symbol: 'the exponential', meaning: 'recomputing \u03b1 from the measured \u0394t each loop is what keeps the filter\u2019s real-world speed fixed at \u03c4 even when the loop rate wobbles'},
-  ]}
-/>
+After one time constant the filter has covered about 63% of a sudden change. The useful part is that
+$\tau$ is in seconds. A fixed $\alpha$ of 0.2 means something different at 50 loops per second than at
+25, but a $\tau$ of 0.08 s means the same thing at any loop rate, as long as you recompute $\alpha$ from
+the measured $\Delta t$ every loop.
 
-The endpoints are limits, not divide-by-zero cases: $\alpha=0$ gives $\tau=\infty$ and accepts no new
-sample weight, while $\alpha=1$ gives $\tau=0$ and copies the current measurement directly.
-
-The common formula $\alpha = \Delta t/(\tau+\Delta t)$ is the backward-Euler approximation. It is
-stable and often adequate when $\Delta t \ll \tau$, but it is not the exact step-response relation.
-Either way, the same hard-coded $\alpha$ represents a different $\tau$ at a different loop rate, so
-the deployable code computes $\alpha$ from a target $\tau$ and the measured $\Delta t$.
+You'll also see $\alpha = \Delta t/(\tau+\Delta t)$. It's an approximation that works fine when the
+loop is much faster than $\tau$, but the exponential version is exact.
 
 <EmaWeightsExplorer />
 
-This Desmos-style graph is the whole filter in two pictures. The **left panel is the memory**: the
-weight each past reading still carries, $\alpha(1-\alpha)^k$ — never exactly zero, always fading, and
-storing all of it costs one number. The **right panel is the price**: fed a sudden step, the output
-climbs to 63 % of the change after exactly $\tau$, and ~95 % after $3\tau$. Slide $\alpha$ down and
-watch both at once — the memory stretches deeper into the past (smoother) while the step response
-lags further behind (slower). That is the trade-off, quantified. Then change $\Delta t$ and notice
-$\tau$ move with it at fixed $\alpha$: proof that $\alpha$ only means something *relative to your
-loop rate*.
+The left panel shows how much weight each past reading still has, $\alpha(1-\alpha)^k$. The right
+panel shows the cost: after a sudden step, the output reaches 63% of the change after $\tau$ and about
+95% after $3\tau$. Lower $\alpha$ and both panels change together. The memory reaches further back, so
+the output is smoother, and the step response takes longer. Then change $\Delta t$ with $\alpha$ fixed
+and watch $\tau$ move, which is why the code picks $\tau$ and computes $\alpha$.
 
-The demo below runs it on a live signal — the true value, the noisy sensor, and the filtered output.
-Sweep $\alpha$ from heavy smoothing to nearly raw, and use the step test to feel the same 63 % lag
-you just measured.
+The live demo runs the filter on a noisy signal. Move $\alpha$ from heavy smoothing to almost none, and
+use the step test to see the lag.
 
 <LowPass />
 
-<Callout type="math" title="The fundamental trade-off.">
-More smoothing always means more delay. Low <code>α</code> rejects noise but lags; high <code>α</code>
-is responsive but leaks jitter. You are choosing how much to trust the latest reading versus the
-accumulated history — there is no setting that wins both.
+<Callout type="math" title="Smoothness costs lag">
+More smoothing always means more delay. A low <code>α</code> rejects noise but lags behind, and a high
+<code>α</code> responds quickly but lets jitter through. You're choosing how much to trust the newest
+reading compared with everything before it, and no setting gets you both.
 </Callout>
 
 </Theory>
@@ -142,8 +116,8 @@ accumulated history — there is no setting that wins both.
 
 ## One line in the loop, tuned to dt
 
-The implementation is trivial; the engineering is choosing $\alpha$ from a target time constant and
-the measured loop time, so behaviour is independent of how fast the loop happens to run.
+The code is short. The important part is computing $\alpha$ from a chosen time constant and the measured
+loop time, so the filter behaves the same whatever the loop rate is.
 
 <JavaCode league="FTC" label="Low-pass a noisy sensor before using it">{`private static final double TAU = 0.08;   // time constant, seconds
 
@@ -167,15 +141,14 @@ double update(double raw, double dt) {
 
 <Exercise title="Ten loops by hand">
 
-The single line that matters is `filtered += alpha * (raw - filtered)`: move a fraction $\alpha$ of the
-way from where you are to what you just measured. Take $\alpha = 0.2$, start at 0, and feed a constant
-reading of 10. Tabulate ten loops. How many does it take to pass 9?
+Take $\alpha = 0.2$, start at 0, and feed in a constant reading of 10. Write out ten loops of
+`filtered += alpha * (raw - filtered)`. How many loops does it take to pass 9?
 
 <Solution>
 
-`2.00, 3.60, 4.88, 5.90, 6.72, 7.38, 7.90, 8.32, 8.66, 8.93` — ten loops and it still has not reached 9;
-loop 11 gets there. That count *is* the response time. At a 50 Hz loop, 11 loops is 220 ms of lag
-before the filter fully believes a step that already happened.
+`2.00, 3.60, 4.88, 5.90, 6.72, 7.38, 7.90, 8.32, 8.66, 8.93`. After ten loops it still hasn't reached 9;
+loop 11 gets there. At 50 loops a second that's 220 ms before the filter mostly believes a change that
+already happened.
 
 </Solution>
 
@@ -183,30 +156,28 @@ before the filter fully believes a step that already happened.
 
 <Exercise title="Why alpha is recomputed every loop">
 
-Naively you would pick a constant $\alpha$ like 0.2 — but then the filter's real-world speed changes
-whenever your loop time does. Work out what $\alpha = 1 - e^{-\Delta t/\tau}$ gives at
-$\Delta t = \tau$, and what it approaches as $\Delta t$ grows large. Then estimate the lag this filter
-costs at $\tau = 0.08$ s and decide whether your controller can tolerate it.
+A fixed $\alpha$ like 0.2 makes the filter faster or slower whenever the loop time changes. What does
+$\alpha = 1 - e^{-\Delta t/\tau}$ give when $\Delta t = \tau$, and what does it approach as $\Delta t$
+gets large? Roughly how much lag does $\tau = 0.08$ s add?
 
 <Solution>
 
-At $\Delta t = \tau$ it gives $1 - e^{-1} \approx 0.63$ — the 63 % you measured on the step test. As
-$\Delta t$ grows it approaches 1, meaning "so much time has passed, just trust the new reading."
-$\tau$ is in seconds, so the behavior is fixed in wall-clock terms no matter how fast the loop runs.
-The filtered value trails the truth by roughly $\tau$, so 80 ms here — survivable for a heading hold,
-usually not for a derivative term.
+At $\Delta t = \tau$ it gives $1 - e^{-1} \approx 0.63$, the 63% from the step test. As $\Delta t$ gets
+large it approaches 1: so much time has passed that you should just take the new reading. The filtered
+value trails the truth by roughly $\tau$, so about 80 ms here. That's usually fine for a heading hold
+and usually too much for a derivative term.
 
 </Solution>
 
 </Exercise>
 
-<Callout type="tip" title="Free high-pass filter.">
-Subtract the low-pass output from the raw signal — <code>raw − filtered</code> — and you get a
-<em>high-pass</em> filter that keeps only fast changes: useful for detecting taps, impacts, or edges.
+<Callout type="tip" title="A high-pass filter for free">
+Subtract the filtered value from the raw one, <code>raw − filtered</code>, and you're left with only
+the fast changes. That's a <em>high-pass</em> filter, useful for detecting bumps, impacts, or edges.
 </Callout>
 
-The low-pass weighs all history with a single fading factor. The next filter instead averages a
-fixed, equally-weighted window — a different trade-off worth understanding.
+The low-pass filter weights all past readings with a fading factor. The next one, the moving average,
+weights the last few readings equally and ignores everything older.
 
 </Deploy>
 

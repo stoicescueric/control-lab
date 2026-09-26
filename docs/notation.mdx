@@ -1,6 +1,6 @@
 ---
 title: Conventions & Notation
-description: "The one page that pins down every convention the curriculum uses: coordinate frames, angle ranges, units, and what each recurring symbol and gain means."
+description: "The coordinate frames, angle ranges, units, and symbols used across Control Lab, all in one place."
 sidebar_position: 99
 tags: [notation, conventions, coordinate-frames, units, symbols, reference]
 ---
@@ -8,9 +8,8 @@ tags: [notation, conventions, coordinate-frames, units, symbols, reference]
 # Conventions & Notation
 
 <Abstract>
-Every lesson on this site uses the same coordinate frames, angle conventions, units, and symbol names —
-this page is where they are pinned down once. If a formula's sign or a symbol ever looks surprising,
-check here before assuming a typo.
+Every lesson uses the same coordinate frames, angle conventions, units, and symbol names, and this page
+lists them. If a sign or symbol in a formula looks wrong, check here before assuming it's a typo.
 </Abstract>
 
 ## Coordinate frames
@@ -41,8 +40,8 @@ $$
 
 :::warning[Sign bugs are convention bugs]
 If a wheel fights the others or the robot strafes when told to turn, fix the **convention** (motor
-direction, encoder sign, angle zero), never the math. Half of all "mecanum is broken" bugs are one
-inverted motor. See [angle wrapping](./path-following/angle-wrapping.mdx) for the $\pm\pi$ seam.
+direction, encoder sign, where zero is), not the math. Most mecanum bugs turn out to be one reversed
+motor. See [angle wrapping](./path-following/angle-wrapping.mdx) for the $\pm\pi$ seam.
 :::
 
 ## Units
@@ -61,8 +60,7 @@ that choice. Convert once at a hardware or library boundary and never mix unit s
 
 ### Indices, increments, and decorations
 
-These appear in almost every equation on the site, so they are defined once here rather than
-re-stated in each lesson.
+These show up in almost every equation on the site.
 
 | Symbol | Meaning |
 |---|---|
@@ -98,8 +96,15 @@ the next loop is some function of the state now, plus how far the robot moved an
 | $k_P, k_I, k_D$ | PID gains (present, past, trend of the error) |
 | $k_S, k_V, k_A$ | feedforward: static friction, velocity, acceleration |
 | $k_G$ | gravity hold (constant for slides, $k_G\cos\theta$ for arms) |
-| $k_L$ | static-friction floor in the [PDFL controller](./control-theory/pid.mdx) |
 | $v_{max}, a_{max}$ | the mechanism's real speed and acceleration limits |
+
+The same two feedforward terms go by other names in some lessons, following the code they come from:
+
+| Name | Where it's used | Same as |
+|---|---|---|
+| $k_F$ | the F in the [PDFL controller](./control-theory/pid.mdx) | $k_G$, the gravity hold |
+| $k_L$ | the L in the PDFL controller | $k_S$, the static-friction push |
+| `kStatic` | [path followers](./path-following/common-implementation.mdx) | $k_S$, applied only near the target |
 
 ### Motors
 
@@ -121,39 +126,23 @@ the next loop is some function of the state now, plus how far the robot moved an
 | $Q, R$ | process-noise and measurement-noise covariance — the two tuning knobs |
 | $K$ | Kalman gain: how much of the innovation to believe |
 | $H$ | measurement matrix/Jacobian: state space → sensor space |
-| $\alpha$ (low-pass / EMA) | weight on the **new reading**; exact relation $\alpha = 1-e^{-\Delta t/\tau}$ |
-| $\alpha$ (complementary) | weight on the **prediction** — the complement of the row above, $\alpha = e^{-\Delta t/\tau}$. Check which one a lesson means |
+| $\alpha$ (low-pass) | weight on the **new reading**, $\alpha = 1-e^{-\Delta t/\tau}$ |
+| $\alpha$ (complementary) | weight on the **prediction**, $\alpha = e^{-\Delta t/\tau}$, the opposite of the row above |
 | $\tau$ | a filter time constant |
-
-### State space
-
-Capital letters here are the *model*, not gains. They say how the mechanism behaves; the gains
-say what you do about it.
-
-| Symbol | Meaning |
-|---|---|
-| $\mathbf{x}$ | the **state**: the smallest set of numbers that captures where the mechanism is right now |
-| $\mathbf{u}$ | the input you command (the same $u$ as in control, written as a vector) |
-| $A$ | how the state evolves on its own, with no input |
-| $B$ | how the input pushes the state |
-| $C$ | which parts of the state a sensor can actually see |
-| $A_d, B_d$ | the same two matrices *discretized*: the exact effect of holding $\mathbf{u}$ constant for one $\Delta t$ |
-| $K$ | the feedback gain solved from the model (context separates this from the Kalman gain) |
+| $A, B$ | in the matrix Kalman filter: how the state moves on its own ($A$) and how a command changes it ($B$) |
 
 ## Naming in the algorithms
 
-Every algorithm in this book is shown as Java, scoped to the method that *is* the lesson. What is
-missing is the program around it: helper methods, tuned constants, and the hardware are yours to write,
-and no block reads a sensor or drives a motor directly. That is deliberate — a block you can paste is a
-block you can skip.
+Every algorithm is shown in Java, usually just the method the lesson is about. The rest of the program,
+like helper methods, tuned constants, and hardware setup, is left for you to write, so most blocks
+won't run if you paste them in on their own. Some blocks do call the FTC SDK directly (`setPower`,
+`getVoltage`) where that call is the point of the lesson.
 
-Names follow ordinary Java: `lowerCamelCase` for locals and methods, `SCREAMING_CASE` for tuned
-constants. Comments in a block carry only units and ranges. Anything worth deriving by hand appears
-after the block in an **Exercise**, often with a collapsible solution — those are the parts worth
-working out on paper before you write code.
+The code is written for Java 8, which is what the FTC SDK compiles by default. Names follow ordinary
+Java: `lowerCamelCase` for variables and methods, `SCREAMING_CASE` for tuned constants. Comments only
+give units and ranges. Anything worth working out by hand comes after the block as an **Exercise**,
+often with a hidden solution.
 
-The names mirror the math: `kP`, `kV`, `kG` for gains; `dt` for measured loop time; `wrap(angle)` for
-the $[-\pi,\pi)$ normalization; `Pose2d`/`Vector2d`/`PoseSample`/`moveStatus(...)` from the shared
-[Common Implementation](./path-following/common-implementation.mdx) page, which keep their exact
-spelling everywhere they appear. A follower's input must first satisfy the
-[Pose Estimation Contract](./path-following/pose-estimation-contract.mdx).
+The names match the math: `kP`, `kV`, `kG` for gains, `dt` for measured loop time, `wrap(angle)` for
+wrapping to $[-\pi,\pi)$, and `Pose2d`, `Vector2d`, `PoseSample`, and `moveStatus(...)` from
+[Common Implementation](./path-following/common-implementation.mdx), spelled the same everywhere.

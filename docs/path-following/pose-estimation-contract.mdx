@@ -45,13 +45,13 @@ interface PoseSource {
 
 <Exercise title="Why two methods">
 
-Refreshing is deliberately separate from reading. Work out how many times per loop `update()` is called,
-and how many times several followers, telemetry, and a logger might each call `getSample()`.
+Refreshing is kept separate from reading on purpose. How many times per loop is `update()` called, and
+how many times might followers, telemetry, and a logger each call `getSample()`?
 
 <Solution>
 
 `update()` once, `getSample()` as many times as anyone asks. Fusing them into one method would make
-every read a refresh, so each consumer would silently get a *different* estimate and the sensor work
+every read a refresh, so each consumer would get a *different* estimate and the sensor work
 would run several times per loop for no benefit. Splitting them makes the sample immutable within a
 loop, which is the whole contract.
 
@@ -106,7 +106,7 @@ then test only the adapter contract here.
 
 <Exercise title="Two followers, two instants">
 
-Work out what breaks if each consumer calls `getSample()` for itself. At 60 inches/second, how far
+What breaks if each consumer calls `getSample()` for itself? At 60 inches per second, how far
 apart are two readings taken 12 ms apart?
 
 <Solution>

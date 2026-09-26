@@ -1,6 +1,6 @@
 ---
 title: Pure Pursuit
-description: Convert a planned path into continuous steering with one geometric rule — chase a lookahead "carrot" along the path, turn the chord into an arc, and command curvature every loop. Fixed vs. dynamic lookahead.
+description: Turn a planned path into continuous steering with one geometric rule. Chase a point a fixed distance ahead on the path, drive the arc that reaches it, and plan speed around the curves.
 sidebar_position: 8
 tags: [pure-pursuit, path-following, lookahead, curvature, autonomous]
 ---
@@ -10,114 +10,88 @@ import CurvatureCircle from '@site/src/components/simulations/path-following/Cur
 import VelocityProfile from '@site/src/components/simulations/path-following/VelocityProfile';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 
-# Path Following (Pure Pursuit)
+# Pure Pursuit
 
 <Difficulty level="Hard" />
 
 <Abstract>
-Pure pursuit turns a planned path into smooth steering with one geometric rule: continuously aim at a
-"carrot" a fixed look-ahead distance along the path. This lesson derives the curvature that arc
-requires and shows how the look-ahead distance trades tracking tightness against smoothness.
+Pure pursuit follows a path by always steering toward a point a fixed distance ahead of the robot on
+the path. This lesson works out the arc that reaches that point, shows how the lookahead distance trades
+tight tracking for smoothness, and adds speed planning so the robot slows down for curves.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-First meet the [Pose Estimation Contract](./pose-estimation-contract.mdx) and
-[Mecanum Kinematics](./mecanum-kinematics.mdx), then read [Splines](./quintic-splines.mdx) to understand
-the curve being followed. This lesson derives curvature, but the first pass only requires a field pose,
-a path, and robot-relative drive commands.
-
-**Math used:** 2-D vectors, distance, circle geometry, and curvature. The first deployed follower does
-not require calculus; treat curvature as a computed steering request.
+Read the [Pose Estimation Contract](./pose-estimation-contract.mdx),
+[Mecanum Kinematics](./mecanum-kinematics.mdx), and [Splines](./quintic-splines.mdx) first. The basic
+follower only needs vectors, distances, and circle geometry.
 
 </Admonition>
 
 <Admonition type="info" title="Reading map for the attached Team 1712 whitepaper">
 
-This lesson's adaptive extension follows Team 1712 DAWGMA's *Implementation of the Adaptive Pure
-Pursuit Controller*. Read pp. 5–9 for point injection, smoothing, curvature, and the backward velocity
-pass; pp. 10–15 for monotone closest/lookahead progress and signed arc curvature; and pp. 16–18 for
-wheel control, tuning, stopping, and visualization. The paper targets a differential drive. This lesson
-keeps that derivation explicit and separately explains what changes for a holonomic mecanum chassis.
+The speed-planning part of this lesson follows Team 1712 DAWGMA's *Implementation of the Adaptive Pure
+Pursuit Controller*. Pages 5 to 9 cover adding and smoothing points, curvature, and the speed plan;
+pages 10 to 15 cover finding the lookahead point; pages 16 to 18 cover wheel control and tuning. The
+paper is written for a tank drive, and this lesson notes what's different on mecanum.
 
 </Admonition>
 
-The robot gets a current field pose from a source verified against the
-[Pose Estimation Contract](./pose-estimation-contract.mdx), and it knows where it should go from a planned path. Path following is
-the controller that connects them: it converts the path into a continuous stream of drive commands.
-**Pure Pursuit** is the classic, deployable method — a single geometric rule that has steered FTC
-and FRC robots for years.
+The robot knows where it is from its pose source and where it should go from a planned path. A path
+follower turns the path into drive commands every loop. Pure pursuit is the classic way to do it, and
+FTC and FRC teams have used it for years.
 
 <Problem>
 
 ## Waypoint-to-waypoint driving is slow and discontinuous
 
-The obvious approach drives straight to waypoint 1, stops, rotates, drives to waypoint 2, and so on.
-It is slow, jerky, and stresses the drivetrain at every stop. Competition autonomous needs to follow
-a *continuous* curve at speed, correcting smoothly for the inevitable pose error rather than halting
-to re-aim. The controller must answer, every loop: given my current pose and this path, what
-curvature should I drive?
+The obvious approach drives to waypoint 1, stops, turns, drives to waypoint 2, and so on. It's slow and
+jerky and hard on the drivetrain. You want the robot to follow a smooth curve at speed and correct small
+errors as it goes, without stopping to re-aim.
 
 <Analogy>
-<strong>A carrot on a stick.</strong> Fix a carrot a constant distance ahead of you, always on the
-path, and simply walk toward it. As you advance, the carrot slides further along the path, so you
-continuously curve to follow it. That moving target is the <strong>lookahead point</strong>.
+<strong>A carrot on a stick.</strong> Hold a carrot a fixed distance ahead of you, always on the path,
+and walk toward it. As you move, the carrot slides along the path, so you keep curving to follow it.
+That moving target is the <strong>lookahead point</strong>.
 </Analogy>
 
 </Problem>
 
-## Core checkpoint: Basic Pure Pursuit
-
 <Theory>
 
-## One arc to a lookahead point
+## One arc to the lookahead point
 
-The algorithm is three steps, run every loop:
+Every loop:
 
-1. **Find the lookahead point**: walk along the path until you are a fixed lookahead distance $L_d$
-   away. That point is the carrot.
-2. **Transform it into the robot frame**, where $+x$ is forward and $+y$ is left. Call the lateral
-   offset $y$.
-3. **Compute the arc**: exactly one circular arc starts at the robot (tangent to its heading) and
-   passes through the carrot. Its curvature, and the resulting turn rate at speed $v$, are:
+1. **Find the lookahead point**: the point on the path a fixed distance $L_d$ from the robot.
+2. **Put it in the robot's frame**, where $+x$ is forward and $+y$ is left. Call its sideways offset $y$.
+3. **Drive the arc**: there's exactly one circle that starts at the robot, heading the way the robot is
+   facing, and passes through the lookahead point. Drive along it.
+
+Say $L_d = 20$ in and the lookahead point is 4 in to the robot's left. The circle through it has radius
+$20^2 / (2 \times 4) = 50$ in, so the robot should curve left with a radius of 50 in. In general:
 
 $$
 \kappa = \frac{2y}{L_d^{\,2}}, \qquad \omega = \kappa\,v
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'y', meaning: 'the carrot\u2019s sideways offset in the ROBOT frame, not the field frame. Positive means the carrot is to the robot\u2019s left', unit: 'in'},
-    {symbol: 'L_d', meaning: 'lookahead distance: the radius of the circle centred on the robot', unit: 'in'},
-    {symbol: '\u03ba', meaning: 'curvature of the arc that reaches the carrot; 1 / turning radius', unit: '1/in'},
-  ]}
-/>
+$\kappa$ is the curvature, one over the turning radius, and at speed $v$ the robot turns at
+$\omega = \kappa v$. In the example, $\kappa = 1/50$ per inch, and at 30 in/s the robot turns at
+0.6 rad/s. If the lookahead point is straight ahead, $y = 0$ and the robot drives straight. The
+derivation is an exercise further down.
 
-<Formula>
-  curvature = <Rose>2·y / Ld²</Rose> &nbsp;&nbsp; turn rate <Amber>ω = curvature · v</Amber>
-</Formula>
-
-This drops out of geometry: the chord to the carrot has length $L_d$ and lateral offset $y$, so the
-unique tangent circle through both has radius $r = L_d^2 / (2y)$, hence curvature $1/r = 2y/L_d^2$.
-If the carrot is dead ahead ($y = 0$), curvature is zero — drive straight.
-
-<Callout type="warning" title="This derivation assumes a nonholonomic robot — mecanum isn't one.">
-The "follow one arc to the carrot" rule is built on a <strong>nonholonomic</strong> drive: a tank, car,
-or differential robot can only move along its heading and must <em>steer</em> (change curvature) to go
-sideways. That constraint is the whole reason a single arc — coupling forward speed to turn rate
-$\omega = \kappa v$ — is the natural command. A <strong>mecanum</strong> drive is
-<strong>holonomic</strong>: it can translate in any direction <em>independently</em> of where it is
-facing. So on mecanum you have two choices. (a) Run pure pursuit as written — treat the chassis like a
-diff-drive, steering toward the carrot and letting heading follow the path tangent; simple, and fine for
-gentle paths. (b) Exploit the holonomy — drive the velocity vector <em>straight at the lookahead point</em>
-and control heading with a <em>separate</em> loop. Option (b) is exactly what the holonomic followers in
-this module do: <a href="./pid-to-point">PID-to-point</a> and the
-<a href="./guided-vector-fields">guided vector field</a> command $(v_x, v_y, \omega)$ directly and never
-need the curvature trick. Use pure pursuit's curvature form when the geometry genuinely couples steering
-and motion (tank/diff); reach for decoupled translation + heading on mecanum.
+<Callout type="warning" title="The arc is for robots that can't strafe">
+The arc rule comes from tank and car-like drives, which can only move the way they're facing and have
+to turn to go sideways. A <strong>mecanum</strong> drive can move in any direction whatever way it's
+facing, so you have two choices. You can run pure pursuit as written and treat the robot like a tank,
+which is simple and fine for gentle paths. That's what the code in this lesson does. Or you can drive
+the robot's velocity straight at the lookahead point and control heading separately, which uses what
+mecanum can do. [PID-to-point](./pid-to-point.mdx) and
+[guided vector fields](./guided-vector-fields.mdx) work that second way. The lookahead-point search and
+the speed planning below are useful either way.
 </Callout>
 
-The single tuning parameter is the lookahead distance, and it is a direct trade-off:
+The main setting is the lookahead distance:
 
 | Lookahead $L_d$ | Behaviour |
 |---|---|
@@ -125,47 +99,39 @@ The single tuning parameter is the lookahead distance, and it is a direct trade-
 | **Too large** | very smooth but cuts corners and rounds off tight features |
 | **Tuned** | smooth tracking with stable, gentle correction |
 
-In the demo, the robot follows the blue path; the <span style={{ color: "#ffc24d" }}>amber
-carrot</span> is its lookahead target. Drag the waypoints to reshape the path and sweep the lookahead
-from small (watch it oscillate) to large (watch it cut corners).
+In the demo, the robot follows the blue path and the <span style={{ color: "#ffc24d" }}>amber
+dot</span> is its lookahead point. Drag the waypoints to reshape the path, and try a small lookahead
+(watch it weave) and a large one (watch it cut corners).
 
 <PurePursuit />
 
-<Callout type="idea" title="Experiment:">
-arrange two waypoints into a tight dog-leg. A small lookahead tracks the corner but jitters; a large
-lookahead is smooth but slices across it. There is no universally correct value — it is chosen for
-the geometry the path demands.
+<Callout type="idea" title="Try this">
+Make a tight dog-leg with two waypoints. A small lookahead follows the corner but jitters, and a large
+one is smooth but cuts across it. The right value depends on the path.
 </Callout>
 
 ### Finding the carrot precisely: line–circle intersection
 
-"Walk along the path until you are $L_d$ away" is fine for densely-sampled waypoints, but the exact
-carrot is where a **circle of radius $L_d$ around the robot crosses the path**. On a straight segment
-from $\mathbf{A}$ to $\mathbf{B}$, parametrize the point as $\mathbf{E}(t) = \mathbf{A} + t(\mathbf{B} -
-\mathbf{A})$ and solve $\lVert \mathbf{E}(t) - \mathbf{P} \rVert^2 = L_d^2$ for the robot at $\mathbf{P}$.
-With $\mathbf{d} = \mathbf{B} - \mathbf{A}$ and $\mathbf{f} = \mathbf{A} - \mathbf{P}$ that is a quadratic
-in $t$:
+The lookahead point is where a **circle of radius $L_d$ around the robot crosses the path**. For one
+straight piece of path from $\mathbf{A}$ to $\mathbf{B}$, the points on it are
+$\mathbf{A} + t(\mathbf{B} - \mathbf{A})$ with $t$ from 0 to 1. You want the $t$ where that point is exactly
+$L_d$ from the robot at $\mathbf{P}$. Writing $\mathbf{d} = \mathbf{B} - \mathbf{A}$ (the segment) and
+$\mathbf{f} = \mathbf{A} - \mathbf{P}$ (robot to start of segment), squaring the distance gives a
+quadratic in $t$:
 
 $$
 (\mathbf{d}\cdot\mathbf{d})\,t^2 + 2(\mathbf{f}\cdot\mathbf{d})\,t + (\mathbf{f}\cdot\mathbf{f} - L_d^2) = 0
 $$
 
-<EquationLegend
-  title="Symbols in the intersection test"
-  items={[
-    {symbol: 'A, B', meaning: 'the two endpoints of the path segment being tested'},
-    {symbol: 'P', meaning: 'the robot\u2019s position, the centre of the lookahead circle'},
-    {symbol: 'd', meaning: 'B \u2212 A, the segment as a vector'},
-    {symbol: 'f', meaning: 'A \u2212 P, from the robot to the segment\u2019s start'},
-    {symbol: 't', meaning: 'how far along the segment a solution lies. 0 is at A, 1 is at B, and anything outside [0,1] missed the segment'},
-  ]}
-/>
+Solve it with the quadratic formula and keep solutions between 0 and 1, since anything outside missed
+the segment. A few rules keep it well behaved:
 
-Solve with the quadratic formula and keep roots in $[0,1]$. Choose the larger root on the **first segment
-at or ahead of stored continuous progress**. Skip duplicate zero-length segments before division. The
-stored segment index plus $t$ makes progress monotone. If there is no intersection and the endpoint is
-inside the lookahead circle, hand off to that exact endpoint. If the robot is simply far from the path,
-retain the last accepted progress and recover toward it rather than irreversibly jumping to the end.
+- Remember how far along the path you got last loop, and only search from there forward.
+- On a segment with two crossings, take the larger $t$, the one further along.
+- Skip zero-length segments (duplicate points), which would divide by zero.
+- If nothing crosses and the end of the path is inside the circle, aim at the end.
+- If the robot is just far from the path, keep aiming at where it last was on the path instead of
+  jumping ahead.
 
 <JavaCode label="Segment-circle intersection">{`// Segment A->B, robot position P, lookahead radius Ld. Returns the
 // parameter t in [0, 1] where the circle crosses, or null.
@@ -211,22 +177,20 @@ Lookahead findLookahead(List<Vector2d> path, Vector2d robot, double Ld,
 
 <Exercise title="Derive the quadratic">
 
-Write the condition "the point $A + t(B-A)$ is exactly $L_d$ away from $P$" as
-$|A + t(B-A) - P| = L_d$, square both sides, and collect powers of $t$. You should get
-$at^2 + bt + c$ with exactly the $a$, $b$, $c$ above. Then work out what a negative discriminant means
-geometrically, and why `tFar` is preferred when both roots are valid.
+Write "the point $A + t(B-A)$ is exactly $L_d$ from $P$" as $|A + t(B-A) - P| = L_d$, square both sides,
+and collect powers of $t$. Do you get the $a$, $b$, and $c$ in the code? What does a negative
+discriminant mean on the field, and why prefer `tFar` when both roots are valid?
 
 <Solution>
 
-Squaring gives $|f + td|^2 = L_d^2$, and expanding the dot product produces
-$(d\cdot d)t^2 + 2(f\cdot d)t + (f\cdot f - L_d^2) = 0$ — the three coefficients above.
+Squaring gives $|f + td|^2 = L_d^2$, and expanding gives
+$(d\cdot d)t^2 + 2(f\cdot d)t + (f\cdot f - L_d^2) = 0$, the same three coefficients.
 
-A negative discriminant means the line carrying the segment never comes within $L_d$ of the robot: the
-circle and the line miss entirely, so there is no carrot on this segment.
+A negative discriminant means the line never comes within $L_d$ of the robot, so the circle misses it
+and there's no lookahead point on this segment.
 
-`tFar` is preferred because when the circle crosses one segment twice, the far root is the one further
-*along* the path. Taking the near root would aim the robot at a point behind the one it is already
-driving toward, and progress would stall. Look up "line-circle intersection."
+When the circle crosses a segment twice, the larger $t$ is further along the path. The smaller one is
+behind the robot's target, and aiming there would stall its progress.
 
 </Solution>
 
@@ -234,15 +198,14 @@ driving toward, and progress would stall. Look up "line-circle intersection."
 
 <Exercise title="What the two guards prevent">
 
-Starting the scan at `from.segment()` and refusing `t < min_t` is what stops the robot snapping onto an
-earlier part of a path that crosses itself. Work out what a figure-eight path does without them.
+The search starts at `from.segment()` and rejects `t < minT`. What would a figure-eight path do
+without those two checks?
 
 <Solution>
 
-At the crossing, the lookahead circle intersects both branches. An unguarded search returns whichever
-comes first in the point list — the earlier branch — so the robot latches onto the part of the path it
-already drove and loops the first half of the eight forever. The guards make progress monotonic: the
-carrot can only ever move forward along the path.
+At the crossing, the lookahead circle hits both branches. Without the checks, the search returns
+whichever comes first in the list, which is the branch the robot already drove, so it loops the first
+half of the eight forever. With them, the lookahead point can only move forward along the path.
 
 </Solution>
 
@@ -250,203 +213,155 @@ carrot can only ever move forward along the path.
 
 ### Fixed vs. dynamic lookahead
 
-The table above is the case *against* a single fixed lookahead: the value that smooths a fast straight
-is the same value that cuts a tight corner. A **fixed** lookahead picks one compromise for the whole
-path. A **dynamic** lookahead changes $L_d$ as the robot drives, escaping the trade-off:
+The lookahead that keeps a fast straight smooth is the same one that cuts a tight corner. A fixed
+lookahead picks one compromise for the whole path. A **dynamic** lookahead changes as the robot drives:
 
-- **Speed-scaled**: make lookahead grow with speed magnitude,
-  $L_d = \operatorname{clamp}(k\,|v|,\ L_\text{min},\ L_\text{max})$. The magnitude matters when reverse
-  motion is supported.
-- **Curvature-scaled**: shrink lookahead where the upcoming path bends sharply (large $|\kappa|$ from the [spline](./quintic-splines.mdx)) and grow it on gentle sections, so tight features are tracked and straights stay calm.
+- **With speed**: longer when the robot is fast, shorter when it's slow. Use the speed's size, so it
+  still works driving backwards.
+- **With curvature**: shorter where the path ahead bends sharply and longer on gentle sections, so tight
+  spots are followed closely and straights stay calm.
+
+For the speed version:
 
 $$
 L_d = \operatorname{clamp}\big(k_v\, |v|,\ L_\text{min},\ L_\text{max}\big)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'k_v', meaning: 'how much lookahead to buy per unit of speed. Because it multiplies a speed to give a distance, it is a time', unit: 's'},
-    {symbol: 'L_min, L_max', meaning: 'the shortest and longest lookahead allowed, whatever the speed says', unit: 'in'},
-  ]}
-/>
+$k_v$ is a time: at 30 in/s with $k_v = 0.5$ s, the lookahead is 15 in, clamped between the shortest and
+longest you allow. It adds settings to tune, and a lookahead that changes too suddenly causes its own
+steering jitter, so limit how fast it can change. If one fixed lookahead can't handle a path with both
+fast and tight sections, make it dynamic, or try a [guided vector field](./guided-vector-fields.mdx),
+which doesn't use a lookahead point at all.
 
-Dynamic lookahead is strictly more capable but adds more settings to tune, and a lookahead that changes too
-abruptly can itself induce steering jitter — rate-limit it. If you find yourself fighting a fixed
-lookahead on a path with both fast and tight sections, that is the signal to make it dynamic, or to
-switch to a [guided vector field](./guided-vector-fields.mdx) that drops the lookahead idea entirely.
+## Planning speed around curves
 
-## Production extension: adaptive speed and spline paths
+### Adaptive pure pursuit
 
-### Adaptive pure pursuit: plan the speed, not just the steering
+Plain pure pursuit decides where to steer. **Adaptive** pure pursuit, which Team 1712 (DAWGMA) made
+popular in FRC, also decides how fast to go at every point, ahead of time, from the shape of the path.
+The robot slows for tight turns and speeds up on straights without a hand-made speed plan. It's three
+passes over a list of closely spaced points, plus a limit on how fast the speed can change while
+driving.
 
-Plain pure pursuit answers *where to steer*. **Adaptive** pure pursuit — the version Team 1712 (DAWGMA)
-popularised in FRC — adds the other half: *how fast to go at every point*, decided ahead of time from
-the path's own geometry. The robot then "adapts" its speed to the curve, braking for tight turns and
-opening up on straights, with no hand-authored velocity plan. It is a three-pass precompute over the
-densely-sampled path, plus a one-line runtime limit.
-
-**1 — Curvature at every point.** Take each point with its two neighbours $P_{i-1}, P_i, P_{i+1}$ and
-fit the unique circle through them; the curvature is $\kappa_i = 1/R$. The compact way to get $R$ is the
-circumscribed-circle (Menger) formula — with triangle side lengths $a, b, c$ and area $A$:
+**1. Curvature at every point.** Take each point and its two neighbors, and find the circle through all
+three. The curvature is one over its radius. There's a neat formula for that radius using the triangle's
+side lengths $a$, $b$, $c$ and its area $A$:
 
 $$
 R = \frac{a\,b\,c}{4A}, \qquad \kappa_i = \frac{1}{R} = \frac{4A}{a\,b\,c},
 \qquad A = \tfrac12\big\lvert (P_i - P_{i-1}) \times (P_{i+1} - P_i)\big\rvert
 $$
 
-<EquationLegend
-  title="Symbols in the Menger curvature formula"
-  items={[
-    {symbol: 'P_i', meaning: 'the i-th point of the densely resampled path. The subscript counts points along the path, not loops in time'},
-    {symbol: 'a, b, c', meaning: 'the three side lengths of the triangle formed by P\u1d62\u208b\u2081, P\u1d62, P\u1d62\u208a\u2081', unit: 'in'},
-    {symbol: 'A', meaning: 'the AREA of that triangle. Not the segment endpoint A above, and not a state matrix', unit: 'in\u00b2'},
-    {symbol: 'R', meaning: 'radius of the unique circle through the three points', unit: 'in'},
-  ]}
-/>
+(Here $A$ is the triangle's area, not the segment endpoint from earlier.) Three points in a straight
+line make a triangle with no area, so the curvature is zero. The first and last points don't have two
+neighbors, so their curvature is set to zero.
 
-A straight run gives $A = 0$, hence $\kappa = 0$ (infinite radius); the two endpoints have no neighbour
-pair, so their curvature is set to zero.
-
-Drag the three points below to feel it: the tighter you bend them, the smaller the circle and the larger
-$\kappa$ — pull them into a line and the curvature collapses to zero.
+Drag the three points below. The tighter the bend, the smaller the circle and the bigger the curvature.
+Line them up and it drops to zero.
 
 <CurvatureCircle />
 
-**2 — A speed cap from curvature.** If a physical lateral-acceleration limit is known, use:
+**2. A speed limit from curvature.** Going around a curve takes sideways acceleration, $v^2\kappa$, and
+the tires can only provide so much. Say they can hold 60 in/s² sideways. On a curve with a radius of
+15 in, $\kappa = 1/15$, so the fastest safe speed is $\sqrt{60 \times 15} = 30$ in/s:
 
 $$
 v_i^{\max} = \min\!\left(v_\text{path},\ \sqrt{\frac{a_{\mathrm{lat,max}}}{|\kappa_i|}}\right)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'v_i^max', meaning: 'the fastest the robot may travel at path point i'},
-    {symbol: 'v_path', meaning: 'the cruise speed you asked for, before any corner limits it', unit: 'in/s'},
-    {symbol: 'a_lat,max', meaning: 'the sideways acceleration the tires can hold before sliding. This is what a corner spends', unit: 'in/s\u00b2'},
-  ]}
-/>
+$v_\text{path}$ is the cruise speed you asked for. Some team code uses $v = k/|\kappa|$ instead, which is
+simpler but doesn't come from the physics. The demo uses the square-root version.
 
-This follows from $a_\text{lat}=v^2|\kappa|$. An empirical alternative sometimes used in team code is
-$v=k_\kappa/|\kappa|$, where $k_\kappa$ has units $1/\mathrm{s}$. It has a different curvature dependence
-and is not a discrete version of the square-root physical limit. The live planner uses the physical cap
-and labels the lateral-acceleration units.
-
-**3 — Forward acceleration and backward braking passes.** Start at the real initial speed and walk
-forward:
+**3. Acceleration and braking passes.** The speed limits alone can ask the robot to jump from 0 to
+full speed, or to hit a slow corner at full speed. Two more passes fix that. Walk forward from the
+robot's actual starting speed, and don't let any point be faster than the robot could reach from the
+point before:
 
 $$
 v_i \leftarrow \min\!\left(v_i,\ \sqrt{v_{i-1}^2 + 2a_\text{max}d_i}\right).
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'd_i', meaning: 'the straight-line distance across the gap this pass steps over: from point i-1 to i in the forward pass, and from i to i+1 in the backward pass. Each pass pairs a speed with the gap it must change speed across', unit: 'in'},
-    {symbol: 'a_max', meaning: 'the forward acceleration and braking limit, a positive magnitude in both passes', unit: 'in/s\u00b2'},
-  ]}
-/>
-
-With $v_0=0$, point 1 is positive whenever $d_1>0$ and $a_\text{max}>0$; the forward pass does not trap
-the robot at zero. A speed cap alone can still reach a slow corner too fast, so next walk the path
-*backwards* from the requested zero end speed and clamp each point to the
-fastest speed from which it could still decelerate to its successor — the very
-[braking kinematics](./pid-to-point.mdx) $v_f = \sqrt{v_i^2 + 2 a d}$, run over the path
-offline:
+where $d_i$ is the distance between the two points and $a_\text{max}$ is the acceleration limit. This is
+$v^2 = u^2 + 2ad$ from physics class. Then walk *backwards* from the end, where the speed is zero, and
+don't let any point be faster than the robot could brake from in time to reach the next point's speed.
+It's the same braking formula as in [PID-to-point](./pid-to-point.mdx), worked out ahead of time for the
+whole path:
 
 $$
 v_i \leftarrow \min\!\left(v_i,\ \sqrt{v_{i+1}^2 + 2\,a_\text{max}\,d_i}\right)
 $$
 
-with $d_i$ the distance between consecutive points. After this pass every stored velocity is guaranteed
-decelerable to a stop at the end.
+After this pass, the robot can always slow down in time, all the way to a stop at the end.
 
-**4 — An additional runtime actuator limit.** The offline passes make the plan kinematically feasible.
-Also cap how fast the command may change each measured loop:
+**4. A limit while driving.** The passes make the plan possible to follow. While driving, also limit how
+much the commanded speed can change each loop:
 
 $$
 \lvert \Delta v\rvert \le a_\text{max}\,\Delta t
 $$
 
-a one-line rate limiter applied to the target velocity. It protects execution when timing or actuators
-depart from the plan; it is not what makes a zero-start profile move.
+That protects you when loop timing or the motors don't go exactly to plan.
 
-Here is the whole plan, live. Drag the waypoints into a tight hairpin and watch the path turn red there
-as the **curvature cap** (blue, right) pulls the speed down; the **backward pass** (orange) then bends
-the profile down to zero at the end so the robot can always stop. The sliders are the three settings from
-the equations above.
+Here's the whole plan. Drag the waypoints into a tight hairpin and watch the path turn red there as the
+**curvature limit** (blue, right) pulls the speed down, and the **backward pass** (orange) brings it to
+zero at the end. The sliders are the three settings from above.
 
 <VelocityProfile />
 
 ### Building the path: inject, then smooth
 
-Adaptive pure pursuit needs a *dense, smooth* list of points — the curvature and velocity passes are
-only as good as the spacing. You can get one from the [splines](./quintic-splines.mdx) in the previous
-lesson, or with the lighter trick the DAWGMA paper uses:
+The speed plan needs a list of closely spaced, smooth points. You can get one from a
+[spline](./quintic-splines.mdx), or use the simpler method from the DAWGMA paper:
 
-1. **Inject** evenly-spaced points along each straight segment between your hand-placed waypoints (a
-   spacing of ~6 in works well), turning a few corners into hundreds of closely-spaced points.
-2. **Smooth** them with a gradient-descent pass that trades staying near the original points against
-   straightening local bends, iterated to convergence:
+1. **Add points** every 6 in or so along each straight line between your waypoints.
+2. **Smooth** them by repeatedly nudging each point toward the average of its neighbors, while also
+   pulling it back toward where it started:
 
 $$
 P_i \leftarrow P_i + \underbrace{a\,(P_i^\text{orig} - P_i)}_{\text{stay near input}}
   + \underbrace{b\,(P_{i-1} + P_{i+1} - 2P_i)}_{\text{pull toward neighbours}}
 $$
 
-<EquationLegend
-  title="Symbols in the smoothing pass"
-  items={[
-    {symbol: 'a, b', meaning: 'the two smoothing weights, and a different a and b from the triangle sides above. a is how hard a point is held near where it started; b is how hard it is pulled toward its neighbours'},
-    {symbol: 'P_i^orig', meaning: 'where point i sat before any smoothing, kept so the path cannot drift away from what you drew'},
-  ]}
-/>
+(These $a$ and $b$ aren't the triangle sides from before.) $b$ is how hard each point is pulled toward
+its neighbors, usually 0.75 to 0.98, with bigger meaning smoother, and $a = 1 - b$ is how hard it's held
+near where it started. Repeat until the points stop moving much.
 
-with $b$ near $0.75$–$0.98$ (larger = smoother), $a = 1 - b$, repeated until the total change drops below
-a tolerance. Update the points **in place**, so that each sweep already sees the new $P_{i-1}$ while it
-is still reading the old $P_{i+1}$. That detail is load-bearing: copying the array and updating every
-point simultaneously diverges for any $b > 1/3$, so at the weights recommended here the "smoothed" path
-blows up to infinity within a few dozen sweeps. In place, it converges for any $b < 1$.
+Update the points **in place**, so each point uses its neighbor's already-updated position on one side.
+This matters more than it looks. If you copy the list and update every point at once, it blows up for
+any $b$ above 1/3, so at the recommended weights the path flies off to infinity within a few dozen
+passes. Updated in place, it settles for any $b$ below 1.
 
-It is a cheap alternative to fitting a spline — no overshoot, though it does pull slightly away from
+It's simpler than fitting a spline and never overshoots, but it does pull the path a little away from
 your original waypoints.
 
 ### Following a spline at speed
 
-The [splines lesson](./quintic-splines.mdx) gives you a smooth curve; to *follow* it, **resample it into a
-list of points by arc length**, tagging each with its curvature radius $R = 1/\kappa$ (computed from the
-spline's derivatives). The curvature speed cap from the adaptive plan above applies per point — the lateral
-acceleration magnitude on a curve is $a_\text{lat} = v^2/|R|$, so the slip limit gives a per-point speed
-$v \le \sqrt{a_\text{lat}^{\max}\, |R|}$: gentle (big $|R|$) ⇒ full speed, tight (small $|R|$) ⇒ slow down.
-(FTCclueless uses a cheaper ramp to the same effect, `speed = 0.25 + 0.75·min(|R|, 200)/200`.)
+To follow a [spline](./quintic-splines.mdx), turn it into a list of points spaced evenly by distance, and
+store each one's turning radius $R = 1/\kappa$ from the spline's derivatives. The same speed limit
+applies at each point: $v \le \sqrt{a_\text{lat}^{\max}\, |R|}$, so full speed on gentle curves and slower on
+tight ones. (FTCclueless uses a simpler ramp, `speed = 0.25 + 0.75·min(|R|, 200)/200`.)
 
-One refinement a *curved* follow needs that a straight lookahead does not is a **centripetal feedforward**.
-To *stay* on a curve of radius $R$ at speed $v$ the robot needs a sideways acceleration toward the centre;
-without it, feedback alone always lags and the robot drifts to the outside of every turn. Add it as a strafe
-feedforward:
+A curve also needs a **centripetal feedforward**. To stay on a curve of radius $R$ at speed $v$, the
+robot needs sideways acceleration toward the center, $v^2/R$. Without it, feedback only reacts once the
+robot has drifted outward, so it runs wide on every turn. On mecanum you can add it straight to the
+strafe command:
 
 $$
 u_\text{strafe} \mathrel{+}= k_c\,\frac{v^2}{R}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'k_c', meaning: 'centripetal feedforward gain: how many seconds of centripetal acceleration to fold into the strafe velocity. It multiplies an acceleration (in/s\u00b2) and the result is added to a velocity (in/s), so it carries seconds', unit: 's'},
-    {symbol: 'u_strafe', meaning: 'the sideways component of the chassis command, the one this term adds to'},
-    {symbol: 'v\u00b2 / R', meaning: 'the centripetal acceleration a turn of radius R at speed v demands', unit: 'in/s\u00b2'},
-  ]}
-/>
-
-Then follow the resampled list with PID-to-point's [point-advance follower](./pid-to-point.mdx) — drive
-toward the current point, advance to the next within a radius — so the whole curve is tracked as one
-continuous motion. The code is in the Deploy section below.
+$k_c$ is a gain you tune. Then follow the list of points the way [PID-to-point](./pid-to-point.mdx)
+follows a list, moving on to the next point within a radius, so the robot tracks the whole curve without
+stopping. The code is below.
 
 </Theory>
 
 <Deploy>
 
-## The loop, and what production followers add
+## The code
 
-One iteration on the Control Hub: locate the carrot ahead, transform it into the robot frame, convert
-to curvature, and command forward speed plus turn rate.
+One loop: find the lookahead point, put it in the robot's frame, turn that into a curvature, and send a
+forward speed and turn rate.
 
 <JavaCode league="FTC" label="Basic Pure Pursuit, one loop iteration">{`private Progress progress = new Progress(0, 0);   // persistent across loops
 
@@ -494,20 +409,19 @@ MoveStatus update(List<Vector2d> path, Pose2d endPose) {
 }
 `}</JavaCode>
 
-The handoff is the only place `REACHED` can come from.
+Near the end, control passes to the shared terminal pose controller, and that's the only place
+`REACHED` can come from.
 
-<Exercise title="Derive the curvature">
+<Exercise title="Where 2y/L² comes from">
 
-In the robot frame the arc from the robot to the carrot is a circle through the origin, tangent to the
-$+x$ axis. Its radius satisfies $R = L^2 / (2 y_{local})$, and curvature is $1/R$. Draw the circle, drop
-the perpendicular, and use the intersecting-chords relation.
+In the robot's frame, the arc starts at the origin heading along $+x$. So the circle's center is
+somewhere on the $y$ axis, at $(0, R)$. The lookahead point $(x, y)$ is on the circle, and its distance
+from the robot is $L$. Find $R$.
 
 <Solution>
 
-The circle is tangent to $+x$ at the origin, so its centre lies on the $y$ axis at $(0, R)$. The carrot
-lies on the circle, so $x^2 + (y - R)^2 = R^2$, which expands to $x^2 + y^2 = 2Ry$. The left side is
-$L^2$ and the right is $2Ry_{local}$, so $R = L^2/(2y_{local})$ and
-$\kappa = 2y_{local}/L^2$ — the line above. Look up "pure pursuit curvature derivation."
+A point on the circle satisfies $x^2 + (y - R)^2 = R^2$, which simplifies to $x^2 + y^2 = 2Ry$. The left
+side is $L^2$, so $R = L^2/(2y)$ and $\kappa = 1/R = 2y/L^2$.
 
 </Solution>
 
@@ -515,29 +429,29 @@ $\kappa = 2y_{local}/L^2$ — the line above. Look up "pure pursuit curvature de
 
 <Exercise title="Why REACHED comes from only one place">
 
-Work out what a follower that can report `REACHED` mid-path does to an autonomous routine that advances
-on `REACHED`.
+What happens to an autonomous routine if its follower can report `REACHED` in the middle of the path?
 
 <Solution>
 
-It advances early. The routine believes the path finished, starts the next action — scoring, or another
-drive — while the robot is somewhere in the middle of the field, and every subsequent move compounds
-the error. Funnelling `REACHED` through the terminal controller means the word can only be produced by
-something that has actually checked the end pose, the heading, and the velocity.
+It moves on early. The routine thinks the path is done and starts the next action, scoring or another
+drive, while the robot is still in the middle of the field, and every move after that starts from the
+wrong place. Only letting the terminal controller say `REACHED` means it can only come from code that
+has actually checked the end position, heading, and speed.
 
 </Solution>
 
 </Exercise>
 
-<Callout type="tip" title="What the production libraries do.">
-Pure Pursuit is the foundation. Road Runner and Pedro Pathing follow full <em>trajectories</em> —
-paths combined with a motion profile and timing — and layer feedforward plus PID on top. The
-principle is identical: look ahead, curve toward the target, with tighter accuracy and explicit speed
-control.
+<Callout type="tip" title="What the libraries do">
+Road Runner follows full <em>trajectories</em>, a path plus a motion profile in time, with feedforward
+and PID on top. Pedro Pathing instead works out its target from where the robot actually is on the path
+each loop and combines several correction terms (see
+[How Does Pedro Pathing Work?](../advanced-topics/how-pedro-pathing-works.mdx)). Both handle speed and
+accuracy more carefully than basic pure pursuit.
 </Callout>
 
-For the **adaptive** velocity plan, precompute it once over the dense path: curvature per point, a
-curvature speed cap, then the backward braking pass.
+The speed plan is worked out once, ahead of time: curvature at each point, a speed limit from it, then
+the two passes.
 
 <JavaCode label="Adaptive velocity profile (offline, over the dense path)">{`// aLatMax is the sideways acceleration the tires hold; aMax the forward
 // acceleration and braking limit; startSpeed how fast the robot is now.
@@ -579,8 +493,8 @@ double mengerCurvature(Vector2d A, Vector2d B, Vector2d C) {
 }
 `}</JavaCode>
 
-Menger curvature is $1/R$ for the circle through three points, computed without ever constructing the
-circle. At runtime, on top of the plan, rate-limit against the *measured* loop time:
+`mengerCurvature` gives one over the radius of the circle through three points without actually
+finding the circle. While driving, limit changes using the measured loop time:
 
 <JavaCode league="FTC" label="Runtime rate limit against the measured loop time">{`double target = pts.get(closestIndex).speed;
 double maxStep = A_MAX * measuredDt;
@@ -589,29 +503,26 @@ commanded += clamp(target - commanded, -maxStep, +maxStep);
 
 <Exercise title="The corner cap, and the two passes">
 
-The curvature cap is $a = v^2/r$ rearranged for $v$. Work out why a tighter corner must mean a lower
-speed, and what physically happens when you exceed it. Then: both passes are the same kinematic
-relation $v^2 = u^2 + 2as$ run in opposite directions. Work out what the profile looks like with only
-the *forward* pass, and say where the robot ends up.
+Why does a tighter corner have to mean a lower speed, and what happens if the robot goes faster? And
+what would the plan look like with only the forward pass?
 
 <Solution>
 
-Holding a curve of radius $r$ at speed $v$ requires a sideways acceleration $v^2/r$, and the only thing
-supplying it is tire friction. Halve the radius and you need twice the acceleration at the same speed —
-past the friction limit the tires break loose and the robot slides straight on, wide of the corner and
-with its odometry now lying about where it is.
+A curve of radius $r$ at speed $v$ needs $v^2/r$ of sideways acceleration, and only tire grip provides
+it. Halve the radius and you need twice as much at the same speed. Past the grip limit, the tires slide,
+the robot runs wide, and the odometry is now wrong too.
 
-With only the forward pass, the plan says "accelerate to cruise and stay there" and nothing ever brings
-the speed back down. The robot arrives at the last point at full speed and drives straight past it,
-braking only once the terminal controller notices. The backward pass exists to make the *plan* end at
-zero, so the deceleration is scheduled rather than reactive.
+With only the forward pass, the plan speeds up to cruise and stays there, and nothing slows it down. The
+robot reaches the last point at full speed and overshoots, braking only when the terminal controller
+notices. The backward pass makes the plan itself end at zero, so the braking is planned instead of a
+reaction.
 
 </Solution>
 
 </Exercise>
 
-To follow a **resampled spline**, advance through its points, cap speed by each point's curvature radius,
-and add the centripetal feedforward:
+To follow a spline, resample it, step through the points, limit speed by each point's radius, and add
+the centripetal feedforward:
 
 <JavaCode label="Spline follower: resample by arc length">{`// Each SplinePoint holds x, y, heading, radius and speed.
 List<SplinePoint> resample(Spline spline, double step) {
@@ -648,8 +559,7 @@ List<SplinePoint> resample(Spline spline, double step) {
 }
 `}</JavaCode>
 
-The spline parameter $t$ is not proportional to distance along the curve, which is the whole reason an
-arc-length lookup has to exist. Look up "arc length parameterization."
+`tAtDistance` is needed because equal steps in the spline's $t$ aren't equal distances along it.
 
 <JavaCode league="FTC" label="Spline follower: plan and follow">{`// Caps each point by its radius, then runs the same forward and backward
 // passes as planProfile. Returns NEW points; never mutates the input.
@@ -704,15 +614,14 @@ MoveStatus update() {
 
 <Exercise title="Why the exact endpoint is appended separately">
 
-Take a spline of length 10.5 with `step = 1.0` and list the distances without that last line. Which
-point is missing, and what does the follower do when it never arrives?
+A spline is 10.5 long and `step = 1.0`. List the distances without that last line. Which point is
+missing, and what does the follower do?
 
 <Solution>
 
-The distances run 0 through 10, so the final half-inch is never sampled and the last planned point sits
-at 10.0 rather than 10.5. The follower advances to it, hands off to the terminal controller against a
-target that is not the end of the spline, and the robot settles half an inch short of every path it
-ever runs — a small, consistent bias that looks like a tuning problem and is not.
+The distances run 0 through 10, so the last half inch is never sampled and the final point is at 10.0
+instead of 10.5. The robot ends every path half an inch short, which looks like a tuning problem but
+isn't.
 
 </Solution>
 
@@ -720,53 +629,44 @@ ever runs — a small, consistent bias that looks like a tuning problem and is n
 
 <Exercise title="Derive the centripetal term">
 
-A robot tracking a curve of radius $r$ at speed $v$ needs a sideways acceleration of $v^2/r$ just to
-stay on it. Work out what the follower does without that feedforward, then confirm the units of
-`K_CENTRIPETAL` work out to seconds.
+What does the follower do on a curve without the centripetal term? And why does `K_CENTRIPETAL` have
+units of seconds?
 
 <Solution>
 
-Without it the follower is purely reactive: it only turns harder once it has already drifted to the
-outside of the corner, so every bend is entered wide and corrected late, and the error grows with
-$v^2$. The feedforward supplies the known part of the demand before the error appears.
+Without it, the follower only corrects once it has drifted to the outside of the corner, so every bend
+starts wide and gets fixed late, and it gets worse with speed squared. The feedforward supplies the
+sideways push the curve needs before any error shows up.
 
-For units: `speed^2 / radius` is $\text{in}^2/\text{s}^2 \div \text{in} = \text{in}/\text{s}^2$,
-an acceleration, and it is being added to `vy`, which is $\text{in}/\text{s}$. So `K_CENTRIPETAL`
-carries seconds — it is effectively how far ahead in time the feedforward is looking.
+`speed^2 / radius` is $\text{in}^2/\text{s}^2 \div \text{in} = \text{in}/\text{s}^2$, an acceleration, and
+it's added to `vy`, a velocity in in/s. So `K_CENTRIPETAL` has to be in seconds.
 
 </Solution>
 
 </Exercise>
 
-The speed plan is computed entirely in inches per second and radians per second, and is converted to
-motor units at exactly one boundary: the `drive(...)` call. That helper consumes **normalized power**,
-so every physical speed is divided by `MAX_SPEED` or `MAX_TURN` on the way in — pass raw inches per
-second and the desaturator inside `drive` compares them against `1.0` and pins all four wheels to full
-power. Near the endpoint, the follower hands off to the shared terminal pose controller and distinguishes
-`REACHED` from `TIMED_OUT`.
+The whole plan is in inches per second and radians per second, and it's only converted to motor units
+in the `drive(...)` call, which takes normalized power. Every speed is divided by `MAX_SPEED` or
+`MAX_TURN` on the way in. Pass raw inches per second and `drive` scales everything to full power.
 
-<Admonition type="tip" title="Why C² matters for the speed plan">
+<Admonition type="tip" title="Why the path needs smooth curvature">
 
-The curvature speed cap is only as smooth as $\kappa$ itself. A **C¹** path — a cubic Hermite or
-Catmull-Rom spline that matches only *tangents* at each waypoint — has $\kappa$ jump at every join, so the
-*speed limit* jumps too. A **C²** path matches position, first derivative, and second derivative; its
-curvature is continuous only where the tangent remains nonzero (a regular curve). Under that regularity
-condition, quintic and natural-cubic paths both support a continuous curvature plan.
+The speed limit is only as smooth as the curvature. A path that only matches direction at each waypoint,
+like a cubic Hermite or Catmull-Rom spline, has curvature that jumps at every join, so the speed limit
+jumps too. Quintic and natural cubic splines have continuous curvature, as long as the path never stops
+dead, so the speed plan is smooth.
 
 </Admonition>
 
-<Callout type="idea" title="On a tank (differential) drive">
-Pure pursuit outputs a signed curvature and a speed; a differential drive turns those straight into
-wheel speeds. With $+\kappa$ meaning a counter-clockwise (left) turn and track width $T$,
-$\;L = v(2 - \kappa T)/2\;$ and $\;R = v(2 + \kappa T)/2$. (Our
-mecanum stack instead feeds the same $(v,\ \omega = \kappa v)$ into the
-[mixer](./mecanum-kinematics.mdx).) Use a track width a few inches larger than the real one to absorb
-turning scrub.
+<Callout type="idea" title="On a tank drive">
+A tank drive turns curvature and speed straight into wheel speeds. With $+\kappa$ meaning a left turn and
+a track width $T$, the left side gets $v(2 - \kappa T)/2$ and the right side $v(2 + \kappa T)/2$. Using a
+track width a few inches wider than the real one helps account for wheel scrub when turning. (On
+mecanum, the same $v$ and $\omega = \kappa v$ go into the [mixer](./mecanum-kinematics.mdx).)
 </Callout>
 
-This completes the autonomous stack — estimate the pose, plan a path, follow it. From here the filter
-track deepens the "where am I" half, and the remaining controllers complete the "what do
-I do" half. The curriculum culminates in a research-grade application of all of it.
+The last lesson in this module, [Guided Vector Fields](./guided-vector-fields.mdx), follows a path
+without a lookahead point at all.
 
 <Admonition type="info" title="Sources and further reading">
 

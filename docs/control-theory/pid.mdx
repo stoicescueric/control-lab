@@ -1,6 +1,6 @@
 ---
 title: PID Control
-description: The three-term feedback controller — present, past, and future of an error signal — with the mass-spring-damper insight (the D term helps the mechanism settle with low velocity) and the upgrades that make a competition-grade PDFL controller.
+description: The three-term feedback controller built from numbers you can check by hand, why the derivative term acts like a shock absorber, and the PDFL variant many FTC teams use instead of an integral.
 sidebar_position: 4
 tags: [pid, pidf, pdfl, feedforward, derivative-filter, anti-windup, feedback, control]
 ---
@@ -12,265 +12,241 @@ import Drone from '@site/src/components/simulations/control-theory/Drone';
 <Difficulty level="Medium" />
 
 <Abstract>
-PID is the most widely used feedback controller: it sums three reactions to the error — proportional to its
-present value, its accumulated past, and its rate of change — into a single command. This lesson builds
-each term from intuition — including how derivative feedback damps motion near the target —
-then upgrades the loop to the controller the FTC community calls "PDFL": a constant feedforward and a static-friction floor
-that replace the integral entirely, plus a low-pass-filtered derivative.
+PID adds up three reactions to the error: one to how big it is now, one to how much has built up over
+time, and one to how fast it's changing. This lesson builds each term from a worked example, shows why
+the derivative term behaves like a shock absorber, and ends with PDFL, a version popular in FTC that
+replaces the integral with feedforward and a friction term.
 </Abstract>
 
-PID is the controller you will deploy most often: arm position, flywheel velocity, drivetrain
-heading, lift height. It is three reactions to a single error signal, summed into one command. The
-name sounds scary; the idea behind it is simple.
+You'll use PID for arm position, flywheel speed, heading hold, and lift height, probably more than any
+other controller. The name makes it sound complicated, but each of the three terms answers a simple
+question about the error.
 
 <Problem>
 
-## Proportional-only control leaves a standing error
+## Proportional control stops short
 
-Consider an arm that must hold itself horizontal against gravity — the worst case, where the full
-weight acts at the end of the moment arm. The intuitive controller is *proportional* —
-command in proportion to the error, $u = K_p e$. It has a structural flaw: to produce the steady
-holding torque gravity demands, it **requires a non-zero error to exist**. The arm settles a few
-degrees low and stays there. Raising $K_p$ shrinks the gap but invites overshoot and oscillation,
-and it still never reaches zero. Disturbances — a game element's weight, a sagging battery — make it
-worse. We need terms that address the error's *history* and its *trend*, not just its present value.
+In [Control & Feedback](../preface/control-and-feedback.mdx) you met the proportional rule,
+$u = k_P e$. Put it on an arm that has to hold itself out horizontally.
+
+Say the arm needs 0.2 power to hold against gravity, and $k_P = 0.01$ power per degree. A proportional
+controller only produces 0.2 power when the error is $0.2 / 0.01 = 20°$. So the arm settles 20° low and
+stays there. Doubling $k_P$ halves the droop to 10°, but it also makes the arm more likely to overshoot
+and oscillate, and the droop never reaches zero. A heavier game element or a sagging battery makes it
+worse.
+
+Proportional control only looks at the error right now. To do better, the controller also needs to
+look at how the error has behaved over time and how fast it's changing.
 
 </Problem>
 
 <Theory>
 
-## Three terms acting on present, past, and future
+## Three questions about the error
 
-The error is the gap between target and measurement, $e(t) = \text{setpoint} - \text{measurement}$.
-PID sums three responses to it:
+Follow one arm through a few loops. The target is 90°, and each loop is 0.02 s.
 
-- **P — proportional** · *the present.* $u_P = K_p\,e(t)$ — push in proportion to the current gap.
-- **I — integral** · *the past.* $u_I = K_i \int_0^t e(\tau)\,d\tau$ — accumulate effort until a
-  persistent gap is eliminated. This is what removes the standing error above.
-- **D — derivative** · *the future.* $u_D = K_d \frac{de(t)}{dt}$ — anticipate: if the gap is
-  closing quickly, ease off early to avoid overshoot.
+| Loop | Measured angle | Error $e$ | Error added up, $\sum e\,\Delta t$ | Change in angle per second |
+|---:|---:|---:|---:|---:|
+| 1 | 70° | 20° | 0.40 °·s | — |
+| 2 | 72° | 18° | 0.76 °·s | +100 °/s |
+| 3 | 73.5° | 16.5° | 1.09 °·s | +75 °/s |
+
+Each column answers a different question.
+
+**How far off is it now?** That's the error, 16.5° on loop 3. The **P** term pushes in proportion to
+it: $u_P = k_P e$.
+
+**How long has it been off?** Add up each loop's error times the loop time. That running total keeps
+growing as long as the arm stays low, so a term built from it, $u_I = k_I \sum e\,\Delta t$, keeps
+pushing harder until the error is actually gone. That's the **I** term, and it's what removes the 20°
+droop from the example above. In calculus this running total is the integral, $\int e\,dt$.
+
+**How fast is it moving?** The angle went from 72° to 73.5° in 0.02 s, which is 75 °/s. If the arm is
+closing in fast, you want to ease off before it overshoots. The **D** term pushes against that motion:
+$u_D = -k_D \times (\text{rate of change of the measurement})$. In calculus the rate of change is the
+derivative.
+
+Put together:
 
 $$
-u(t) = K_p\,e(t) + K_i \int_0^t e(\tau)\,d\tau + K_d \frac{de(t)}{dt}
+u = k_P\,e + k_I \int e\,dt - k_D \frac{dm}{dt}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'u(t)', meaning: 'the command at time t, in continuous time. The next equation is the version a robot can actually run'},
-    {symbol: 'e(t)', meaning: 'the error: target minus measurement'},
-    {symbol: '\u03c4 (in the integral)', meaning: 'a dummy variable of integration, sweeping from 0 to now. It is not the filter time constant \u03c4 used in the signal-processing lessons'},
-    {symbol: 'de(t)/dt', meaning: 'how fast the error is changing right now'},
-  ]}
-/>
+where $m$ is the measurement. You'll also see the D term written as $+k_D\,de/dt$, the rate of change of
+the *error*. For a target that isn't moving, the two are the same thing, since the error only changes
+when the measurement does. They differ when the target jumps, which comes up below.
 
-<Callout type="idea" title="What the three terms really are: a mass on a spring.">
+<Callout type="idea" title="A mass on a spring">
 <ul>
-<li><strong>P is the spring.</strong> It pulls toward the target with a force proportional to how far off
-you are. An ideal mass on a spring with no damping oscillates indefinitely; real mechanisms also have
-friction and other damping.</li>
-<li><strong>D is the shock absorber.</strong> It opposes <em>motion</em>. Because the well-behaved version
-differentiates the measurement, $u_D = -K_d\,\dot m$ is literally <strong>velocity feedback</strong>: the
-faster you're moving, the harder it brakes. With suitable gains, D helps the system
-<strong>settle at the target with near-zero velocity</strong>; it does not guarantee a zero-velocity first
-arrival. P + D forms a
-mass-spring-damper, but it is critically damped only for a particular gain-to-plant relationship. For an
-ideal mass $m$, that boundary is $K_d = 2\sqrt{mK_p}$; less damping overshoots and more damping settles
-without overshoot but more slowly.</li>
-<li><strong>I shifts the rest position.</strong> It slowly builds whatever constant push the job needs
-(holding an arm against gravity) so the spring no longer has to hold a standing error to make that
-force.</li>
+<li><strong>P is a spring.</strong> It pulls toward the target harder the farther away you are. A
+spring with no damping would bounce back and forth forever.</li>
+<li><strong>D is a shock absorber.</strong> It pushes against motion, harder the faster you move, which
+is why it's often called velocity feedback. With suitable gains it lets the arm arrive and settle
+instead of bouncing. For an ideal mass $m$ the boundary between overshooting and not is
+$k_D = 2\sqrt{m k_P}$. Less damping than that overshoots. More settles without overshoot, just more
+slowly.</li>
+<li><strong>I moves where the spring rests.</strong> It slowly builds up whatever constant push the job
+needs, like holding an arm against gravity, so the spring doesn't have to stay stretched to provide
+it.</li>
 </ul>
 </Callout>
 
-The gains $K_p, K_i, K_d$ are the tunable parameters. The drone below must hover at the dashed
-target while gravity pulls it down — the classic "standing error" problem. Drag the target, tune
-the gains, and read the live contribution of each term.
+In the demo, the drone has to hover at the dashed line while gravity pulls it down, which is the same
+droop problem as the arm. Drag the target, change the gains, and watch each term's contribution.
 
 <Drone />
 
-<Callout type="idea" title="Three experiments that isolate each term:">
+<Callout type="idea" title="Three things to try">
 <ol>
-<li><strong>"P only"</strong> — the drone stabilises <em>below</em> target. With no integral term it
-cannot generate the constant thrust that cancels gravity without holding an error. This is
-steady-state error, made visible.</li>
-<li><strong>"PID (tuned)"</strong> — the integral term accumulates exactly enough extra thrust to
-cancel gravity; the drone settles on target. Watch the yellow I-meter climb.</li>
-<li><strong>"Too much Kp"</strong> + a <strong>wind gust</strong> — overshoot and oscillation. The
-derivative term is what damps it.</li>
+<li><strong>P only.</strong> The drone settles <em>below</em> the target. Without an integral term, it
+can only produce the thrust to fight gravity by staying low.</li>
+<li><strong>PID (tuned).</strong> The integral builds up exactly the extra thrust gravity needs, and the
+drone settles on the target. Watch the yellow I bar climb.</li>
+<li><strong>Too much kP,</strong> then a wind gust. It overshoots and oscillates. Adding kD calms it
+down.</li>
 </ol>
 </Callout>
 
-**Tuning** is the engineering. A reliable procedure: raise $K_p$ until the mechanism just begins to
-oscillate, then back off; add $K_d$ to damp the overshoot; add $K_i$ last, only if a standing error
-remains.
+## Tuning
 
-| Symptom | Likely cause | Correction |
+A procedure that works for most mechanisms: raise $k_P$ until the mechanism just starts to oscillate,
+then back off a bit. Add $k_D$ to damp the overshoot. Add $k_I$ last, and only if there's still a
+steady error you can't fix with feedforward. Log each term and the final output while you do it.
+
+| Symptom | Likely cause | Try |
 |---|---|---|
 | Slow to respond | `kP` too low | raise `kP` |
-| Overshoots & oscillates | `kP` high / `kD` low | lower `kP`, raise `kD` |
-| Never reaches target | no / low `kI` | add a little `kI` |
-| Slow drift, sluggish wobble | `kI` too high | lower `kI` |
-| Big overshoot after a long saturated move | integral windup | add anti-windup (next lesson) |
-| Jittery, twitchy | `kD` too high (noise) | lower `kD`, filter the input |
-
-### Core checkpoint: tune and log one feedback loop
-
-Stop here only after you can define `error = target - measurement`, tune P then D, add I only for a
-measured persistent bias, and log each term plus the saturated output. The deploy block turns that
-artifact into measured-loop Java.
+| Overshoots and oscillates | `kP` too high or `kD` too low | lower `kP`, raise `kD` |
+| Stops short of the target | no `kI`, or missing feedforward | add feedforward, then a little `kI` |
+| Slow, wide oscillation | `kI` too high | lower `kI` |
+| Big overshoot after a long move at full power | integral windup | add anti-windup (next lesson) |
+| Jittery, twitchy | `kD` too high for the noise | lower `kD`, filter the velocity |
 
 </Theory>
 
 <Deploy>
 
-## A discrete PID loop, hardened for the Control Hub
+## PID in a loop
 
-The hub can't integrate or differentiate, so discretise: the integral becomes a running sum, the
-derivative a difference over the measured $\Delta t$.
+On the robot, the running total is a sum with one rectangle per loop, and the rate of change is the
+difference between two readings divided by the measured $\Delta t$, as in
+[From Math to a Loop](../software-architecture/discretization.mdx):
 
 $$
-u_k = K_p e_k + K_i \sum_{j} e_j \Delta t
-- K_d \frac{m_k - m_{k-1}}{\Delta t}
+u_k = k_P e_k + k_I \sum_{j} e_j \Delta t_j
+- k_D \frac{m_k - m_{k-1}}{\Delta t}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'u_k, e_k', meaning: 'the command and the error at loop k'},
-    {symbol: 'j', meaning: 'a counter over past loops for the running sum. Not a physical quantity'},
-    {symbol: 'm_k, m_{k-1}', meaning: 'the MEASUREMENT this loop and last loop. The derivative is taken on m rather than on e, which is why a minus sign appears in front of K_d'},
-    {symbol: 'the minus sign', meaning: 'this term is velocity feedback: it always opposes the direction the mechanism is moving, on either side of the target. Differentiating the error instead would spike every time the target moves'},
-  ]}
-/>
+<JavaCode league="FTC" label="PID for an arm, derivative on the measurement">{`private double integral, lastMeasurement;
+private boolean firstLoop = true;
 
-Here $m_k$ is the measurement. This is derivative-on-measurement, so a setpoint step does not create a
-derivative kick.
+// target and measurement in encoder ticks; dt is the measured loop time.
+double update(double target, double measurement, double dt) {
+    if (!Double.isFinite(dt) || dt <= 0) return 0;
 
-Two refinements are mandatory on real hardware:
+    double error = target - measurement;
+    integral += error * dt;
 
-- **Derivative on measurement.** Differentiating the *error* spikes the output whenever the setpoint
-  changes ("derivative kick"). Differentiate the *measurement* instead — $-K_d\,\dot{m}$ — for the
-  same damping without the kick. (The drone above already does this with $-K_d\,\dot{y}$.)
-- **Anti-windup.** When the actuator is saturated, stop accumulating the integral; otherwise it
-  "winds up" and causes a large overshoot once the target is reached. The full implementation lives in
-  [Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx).
+    double rate = firstLoop ? 0 : (measurement - lastMeasurement) / dt;
+    lastMeasurement = measurement;
+    firstLoop = false;
 
-FTCLib provides a convenient baseline controller, and FTC Dashboard tunes the gains live over Wi-Fi.
-Treat the refinements above as production requirements: verify whether your library implements them
-the way your mechanism needs, or use the explicit anti-windup controller in the next lesson.
-
-<JavaCode league="FTC" label="A baseline PID loop for an arm">{`// Expose the gains for live tuning, not as constants buried in the file.
-public static double kP = 0.004, kI = 0, kD = 0.0002;
-
-private PIDController pid;
-private DcMotorEx arm;
-
-void setup() {
-    arm = hardwareMap.get(DcMotorEx.class, "arm");
-    arm.setMode(RUN_WITHOUT_ENCODER);   // YOU are the controller now
-    pid = new PIDController(kP, kI, kD);
-}
-
-void update(double targetTicks) {
-    pid.setPID(kP, kI, kD);             // so a tuning edit lands this loop
-    double power = pid.calculate(arm.getCurrentPosition(), targetTicks);
-    arm.setPower(Math.max(-1, Math.min(1, power)));
+    double power = kP * error + kI * integral - kD * rate;
+    return clamp(power, -1, +1);
 }`}</JavaCode>
 
-<Exercise title="The clamp is not decoration">
+The motor for this arm runs in `RUN_WITHOUT_ENCODER`, because this method is the controller and its
+output is a motor power. Keep `kP`, `kI`, and `kD` somewhere you can change them live, like FTC
+Dashboard, so tuning doesn't mean redeploying.
 
-Work out what a PID output of 3.7 means, and what the SDK does with it. Then explain why this example
-uses `RUN_WITHOUT_ENCODER`: the controller's output is motor power, so what would change if that command
-were sent through a mode that interprets it as a velocity or position request?
+Two details in that block matter on real hardware.
+
+**The derivative uses the measurement, not the error.** Suppose the target jumps from 0 to 500 ticks in
+one 20 ms loop. The error jumps by 500 too, so its rate of change is $500 / 0.02 = 25{,}000$ ticks per
+second for one loop, and the D term slams the motor to full power even though the arm hasn't moved.
+This is called derivative kick. The measurement only changes when the arm actually moves, so taking the
+rate of change of the measurement gives the same damping without the kick. The minus sign is there
+because, for a fixed target, the error goes down exactly as fast as the measurement goes up.
+
+**The integral needs protection when the output is maxed out.** While the motor sits at full power the
+error keeps adding up, and all that stored-up push comes out as overshoot later. The fix is covered in
+[Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx).
+
+Libraries like FTCLib include a PID class, which is fine to use, but check how it computes the
+derivative. FTCLib's `PIDController` takes the rate of change of the error, so it will kick when the
+target jumps.
+
+<Exercise title="What an output of 3.7 means">
+
+The controller computes 3.7. What does that mean, and what does the SDK do with it? And why does it
+matter that the motor is in `RUN_WITHOUT_ENCODER` rather than a mode that treats the command as a
+velocity or position request?
 
 <Solution>
 
-3.7 means the controller wants 3.7 times full power, which does not exist — `setPower` clips it to 1.0
-silently. The output is saturated, and everything the integrator accumulates while it sits there is
-windup, which is the subject of the next lesson.
+It means the controller wants 3.7 times full power, which doesn't exist, so the output is clipped to 1.
+While it sits there, anything the integral adds is windup.
 
-For the mode: this controller computes a direct motor-power command, so `RUN_WITHOUT_ENCODER` matches
-the actuator model used by the lesson. `RUN_USING_ENCODER` regulates velocity and `RUN_TO_POSITION`
-regulates position; sending the same output through those modes changes what the command means and can
-produce behavior this outer loop did not model.
-
-Nested loops are not inherently wrong. A deliberately designed cascade can use an outer position loop
-to command an inner velocity loop. In that design, each loop has a defined measurement and output and
-the faster inner loop is tuned before the slower outer loop. It is different from stacking two
-position controllers or treating a power command as though it were a velocity request.
+This method outputs a motor power. `RUN_USING_ENCODER` treats the command as a velocity target and
+`RUN_TO_POSITION` as a position target, so sending the same number through those modes would change
+what it means and give behavior this controller wasn't tuned for. Stacking loops can be done on
+purpose, with an outer position loop feeding an inner velocity loop, but that's a design you tune
+inner loop first, not something that should happen by accident.
 
 </Solution>
 
 </Exercise>
 
-<Callout type="tip" title="Filters and controllers are a team.">
-The derivative term amplifies sensor noise. Production controllers run the measurement through a
-low-pass filter first — a noisy encoder or distance sensor will ruin a D term. Clean the signal,
-then control it.
+<Callout type="tip" title="Filter the velocity, not the position">
+The D term multiplies a rate of change, and differencing encoder readings over a short loop turns one
+tick of jitter into a big spike. A light low-pass filter on that computed velocity helps a lot. A noisy
+analog sensor, like a distance sensor, needs filtering before you use it at all.
 </Callout>
 
-### Production extension: the PDFL controller
+## PDFL: replacing the integral
 
-Notice the arm problem never actually needed an *integral*. The steady push gravity demands is
-*predictable*, so you can supply it directly and skip the slow, windup-prone I term. That is the idea
-behind the controller the FTC community calls **PDFL** (from the video linked below) — **P**roportional,
-**D**erivative, **F**eedforward, and an **L**ower-limit (static-friction) term, with **no integral at
-all**. The name is community shorthand rather than standard control vocabulary; the pieces are the same
-$k_G$ and $k_S$ you meet in [feedforward](./feedforward.mdx), rearranged to replace the integral:
+Look back at the arm. The steady push it needed was for gravity, and gravity is predictable. You can
+just supply it, instead of waiting for an integral to discover it slowly and then having to protect
+that integral from windup. That's the idea behind a controller the FTC community calls **PDFL**, after
+the video linked below: proportional, derivative, feedforward, and a lower limit, with no integral.
 
-- **P**: proportional to the error, exactly as before.
-- **D**: the derivative, **low-pass filtered** (an exponential moving average) so encoder noise doesn't
-  ruin it; the filter lives *inside* the D term (see [low-pass filters](../signal-processing/low-pass.mdx)).
-  It is still velocity feedback that helps the mechanism settle with low velocity; it does not guarantee
-  a zero-velocity first arrival.
-- **F**: a **constant** feedforward: the steady power that holds the mechanism in place against gravity.
-  It does the integral's old job instantly, with nothing to wind up. On a **slide** that really is one
-  constant. On an **arm** the hold varies as $\cos\theta$, so a constant `kF` is only right near the angle
-  you measured it at — for an arm that sweeps a wide range, swap it for the $k_G\cos\theta$ term from
-  [feedforward](./feedforward.mdx) and keep the rest of PDFL unchanged.
-- **L**: a **static-friction floor**: a fixed $k_L\,\operatorname{sign}(e)$ that shoves *just hard enough*
-  to break stiction in the direction you need to move. It is applied only **outside a small dead zone**
-  around the target — inside it the sign of the error flips every loop, so dropping L there stops the
-  mechanism from buzzing.
+The F and L terms are the same things you met in [feedforward](./feedforward.mdx), under different
+names:
+
+- **P**: proportional to the error, as before.
+- **D**: the derivative of the measurement, passed through a low-pass filter so encoder jitter doesn't
+  get amplified. (See [low-pass filters](../signal-processing/low-pass.mdx).)
+- **F**: a constant that holds the mechanism against gravity. This is $k_G$ from the feedforward
+  lesson. On a slide it really is one constant. On an arm the hold changes with $\cos\theta$, so for an
+  arm that sweeps a wide range, use $k_G\cos\theta$ instead and keep the rest.
+- **L**: a small push in the direction of the error, just enough to overcome friction. This is $k_S$.
+  It's turned off inside a small dead zone around the target, because there the error's sign flips
+  every loop and the push would make the mechanism buzz.
 
 $$
-u = \underbrace{k_P\,e}_{P} - \underbrace{k_D\,\dot m_\text{filtered}}_{D}
-  + \underbrace{k_F}_{F} + \underbrace{k_L\,\operatorname{sign}(e)}_{L\ \text{(outside the dead zone)}}
+u = k_P\,e - k_D\,\dot m_\text{filtered} + k_F + k_L\,\operatorname{sign}(e)
 $$
 
-<EquationLegend
-  title="Symbols in PDFL"
-  items={[
-    {symbol: 'P, D, F, L', meaning: 'the braces name the four terms, they are not variables. PDFL is Proportional, Derivative, Feedforward, Lower-limit'},
-    {symbol: 'k_F', meaning: 'a constant feedforward that holds the mechanism against gravity, the same job k_G does elsewhere', unit: 'power or V'},
-    {symbol: 'k_L', meaning: 'a static-friction floor: a constant push in the direction of the error, applied only outside the dead zone'},
-    {symbol: 'ṁ_filtered', meaning: 'the low-pass filtered rate of change of the measurement, not of the error'},
-  ]}
-/>
+with the $k_L$ term only applied outside the dead zone.
 
-<Callout type="idea" title="How to actually find F and L.">
-$k_F$ is the term you'd like to tune first, but it is hard to read off directly. The method: slowly raise the
-command by hand until you find the power <strong>just as the mechanism starts to move up</strong>
-($u_\text{up}$), then lower that positive-up command until it is <strong>just about to move down</strong>
-($u_\text{down}$). Going
-up you fight gravity <em>and</em> friction ($u_\text{up} = k_F + k_L$); going down gravity helps while
-friction still resists ($u_\text{down} = k_F - k_L$). Solve the pair:
+<Callout type="idea" title="Measuring F and L">
+Slowly raise the power by hand until the mechanism just starts to move up. Call that $u_\text{up}$.
+Then lower the power until it just starts to creep down, and call that $u_\text{down}$. Going up, the
+motor fights gravity and friction, so $u_\text{up} = k_F + k_L$. Going down, gravity helps and friction
+still resists, so $u_\text{down} = k_F - k_L$. Solving:
 $$
 k_F = \frac{u_\text{up} + u_\text{down}}{2}, \qquad k_L = \frac{u_\text{up} - u_\text{down}}{2}.
 $$
-
-<EquationLegend
-  items={[
-    {symbol: 'u_up', meaning: 'the smallest command that just moves the mechanism UP, found by experiment. Gravity and friction both oppose you here'},
-    {symbol: 'u_down', meaning: 'the positive-up command at the downward breakaway threshold. Gravity helps while friction still resists, which is why it is below the hold command'},
-  ]}
-/>
-The <strong>average</strong> is the gravity hold; <strong>half the difference</strong> is the friction.
-Two measurements give you both gains.
+For example, if it starts moving up at 0.26 and creeps down at 0.14, then $k_F = 0.20$ and
+$k_L = 0.06$. There's no single power that "holds it still," because friction lets it hold anywhere
+between those two readings.
 </Callout>
 
-<VideoEmbed title="PDFL — Improving Upon PID" src="https://www.youtube.com/embed/EKSDbWL7tIY?start=6" href="https://www.youtube.com/watch?v=EKSDbWL7tIY">
-A walkthrough of these exact upgrades — swapping the integral for feedforward, differentiating the
-measurement, and low-pass-filtering the derivative — and why they beat a textbook PID on FTC mechanisms.
+<VideoEmbed title="PDFL: Improving Upon PID" src="https://www.youtube.com/embed/EKSDbWL7tIY?start=6" href="https://www.youtube.com/watch?v=EKSDbWL7tIY">
+A walkthrough of these changes: swapping the integral for feedforward, differentiating the
+measurement, and filtering the derivative, and why they work better than textbook PID on FTC
+mechanisms.
 </VideoEmbed>
 
 <JavaCode league="FTC" label="PDFL: P, filtered D, constant F, static-friction L">{`// No integral term at all: F and L do that job explicitly.
@@ -295,70 +271,46 @@ double run(double target, double measurement, double dt) {
     return p + d + f + l;
 }`}</JavaCode>
 
-Tune `kF` and `kL` by measurement rather than by guessing, using the two-reading method above: find the
-smallest power that just moves the arm **up** ($u_\text{up}$), then lower the command until the arm just
-starts to creep **down** — the largest power at which it still descends is $u_\text{down}$. Then `kF` is
-their average and `kL` is half their difference. Note that there is no single "power that holds the arm
-still" to read off: static friction holds it anywhere between those two readings. That band is
-$2k_L$ wide, so `kL` is *half* of it — which is exactly the formula above.
+<Exercise title="How much jitter the filter removes">
 
-<Exercise title="Two ideas hidden in the D term">
-
-Both are worth deriving.
-
-First, why the derivative is taken on the *measurement* and negated, rather than on the error. Step the
-target from 0 to 500 in one loop and compute $d(\text{error})/dt$. What does that spike do to the motor?
-
-Second, why `rawD` is filtered at all. Differencing a quantized encoder over a short `dt` amplifies
-noise — work out the velocity implied by a one-tick jitter at `dt = 0.02 s`, and confirm that
-$\alpha \to 1$ as `dt` grows past `TAU`.
+The encoder jitters by one tick. At `dt = 0.02 s`, what velocity does that one tick look like? Then
+check what `alpha` does as `dt` gets much larger than `TAU`.
 
 <Solution>
 
-A 500-tick step in one 20 ms loop makes $d(\text{error})/dt$ equal 25,000 ticks/s — a single enormous
-spike from the *target* moving, not the arm. The motor slams to full power for one loop and the
-mechanism jerks. Differentiating the measurement instead means the derivative only ever responds to
-what the arm actually did; the negation is because $\frac{d}{dt}(\text{target} - x) = -\dot x$ when the
-target is constant. Look up "derivative kick".
-
-For the filter: one tick over 20 ms is 50 ticks/s of pure noise, multiplied by `kD` and fed straight to
-the motor every loop. The low-pass averages it away at the cost of a little lag, and as `dt` grows past
-`TAU` the exponential term collapses so $\alpha \to 1$ — meaning "so much time has passed, just take
-the new reading."
+One tick in 20 ms is 50 ticks per second of velocity that isn't real, multiplied by `kD` and sent to the
+motor every loop. The filter averages it out at the cost of a little lag. As `dt` grows past `TAU`,
+$e^{-dt/\tau}$ shrinks toward zero and `alpha` goes to 1, which means "so much time has passed, just use
+the new value."
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Why L is dropped near the target">
+<Exercise title="Why L turns off near the target">
 
-`Math.signum(error)` flips every time the arm crosses the setpoint. Trace three loops with the arm
-oscillating one tick either side of the target, and describe the noise the mechanism makes.
+`Math.signum(error)` flips every time the arm crosses the target. Trace three loops with the arm
+wobbling one tick either side. What does the mechanism sound like?
 
 <Solution>
 
-`l` flips between `+kL` and `-kL` on alternating loops, so the command jumps by $2k_L$ at 50 Hz around
-a target the arm has effectively already reached. The mechanism buzzes audibly and the gearbox takes the
-load for nothing. `DEADZONE` exists so the friction term switches off once the arm is close enough that
-breaking friction no longer matters.
+`l` alternates between `+kL` and `-kL`, so the command jumps by $2k_L$ at 50 Hz around a target the
+arm has basically already reached. It buzzes and the gearbox takes the load for nothing. The dead zone
+turns the friction push off once the arm is close enough that it doesn't matter.
 
 </Solution>
 
 </Exercise>
 
-This mirrors the widely shared FTC `PDFL` controller. There is no integral term at all: $k_F$ holds the
-steady load and $k_L$ breaks friction, so there is nothing to wind up.
+With $k_F$ holding the load and $k_L$ breaking friction, there's nothing to wind up.
 
-PID reacts only to error that has *already* happened. Pair it with the
-[feedforward](./feedforward.mdx) — feedforward for the bulk of the command, PID for the residual it
-can't predict — and you have the control stack behind nearly every fast, accurate FTC mechanism.
+## Where to go next
 
-From here the module branches into the techniques that make that stack *good*. For a high-inertia
-flywheel, a far simpler controller often beats PID — [**bang-bang**](./bang-bang.mdx) (and its
-take-back-half upgrade). To
-move a mechanism fast *without* overshoot, stop feeding it a step and feed it a
-[**motion profile**](./motion-profiling.mdx) instead. And to keep every one of these behaving identically
-from a full battery to a sagging one, wrap them all in [**voltage compensation**](./voltage-compensation.mdx).
+PID only reacts to error that has already happened, so pair it with [feedforward](./feedforward.mdx)
+for the bulk of the command. The rest of the module covers what happens when the motor maxes out
+([anti-windup](./actuator-saturation-anti-windup.mdx)), a simpler controller that often works better
+for flywheels ([bang-bang](./bang-bang.mdx)), and how to move fast without overshooting by feeding the
+controller a [motion profile](./motion-profiling.mdx) instead of a step.
 
 </Deploy>
 

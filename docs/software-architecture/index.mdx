@@ -6,39 +6,27 @@ tags: [architecture, command-based, state-machine, loop-time, units]
 
 # Module 1 · Software Architecture & Loop Optimization
 
-Control theory does not run in a vacuum. It runs inside an OpMode, inside a loop, on hardware with
-limited time and imperfect sensors.
+Control code doesn't run on its own. It runs inside an OpMode, inside a loop, on a Control Hub with a
+limited time budget and imperfect sensors. This module deals with that before the math gets heavier,
+and it answers two questions:
 
-This module answers two questions before the math gets heavier:
-
-1. Where does robot behavior live in the codebase?
-2. What does it mean for control math to run once per loop on a real Control Hub?
-
-## What this module covers
-
-- **State machines** - model one subsystem as explicit modes and legal transitions.
-- **Command-based programming** - compose reusable actions across the whole robot.
-- **Discretization and units** - turn continuous equations into per-loop Java using measured
-  $\Delta t$ and real engineering units.
-- **Loop optimization** - protect the loop-time budget that filters, controllers, and estimators all
-  depend on.
-
-<Admonition type="tip" title="Why architecture comes before control theory">
-
-The most common reason good control math fails in competition is not the equation. It is that the
-equation was dropped into a giant OpMode where timing, units, telemetry, and subsystem ownership were
-unclear. Architecture makes the rest of this curriculum deployable.
-
-</Admonition>
+1. Where does each piece of robot behavior live in the code?
+2. What changes when control math runs once per loop on real hardware?
 
 ## Lessons
 
-1. [State Machines](./state-machines.mdx) - explicit subsystem modes, legal transitions, and
-   non-blocking sequencing.
-2. [Command-Based Programming](./command-based.mdx) - reusable commands, subsystem requirements,
-   scheduling, and autonomous composition.
-3. [From Math to a Loop](./discretization.mdx) - measured loop time, unit conversion, sampling, and
-   the bridge from equations to hardware.
+1. [State Machines](./state-machines.mdx): give one subsystem an explicit set of modes and legal
+   transitions, and sequence it without blocking.
+2. [Command-Based Programming](./command-based.mdx): build reusable commands that a scheduler runs,
+   interrupts, and combines across the whole robot.
+3. [From Math to a Loop](./discretization.mdx): turn derivatives and integrals into per-loop Java,
+   convert encoder ticks to real units, measure loop time, and keep hub traffic under control.
 
-Future lessons in this module will cover Git workflow, FTC Dashboard, manual bulk reads, and deeper
-loop-time optimization.
+<Admonition type="tip" title="Why this comes before control theory">
+
+When good control math fails at competition, the equation is rarely the problem. More often it was
+dropped into one giant OpMode where nobody could say what the loop time was, which units a number was
+in, or which code owned a motor. Getting the structure right first makes everything after it easier to
+deploy.
+
+</Admonition>

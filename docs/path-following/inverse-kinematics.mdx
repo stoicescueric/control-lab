@@ -12,58 +12,32 @@ import InverseKinematicsArm from '@site/src/components/simulations/path-followin
 <Difficulty level="Medium" />
 
 <Abstract>
-Inverse kinematics answers the practical robotics question: "I know where I want the mechanism to go;
-what motor positions or wheel speeds make that happen?" In FTC, that shows up in obvious places like
-arms and turrets, but also in less obvious places like mecanum wheel mixing, where a desired chassis
-motion becomes four wheel powers.
+Inverse kinematics answers a practical question: you know where you want the mechanism to be, so what
+joint angles or wheel speeds get it there? In FTC that comes up with arms and turrets, and also in
+mecanum drive mixing, where a desired robot motion becomes four wheel powers.
 </Abstract>
 
-<Admonition type="note" title="Math starting point">
+<Admonition type="note" title="Math used">
 
-**Math used:** right-triangle trigonometry, sine and cosine, `atan2`, and square roots. Start with the
-two-link picture in this lesson. [Jacobians, partial derivatives, and numerical solvers](../advanced-topics/inverse-kinematics-jacobians.mdx)
-are optional next steps for mechanisms that no longer have a convenient geometry solution.
+Right-triangle trigonometry, sine and cosine, `atan2`, and square roots.
+[Jacobians and numerical solvers](../advanced-topics/inverse-kinematics-jacobians.mdx) are an optional
+next step for mechanisms without a tidy geometric solution.
 
 </Admonition>
 
-A robot is built from actuators, gears, links, wheels, and sensors. A driver or autonomous routine does
-not naturally think in those actuator coordinates. It thinks in goals: put the claw here, point the wrist
-there, drive the robot sideways, rotate toward the backdrop, place the pixel at this height.
-
-That mismatch is the reason inverse kinematics matters. It is the translation layer between **task
-space** and **actuator space**:
-
-$$
-\text{desired motion in the world}
-\quad\longrightarrow\quad
-\text{motor commands that create it}
-$$
-
-For a drivetrain, task space might be a chassis velocity:
-
-$$
-\begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
-$$
-
-where $v_x$ is forward speed, $v_y$ is sideways speed, and $\omega$ is angular velocity. For an arm, task
-space might be a claw position:
-
-$$
-\begin{bmatrix} x \\ y \end{bmatrix}
-$$
-
-where $x$ is horizontal position and $y$ is vertical position measured from the shoulder pivot. In both
-cases, the robot needs the same kind of answer: what should the motors do?
+Drivers and autonomous routines think in goals: put the claw here, point the wrist there, slide the
+robot sideways. Motors think in angles and speeds. Inverse kinematics translates from the first to the
+second. For a drivetrain, the goal is a robot motion $(v_x, v_y, \omega)$. For an arm, it's a claw
+position $(x, y)$ measured from the shoulder pivot. Either way the question is the same: what should
+the motors do?
 
 ## First ask: how many freedoms does the mechanism have?
 
-The Quality Control workshop makes a useful point before any equations appear: inverse kinematics starts
-with **degree-of-freedom analysis**. A degree of freedom is one independent way something can move. A slide
-has one translational degree of freedom. A simple arm joint has one rotational degree of freedom. A
-turreted arm has at least two: turret angle plus arm angle. A claw that must stay level adds another
-constraint.
+Team 21229 Quality Control's workshop makes a good point before any equations: start by counting
+**degrees of freedom**, the independent ways something can move. A slide has one. A single arm joint has
+one. A turret with an arm has at least two. A claw that has to stay level adds a constraint.
 
-Compare the degrees of freedom in the **target** with the degrees of freedom in the **mechanism**:
+Compare how many the **target** needs with how many the **mechanism** has:
 
 | Case | What it means on a robot | What the solver must do |
 |---|---|---|
@@ -71,19 +45,17 @@ Compare the degrees of freedom in the **target** with the degrees of freedom in 
 | Same number of freedoms | A two-link arm can often solve $(x, y)$ with geometry. | Use a closed-form trig/vector solution when possible. |
 | Extra mechanism freedoms | A turret + arm + slide may have many ways to reach the same point. | Choose a configuration using constraints, preferences, or numerical IK. |
 
-This is why "the IK answer" is not always a single answer. Sometimes there are two valid answers
-(elbow-up and elbow-down). Sometimes there are infinitely many, and the software must pick the one that
-avoids collisions, respects joint limits, keeps the claw level, and does not jerk the mechanism between
-two distant configurations.
+So there isn't always one answer. Sometimes there are two (elbow up and elbow down), and sometimes
+infinitely many, and the code has to pick one that avoids collisions, stays within joint limits, keeps
+the claw level, and doesn't jump between two very different poses.
 
 <Problem>
 
-## Start with the picture
+## Try it
 
-Drag the orange target. The software solves for two joint angles: the shoulder angle and the elbow angle.
-Try both elbow-up and elbow-down. They can reach the same point, which is the first important lesson:
-inverse kinematics may have more than one valid answer. Good robot code chooses the answer that is
-continuous from the current pose, not just mathematically valid.
+Drag the orange target. The demo solves for two angles, shoulder and elbow. Switch between elbow up and
+elbow down: both reach the same point. On a robot, pick the one that's closest to where the arm already
+is, not just any valid one.
 
 <InverseKinematicsArm />
 
@@ -91,8 +63,7 @@ continuous from the current pose, not just mathematically valid.
   title="The Basics of Inverse Kinematics in Robotics"
   src="https://www.youtube.com/embed/xXWveqIQObo"
   href="https://www.youtube.com/watch?v=xXWveqIQObo">
-  21229 Quality Control gives a visual robotics explanation of the same position-to-joint-angles idea
-  before this lesson formalizes it with FTC-ready equations and Java.
+  21229 Quality Control explains the same position-to-angles idea visually.
 </VideoEmbed>
 
 </Problem>
@@ -101,19 +72,14 @@ continuous from the current pose, not just mathematically valid.
 
 ## Forward kinematics: angles to position
 
-It is easier to understand inverse kinematics if we first write the opposite direction. **Forward
-kinematics** means: if the joint angles are known, where is the claw?
+It's easier to start with the opposite question, **forward kinematics**: if you know the joint angles,
+where is the claw?
 
-For a two-link arm:
+Take a two-link arm with a first link of length $L_1$ (shoulder to elbow) and a second of length $L_2$
+(elbow to claw). The shoulder angle $\theta_1$ is measured from horizontal. The elbow angle $\theta_2$ is
+measured from the first link, so $\theta_2 = 0$ means the arm is straight.
 
-- $L_1$ is the length of the first link, from the shoulder pivot to the elbow pivot.
-- $L_2$ is the length of the second link, from the elbow pivot to the claw or wrist.
-- $\theta_1$ is the shoulder angle, measured from the positive $x$ axis.
-- $\theta_2$ is the elbow angle, measured relative to the first link.
-- $x$ is the claw's horizontal position relative to the shoulder pivot.
-- $y$ is the claw's vertical position relative to the shoulder pivot.
-
-The first link contributes:
+The first link is the hypotenuse of a right triangle, so it reaches:
 
 $$
 \begin{aligned}
@@ -122,7 +88,7 @@ y_1 &= L_1\sin(\theta_1)
 \end{aligned}
 $$
 
-The second link points at angle $\theta_1 + \theta_2$, because it is mounted on the end of the first link:
+The second link points at $\theta_1 + \theta_2$, because it's mounted on the end of the first:
 
 $$
 \begin{aligned}
@@ -131,7 +97,7 @@ y_2 &= L_2\sin(\theta_1 + \theta_2)
 \end{aligned}
 $$
 
-Add the two link vectors and you get the claw position:
+Add the two together for the claw position:
 
 $$
 \boxed{
@@ -142,36 +108,25 @@ y &= L_1\sin(\theta_1) + L_2\sin(\theta_1 + \theta_2)
 }
 $$
 
-<EquationLegend
-  title="Symbols in the two-link arm"
-  items={[
-    {symbol: 'L_1, L_2', meaning: 'the fixed lengths of the two links: shoulder to elbow, and elbow to claw. Here the subscript names WHICH link, not a loop or a sample', unit: 'in'},
-    {symbol: '\u03b8_1', meaning: 'the shoulder angle, measured from the +x axis'},
-    {symbol: '\u03b8_2', meaning: 'the elbow angle, measured RELATIVE to the first link rather than from the world. This is why the second link points at \u03b8\u2081 + \u03b8\u2082'},
-    {symbol: 'x_1, y_1', meaning: 'how far the first link alone carries you from the shoulder'},
-    {symbol: 'x_2, y_2', meaning: 'how much the second link adds on top of that'},
-  ]}
-/>
-
-That is a simulation equation. Give it angles, and it tells you where the mechanism is.
+Check it: with both links 10 in, $\theta_1 = 90°$ (straight up) and $\theta_2 = -90°$ (elbow bent back
+down to horizontal), the claw is at $x = 0 + 10\cos 0° = 10$ and $y = 10 + 10\sin 0° = 10$.
 
 ### Inverse kinematics: position to angles
 
-FTC code usually needs the reverse. The autonomous routine says "place the claw at $(x, y)$." The motors
-need angles.
+Robot code usually needs the reverse: the routine says "put the claw at $(x, y)$," and the motors need
+angles.
 
-Draw a triangle from the shoulder to the elbow to the claw. The distance from the shoulder to the target
-is:
+Draw a triangle from shoulder to elbow to claw. The side from the shoulder to the claw has length
 
 $$
 r = \sqrt{x^2 + y^2}
 $$
 
-where $r$ is the straight-line distance from the shoulder pivot to the desired claw position. If $r$ is
-greater than $L_1 + L_2$, the point is too far away. If $r$ is less than $|L_1 - L_2|$, the point is too
-close to reach because one link cannot fold through the other.
+by Pythagoras. If $r$ is more than $L_1 + L_2$, the target is out of reach. If it's less than
+$|L_1 - L_2|$, it's too close, because one link can't fold through the other.
 
-The elbow angle comes from the law of cosines:
+The triangle's three sides are $L_1$, $L_2$, and $r$, so the law of cosines gives the angle at the
+elbow:
 
 $$
 \boxed{
@@ -180,14 +135,8 @@ $$
 }
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'r', meaning: 'the straight-line distance from the shoulder pivot to the target. Not a radius of curvature, and not the setpoint r used in control lessons', unit: 'in'},
-    {symbol: 'r\u00b2 \u2212 L\u2081\u00b2 \u2212 L\u2082\u00b2', meaning: 'the law of cosines rearranged. The triangle has sides L\u2081, L\u2082 and r, and \u03b8\u2082 is set by the angle between the two links'},
-  ]}
-/>
-
-Then:
+(The sign is flipped from the textbook form because $\theta_2$ is measured from straight, not the
+inside angle of the triangle.) Then:
 
 $$
 \theta_2 = \pm \cos^{-1}\!\left(
@@ -195,17 +144,11 @@ $$
 \right)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u00b1', meaning: 'the two solutions, elbow-up and elbow-down. Both put the claw in exactly the same place; they differ only in how the arm folds to get there. Which one you can use is a mechanical question, not a mathematical one'},
-  ]}
-/>
+The $\pm$ is the choice between elbow up and elbow down. Both put the claw in the same place, but one
+might hit the robot frame and the other might not.
 
-The $\pm$ is not decoration. It is the difference between the elbow-up and elbow-down solutions. Both may
-put the claw at the same point, but one might collide with the robot frame while the other clears it.
-
-To find the shoulder angle, point from the shoulder to the target, then subtract the angle inside the
-link triangle:
+For the shoulder angle, aim straight at the target, then back off by the angle inside the triangle
+between "straight at the target" and "along the first link":
 
 $$
 \boxed{
@@ -219,37 +162,14 @@ L_1 + L_2\cos(\theta_2)
 }
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'atan2(y, x)', meaning: 'the angle from the shoulder straight to the target. Unlike atan(y/x) it uses both signs, so it gets the correct quadrant when the target is behind the shoulder'},
-    {symbol: 'the second atan2', meaning: 'the angle inside the link triangle between "straight at the target" and "along link 1". Subtracting it swings the shoulder off the direct line by exactly enough for the elbow bend'},
-  ]}
-/>
-
-Here:
-
-- $\operatorname{atan2}(y, x)$ is the field angle from the shoulder to the target.
-- $L_2\sin(\theta_2)$ is the vertical component of the second link relative to the first.
-- $L_1 + L_2\cos(\theta_2)$ is the horizontal reach of the two-link triangle along the first link.
-- The second `atan2` subtracts the triangle's internal offset so the shoulder points to the correct
-  elbow position, not directly at the claw.
+`atan2(y, x)` is like $\tan^{-1}(y/x)$, but it looks at the signs of both inputs, so it gets the angle
+right even when the target is behind the shoulder. The second `atan2` is that inside angle: measured
+along the first link, the claw is $L_1 + L_2\cos\theta_2$ out and $L_2\sin\theta_2$ to the side.
 
 ### The drivetrain version
 
-The same idea appears in mecanum. In [Mecanum Kinematics](./mecanum-kinematics.mdx), the desired chassis
-motion is:
-
-$$
-\mathbf{u} =
-\begin{bmatrix}
-v_x \\
-v_y \\
-\omega
-\end{bmatrix}
-$$
-
-where $v_x$ is forward velocity, $v_y$ is sideways velocity, and $\omega$ is turn rate. The wheel powers
-are:
+The mecanum mixer from [Mecanum Kinematics](./mecanum-kinematics.mdx) is inverse kinematics too. The
+goal is a robot motion $(v_x, v_y, \omega)$, and the wheel powers are:
 
 $$
 \begin{bmatrix} w_{FL} \\ w_{FR} \\ w_{BL} \\ w_{BR} \end{bmatrix}
@@ -263,8 +183,8 @@ $$
 \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
 $$
 
-That is also inverse kinematics: a desired robot motion becomes actuator commands. The only difference is
-that the actuator commands are wheel speeds instead of joint angles.
+A desired motion goes in and motor commands come out. The difference is that they're wheel speeds
+instead of joint angles.
 
 </Theory>
 
@@ -272,14 +192,13 @@ that the actuator commands are wheel speeds instead of joint angles.
 
 ## A clean FTC implementation
 
-Keep inverse kinematics out of your OpMode. Your OpMode should ask for a target; a kinematics class
-should return the joint angles. That separation makes the math testable and keeps hardware code from
-turning into a geometry notebook.
+Keep inverse kinematics out of the OpMode. The OpMode asks for a target, and a separate class returns
+the angles. That way you can test the math at a desk without the robot.
 
-For a friendly check, let both links be $10$ inches and target $(10,10)$. Then
-$\cos\theta_2=0$. The elbow-up branch uses $\sin\theta_2=-1$, giving shoulder $90°$, elbow $-90°$, and
-elbow point $(0,10)$ above the directed base-to-target chord. The elbow-down branch gives shoulder $0°$,
-elbow $+90°$, and elbow point $(10,0)$. Both forward-solve to the same wrist target.
+A check you can do in your head: both links 10 in, target $(10, 10)$. Then $\cos\theta_2 = 0$. Elbow up
+uses $\sin\theta_2 = -1$ and gives shoulder $90°$, elbow $-90°$, with the elbow at $(0, 10)$. That's the
+pose from the forward-kinematics check above. Elbow down gives shoulder $0°$, elbow $+90°$, with the
+elbow at $(10, 0)$. Both put the claw at $(10, 10)$.
 
 <JavaCode label="Two-link arm inverse kinematics">{`// x, y is the wrist target measured FROM THE SHOULDER PIVOT. Units are
 // arbitrary but must match link1 and link2; angles come back in radians.
@@ -307,20 +226,20 @@ ArmSolution solve(double x, double y, boolean elbowUp) {
 }
 `}</JavaCode>
 
-The sign of `sinElbow` is the only difference between the two solutions. With $+x$ right and $+y$ up, a
-negative sine puts the elbow above the line from shoulder to target.
+The sign of `sinElbow` is the only difference between the two answers. With $+x$ to the right and $+y$
+up, a negative sine puts the elbow above the line from shoulder to target.
 
 <Exercise title="The workspace is a ring">
 
-Draw it. `minReach` and `maxReach` describe an annulus, not a disc. Work out when the inner hole
-disappears, and what that says about choosing link lengths.
+`minReach` and `maxReach` describe a ring, not a filled circle. When does the hole in the middle
+disappear, and what does that suggest about choosing link lengths?
 
 <Solution>
 
-The hole closes when `link1 == link2`, since `|link1 - link2|` is then zero and the arm can fold back on
-itself to reach the pivot. Equal links give the largest usable workspace for a given total length, which
-is why most two-link designs come close to it. Unequal links buy you a dead zone right in front of the
-shoulder — often exactly where you wanted to pick something up.
+When `link1 == link2`, `|link1 - link2|` is zero, and the arm can fold back to reach the pivot. Equal
+links give the most usable area for a given total length, which is why most two-link arms are close to
+equal. Unequal links leave a dead zone right in front of the shoulder, which is often where you wanted
+to pick something up.
 
 </Solution>
 
@@ -328,34 +247,32 @@ shoulder — often exactly where you wanted to pick something up.
 
 <Exercise title="Derive both angle lines">
 
-The triangle has sides `link1`, `link2` and `r`. Write $c^2 = a^2 + b^2 - 2ab\cos C$ with $C$ the
-interior angle at the elbow, and solve for the cosine. Note that the returned elbow angle is measured
-from *straight out*, not the interior angle — work out the relationship between the two.
+The triangle has sides `link1`, `link2`, and `r`. Write $c^2 = a^2 + b^2 - 2ab\cos C$ with $C$ the inside
+angle at the elbow, and solve for $\cos C$. The code's elbow angle is measured from straight, not the
+inside angle. How are they related?
 
-Then the shoulder line. The second `atan2` is the angle between "straight at the target" and "along
-link1." Draw the triangle, mark that angle, and confirm its two legs are `link2*sin(elbow)` and
-`link1 + link2*cos(elbow)`.
+Then the shoulder: draw the triangle, mark the angle between "straight at the target" and "along link 1,"
+and check that its two sides are `link2*sin(elbow)` and `link1 + link2*cos(elbow)`.
 
 <Solution>
 
-The law of cosines gives $r^2 = l_1^2 + l_2^2 - 2l_1l_2\cos C$, so
-$\cos C = (l_1^2 + l_2^2 - r^2)/(2l_1l_2)$ — which is the negative of the line above, because the
-returned angle is $\pi - C$: zero when the arm is straight out, not when it is folded shut. That sign
-flip is the whole relationship.
+The law of cosines gives $\cos C = (l_1^2 + l_2^2 - r^2)/(2l_1l_2)$. That's the negative of the code's
+formula, because the code's angle is $\pi - C$: zero when the arm is straight, not when it's folded
+shut, and $\cos(\pi - C) = -\cos C$.
 
-For the shoulder, drop a perpendicular from the wrist onto the link1 direction. The component along
-link1 is $l_1 + l_2\cos(\text{elbow})$ and the component across it is $l_2\sin(\text{elbow})$, so
-their `atan2` is the offset between aiming at the target and aiming along link1.
+For the shoulder, drop a perpendicular from the wrist onto the line of link 1. Along link 1 the wrist is
+$l_1 + l_2\cos(\text{elbow})$ out, and across it $l_2\sin(\text{elbow})$, so their `atan2` is the angle
+between aiming at the target and aiming along link 1.
 
-`atan2` rather than `atan` is mandatory: `atan` cannot distinguish a target behind the shoulder from
-one in front, since both give the same ratio. Look up "two-link planar manipulator inverse kinematics."
+It has to be `atan2`, not `atan`, because `atan` gives the same answer for a target in front of the
+shoulder and one directly behind it.
 
 </Solution>
 
 </Exercise>
 
-Then convert angles into your actual mechanism commands. That layer is robot-specific: encoder offsets,
-gear ratios, feedforward, joint limits, and homing sensors belong there, not inside the geometry solver.
+Then turn angles into commands for your mechanism. That part is specific to your robot: encoder
+offsets, gear ratios, feedforward, joint limits, and homing all go there, not in the solver.
 
 <JavaCode league="FTC" label="Using the solver inside a subsystem">{`void moveWristTo(double xInches, double yInches) {
     ArmSolution target = solve(xInches, yInches, true);
@@ -375,18 +292,17 @@ gear ratios, feedforward, joint limits, and homing sensors belong there, not ins
 
 <Exercise title="Where the offsets live">
 
-The geometry solver returns angles. It does not know about encoders, gear ratios, zero offsets, or motor
-limits — your subsystem owns all of that, and that split is the point. Work out what `toShoulderTicks`
-needs to know, and where a mechanical zero offset belongs.
+The solver returns angles and knows nothing about encoders, gear ratios, zero offsets, or motor limits.
+What does `toShoulderTicks` need to know, and where does a mechanical zero offset belong?
 
 <Solution>
 
-It needs ticks per revolution, the gear reduction between motor and joint, the direction convention, and
-the encoder reading that corresponds to the geometric zero. All four are facts about *this* robot, and
-none of them appear in `solve` — which is why `solve` is testable at a desk with a calculator.
+Ticks per revolution, the gear ratio between motor and joint, which direction is positive, and the
+encoder reading at the geometric zero. Those are all facts about this robot, and none of them are in
+`solve`, which is why `solve` can be checked with a calculator.
 
-The zero offset belongs in `toShoulderTicks`, not in `solve`. Put it in the solver and the geometry
-stops matching the diagram you derived it from, so every future check by hand disagrees with the code.
+The zero offset goes in `toShoulderTicks`. If you put it in the solver, the math stops matching the
+diagram it came from, and every check by hand disagrees with the code.
 
 </Solution>
 
@@ -394,27 +310,27 @@ stops matching the diagram you derived it from, so every future check by hand di
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: reachable does not mean safe">
+<Admonition type="warning" title="Reachable doesn't mean safe">
 
-The math only knows link lengths. It does not know that your claw hits the slides, that the arm smacks
-the alliance wall, or that your intake cable gets pulled tight. After the IK solver returns a valid
-answer, still apply joint limits, collision rules, and current limits before commanding motors.
-
-</Admonition>
-
-<Admonition type="warning" title="Hardware reality: singularities are fragile">
-
-When the arm is nearly straight or nearly folded, small target changes can create large joint-angle
-changes. Those configurations are called singularities. Avoid scoring paths that skim through them unless
-your controller is slow, current-limited, and well tested.
+The math only knows the link lengths. It doesn't know your claw hits the slides or that the intake cable
+gets pulled tight. After the solver gives an answer, still apply joint limits, collision rules, and
+current limits before moving anything.
 
 </Admonition>
 
-<Admonition type="tip" title="Calibrate the coordinate frame before tuning PID">
+<Admonition type="warning" title="Nearly straight or nearly folded is touchy">
 
-Most IK bugs are coordinate-frame bugs: the zero angle is off, the encoder sign is flipped, or inches and
-ticks are mixed. Before tuning a controller, print the measured shoulder and elbow angles, move the arm by
-hand, and verify that positive angles match the equations above.
+When the arm is almost straight or almost folded, a small change in the target can need a big change in
+the joint angles. These poses are called singularities. Avoid paths that pass through them unless the
+controller is slow, current-limited, and well tested.
+
+</Admonition>
+
+<Admonition type="tip" title="Check angles before tuning">
+
+Most IK bugs are angle-convention bugs: the zero is off, an encoder sign is flipped, or inches and ticks
+got mixed up. Before tuning anything, print the measured shoulder and elbow angles, move the arm by
+hand, and check that positive angles go the way the equations say.
 
 </Admonition>
 

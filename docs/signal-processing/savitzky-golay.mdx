@@ -12,22 +12,21 @@ import SavitzkyGolay from '@site/src/components/simulations/signal-processing/Sa
 <Difficulty level="Medium" />
 
 <Abstract>
-A moving average is a polynomial fit of the dumbest possible kind: it fits a flat line to the window,
-which is why it flattens every peak it touches. Fitting a parabola instead costs nothing at runtime,
-keeps the shape of the signal, and hands you a clean velocity estimate as a side effect.
+A moving average is secretly fitting a flat line to the window, which is why it flattens peaks. Fitting
+a parabola instead costs nothing extra on the robot, keeps the shape of the signal, and gives you a
+clean velocity estimate along the way.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-Start with [Moving Average](./moving-average.mdx) and [Low-Pass Filtering](./low-pass.mdx).
-**Math used:** a small polynomial, least-squares fitting, and a derivative read from that fit. The
-five-point implementation is already derived below; you do not need to solve normal equations or invert
-matrices before using it.
+Read [Moving Average](./moving-average.mdx) and [Low-Pass Filtering](./low-pass.mdx) first. The
+derivation uses a parabola, a line of best fit, and one derivative. You can use the five-point filter
+at the end without following every step.
 
 </Admonition>
 
-Your robot is closing on an AprilTag. The vision pose jitters a few centimetres frame to frame, so you
-smooth it. The jitter goes away, and so does something you wanted.
+Your robot is driving toward an AprilTag and the vision pose jitters by a few centimeters from frame to
+frame, so you smooth it. The jitter goes away, but so does part of the real signal.
 
 <Problem>
 
@@ -47,17 +46,13 @@ $$
 \frac{6 + 9 + 10 + 9 + 6}{5} = \frac{40}{5} = 8
 $$
 
-The filter reports 8 where the truth is 10. Not because a sensor lied, and not because the window was
-too long. It is wrong by 2 on perfectly clean data, and making the readings cleaner will not move that
-number at all.
-
-This is the flaw worth understanding before reaching for a longer window. Averaging asks "what single
-flat value best explains these five readings?", and for data that curves, the honest answer to that
-question sits below the peak. The average is not failing at its job. Its job is the wrong job.
+The filter says 8 when the truth is 10. There's no noise here at all, so cleaner readings won't help.
+Averaging asks "what single flat value best fits these five readings?", and for data that curves, the
+best flat value sits below the peak.
 
 <Analogy>
-<strong>You have seen this.</strong> Blur a photo to hide the grain and the edges go soft too. The
-blur cannot tell noise from a real edge, because both are places where neighbouring values disagree.
+<strong>Blurring a photo.</strong> Blur a photo to hide the grain and the edges go soft too. The blur
+can't tell noise from a real edge, because both are places where neighboring pixels disagree.
 </Analogy>
 
 </Problem>
@@ -79,11 +74,9 @@ $$
 
 Differentiate, set to zero: $-2\sum_i (y_i - a) = 0$, so $\sum_i y_i = na$, so $a = \frac{1}{n}\sum_i y_i$.
 
-That is the mean. **The moving average is not merely similar to a least-squares fit, it is one**: the
-best fit of a horizontal line to the window. The 8 from the opening was not a bug, it was the correct
-answer to a question about flat lines.
-
-So if the model is what went wrong, change the model.
+That's the average. So the moving average *is* a least-squares fit: the best horizontal line through
+the window. The 8 from the opening is the right answer to the wrong question. To fix it, fit a shape
+that can bend.
 
 ### Fit a parabola instead
 
@@ -134,10 +127,9 @@ $$
 a = \frac{-3y_{-2} + 12y_{-1} + 17y_{0} + 12y_{1} - 3y_{2}}{35}
 $$
 
-Look at what survived. **No $y$ values appear in the coefficients.** The fit depends on the data, but
-the *recipe* does not: it is always $(-3, 12, 17, 12, -3)$ divided by 35. Do the least-squares algebra
-once, on paper, and at runtime a Savitzky-Golay filter is five multiplies and an add. It costs what a
-moving average costs.
+The weights don't depend on the readings. They're always $(-3, 12, 17, 12, -3)$ divided by 35. You do
+the algebra once on paper, and on the robot a Savitzky-Golay filter is five multiplies and some adds,
+the same cost as a moving average.
 
 Two checks you can do by eye. The coefficients sum to $-3+12+17+12-3 = 35$, so a constant signal comes
 through unchanged, exactly as it must. And on the five readings from the opening:
@@ -146,8 +138,8 @@ $$
 \frac{-3(6) + 12(9) + 17(10) + 12(9) - 3(6)}{35} = \frac{-18 + 108 + 170 + 108 - 18}{35} = \frac{350}{35} = 10
 $$
 
-Exactly 10, the value the moving average missed by 2. The parabola through those five points *is*
-$y = 10 - x^2$, and a fit that can represent the true shape reproduces it perfectly.
+Exactly 10. The five readings lie on $y = 10 - x^2$, and a fit that can represent that shape reproduces
+it exactly.
 
 <figure className="my-7 text-center">
   <svg viewBox="0 0 640 220" className="mx-auto h-auto w-full" role="img" aria-label="Five points on a downward parabola, with a flat average line sitting below the peak and a fitted parabola passing through every point">
@@ -177,11 +169,9 @@ $y = 10 - x^2$, and a fit that can represent the true shape reproduces it perfec
 
 ### Where the moving average went
 
-Set the degree to 0 and the whole derivation shrinks back: with no $b$ or $c$ term the single equation
-is $5a = S_0$, the weights become $(1, 1, 1, 1, 1)/5$, and you have the moving average again. It is
-not a rival filter, it is the bottom rung of the same ladder. Degree 1 fits a straight tilted line and,
-for a symmetric window, produces those same equal weights. Degree 2 is the first setting that can
-represent a bend.
+Set the degree to 0 and the derivation shrinks: with no $b$ or $c$ the only equation is $5a = S_0$, the
+weights are $(1, 1, 1, 1, 1)/5$, and you're back to the moving average. Degree 1 fits a tilted line and,
+for a symmetric window, gives the same equal weights. Degree 2 is the first one that can bend.
 
 Drag the degree slider from 0 upward and watch the weight bars change shape. At degree 0 they are a
 flat block. At degree 2 the outer two go negative, and those negative weights are exactly what lets
@@ -190,28 +180,26 @@ the output climb above every reading in the window when the signal is peaking.
 <SavitzkyGolay />
 
 <Callout type="warn" title="Negative weights cut both ways.">
-A moving average can never leave the range of its window; it is an average, so it sits between the
-smallest and largest reading. A Savitzky-Golay filter can overshoot past every sample it saw, because
-two of its weights are negative. On a real peak that is the feature. On a single wild outlier it is a
-liability: the filter treats the spike as evidence of curvature and leans further into it than an
-average would. Gate outliers out before this filter: reject any sample that jumps further than the
-mechanism physically can in one loop, and the spike never reaches the fit.
+A moving average always stays between the smallest and largest reading in its window. A Savitzky-Golay
+filter can go beyond them, because two of its weights are negative. On a real peak that's what you
+want. On a single wild reading it's a problem: the filter treats the spike as a curve and leans into it
+harder than an average would. Reject readings that jump further than the mechanism could physically
+move in one loop before they reach this filter.
 </Callout>
 
-### Velocity, already paid for
+### Velocity from the same fit
 
-The $b$ term has been sitting there unused. It is the fitted slope at the window centre, and the same
-grouping trick turns $b = S_1/10$ into fixed weights:
+The $b$ term is the slope of the fitted parabola at the middle of the window, and the same grouping
+turns $b = S_1/10$ into fixed weights:
 
 $$
 b = \frac{-2y_{-2} - y_{-1} + 0y_{0} + y_{1} + 2y_{2}}{10}
 $$
 
-That is a velocity estimate in units per sample; divide by the loop period for units per second. It
-matters because the obvious way to get velocity from a noisy position signal, subtracting consecutive
-readings, is the worst thing you can do to noise. Differencing two samples doubles the noise variance
-while the signal change between them is tiny. This estimate uses all five samples and the same fit
-that produced the smoothed position, so it costs one more dot product and nothing else.
+That's a velocity in units per sample; divide by the loop period to get units per second. The usual way
+to get velocity from a noisy position, subtracting two consecutive readings, is about the noisiest
+option there is. It doubles the noise variance while the real change between two samples is tiny. This
+estimate uses all five samples and costs one more multiply-and-add pass.
 
 </Theory>
 
@@ -219,8 +207,8 @@ that produced the smoothed position, so it costs one more dot product and nothin
 
 ## Precompute the weights, then it is a dot product
 
-Nothing about the derivation happens on the robot. The weights are constants, so the Control Hub only
-ever does the multiply-and-add.
+None of the derivation runs on the robot. The weights are constants, so the Control Hub only does the
+multiplying and adding.
 
 <JavaCode league="FTC" label="Five-point quadratic smoothing">{`private static final double[] SG_SMOOTH = {-3.0 / 35, 12.0 / 35, 17.0 / 35, 12.0 / 35, -3.0 / 35};
 
@@ -242,12 +230,11 @@ double smooth(double reading) {
     return total;
 }`}</JavaCode>
 
-The returned number describes the *centre* of the window, which is two samples behind the reading you
-just fed in. That is the honest price of a symmetric fit and it is the same price a symmetric moving
-average pays. If two loops of delay is too much, refit the polynomial to be evaluated at the newest
-sample instead of the middle. The demo's second button does exactly that, and the weights it shows
-change accordingly: the fit is then extrapolating to the window edge rather than interpolating to its
-centre, which is more responsive and noticeably noisier.
+The result describes the *middle* of the window, two samples behind the newest reading. A symmetric
+moving average has the same two-loop delay. If that's too much, evaluate the fitted parabola at the
+newest sample instead of the middle. The demo's second button does this, and you can see the weights
+change. It responds faster, but it's noticeably noisier, because it's predicting the edge of the
+window instead of the middle.
 
 <JavaCode league="FTC" label="Centre velocity from the same window">{`private static final double[] SG_SLOPE = {-0.2, -0.1, 0.0, 0.1, 0.2};
 
@@ -259,9 +246,9 @@ double centreVelocity(double loopSeconds) {
     return perSample / loopSeconds;
 }`}</JavaCode>
 
-When you tune this, log the raw readings alongside both outputs. The failure you are looking for is
-the smoothed line clipping the tops of real peaks, which means the degree is too low for the shape or
-the window is too long for how fast the signal moves.
+When you tune this, log the raw readings next to both outputs. If the smoothed line cuts off the tops
+of real peaks, the degree is too low for the shape or the window is too long for how fast the signal
+changes.
 
 <Exercise title="Compute both filters by hand">
 
@@ -277,14 +264,12 @@ average's error get better or worse, and why?
 The average is $(4+10+12+10+5)/5 = 41/5 = 8.2$. The fit is
 $(-3(4) + 12(10) + 17(12) + 12(10) - 3(5))/35 = (-12 + 120 + 204 + 120 - 15)/35 = 417/35 = 11.91$.
 
-The true peak is 12. The average misses by 3.8, the fit by 0.09. The fit is not exact here because
-these readings are not exactly a parabola, which is the realistic case: the fit is close, not magic.
+The true peak is 12. The average misses by 3.8 and the fit by 0.09. The fit isn't exact because these
+readings aren't exactly a parabola, which is what real data looks like.
 
-Widening the window makes the average **worse**, and this is the important half of the question. A
-longer window reaches further down both sides of the peak, so the values being averaged are further
-below the centre and the result sinks lower. For a curved signal, the moving average's error grows
-with window length. That is the opposite of the intuition that a longer window is a better filter, and
-it is why "just average more samples" eventually stops helping.
+A wider window makes the average **worse**. It reaches further down both sides of the peak, so it
+averages in lower values and the result sinks. On a curved signal, the moving average's error grows
+with the window size, which is why "just average more samples" stops helping at some point.
 
 </Solution>
 
@@ -292,18 +277,15 @@ it is why "just average more samples" eventually stops helping.
 
 <Exercise title="Why the outer weights are negative">
 
-The weights $(-3, 12, 17, 12, -3)/35$ do not merely average. Explain, in terms of the fitted parabola,
-what the two negative weights accomplish. It may help to ask what the filter should output when the
-outer readings are far *below* the inner ones.
+What do the two negative weights do? Think about what the filter should output when the outer readings
+are far *below* the inner ones.
 
 <Solution>
 
-When the outer samples sit well below the inner ones, the window is curving downward, and a parabola
-through those points peaks *above* the middle reading. To report that peak the filter has to push its
-output up, and the only way to push up using the outer samples is to subtract them. The negative
-weights are the filter measuring curvature: the further the edges fall below the centre, the more it
-lifts the answer. Set the readings to a straight line and the curvature contribution cancels exactly,
-which is why the filter leaves lines and constants untouched.
+When the outer readings are well below the inner ones, the data is curving downward, and a parabola
+through them peaks *above* the middle reading. To report that, the filter has to push its output up,
+and subtracting the outer readings does exactly that. The further the edges drop, the more it lifts the
+answer. On a straight line the effect cancels out, so lines and constants pass through unchanged.
 
 </Solution>
 
@@ -311,23 +293,22 @@ which is why the filter leaves lines and constants untouched.
 
 <Exercise title="Pick the setting for a real signal">
 
-You are filtering AprilTag range at 40 Hz while driving at roughly 1 m/s. Vision noise is about 2 cm
-one-sigma. Sketch how you would choose between a 5-sample quadratic fit and a 21-sample quadratic fit,
-in terms of how far the robot travels inside the window and how much smoothing you need.
+You're filtering AprilTag range at 40 Hz while driving at about 1 m/s, and the vision noise is about
+2 cm (one standard deviation). How would you choose between a 5-sample and a 21-sample quadratic fit?
+Think about how far the robot moves during one window and how much smoothing you need.
 
 </Exercise>
 
-:::warning[Hardware reality]
-Everything here assumes samples arrive at a fixed period, because the offsets $-2, -1, 0, 1, 2$ are
-sample indices, not timestamps. Vision frames dropped by the pipeline break that assumption silently:
-the filter keeps producing numbers, but the window now spans more time than you think and the velocity
-estimate is scaled wrong. Timestamp your frames and either discard incomplete windows or refit the
-polynomial against the real timestamps.
+:::warning[Dropped frames]
+All of this assumes readings arrive evenly spaced in time, because the offsets $-2, -1, 0, 1, 2$ count
+samples, not seconds. When the vision pipeline drops frames, the filter keeps producing numbers, but the
+window covers more time than you think and the velocity comes out wrong. Timestamp your frames, and
+either throw out windows with gaps or fit against the real timestamps.
 :::
 
-Both this filter and the moving average still work on one sensor and can only fight jitter. Neither
-can tell you that your vision pose has drifted a steady 10 cm to the left, because a smooth wrong
-answer is still wrong. The rest of the module brings in a second sensor, starting with the
+This filter and the moving average both work on a single sensor, and both only fight jitter. Neither
+can tell that your vision pose is off by a steady 10 cm, because a smooth wrong answer is still wrong.
+The rest of the module brings in a second sensor, starting with the
 [complementary filter](./complementary.mdx).
 
 </Deploy>

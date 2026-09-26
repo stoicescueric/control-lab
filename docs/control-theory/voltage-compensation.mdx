@@ -12,29 +12,27 @@ import VoltageComp from '@site/src/components/simulations/control-theory/Voltage
 <Difficulty level="Easy" />
 
 <Abstract>
-A motor power command in $[-1, 1]$ delivers that fraction of the *battery's current voltage*, not a fixed
-voltage — so as the pack sags over a match, the same command produces less and less. Voltage compensation
-divides the intended voltage by the measured battery voltage before sending it, delivering a constant
-target voltage (until the battery physically can't), which keeps feedforward gains valid and behavior
-repeatable from the first second to the last.
+A motor power command in $[-1, 1]$ is a fraction of whatever the battery reads right now, not a fixed
+voltage. As the battery sags during a match, the same command does less. Voltage compensation divides
+the voltage you want by the measured battery voltage, so the motor gets the same voltage all match (as
+long as the battery can supply it) and your feedforward gains stay correct.
 </Abstract>
 
-This is the shortest lesson in the module and one of the most valuable: a few characters of code that
-make every other controller — [feedforward](./feedforward.mdx), [PID](./pid.mdx),
-[profiles](./motion-profiling.mdx) — behave the same on a fresh pack and a tired one.
+This is a short lesson about one division. It's what makes [feedforward](./feedforward.mdx),
+[PID](./pid.mdx), and [motion profiles](./motion-profiling.mdx) behave the same on a fresh battery and a
+tired one.
 
 <Problem>
 
-## The same command, quietly doing less
+## The same command does less as the battery drains
 
-`motor.setPower(0.6)` does **not** apply a fixed voltage. It applies 60% of whatever the battery happens
-to read right now. A freshly charged 12 V pack typically reads somewhat above nominal — on the order of
-13 V — and can sag to roughly 11 V or lower under sustained load; the exact numbers depend on the battery's
-age, state of charge, and the current being drawn, but this range is illustrative, not a spec. So `0.6` is
-$0.6 \times 13 = 7.8$ V early in the match and $0.6 \times 11 = 6.6$ V late — a real drop in effort for the
-identical command. Your auto that was tuned on a full battery
-now undershoots; your flywheel that was on speed now falls short. Worse, your carefully *measured*
-feedforward gains are in **volts**: and they're being applied to a command that no longer maps to volts.
+`motor.setPower(0.6)` doesn't apply a fixed voltage. It applies 60% of whatever the battery reads at that
+moment. A freshly charged 12 V battery usually reads around 13 V and can sag to 11 V or lower under
+heavy load. (The exact numbers depend on the battery's age, charge, and current draw.) So `0.6` means
+$0.6 \times 13 = 7.8$ V early in the match and $0.6 \times 11 = 6.6$ V late in it, for the same line of
+code. An auto tuned on a full battery starts coming up short, and a flywheel that was on speed falls
+behind. Your feedforward gains are also measured in volts, and they're being applied to a command that
+no longer means a fixed number of volts.
 
 </Problem>
 
@@ -42,31 +40,28 @@ feedforward gains are in **volts**: and they're being applied to a command that 
 
 ## Divide by what you actually have
 
-Every controller in this module computes a desired *voltage* — feedforward's $k_S + k_V v + k_A a$, PID's
-output, a profile's command. To turn a desired voltage $V_\text{cmd}$ into the power fraction that will
-actually deliver it, divide by the **measured** battery voltage:
+Suppose you want 6 V at the motor. On a 13 V battery that's a power of $6/13 = 0.46$. On an 11 V battery
+it's $6/11 = 0.55$. In general, divide the voltage you want by the voltage you have:
 
 $$
 \text{power} = \frac{V_\text{cmd}}{V_\text{battery}}
 $$
 
-Now the delivered voltage is $\text{power} \times V_\text{battery} = V_\text{cmd}$ — independent of the
-battery, exactly what you asked for. The only thing that can break the guarantee is physics: you cannot
-deliver more than the battery holds, so once $V_\text{cmd} > V_\text{battery}$ the command saturates at
-full power and the output follows the sagging pack down.
+The motor then gets $\text{power} \times V_\text{battery} = V_\text{cmd}$, whatever the battery is doing.
+The one limit is that you can't ask for more than the battery has. Once $V_\text{cmd} > V_\text{battery}$
+the command hits full power and the output drops with the battery.
 
-In the demo, the rose line is a raw command (delivered volts $=$ power $\times$ battery, drifting as the
-pack changes); the green line is the compensated command, flat at your target until the battery can no
-longer reach it. Drag the battery marker from full to sagging and watch the raw output fall away while the
-compensated one holds.
+In the demo, the rose line is a raw power command, so the delivered voltage drifts as the battery
+changes. The green line is compensated and stays flat at the target until the battery can't reach it.
+Drag the battery from full to sagging and compare them.
 
 <VoltageComp />
 
-<Callout type="idea" title="It makes your gains portable in time.">
-Because compensation pins the command to real volts, the feedforward constants you
-[measured](./system-identification.mdx) stay correct all match — and even transfer better between two
-robots with the same mechanism. Without it, every gain is implicitly "valid at whatever voltage I tuned
-on," which is never the voltage you compete on.
+<Callout type="idea" title="Gains that stay correct">
+With the command in real volts, the feedforward constants you
+[measured](./system-identification.mdx) stay correct all match, and they carry over better between two
+robots with the same mechanism. Without it, every gain is really "correct at whatever voltage the
+battery had when I tuned," which is never the voltage you compete on.
 </Callout>
 
 </Theory>
@@ -75,8 +70,8 @@ on," which is never the voltage you compete on.
 
 ## One division, or one SDK call
 
-Apply it at the very end, after the controller has produced a voltage. Read the battery once per loop
-(reading it is not free) and clamp the result to the legal power range.
+Do it last, after the controller has worked out a voltage. Read the battery once per loop, since each
+read takes time, and clamp the result to $[-1, 1]$.
 
 <JavaCode league="FTC" label="Voltage-compensated output">{`// A telemetry sanity floor, NOT a battery cutoff.
 static final double MIN_VALID_BATTERY_VOLTS = 6.0;
@@ -98,20 +93,20 @@ void setVoltage(DcMotor motor, double desiredVolts, double vbat) {
     motor.setPower(Math.max(-1, Math.min(1, power)));
 }`}</JavaCode>
 
-Every mechanism computes what it wants in volts. This is the single place volts become motor power, and
-the same cached `vbat` reaches all of them.
+Every mechanism works out what it wants in volts, and this is the only place volts become motor power.
+All of them use the same `vbat` reading.
 
 <Exercise title="Why one reading, shared">
 
-Each motor could read the battery for itself. Work out what goes wrong when two motors read a sagging
-rail a few milliseconds apart while being handed the same commanded voltage.
+Each motor could read the battery itself. What goes wrong when two drive motors read a sagging battery
+a few milliseconds apart and are both asked for the same voltage?
 
 <Solution>
 
-They get different divisors, so the same 6 V request becomes two different powers — and on a
-drivetrain that is a steering error the controller never asked for, appearing only when the pack is
-sagging, which is exactly when you are pushing. One reading per loop makes the whole robot agree on
-what the battery is doing.
+They divide by slightly different numbers, so the same 6 V request turns into two different powers. On a
+drivetrain that's a steering error nobody asked for, and it only shows up when the battery is sagging,
+which is when you're pushing hardest. With one reading per loop, the whole robot agrees on the battery
+voltage.
 
 </Solution>
 
@@ -119,53 +114,49 @@ what the battery is doing.
 
 <Exercise title="The sign of the effect">
 
-You want 6 volts. At a fresh 13.0 V the power is 0.46; at a sagging 11.0 V it is 0.55. Explain why
-commanding a *larger* number is the correct response to a *weaker* battery.
+You want 6 V. On a fresh 13.0 V battery the power is 0.46, and on a sagging 11.0 V battery it's 0.55. Why
+is a bigger number the right answer for a weaker battery?
 
 <Solution>
 
-`setPower` is a duty cycle, not a voltage — it is the fraction of the rail you are asking for. A
-weaker rail means a larger fraction is needed to reach the same actual voltage at the motor. Without
-the division, the same `0.46` would deliver 6.0 V on a fresh pack and 5.06 V on a sagging one, and
-every gain you tuned would quietly drift over the match.
+`setPower` is a fraction of the battery voltage, not a voltage. A weaker battery needs a bigger fraction
+to give the motor the same voltage. Without the division, `0.46` gives 6.0 V on a fresh battery and
+5.06 V on a sagging one, and every gain you tuned drifts over the match.
 
 </Solution>
 
 </Exercise>
 
-In FRC you do not write the division yourself: `setVoltage(...)` divides by the measured bus voltage for
-you, and modern vendor APIs (Phoenix 6's `VoltageOut`, for instance) take a voltage request natively.
-Pick **one** mechanism — the roboRIO-side `setVoltage`, or the controller's own
-`enableVoltageCompensation(nominalVolts)` mode — never both. They compose multiplicatively: `setVoltage`
-emits a percent $V_\text{cmd}/V_\text{bus}$, the controller then interprets that percent against
-$V_\text{nom}$, and the mechanism actually receives
+In FRC you don't write the division yourself. `setVoltage(...)` divides by the measured bus voltage, and
+newer vendor APIs like Phoenix 6's `VoltageOut` take a voltage directly. Use either the roboRIO-side
+`setVoltage` or the motor controller's own `enableVoltageCompensation(nominalVolts)`, not both. If you
+use both, `setVoltage` sends a percent $V_\text{cmd}/V_\text{bus}$, the controller scales that percent
+by $V_\text{nom}$, and the mechanism receives
 
 $$
 V_\text{delivered} = V_\text{cmd}\,\frac{V_\text{nom}}{V_\text{bus}}
 $$
 
-On a **sagging** pack that **over**-commands: ask for 6 V at $V_\text{bus} = 11$ V and 6.55 V arrives, 9%
-high — and sag is exactly the condition this lesson exists for. On a fresh pack above nominal it
-under-commands instead. The idea is identical either way: stop thinking in unitless "power" and start
-thinking in volts the battery may or may not be able to supply.
+On a sagging battery that asks for too much: request 6 V with $V_\text{bus} = 11$ V and 6.55 V arrives,
+9% high, in exactly the situation compensation is meant for. On a fresh battery above nominal it asks for
+too little.
 
-<Callout type="tip" title="Compensation is not a brownout cure.">
-Holding the *command* constant as voltage drops means drawing *more current* to do it — which sags the
-pack further. Compensation keeps behavior consistent within the battery's ability; it cannot create energy
-that isn't there. If you're browning out, the fix is in the [motor model](./how-a-motor-works.mdx) (you're
-living too near stall), not here.
+<Callout type="tip" title="It doesn't fix brownouts">
+Holding the voltage steady while the battery sags means drawing more current, which sags the battery
+further. Compensation keeps behavior consistent within what the battery can do. If you're browning
+out, look at the [motor model](./how-a-motor-works.mdx): something is probably running too close to
+stall.
 </Callout>
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: validate the voltage reading">
+<Admonition type="warning" title="Check the voltage reading">
 
-Battery voltage spikes downward sharply under sudden load (a drivetrain slamming to full power), so a raw
-reading can momentarily read very low and make your compensation over-command. Reject nonfinite or
-physically implausible readings as the snippet does. If measurement noise requires it, use only a very
-light [low-pass filter](../signal-processing/low-pass.mdx): genuine bus sag is the value the command must
-respect, so heavy smoothing would hide the condition. Read voltage once per loop rather than per
-motor — the sensor call has real latency.
+Battery voltage dips sharply under a sudden load, like the drivetrain going to full power, so one
+reading can come back very low and make compensation ask for too much. Throw out readings that aren't
+finite or aren't physically possible, as the code does. If the reading is noisy, a very light
+[low-pass filter](../signal-processing/low-pass.mdx) is fine, but don't smooth heavily: real sag is
+exactly what the command needs to respond to.
 
 </Admonition>
 
@@ -174,9 +165,8 @@ motor — the sensor call has real latency.
 - [WPILib: Feedforward Control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/controllers/feedforward.html) -
   competition-robotics reference for commanding mechanisms in volts instead of relying on unitless power.
 - Game Manual 0, [Motor Power](https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html) -
-  FTC motor current and stall context, and the 12 V nominal basis for motor performance curves. (This page
-  does not itself cover battery voltage sag; no FTC-specific manufacturer source with sourced voltage-sag
-  figures was found, so the sag numbers above are presented as illustrative, not sourced.)
+  FTC motor current and stall context, and the 12 V basis for motor curves. It doesn't cover battery
+  sag, so the sag numbers in this lesson are typical values rather than sourced figures.
 - [How a Motor Works](./how-a-motor-works.mdx) - Control Lab's motor-model lesson explaining why voltage,
   current, speed, and torque are coupled.
 

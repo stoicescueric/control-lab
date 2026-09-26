@@ -94,12 +94,11 @@ analytics, and URL safety belong in `src/lib/platform`.
 
 | Directory | Typical contents |
 | --- | --- |
-| `foundations/` | Introductory feedback and mathematical intuition. |
+| `foundations/` | Introductory feedback. |
 | `software-architecture/` | State machines, command scheduling, and loop timing. |
 | `control-theory/` | Motor models, PID, feedforward, identification, saturation, and profiles. |
 | `signal-processing/` | Noise, smoothing filters, sensor fusion, and Kalman estimation. |
 | `path-following/` | Kinematics, pursuit, splines, vector fields, and steering geometry. |
-| `state-space/` | State feedback and optimal-control explorers. |
 | `research/` | Projectile simulation and shoot-on-the-move case studies. |
 
 A simulation is assigned by the concept it teaches, not by every page that

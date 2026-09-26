@@ -13,17 +13,17 @@ import FlightExplorer, {IntegratorExperiment} from '@site/src/components/simulat
 <Difficulty level="Medium" />
 
 <Abstract>
-A launch command becomes useful when it predicts the right event: the ball descending through the
-opening. This lesson turns the paper's force model into an offline solver with a clear input/output
-contract, then separates numerical accuracy from physical accuracy.
+To pick a shot, you need to predict one moment: the ball coming down through the opening. This lesson
+builds a simulator for that from the forces on the ball, and separates "is the code right" from "is the
+physics right."
 </Abstract>
 
 <Admonition type="note" title="Builder outcome and prerequisites">
 
-Build an offline `simulateShot(...)` function that returns the descending rim crossing, entry
-velocity, time of flight, and geometric entry result. The full derivation uses vectors, ordinary
-differential equations, RK4, and cubic Hermite interpolation. You can implement a tested solver
-without deriving each method, but you must keep the event definition and units explicit.
+You'll build a `simulateShot(...)` function that says where the ball crosses the rim height on the way
+down, how fast it's moving, how long it took, and whether it fits through the opening. The math uses
+vectors, differential equations, and numerical integration. You can use a tested library for those, as
+long as you're careful about units and exactly which moment you're measuring.
 
 </Admonition>
 
@@ -45,7 +45,7 @@ For a front lip at $d=1.778\ \mathrm{m}$ (70 inches), the center must cross betw
 
 At **5.25 m/s and 58°**, a vacuum calculation places the descending crossing at **2.084 m**. With the paper’s effective drag coefficient, $C_D=0.47$, it crosses at **1.859 m**: approximately **22.5 cm earlier**, a 10.8% reduction.
 
-Both nominal predictions enter this particular opening. But the drag-aware prediction leaves only about **1.8 cm** of front-lip center clearance. That is the reason the next lesson tests neighboring commands instead of celebrating one successful line. Source: paper §4, Figure 3.
+Both predictions go in. But with drag, the ball's center clears the front lip by only about **1.8 cm**. That's why the next lesson checks nearby settings too instead of trusting one good-looking line. Source: paper §4, Figure 3.
 
 :::tip[Predict, change, explain]
 Before touching the controls, predict what increasing drag will do to the crossing. Set the drag coefficient to zero, restore it to 0.47, then lower the exit speed. Watch for the difference between **missing the opening** and **never reaching a descending rim event**.
@@ -73,16 +73,14 @@ $$
   {symbol: '|v|', meaning: 'speed: the magnitude of the velocity vector', unit: 'm/s'},
 ]} />
 
-The model uses a 0.0748 kg ball, air density 1.204 kg/m³, and frontal area $A=\pi(0.127/2)^2$. The constant $C_D$ is an effective modeling choice, not a drag measurement from the tracking video. Spin, lateral forces, and goal contact are outside this flight model.
+The model uses a 0.0748 kg ball, air density 1.204 kg/m³, and a cross-section of $A=\pi(0.127/2)^2$. The drag coefficient $C_D$ was chosen for the model, not measured. The model leaves out spin, sideways forces, and anything after the ball touches the goal.
 
 For horizontal wind $v_w$, use $\mathbf u=(v_x-v_w,v_z)$ in the drag term. Keep $v_x$ in
 $\dot x=v_x$: the position is measured relative to the ground, while drag depends on air-relative
 motion. Mixing those two frames changes the trajectory even when the force equation looks familiar.
 
-Paper §4 provides two useful sensitivity checks at the representative command. Varying $C_D$ from
-0.40 to 0.55 shifts the crossing by 6.3 cm; varying measured ball diameter from 0.124 to 0.127 m
-shifts it by 0.9 cm. These compare model assumptions at one command. They do not measure the
-distribution of physical misses.
+How much do those choices matter? At the example shot, changing $C_D$ from 0.40 to 0.55 moves the
+crossing by 6.3 cm, and changing the ball's diameter from 0.124 to 0.127 m moves it by 0.9 cm (paper §4).
 
 ## Find the event between samples
 
@@ -90,8 +88,8 @@ RK4 advances the state in 20 ms steps. Scoring happens at the instant the ball d
 
 The same crossing supplies the horizontal coordinate, flight time, and entry velocity. The time when the ball later hits the floor describes a different event and cannot replace it.
 
-A small bisection bracket only controls the root search inside the reconstructed segment. It cannot
-remove the integration error in the segment's endpoints or uncertainty in the drag coefficient.
+Narrowing the search that far only makes the crossing time precise within the reconstructed segment. It
+doesn't fix errors in the simulation itself or in the drag coefficient.
 
 <details>
 <summary>Explore the integration method</summary>
@@ -129,10 +127,9 @@ spin parameters are compatibility fields; they do not add Magnus forces to the e
 
 ## Verify the mathematics before calibrating the hardware
 
-Paper §5.6 reports 993 vacuum comparisons with an analytic parabola and 158 drag-event comparisons
-with an independently implemented DOP853 solver. Maximum position errors are approximately
-$7.11\times10^{-7}$ m and $5.41\times10^{-7}$ m respectively. Those are numerical comparisons,
-not sub-micrometre physical aiming accuracy.
+The paper (§5.6) compared the simulator with the exact no-drag parabola 993 times, and with a separate
+high-accuracy solver 158 times with drag. The biggest differences were under a micrometer. That shows
+the code solves the equations correctly. It doesn't mean the robot aims to a micrometer.
 
 The [verification harness](https://github.com/stoicescueric/Trajectory-Simulation/blob/09663d6868fd0cc781dc28448cc3f6ace828da1a/backend/verify.py)
 also checks caching, exhaustive selection, input validation, and concurrent requests. Its DOP853

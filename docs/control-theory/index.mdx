@@ -1,46 +1,42 @@
 ---
 title: Motor Dynamics & Control Theory
-description: From the DC-motor model to deployable controllers — feedforward, PID, bang-bang, system identification, battery compensation, and motion profiling.
+description: From the DC-motor model to deployable controllers. Feedforward, PID, anti-windup, bang-bang, system identification, battery compensation, and motion profiling.
 tags: [pid, feedforward, motor-model, motion-profiling, sysid]
 ---
 
 # Module 2 · Motor Dynamics & Control Theory
 
-This is the heart of the curriculum. A motor is a physical system with a knowable model; a controller is
-the math that commands it to do what you want despite gravity, friction, and a sagging battery. We start
-with the motor itself, learn to *predict* the command it needs (feedforward), then *correct* whatever is
-left with feedback (PID) — and combine the two into a single output.
+Most of the controllers on an FTC robot live in this module. It starts with the motor itself, then
+predicts the command a mechanism needs (feedforward), corrects whatever the prediction missed
+(feedback), and combines the two.
 
-## What this module covers
+## Lessons
 
-The lessons are ordered by **difficulty**, easiest first, so start with the two Easy ones and climb.
-They still chain conceptually (model the motor → predict its command → measure those constants →
-correct the residual → specialize and plan), so if you'd rather follow the ideas than the difficulty,
-the cross-links at the foot of each lesson keep you oriented.
+The order follows the ideas: understand the motor, predict its command, correct the rest, then deal
+with limits, special cases, and planning. System identification sits near the end because it's the
+hardest, but you can read it right after Feedforward if you want real numbers sooner.
 
-1. **[How a Motor Works](./how-a-motor-works.mdx)** *(Easy)*: torque, speed, and back-EMF; why a motor
-   slows under load.
-2. **[Voltage Compensation](./voltage-compensation.mdx)** *(Easy)*: holding behavior constant as the
-   battery drops over a match.
-3. **[Feedforward (kS, kV, kA, kG)](./feedforward.mdx)** *(Medium)*: computing the command *before* the
-   error appears, including gravity terms for arms and slides.
-4. **[PID Control](./pid.mdx)** *(Medium)*: the three-term feedback controller, hardened for real
-   hardware.
+1. **[How a Motor Works](./how-a-motor-works.mdx)** *(Easy)*: torque, speed, and back-EMF, and why a
+   motor slows down under load.
+2. **[Voltage Compensation](./voltage-compensation.mdx)** *(Easy)*: keeping behavior the same as the
+   battery drains over a match.
+3. **[Feedforward (kS, kV, kA, kG)](./feedforward.mdx)** *(Medium)*: sending most of the command before
+   any error appears, including gravity for arms and slides.
+4. **[PID Control](./pid.mdx)** *(Medium)*: the three-term feedback controller, set up for real hardware.
 5. **[Actuator Saturation & Anti-Windup](./actuator-saturation-anti-windup.mdx)** *(Medium)*: what
-   happens when the controller asks for more than the robot can deliver, and how to stop the integral
-   from storing impossible commands.
-6. **[Bang-Bang Control](./bang-bang.mdx)** *(Medium)*: when the simplest possible controller is the
-   right one (flywheels); its take-back-half upgrade lives in
+   happens when the controller asks for more than the motor has, and how to keep the integral in check.
+6. **[Bang-Bang Control](./bang-bang.mdx)** *(Easy)*: when the simplest controller is the right one,
+   usually for flywheels. Its take-back-half upgrade is in
    [Advanced Topics](../advanced-topics/takeback-half.mdx).
-7. **[System Identification](./system-identification.mdx)** *(Hard)*: recovering kS/kV/kA from data by
-   least-squares, the way SysId does.
-8. **[Motion Profiling](./motion-profiling.mdx)** *(Hard)*: feeding the controller a physically
-   achievable trajectory instead of a step.
+7. **[System Identification](./system-identification.mdx)** *(Hard)*: measuring kS, kV, and kA from data
+   with a line of best fit, the way SysId does.
+8. **[Motion Profiling](./motion-profiling.mdx)** *(Hard)*: giving the controller a target it can
+   actually follow instead of a sudden jump.
 
-<Admonition type="warning" title="Feedback alone is always a step behind">
+<Admonition type="warning" title="Feedback is always a step behind">
 
-A pure PID controller cannot act until an error already exists. The fast, accurate mechanisms you see
-at competition pair feedback with a feedforward model of the plant. Understanding the motor model is
-what makes that pairing possible.
+A PID controller can't do anything until an error exists. The fast, accurate mechanisms you see at
+competition pair feedback with a feedforward model, and the motor model is what makes that model
+possible.
 
 </Admonition>

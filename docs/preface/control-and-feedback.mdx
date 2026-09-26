@@ -12,41 +12,38 @@ import Heater from '@site/src/components/simulations/foundations/Heater';
 <Difficulty level="Easy" />
 
 <Abstract>
-Control engineering is the discipline of making a physical system reach and hold a desired behavior while the real world pushes back.
-Feedback is the central idea: measure the system, compare it to the target, and use that error to compute the next command.
+Control means getting a mechanism to reach and hold what you asked for while the real world pushes
+back. The main tool is feedback: measure what happened, compare it to the target, and use the
+difference to choose the next command.
 </Abstract>
 
-Control is not a PID acronym. PID is only one possible rule inside a much larger pattern.
-
-Every robot mechanism has the same basic story:
+People tend to meet control through PID, but PID is one rule inside a much bigger pattern. Every
+mechanism on a robot goes through the same four steps:
 
 1. You want something to happen.
-2. The mechanism does something close, but not perfect.
+2. The mechanism does something close to it, but not exactly.
 3. A sensor tells you what actually happened.
-4. Code decides the next motor command.
+4. Your code picks the next motor command.
 
-That loop is the foundation behind arm control, flywheel velocity, drivetrain heading hold, odometry
-correction, path following, and state estimation.
+Arm control, flywheel speed, heading hold, odometry correction, and path following are all versions of
+that loop.
 
-## FTC example: an arm does not stop where power says it should
+## An arm that holds in the pits and sags in a match
 
-Imagine an arm that scores a game element. During testing, you discover that `0.28` motor power holds
-the arm near the target angle when the battery is full and the robot is sitting still.
+Say you have a scoring arm, and in testing you find that `0.28` motor power holds it at the right angle.
+The battery is full and the robot is sitting on the bench.
 
-Then the match starts.
+Then the match starts. The battery drops a volt, the intake picks up a game element, and a cable starts
+rubbing against the arm. `0.28` no longer holds the same angle. Nothing is wrong with the robot. The code
+sent a fixed command and never checked whether it worked, which is what open-loop control means.
 
-The battery voltage drops. The intake has a game element in it. A cable rubs slightly against the
-mechanism. The same `0.28` power no longer holds the same angle. The robot did not become mysterious;
-the code was open-loop. It sent a command without checking whether the command worked.
+Feedback closes that gap. Each loop the code asks where the arm should be, where it is, and how hard to
+push next.
 
-Feedback fixes that failure by turning the mechanism into a conversation:
+## When open loop is good enough
 
-> "Where should you be? Where are you now? How hard should I push next?"
-
-## Open loop is not wrong; it is just blind
-
-Open-loop control means you send an output without using the result to change the next output. A
-time-based autonomous drive is open loop:
+Open-loop control sends an output without looking at the result. A timed autonomous drive is the
+classic example:
 
 <JavaCode league="FTC" label="Open-loop drivetrain timing">{`frontLeft.setPower(0.5);
 frontRight.setPower(0.5);
@@ -60,7 +57,7 @@ frontRight.setPower(0.0);
 backLeft.setPower(0.0);
 backRight.setPower(0.0);`}</JavaCode>
 
-An intake that simply runs while the driver holds a trigger is also open loop:
+So is an intake that runs while the driver holds a trigger:
 
 <JavaCode league="FTC" label="Open-loop intake">{`if (gamepad1.right_trigger > 0.2) {
     intakeMotor.setPower(1.0);
@@ -68,58 +65,44 @@ An intake that simply runs while the driver holds a trigger is also open loop:
     intakeMotor.setPower(0.0);
 }`}</JavaCode>
 
-This is often fine. An intake may not need to land at a precise state. A simple timed motion may be
-good enough for a low-risk autonomous action. The question is not "is open loop bad?" The question is:
-what are the design requirements?
+Both of these are often fine. The intake doesn't need to stop anywhere in particular, and a short timed
+move can be good enough for a low-stakes part of auto. Whether you need feedback depends on the job:
 
-Ask:
+- Does the mechanism need to end up somewhere specific, or just move?
+- Will battery voltage, load, or contact with another robot change the result?
+- Do you have a sensor that can tell you whether it worked?
+- How much does a bad final position cost you in a match?
 
-- Does the mechanism need accuracy, or only motion?
-- Will battery voltage, load, or defense contact change the result?
-- Is there a sensor that can measure success?
-- Is a bad final position costly during a match?
+If accuracy matters, disturbances are likely, and you have a sensor, you want feedback.
 
-If the answer is "yes" to accuracy, disturbances, measurable success, or high cost, you probably want
-feedback.
+## Seeing the difference
 
-## Visual intuition
-
-The demo below shows the difference with temperature instead of an arm, because temperature is easy to
-read. The principle is identical for FTC hardware: the open-loop system keeps doing the same thing,
-while the closed-loop system measures error and reacts to disturbances.
+The demo uses room temperature instead of an arm because it is easy to read, but it is the same
+situation. The open-loop heater keeps doing the same thing no matter what. The closed-loop heater
+measures the temperature and reacts.
 
 <Heater />
 
-Watch what happens when the outside temperature changes. The open-loop room has no way to know it is
-wrong. The closed-loop room sees the error grow and increases its command.
+Change the outside temperature and watch both rooms. The open-loop room has no idea anything changed.
+The closed-loop room sees its error grow and turns the heat up.
 
-## Theoretical rigor
+## Error, command, and plant
 
-A feedback system starts with a target and a measurement.
+Take the arm again. You want it at 90° and the encoder says 84°. The difference, 6°, is the **error**:
 
 $$
 e = r - y
 $$
 
-Here, $e$ is error, $r$ is the reference or setpoint, and $y$ is the measured output. For an FTC arm,
-$r$ might be the desired arm angle and $y$ might be the encoder-estimated arm angle.
+where $r$ is the target (the reference or setpoint) and $y$ is the measurement. Every feedback
+controller starts by computing this one number.
 
-The controller maps error into a command:
+The controller then turns error into a command $u$. You can write that as a function, $u = C(e)$,
+without saying yet what $C$ is. Every controller on this site, from bang-bang to PID, is a different
+choice of $C$.
 
-$$
-u = C(e)
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'C(\u00b7)', meaning: 'the CONTROLLER, written as a function. Every controller in this curriculum, from bang-bang to LQR, is a different choice of C'},
-  ]}
-/>
-
-Here, $u$ is the actuator command and $C(\cdot)$ is the controller rule. That rule could be as simple
-as proportional control or as advanced as a model-based controller.
-
-The robot mechanism then responds:
+The mechanism answers the command. Engineers call the mechanism the **plant**, and it's the part you
+don't get to design:
 
 $$
 y_{k+1} = P(y_k, u_k, d_k)
@@ -127,35 +110,28 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'P(\u00b7)', meaning: 'the PLANT: the mechanism itself, the thing being controlled. You do not get to choose this one; physics does'},
-    {symbol: 'y_k, u_k', meaning: 'the measured output and the command at loop k'},
-    {symbol: 'd_k', meaning: 'DISTURBANCE: everything acting on the mechanism that you neither commanded nor modelled. A defending robot, a battery sag, a wheel on a seam'},
+    {symbol: 'k', meaning: 'the loop number. y_k is this loop, y_{k+1} is the next one'},
+    {symbol: 'P(·)', meaning: 'the plant: what the arm, lift, or drivetrain actually does with a command'},
+    {symbol: 'd_k', meaning: 'a disturbance: anything you did not command, like battery sag, a defending robot, or a game element in the intake'},
   ]}
 />
 
-Here, $k$ is the current loop number, $k+1$ is the next loop, $P(\cdot)$ represents the physical plant
-or mechanism, and $d_k$ is a disturbance such as battery sag, friction, defense contact, gravity, or a
-game element entering the mechanism.
-
-The key difference is whether the next command depends on the latest measurement.
+The whole difference between the two styles is whether the next command uses the latest measurement:
 
 | Style | Command | What it can handle |
 |---|---|---|
-| Open loop | $u_k = u_\text{fixed}$ | only the condition it was tuned for |
+| Open loop | $u_k = u_\text{fixed}$ | only the conditions it was tuned for |
 | Closed loop | $u_k = C(r_k - y_k)$ | changes in load, voltage, friction, and position |
 
-Open loop can still be useful. Feedforward is often an open-loop prediction from a model. But by
-itself, open loop cannot know when it is wrong.
-
-Closed loop is useful because it makes failure observable. If the measured arm angle is low, the error
-is positive. If the flywheel slows after shooting, the velocity error grows. If the drivetrain heading
-drifts, the heading error appears. The controller does not need to guess that reality changed; the
-sensor makes the change visible.
+Open loop still has a place. Feedforward, which you will meet later, is an open-loop prediction from a
+model, and it does most of the work in a good controller. But on its own it can't tell when it's wrong.
+Closed loop can: if the arm sags, the error goes positive; if the flywheel slows after a shot, the speed
+error grows. The sensor shows you that something changed without you having to predict it.
 
 ### Two first controllers
 
-The simplest closed-loop controller is a bang-bang controller. It looks at the error and chooses one of
-two outputs:
+The simplest feedback rule is bang-bang. Below the target, push up. Above it, push down. Close enough,
+do nothing:
 
 $$
 u =
@@ -166,15 +142,10 @@ u_\text{down}, & e < -\epsilon \\
 \end{cases}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03b5 (epsilon)', meaning: 'the tolerance half-width: how close counts as close enough. Inside this band the controller does nothing, which is exactly what stops it buzzing back and forth across the target'},
-    {symbol: 'u_up, u_down', meaning: 'the two fixed outputs. They usually differ in magnitude, because gravity resists one direction and helps the other'},
-  ]}
-/>
-
-Here, $\epsilon$ is a tolerance band. Without a tolerance, a real robot may wait forever for the
-measurement to equal the setpoint exactly, which almost never happens.
+The band $\epsilon$ is what "close enough" means. Without it the controller waits for the encoder to
+read exactly the target, which almost never happens, so it keeps switching. $u_\text{up}$ and
+$u_\text{down}$ are usually different sizes because gravity fights the arm one way and helps it the
+other.
 
 <JavaCode league="FTC" label="Bang-bang arm hold with tolerance">{`static final int TOLERANCE = 20;   // encoder ticks
 
@@ -185,53 +156,49 @@ else if (error < -TOLERANCE) arm.setPower(-0.25);   // drive down
 else                         arm.setPower(0);
 `}</JavaCode>
 
-<Exercise title="Two things worth stopping on">
+<Exercise title="The two powers and the tolerance">
 
-The two powers differ, and up is the larger one. Work out why: which direction is gravity helping, and
-what would happen with 0.45 in both?
+Why is the upward power bigger? What would the arm do with 0.45 in both directions?
 
-Then `TOLERANCE`, which is what makes this usable at all. Work out what the arm does with a tolerance
-of zero — the error crosses back and forth by one tick, and the motor is commanded full-up, full-down,
-full-up. Describe the sound, then say what it costs the battery.
+Now set `TOLERANCE` to zero. The error keeps crossing back and forth by a tick, so the motor gets full
+up, full down, full up. What does that sound like, and what does it do to the battery?
 
 <Solution>
 
-Gravity opposes the arm going up and helps it coming down, so the same power produces very different
-accelerations in the two directions. Using 0.45 both ways makes the descent a controlled fall: the arm
-slams down and the driver learns not to trust it.
+Gravity resists the arm on the way up and helps it on the way down, so the same power gives very
+different accelerations. With 0.45 both ways the arm slams down, and the driver learns not to trust it.
 
-With zero tolerance the motor reverses at loop rate — up to 50 direction changes a second. It buzzes
-audibly, the gearbox takes shock loading it was not designed for, and each reversal is a current spike
-into the pack, so the rail sags for every other mechanism on the robot.
+With zero tolerance the motor can reverse every loop, up to 50 times a second. It buzzes, the gearbox
+takes shock loads, and every reversal pulls a current spike from the battery, which sags the voltage
+for everything else on the robot.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="The limit you cannot tune away">
+<Exercise title="What bang-bang can't fix">
 
-This controller has exactly three outputs. Whether the arm is 5 ticks or 500 ticks away, it applies the
-same power. Work out what that does to the approach.
+The controller has three outputs. It pushes just as hard at 500 ticks away as at 5. What happens as
+the arm reaches the target?
 
 <Solution>
 
-It arrives at full speed and then stops commanding — so it coasts through the target, trips the
-opposite branch, and comes back. No choice of the two powers fixes it, because the controller has no
-way to know it is close. That is precisely what the next controller adds.
+It arrives at full speed, the command drops to zero, and the arm coasts through the target, trips the
+opposite branch, and comes back. Changing the two powers doesn't help, because the controller has no
+idea it is getting close. The next controller does.
 
 </Solution>
 
 </Exercise>
 
-Bang-bang is easy to understand, but it often oscillates because the command changes abruptly. A
-proportional controller is the next step:
+A proportional controller scales the push with the error. Suppose the arm is 500 ticks from its target
+and you want about half power there. Half power for 500 ticks is 0.001 power per tick. At 100 ticks
+away that gives 0.1 power, and at 10 ticks away 0.01. That number is the proportional gain, and the
+rule is just
 
 $$
 u = k_P e
 $$
-
-Here, $k_P$ is the proportional gain. A larger error creates a larger command; a smaller error creates
-a smaller command.
 
 <JavaCode league="FTC" label="Proportional arm controller">{`double error = target - measuredPosition;
 double command = kP * error;
@@ -239,30 +206,28 @@ double command = kP * error;
 arm.setPower(clamp(command, -1, +1));
 `}</JavaCode>
 
-Three lines, and it fixes bang-bang's *discontinuity*: the further away the arm is, the harder it
-pushes, and near the target it eases off by itself with no tolerance band to tune. It does not remove
-overshoot — a proportional controller on something with momentum still races past the target, and
-learning what to add for that is the rest of this curriculum.
+The arm now pushes hard when it's far away and eases off as it gets close, with no tolerance band to
+tune. It still overshoots, though. Anything with momentum will carry past the target under a
+proportional rule, and most of this curriculum is about what to add for that.
 
-<Exercise title="What kP's units are">
+<Exercise title="Picking a first kP">
 
-Work out $k_P$'s units before guessing a value. `error` is in ticks and `command` is in $[-1, 1]$, so
-$k_P$ is "power per tick." If the arm is 500 ticks away and you want roughly half power, what is
-$k_P$?
+`error` is in ticks and the command is in $[-1, 1]$, so $k_P$ has units of power per tick. Your arm
+travels 1,200 ticks and you want about 60% power at the far end of its travel. What $k_P$ do you start
+with?
 
 <Solution>
 
-$0.5 / 500 = 0.001$ power per tick. That estimate is your starting point — a number you derived from
-your own mechanism's range of travel — not a value copied out of a lesson written for someone else's
-arm.
+$0.6 / 1200 = 0.0005$ power per tick. It's only a starting point, but it comes from your own
+mechanism's travel, which beats copying a number from someone else's arm.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Where this one still fails">
+<Exercise title="Where proportional control still fails">
 
-It does fail, in three distinct ways. Match each symptom to what is missing:
+Match each symptom to what the controller is missing:
 
 - the arm stops slightly short and stays there
 - the arm sags under gravity at every angle
@@ -270,20 +235,19 @@ It does fail, in three distinct ways. Match each symptom to what is missing:
 
 <Solution>
 
-Stopping short is missing an *integral* term: the remaining error is too small to produce enough
-command to move, and nothing accumulates it. Sagging at every angle is missing *feedforward*: the
-controller only reacts to error it has already allowed to happen, so gravity always wins first.
-Overshoot is missing a *derivative* term: nothing damps the approach, so momentum carries the arm past
-the target. Each answer is a later lesson in this module.
+Stopping short needs an *integral* term: the leftover error is too small to produce a command that
+moves the arm, and nothing adds it up over time. Sagging everywhere needs *feedforward*: a pure feedback
+controller only reacts after gravity has already pulled the arm down. Overshoot needs a *derivative*
+term to slow the approach. All three are covered in the Control Theory module.
 
 </Solution>
 
 </Exercise>
 
-This proportional rule is the first piece of PID. Later, the PID lesson adds memory of past error and
-reaction to changing error, but the core feedback idea is already here.
+The proportional rule is the P in PID. The PID lesson adds a memory of past error and a reaction to how
+fast the error is changing, but the idea of feeding the measurement back is already all here.
 
-### The loop shape
+### The whole loop in one picture
 
 <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
   <div className="bg-panel px-4 py-5">
@@ -320,10 +284,10 @@ reaction to changing error, but the core feedback idea is already here.
   </figcaption>
 </figure>
 
-## Engineering implementation
+## Writing the loop so the pieces can change
 
-Production robot code should make the feedback loop explicit. Sensors read. Controllers compute.
-Actuators write. Telemetry records what happened.
+In robot code it helps to keep the loop visible: sensors read, the controller computes, the actuator
+writes, and telemetry records what happened.
 
 <JavaCode league="FTC" label="A small feedback-control architecture">{`interface FeedbackSensor {
     double getMeasurement();          // in real engineering units
@@ -353,86 +317,78 @@ class FeedbackLoop {
 }
 `}</JavaCode>
 
-That `update()` is the block diagram from the top of this lesson, written out. Read it next to the
-diagram and match each line to an arrow.
+Put `update()` next to the diagram above and each line lines up with an arrow.
 
-<Exercise title="What each boundary buys">
+<Exercise title="What the three interfaces let you swap">
 
-The split into three roles is the point. Work out what becomes possible at each seam:
-
-- swap the **controller** — bang-bang becomes P becomes PID, loop unchanged
-- swap the **sensor** — encoder becomes potentiometer becomes camera
-- swap the **actuator** — test the whole loop with no hardware attached
-
-Then two questions about the loop itself. Why does the clamp live in `update()` rather than inside each
-controller? And why are all four values logged rather than just the command?
+What can you change without touching the rest of the loop if you swap the controller? The sensor? The
+actuator? Then two smaller questions: why does the clamp sit in `update()` instead of inside each
+controller, and why log four values instead of just the command?
 
 <Solution>
 
-Each seam lets one piece change without the others knowing. The actuator seam is the one people
-underuse: a fake actuator that just records what it was told turns the entire control loop into
-something you can unit-test at your desk.
+Swapping the controller takes you from bang-bang to P to PID with the loop unchanged. Swapping the
+sensor lets an encoder become a potentiometer or a camera. The actuator swap gets overlooked: a fake
+actuator that only records what it was told lets you unit-test the whole loop at your desk, with no
+robot.
 
-The clamp lives in the loop because otherwise every controller you ever write has to remember it, and
-the one that forgets fails silently. One place, one rule.
+If the clamp lived in each controller, every controller you write would have to remember it, and the
+one that forgot would fail without any warning.
 
-For the log: you are tuning, the arm is oscillating, and you have one graph. If `measurement` is noisy
-while `setpoint` is steady, the problem is the sensor. If `measurement` is clean but `safeCommand`
-swings hard, the problem is the controller. The command alone cannot distinguish those two.
+The four values matter when you're tuning an oscillating arm with one graph. A noisy `measurement` with
+a steady `setpoint` points at the sensor. A clean `measurement` with a wildly swinging `safeCommand`
+points at the controller. The command on its own can't tell those apart.
 
 </Solution>
 
 </Exercise>
 
-This style makes later lessons easier to plug in. A proportional controller, PID controller,
-feedforward-plus-PID controller, or motion-profiled controller can all implement the same
-`FeedbackController` interface.
+Later lessons slot into this shape. P, PID, feedforward plus PID, and a motion-profiled controller can
+all implement the same `FeedbackController` interface.
 
-## Practice
+## Things to try on the robot
 
-Try these on a safe test stand or with the robot wheels off the ground first:
+Use a test stand or put the wheels off the ground first.
 
-- Run a drivetrain forward for a fixed time. Does the distance change between a full battery and a
-  low battery?
-- Move an arm with bang-bang control and a tolerance. Does it chatter near the setpoint?
-- Replace bang-bang with proportional control. What value of $k_P$ starts to oscillate?
-- Add telemetry for setpoint, measurement, error, and command. Which value tells the clearest story
-  when behavior is wrong?
+- Drive forward for a fixed time on a full battery, then on a tired one. Does the distance change?
+- Hold an arm with bang-bang and a tolerance. Does it chatter near the target?
+- Switch to proportional control and raise $k_P$ until it starts to oscillate. Where is that?
+- Put setpoint, measurement, error, and command on telemetry. When something goes wrong, which one
+  tells you the most?
 
-## Hardware reality
+## What feedback can't do
 
-<Admonition type="warning" title="Feedback is only as good as the measurement">
+<Admonition type="warning" title="It can only react to what the sensor reports">
 
-If the encoder slips, the IMU drifts, or the camera frame arrives late, the controller is reacting to
-bad information. Feedback does not magically make a robot correct; it makes the robot correctable when
-the measurement is trustworthy enough.
+If the encoder slips, the IMU drifts, or a camera frame arrives late, the controller reacts to wrong
+information. Feedback makes a robot correctable, and only as correct as the measurement it gets.
 
 </Admonition>
 
-<Admonition type="warning" title="Closed loop does not remove actuator limits">
+<Admonition type="warning" title="It can't create more voltage">
 
-If the motor is already at full power, asking for more command cannot create more voltage. Saturation
-changes controller behavior, especially for integral terms, so real implementations need output
-clamps, anti-windup, current limits, and carefully chosen motion targets.
-
-</Admonition>
-
-<Admonition type="tip" title="FTC intuition">
-
-When a mechanism fails only after the battery drops, load changes, or a defender bumps the robot, ask
-whether the code can measure the failure. If it cannot measure the failure, it cannot correct it.
+Once the motor is at full power, a bigger command does nothing. That limit changes how controllers
+behave, especially ones with an integral term, so real code needs output clamps, anti-windup, current
+limits, and reasonable targets.
 
 </Admonition>
 
-The next lesson, [From Math to a Loop](../software-architecture/discretization.mdx), explains how
-continuous equations become the discrete update loop your Control Hub actually runs.
+<Admonition type="tip" title="A quick diagnostic">
+
+If a mechanism only misbehaves after the battery drops, the load changes, or a defender bumps it, ask
+whether your code can measure that failure. If it can't measure it, it can't correct it.
+
+</Admonition>
+
+Next, Module 1 starts with [State Machines](../software-architecture/state-machines.mdx): how to
+structure robot code so loops like this one never block.
 
 <Admonition type="info" title="Sources & references">
 
 - [CTRL ALT FTC](https://www.ctrlaltftc.com/) - FTC-focused explanations of feedback control, PID, and
   feedforward that inspired this module's practical framing.
 - Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) -
-  a rigorous open robotics-controls text covering feedback loops, modeling, and state-space control.
+  an open robotics-controls textbook covering feedback loops and modeling.
 - [WPILib: Introduction to PID Control](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/introduction/introduction-to-pid.html) -
   a competition-robotics reference for setpoints, measurements, error, and actuator limits.
 

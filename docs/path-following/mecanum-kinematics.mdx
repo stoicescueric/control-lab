@@ -1,6 +1,6 @@
 ---
 title: Mecanum Kinematics
-description: How four mecanum wheels turn one driver command into sideways, forward, and spinning motion — the wheel-mixing equations, field-centric driving, and the joystick dead zone and response curve that make the robot feel good to drive.
+description: How four mecanum wheels turn one driver command into forward, sideways, and spinning motion. The wheel-mixing equations, field-centric driving, and the joystick dead zone and response curve that make the robot feel good to drive.
 sidebar_position: 1
 tags: [mecanum, kinematics, field-centric, desaturation, dead-zone, teleop]
 ---
@@ -13,30 +13,29 @@ import JoystickShaping from '@site/src/components/simulations/path-following/Joy
 <Difficulty level="Easy" />
 
 <Abstract>
-A mecanum drive can slide in any direction without turning. This lesson shows the one idea behind it —
-each wheel can only push along a 45° diagonal, so the right *combination* of four wheels makes any motion
-— then turns that into the handful of lines of code you actually write: mix the command into four wheel
-powers, rotate it for field-centric driving, scale the joystick for fine control, and add a dead zone so
-a twitchy stick doesn't creep the robot.
+A mecanum drive can slide in any direction without turning. Each wheel can only push along a 45°
+diagonal, and combining the four pushes gives any motion you want. This lesson turns that into the few
+lines of code you actually write: mix the command into four wheel powers, rotate it for field-centric
+driving, shape the joystick for fine control, and add a dead zone so a drifting stick doesn't creep the
+robot.
 </Abstract>
 
-Good news: this is one of the easier topics in the whole curriculum. There is no calculus and no big
-matrix to invert — just some adding and subtracting, done sixty times a second. By the end you will be
-able to write a clean teleop drive from memory.
+This is one of the easier lessons on the site. It's adding and subtracting, done every loop, and by the
+end you should be able to write a teleop drive from memory.
 
 <Problem>
 
 ## Three numbers in, four motors out
 
 The driver gives you three numbers from two thumbsticks: how much to go **forward**, how much to
-**strafe** (slide sideways), and how much to **turn**. Your robot has four motors. Every loop you have to
-turn those three numbers into four wheel powers — and get the signs right, or the robot strafes when you
-meant to spin.
+**strafe** (slide sideways), and how much to **turn**. The robot has four motors. Every loop you turn
+those three numbers into four wheel powers, and if a sign is wrong the robot strafes when you meant to
+spin.
 
-There are also two traps the obvious "just add the sticks together" code falls into: it drives relative to
-the *robot*, so a turned-around driver fights the controls; and when you push two sticks at once it asks a
-wheel for more than 100% power, which the motor silently clips — bending your straight line into a curve.
-We'll fix both.
+The obvious "add the sticks together" code has two more problems. It drives relative to the robot, so
+once the robot turns around the driver is fighting the controls. And pushing two sticks at once can ask a
+wheel for more than 100% power, which the motor clips, bending a straight line into a curve. Both are
+fixed below.
 
 </Problem>
 
@@ -44,26 +43,20 @@ We'll fix both.
 
 ## One idea: each wheel pushes along a diagonal
 
-A mecanum wheel has little rollers wrapped around it at **45°**. Because of that angle, when the wheel
-spins it doesn't grip straight forward like a normal wheel — it grips along a **diagonal**. The four
-wheels are mirrored so their diagonals form an **X** when you look down at the robot.
+A mecanum wheel has small rollers around its edge set at **45°**. Because of that angle, a spinning
+wheel doesn't push straight forward like a normal wheel. It pushes along a **diagonal**. The four wheels
+are mirrored so their diagonals make an **X** when you look down at the robot.
 
-That one fact is the whole lesson. A single wheel can only push along its diagonal, but *add up* the four
-diagonal pushes and the sideways parts can cancel (giving pure forward), or the forward parts can cancel
-(giving pure strafe), or they can reinforce into a spin. Choosing the four wheel speeds to get the motion
-you want is the only skill here — and it's just addition.
+One wheel can only push along its diagonal, but add up all four pushes and interesting things happen.
+The sideways parts can cancel, leaving pure forward motion. The forward parts can cancel, leaving pure
+sideways motion. Or they can combine into a spin. Getting the motion you want is a matter of choosing the
+four wheel speeds.
 
 ### Mixing: add the three things you want
 
-Work in the robot's own frame first. Call the command
-
-$$
-\mathbf{u} = \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
-$$
-
-where $v_x$ is forward speed, $v_y$ is strafe speed (positive to the **left**), and $\omega$ is turn rate
-(positive **counter-clockwise**). Each wheel gets a share of all three. Writing out the four wheels —
-front-left, front-right, back-left, back-right:
+Work in the robot's own frame first. Call the three parts of the command $v_x$ (forward), $v_y$
+(strafe, positive to the **left**), and $\omega$ (turn, positive **counter-clockwise**). Each wheel gets
+a share of all three. For front-left, front-right, back-left, and back-right:
 
 $$
 \begin{aligned}
@@ -74,16 +67,13 @@ w_{BR} &= v_x - v_y + \omega
 \end{aligned}
 $$
 
-Read it one column at a time and it's obvious:
+Check it one input at a time. Push only forward, $v_x = 0.5$: all four wheels get 0.5 and the robot
+drives straight. Push only left, $v_y = 0.5$: FR and BL get +0.5 and FL and BR get −0.5, and the X
+pattern pushes the robot sideways. Turn only, $\omega = 0.5$: the right wheels get +0.5 and the left
+wheels −0.5, and it spins in place.
 
-- **Forward** ($v_x$) adds to **all four** equally → the robot drives straight.
-- **Strafe** ($v_y$) adds to one diagonal (FR, BL) and subtracts from the other (FL, BR) → the X-pattern
-  pushes the robot sideways.
-- **Turn** ($\omega$) adds to the **right** wheels and subtracts from the **left** → the robot spins in
-  place.
-
-That's the same thing as one matrix multiply, which is the compact way to write it (and how the ECAM and
-gm0 references at the end of this lesson present it):
+The same four lines written as one matrix multiplication, which is how the ECAM and gm0 references at
+the end present it:
 
 $$
 \begin{bmatrix} w_{FL} \\ w_{FR} \\ w_{BL} \\ w_{BR} \end{bmatrix}
@@ -97,27 +87,22 @@ $$
 \begin{bmatrix} v_x \\ v_y \\ \omega \end{bmatrix}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'w_FL, w_FR, w_BL, w_BR', meaning: 'front-left, front-right, back-left, and back-right wheel commands'},
-    {symbol: 'v_x', meaning: 'robot-forward chassis command: positive drives the robot forward'},
-    {symbol: 'v_y', meaning: 'robot-left strafe command: positive drives the robot left'},
-    {symbol: 'omega', meaning: 'counterclockwise turn command, normalized for teleop in this simplified matrix'},
-  ]}
-/>
-
-The full physics version replaces that $\omega$ column with $\pm(L+W)$, where $L$ and $W$ are the
-distances from the robot's center to the wheels — it just says wheels farther out get loaded more when
-turning. For normalized teleop you can fold those constants into $\omega$ and use the clean $\pm 1$
-pattern above. Push the sticks in the demo and watch each wheel's number come straight from that sum:
+In the full physical version the $\omega$ column is $\pm(L+W)$, where $L$ and $W$ are the distances from
+the robot's center to the wheels, because wheels farther out have to travel further to turn the robot.
+For teleop with normalized powers you can fold that into $\omega$ and use $\pm 1$. Push the sticks in the
+demo and watch each wheel's number come from those sums:
 
 <MecanumDrive />
 
 ### Field-centric: rotate the command first
 
-Drivers think in **field** directions — "go toward the goal" — not robot directions. So *before* the
-mixing step, rotate the driver's field command into the robot's frame by the robot's heading $\theta$
-(read from the IMU). It's a 2-D rotation by $-\theta$:
+Drivers think in field directions, like "toward the goal," not robot directions. So before mixing,
+rotate the driver's command from the field frame into the robot's frame using the robot's heading
+$\theta$ from the IMU.
+
+Check with a case you can picture. The robot faces left, $\theta = 90°$, and the driver pushes the stick
+away from them, toward the far wall. From the robot's point of view, the far wall is to its right, so
+the robot should strafe right: $v_x = 0$, $v_y$ negative. The rotation by $-\theta$ does exactly that:
 
 $$
 \begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{robot}
@@ -126,52 +111,37 @@ $$
 \begin{bmatrix} v_x \\ v_y \end{bmatrix}_\text{field}
 $$
 
-<EquationLegend
-  title="Field-centric rotation symbols"
-  items={[
-    {symbol: 'theta', meaning: 'robot heading from the IMU, measured relative to the field frame'},
-    {symbol: '[v_x, v_y]_field', meaning: 'driver command in field coordinates'},
-    {symbol: '[v_x, v_y]_robot', meaning: 'the same command after rotating into robot coordinates'},
-  ]}
-/>
-
-Now "push the stick away from you" means the same field direction no matter which way the robot is facing.
-Toggle field-centric in the demo and spin the heading to feel the difference.
+With $\theta = 90°$, $\cos\theta = 0$ and $\sin\theta = 1$, so a field command of $(1, 0)$ becomes
+$(0, -1)$ in the robot frame: no forward, full right. Now "push the stick away from you" means the same
+direction on the field whichever way the robot faces. Turn field-centric on in the demo and spin the
+heading to feel it.
 
 ### Desaturation: keep the robot driving straight
 
-The mixing sum can hand back a wheel power bigger than $1.0$ — for example, full forward *and* full turn
-asks the front-right wheel for $v_x + v_y + \omega = $ way over 100%. If you just clip that one wheel to
-$1.0$, the *other* wheels keep their values, the ratios between wheels change, and the robot curves away
-from where you aimed.
+The sums can come out bigger than 1. Full forward plus full turn asks the front-right wheel for
+$1 + 0 + 1 = 2$, and the front-left for $1 - 0 - 1 = 0$. Clip the front-right to 1 and leave the rest
+alone, and the ratio between the wheels changes, so the robot curves away from where you aimed.
 
-The fix is to scale **all four together** by the largest magnitude, but only when it exceeds one:
+Instead, divide **all four** by the biggest one, but only when it's over 1. Here that's 2, so the wheels
+become 1 and 0: the same turn-and-drive, just at half speed:
 
 $$
 \text{scale} = \max\big(1,\ |w_{FL}|, |w_{FR}|, |w_{BL}|, |w_{BR}|\big),
 \qquad w_i \leftarrow \frac{w_i}{\text{scale}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'w_i', meaning: 'stands for any one of the four wheel powers. The subscript i means "each of them in turn", which is the point: all four are divided by the SAME scale'},
-    {symbol: 'scale', meaning: 'the largest wheel magnitude, or 1 if none exceeds 1. Taking the max with 1 is what stops the rule from amplifying a command that already fits'},
-  ]}
-/>
-
-Small commands pass through untouched; oversized ones shrink while **keeping their ratios**, so the
-direction of travel is preserved. (gm0's tutorial does the same job with a single divisor
-$\,\max(|v_x| + |v_y| + |\omega|,\ 1)\,$ — a slightly more conservative version of the same idea.) In the
-demo, push forward and turn to the top and watch the "desaturate ÷" readout climb above 1 — that divisor
-is the only thing keeping the robot honest.
+Commands that already fit pass through unchanged, because of the 1 in the max. Oversized ones shrink but
+keep their ratios, so the robot still goes the direction you asked. (gm0's tutorial divides by
+$\max(|v_x| + |v_y| + |\omega|,\ 1)$ instead, which is a slightly more cautious version of the same
+idea.) In the demo, push forward and turn all the way and watch the "desaturate ÷" readout go above 1.
 
 ### Scaling the joystick for fine control
 
-A raw stick is **linear**: half stick gives half speed. But the moments you need precision — nudging up to
-score — are exactly the small-stick moments, and linear response makes them twitchy. The fix is to bend
-the response so small pushes give *very* small speeds while full stick still reaches full speed. Raise the
-**magnitude** to a power $k \ge 1$ (shaping the magnitude, not each axis, so you don't distort the
-direction):
+A raw stick is linear: half stick gives half speed. But the moments that need precision, like creeping
+up to score, are small-stick moments, and a linear response makes them twitchy. Bending the response
+fixes it: small pushes give very small speeds, and full stick still gives full speed. Raise the stick's
+**magnitude** to a power $k \ge 1$. (Shape the magnitude rather than each axis separately, or the
+direction gets distorted.)
 
 $$
 m_\text{out} = m_\text{in}^{\,k}, \qquad m_\text{in} = \sqrt{v_x^2 + v_y^2}
@@ -182,14 +152,12 @@ slow moves are gentle and the top end is untouched. Some drivers prefer cubic ($
 
 ### Dead zone: ignore a stick that won't sit still
 
-Thumbsticks don't return to exactly zero. Let go and the stick reports something like $0.03$ forever —
-so the robot **creeps** on its own. A **dead zone** fixes it: any stick value smaller than a threshold
-$d$ counts as zero.
+Thumbsticks don't return exactly to zero. Let go and the stick might report 0.03 forever, so the robot
+**creeps** on its own. A **dead zone** fixes that: any value smaller than a threshold $d$ counts as zero.
 
-But a plain dead zone has a side effect — the instant you cross $d$, the output jumps from $0$ to $d$,
-giving a little lurch. The clean version **re-expands** the leftover range so the output rises smoothly
-from $0$ at the edge of the dead zone up to $1$ at full stick. Combine it with the response curve and you
-get one tidy shaping function:
+A plain dead zone causes a small lurch, though. The moment the stick passes $d$, the output jumps from 0
+to $d$. The fix is to stretch what's left of the range so the output starts at 0 at the edge of the dead
+zone and reaches 1 at full stick. Combined with the response curve:
 
 $$
 \text{shape}(s) =
@@ -199,18 +167,11 @@ $$
 \end{cases}
 $$
 
-<EquationLegend
-  title="Symbols in the shaping function"
-  items={[
-    {symbol: 's', meaning: 'the raw stick value coming in, from \u22121 to +1'},
-    {symbol: 'd', meaning: 'the dead zone half-width: below this the stick is treated as centred. Typically around 0.06'},
-    {symbol: 'k', meaning: 'the response curve exponent. Here k is an exponent, not the loop index used elsewhere on the site. k = 1 is linear; k = 2 gives fine control near centre'},
-    {symbol: '(|s| \u2212 d)/(1 \u2212 d)', meaning: 'the re-expansion. Without it the output would jump from 0 straight to d at the edge of the dead zone'},
-  ]}
-/>
+Here $s$ is the raw stick value, $d$ the dead zone (around 0.06 is typical), and $k$ the curve exponent.
+With $d = 0.06$ and $k = 2$, a stick at 0.53 gives $((0.53 - 0.06)/0.94)^2 = 0.5^2 = 0.25$.
 
-Drag the input below: the flat red band is the dead zone (output stays $0$), and past it the blue curve
-is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills drift without you feeling it.
+Drag the input below. The flat red band is the dead zone, and past it the blue curve climbs to full. A
+dead zone of 0.05 to 0.10 stops the drift without the driver noticing it.
 
 <JoystickShaping />
 
@@ -220,7 +181,7 @@ is your scaled response climbing to full. A dead zone of $0.05$–$0.10$ kills d
 
 ## A clean field-centric teleop drive
 
-The whole pipeline is short when you respect the order: **shape → rotate → mix → desaturate.**
+The whole thing is short as long as you keep the order: **shape, rotate, mix, desaturate.**
 
 <JavaCode league="FTC" label="Stick shaping: dead zone and response curve">{`// One stick axis in [-1, 1] -> a shaped command in [-1, 1].
 // DEADZONE ~ 0.06, DRIVE_CURVE ~ 2.0.
@@ -233,8 +194,7 @@ double shape(double s) {
 }
 `}</JavaCode>
 
-Re-expanding `scaled` matters: it runs from 0 at the edge of the dead zone to 1 at full stick. Without
-it the output would jump straight from 0 to `DEADZONE`.
+`scaled` runs from 0 at the edge of the dead zone to 1 at full stick, so the output doesn't jump.
 
 <JavaCode league="FTC" label="Field-centric mecanum drive">{`// fwd +1 away from the driver, strafe +1 to the driver's left,
 // turn +1 counter-clockwise, all [-1, 1]. heading is field-frame radians.
@@ -265,20 +225,18 @@ void driveFieldCentric(double fwd, double strafe, double turn, double heading) {
 
 <Exercise title="What the exponent does">
 
-Tabulate `scaled^1` and `scaled^2` at 0.25, 0.5, 0.75 and 1.0. Where did the driver gain fine control,
-and what did they give up? Then work out the jump size for `DEADZONE = 0.06` without the re-expansion,
-and decide whether you would feel it.
+Make a table of `scaled^1` and `scaled^2` at 0.25, 0.5, 0.75, and 1.0. Where does the driver gain fine
+control, and what do they give up? Then, with `DEADZONE = 0.06` and no stretching, how big is the jump
+when the stick leaves the dead zone?
 
 <Solution>
 
-Squaring gives 0.0625, 0.25, 0.5625, 1.0 — so the bottom half of the stick now covers only a quarter of
-the output range. That is where fine control comes from: slow, precise motion gets most of the stick's
-travel. What the driver gave up is the top end, where the same stick movement now changes the output
-much faster, so full-speed driving becomes twitchier.
+Squaring gives 0.0625, 0.25, 0.5625, and 1.0, so the bottom half of the stick now covers only a quarter
+of the output range. Slow, precise driving gets most of the stick's travel. The cost is at the top,
+where the same stick movement changes the speed more, so full-speed driving is a bit twitchier.
 
-Without the re-expansion, the first output past the dead zone is 0.06 rather than 0 — a 6 % power step
-the instant the stick crosses the threshold. On a drivetrain that is a visible twitch every time the
-driver starts moving.
+Without stretching, the first output past the dead zone is 0.06 instead of 0, a 6% power jump. On a
+drivetrain that's a visible twitch every time the driver starts moving.
 
 </Solution>
 
@@ -286,16 +244,15 @@ driver starts moving.
 
 <Exercise title="Why the magnitude is shaped, not each axis">
 
-Push the stick to a perfect 45° and shape `fwd` and `strafe` separately with a square curve. What angle
-does the robot actually drive at?
+Push the stick to exactly 45° and square `fwd` and `strafe` separately. What angle does the robot drive
+at? Now try 60°.
 
 <Solution>
 
-Still 45°, in that one special case — squaring both equal components scales them equally. The failure
-shows up everywhere else. At 60° off-axis the two components are 0.5 and 0.866; squared they are 0.25
-and 0.75, and `atan2(0.75, 0.25)` is 71.6°, not 60°. Per-axis shaping bends every direction except the
-axes and the diagonals, so the robot does not go where the stick points. Shaping the magnitude and
-rebuilding from the angle leaves the direction untouched.
+At 45° it still drives at 45°, because both parts are equal and get squared the same way. At 60° the
+parts are 0.5 and 0.866. Squared, they're 0.25 and 0.75, and `atan2(0.75, 0.25)` is 71.6°, not 60°.
+Shaping each axis separately bends every direction except straight along an axis or a diagonal.
+Shaping the magnitude and rebuilding from the angle keeps the direction.
 
 </Solution>
 
@@ -303,18 +260,17 @@ rebuilding from the angle leaves the direction untouched.
 
 <Exercise title="Derive the four signs">
 
-Those signs *are* the lesson. A mecanum roller at 45° turns wheel spin into a force at 45°. Draw all
-four rollers from above, add the force vectors for "all wheels forward," then for "left pair forward,
-right pair backward," and finally for one diagonal pair (FL, BR) driven against the other (FR, BL).
+Each roller turns wheel spin into a push at 45°. Draw all four from above and add up the pushes for
+"all wheels forward," then "left side forward, right side backward," then one diagonal pair (FL, BR)
+driven against the other (FR, BL).
 
 <Solution>
 
-All four forward: the lateral components of the four roller forces cancel in pairs and the forward
-components add, so the robot translates straight ahead. Left pair forward with the right pair
-backward: the forward *and* lateral components both cancel, and what is left is a pure couple — the
-robot spins in place. One diagonal pair against the other: the forward components and the couple both
-cancel, leaving a net lateral force, which is the strafe. Every entry in the mix is just which of those
-three the wheel contributes to, and with what sign. Look up "mecanum wheel force decomposition."
+All four forward: the sideways parts cancel in pairs and the forward parts add, so the robot drives
+straight. Left side forward, right side backward: the forward and sideways parts both cancel, leaving
+only a twist, so the robot spins in place. One diagonal against the other: the forward parts and the
+twist cancel, leaving a sideways push, which is the strafe. Each sign in the mixer just says which of
+those three a wheel contributes to, and in which direction.
 
 </Solution>
 
@@ -322,21 +278,20 @@ three the wheel contributes to, and with what sign. Look up "mecanum wheel force
 
 <Exercise title="Why desaturate all four by one factor">
 
-`scale` divides every wheel by the same number rather than clipping each one at 1.
+Why divide every wheel by the same number instead of clipping each one at 1?
 
 <Solution>
 
-Clipping changes the *ratio* between the four wheels, and the ratio is what encodes the direction and
-the turn rate. Clip one wheel and the robot drives somewhere other than where you asked — usually
-curving, exactly when you are commanding the most. Scaling all four preserves the ratio, so the robot
-goes the right way, just slower than requested. That is the correct failure mode for a saturated
-command.
+The ratios between the four wheels are what set the direction and turn rate. Clip one wheel and the
+robot goes somewhere you didn't ask, usually curving, and it happens exactly when you're pushing
+hardest. Scaling all four keeps the ratios, so the robot goes the right way, just slower. When you've
+asked for too much, slower is the right way to fall short.
 
 </Solution>
 
 </Exercise>
 
-In an FTC `OpMode` the sticks map in like this (the Y axis is inverted on the gamepad, so negate it):
+In an FTC OpMode the sticks map in like this. The gamepad's Y axis is upside down, so negate it:
 
 <JavaCode league="FTC" label="Reading the gamepad">{`double fwd    = -gamepad1.left_stick_y;   // up on the stick = forward
 double strafe = -gamepad1.left_stick_x;   // left on the stick = +left (our convention)
@@ -344,35 +299,35 @@ double turn   = -gamepad1.right_stick_x;  // left = counter-clockwise
 double heading = imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
 driveFieldCentric(fwd, strafe, turn, heading);`}</JavaCode>
 
-With teleop solid, the same chassis command becomes the *output* of an autonomous controller. The
-simplest one drives straight at a target pose — that is [**PID-to-point**](./pid-to-point.mdx), the next
-lesson.
+In autonomous, the same `(vx, vy, omega)` command comes from a controller instead of the sticks. Before
+building one, the next lesson, [Angle Wrapping](./angle-wrapping.mdx), fixes the one bug every heading
+controller runs into.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: strafing is weaker than driving">
+<Admonition type="warning" title="Strafing is weaker than driving forward">
 
-Those canted rollers lose a little grip sideways, so a mecanum robot strafes *slower* than it drives
-forward at the same power. The common fix (straight from gm0) is to multiply the strafe command by about
-**1.1** before mixing, so sideways and forward feel matched. Tune the exact number on your robot.
-
-</Admonition>
-
-<Admonition type="warning" title="Hardware reality: drive encoders slip">
-
-Mecanum wheel encoders can contribute to a pose estimate, but sideways roller slip makes strafe scale and
-heading coupling less accurate than the ideal mixer predicts; drift grows with aggressive motion and
-contact. Before an autonomous follower consumes that estimate, adapt whichever maintained localization
-stack you selected through the [Pose Estimation Contract](./pose-estimation-contract.mdx) and measure its
-forward, left, turn, and return-to-start errors on your actual robot.
+The angled rollers lose a little grip sideways, so a mecanum robot strafes slower than it drives forward
+at the same power. The usual fix, from gm0, is to multiply the strafe command by about **1.1** before
+mixing. Tune the exact number on your robot.
 
 </Admonition>
 
-<Admonition type="tip" title="Sign conventions are the #1 bug">
+<Admonition type="warning" title="Mecanum drive encoders slip">
 
-If a wheel fights the others, flip its motor direction, not the math. Pick one convention (+x forward,
-+y left, +ω CCW), write it in a comment, and make every wheel obey it. Half of all "mecanum is broken"
-posts are one inverted motor.
+You can use mecanum wheel encoders for position tracking, but the rollers slip sideways, so strafing
+distance and heading drift more than the ideal math suggests, especially when driving hard or pushing.
+Before an autonomous follower relies on that position, set up your localization library and check it
+with the [Pose Estimation Contract](./pose-estimation-contract.mdx), including how far off it is after
+returning to the start.
+
+</Admonition>
+
+<Admonition type="tip" title="Most mecanum bugs are one reversed motor">
+
+If one wheel fights the others, flip that motor's direction in the configuration, not the math. Pick
+one convention (+x forward, +y left, +ω counter-clockwise), write it in a comment, and make every wheel
+follow it.
 
 </Admonition>
 

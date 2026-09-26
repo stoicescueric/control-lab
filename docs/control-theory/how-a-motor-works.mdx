@@ -14,29 +14,28 @@ import motorCutaway from '@site/static/img/siemens-pm-dc-motor-cutaway.jpg';
 <Difficulty level="Easy" />
 
 <Abstract>
-A motor is the only actuator on the robot, and every controller you will ever write ends by choosing a
-*voltage* to send it. This lesson starts from the metal — what each part inside a DC motor does, and how
-brushed and brushless motors differ — then derives the two physical effects (torque from current,
-back-EMF from speed) that produce the torque–speed curve. It finishes on the real goBILDA motor curve
-with a worked operating point, and on what `setPower`, velocity mode, and current control actually do.
+Every controller on the robot ends by picking a voltage for a motor. This lesson opens a DC motor up,
+explains what each part does and how brushless motors differ, and then builds the torque–speed curve
+from two physical effects: current makes torque, and speed makes a voltage that pushes back. It ends
+with a worked operating point on a real goBILDA motor and what `setPower`, velocity mode, and current
+control actually do.
 </Abstract>
 
-Every controller in this module — PID, feedforward, motion profiling — is an elaborate way of
-answering one question: *what voltage now?* So before any of that, you have to know what the motor **is**
-and what it does with that voltage. We'll build it up from the parts, not down from an equation.
+PID, feedforward, and motion profiling all answer the same question in the end: what voltage should
+the motor get right now? It's worth knowing what the motor does with that voltage first, so this lesson
+starts with the hardware.
 
 <Problem>
 
 ## The mechanism that's fast empty and useless under load
 
-A team gears a lift for very high speed. With no load on the bench, it races to the top. Hang a game
-element on it and it slows to a near stop, gets too hot to touch, and two matches later browns out (a
-sudden voltage drop that resets the robot) mid-climb. Nothing is broken — the motor is doing exactly what physics requires.
+A team gears a lift for a lot of speed. With nothing on it, it races to the top. Hang a game element on
+it and it slows almost to a stop, gets too hot to touch, and two matches later causes a brownout (a
+voltage drop that resets the robot) halfway up. Nothing is broken. The motor is doing what motors do.
 
-The team designed against a model that doesn't exist: **"voltage sets speed, full stop."** In reality a
-motor trades speed for torque, pulls more current the harder you load it, and dumps the shortfall as
-heat. You can't pick a gear ratio, choose a controller, or read a current spike correctly until you
-know *why*.
+The team assumed voltage sets speed. It doesn't, quite. A motor trades speed for torque, draws more
+current the harder you load it, and turns the difference into heat. Picking a gear ratio, choosing a
+controller, and reading a current spike all depend on understanding why.
 
 <Analogy>
 <strong>Bicycle gears on a hill.</strong> In your highest gear you fly along on flat ground but slow to a stop
@@ -53,28 +52,27 @@ just slowly. The pedals (the motor) didn't change; the <em>load</em> did. There 
 
 ### What's inside
 
-Pull a brushed DC motor apart and you find six things doing one job between them: turn electrical current
-into a twisting force on a shaft.
+Take a brushed DC motor apart and you find six parts that together turn electric current into a
+twisting force on a shaft.
 
 <MotorExploded />
 
-- **Magnets (the stator).** Permanent magnets line the inside of the housing and never move — they create
-  a fixed magnetic field across the middle of the motor. "Stator" = the stationary part.
-- **Armature (the rotor).** An iron core wrapped in coils of copper wire, mounted on the shaft. When
-  current flows through those coils inside the magnets' field, each wire feels a sideways push — and
-  because the coils are arranged around the shaft, those pushes add up to a *rotation*. "Rotor" = the
-  rotating part.
+- **Magnets (the stator).** Permanent magnets line the inside of the housing and never move. They set up
+  a fixed magnetic field across the middle of the motor. The stator is the part that stays still.
+- **Armature (the rotor).** An iron core wrapped in copper coils, mounted on the shaft. When current
+  flows through the coils inside the magnets' field, each wire gets pushed sideways, and because the
+  coils are arranged around the shaft, those pushes add up to rotation. The rotor is the part that
+  spins.
 - **Commutator.** A copper ring split into segments, riding on the shaft. As the rotor spins it swaps
   which coil the current flows through, so the push is always in the direction that keeps it turning. A
   motor without this would just twitch to one position and stop.
-- **Brushes.** Two carbon blocks, spring-loaded against the commutator, that feed current into the
-  spinning rotor. They literally *brush* against the rotating segments — hence the name, and hence the
-  wear.
+- **Brushes.** Two spring-loaded carbon blocks pressed against the commutator. They feed current into
+  the spinning rotor by rubbing against it, which is where the name comes from, and why they wear out.
 - **Housing, bearings, shaft.** The steel can holds the magnets and closes the magnetic loop; the
   bearings let the shaft spin freely; the shaft carries the torque out to your gearbox.
 
-Those six parts, in real metal — a permanent-magnet DC motor sawn in half lengthwise, with the cut
-faces painted red:
+Here are the same parts in a permanent-magnet DC motor that has been cut in half lengthwise, with the
+cut faces painted red:
 
 <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
   <img
@@ -100,24 +98,23 @@ faces painted red:
   </figcaption>
 </figure>
 
-Current comes in the leads → through a brush → across the commutator → into a rotor coil → the magnets'
-field turns that current into force → the commutator keeps swapping coils so the force keeps pushing the
-same way → the shaft spins. That's the whole machine.
+Following the current: it comes in the leads, through a brush, across the commutator, and into a rotor
+coil, where the magnets' field turns it into a force. As the shaft turns, the commutator switches to
+the next coil so the force keeps pushing the same way.
 
 <VideoEmbed
   title="How does an Electric Motor work? (DC Motor)"
   src="https://www.youtube.com/embed/CWulQ1ZSE3c"
   href="https://www.youtube.com/watch?v=CWulQ1ZSE3c">
-  Jared Owen animates the same teardown in 3D. Worth watching for the commutator alone — seeing it swap
-  which coil is energised makes the "motor without this would just twitch and stop" point obvious in a way
-  a still diagram cannot.
+  Jared Owen animates the same teardown in 3D. The commutator is much easier to understand when you can
+  watch it switch coils.
 </VideoEmbed>
 
 ### Brushed vs. brushless
 
-The brushes-and-commutator design is clever but mechanical: carbon scraping copper wears out, sparks, and
-adds friction. **Brushless** motors do the same job — current in a field makes torque — but turn the
-motor inside-out and switch the current *electronically*.
+Brushes and a commutator work, but carbon rubbing on copper wears out, sparks, and adds friction.
+**Brushless** motors make torque the same way, but they turn the motor inside out and switch the current
+electronically.
 
 <BrushedVsBrushless />
 
@@ -137,26 +134,25 @@ lives in the speed controller.)
 
 ### The two effects that make it a motor
 
-Everything the motor does comes from two facts, and it is worth saying exactly what each symbol *is*.
+Almost everything the motor does comes from two effects.
 
-**1 — Torque comes from current.** Current $I$ (amps) is the rate of electric charge flowing through the
-coils. Every wire carrying current inside a magnetic field feels a sideways force (the Lorentz force);
-summed around the rotor, that force becomes a twisting **torque** $\tau$ (newton-metres). Double the
-current, double the torque:
+**Torque comes from current.** Current $I$, in amps, is how much charge flows through the coils each
+second. A wire carrying current through a magnetic field gets pushed sideways, and added up around the
+rotor, those pushes become a twisting force, the **torque** $\tau$, in newton-metres. Double the current
+and you double the torque:
 
 $$
 \tau = k_t\,I
 $$
 
-$k_t$ (the **torque constant**, N·m per amp) is just the proportionality — how much twist you get per amp,
-set by the magnets and the number of wire turns. **Torque is current.** That single fact is what
-[current control](#production-extensions-feedback-and-current-control) below is built on.
+$k_t$, the **torque constant**, is how many newton-metres you get per amp. It depends on the magnets and
+the number of turns of wire. Since torque is proportional to current, controlling current means
+controlling torque, which is what [current control](#feedback-and-current-control) below relies on.
 
-**2 — Speed creates a voltage that fights you.** Here is the part that surprises people: a spinning motor
-is *also a generator*. **Angular velocity** $\omega$ is how fast the shaft turns, in radians per second
-($\omega = \text{RPM}\times 2\pi/60$ — one full turn is $2\pi$ rad). As the coils spin through the
-magnets' field they generate their own voltage (Faraday's law), and it points *against* the supply
-— the **back-EMF**:
+**Speed creates a voltage that pushes back.** A spinning motor is also a generator. As the coils sweep
+through the magnets' field they produce their own voltage, and it points against the supply. This is
+the **back-EMF**. It grows with the shaft speed $\omega$, measured in radians per second (one turn is
+$2\pi$ rad, so $\omega = \text{RPM}\times 2\pi/60$):
 
 $$
 V_\text{emf} = k_e\,\omega
@@ -166,30 +162,19 @@ $$
   torque <Teal>τ = kt·I</Teal> &nbsp;·&nbsp; back-EMF <Amber>V_emf = ke·ω</Amber>
 </Formula>
 
-$k_e$ (the **back-EMF constant**, volts per rad/s) is the generator side of the same magnets and turns —
-in SI units, $k_e$ and $k_t$ are numerically the same constant. The faster the motor spins, the more of
-the supply voltage its own back-EMF cancels, leaving less to push current — which is why a motor stops
-speeding up.
+$k_e$, the **back-EMF constant**, is volts per rad/s. It comes from the same magnets and windings as
+$k_t$, and in SI units the two are the same number. The faster the motor spins, the more of the supply
+its back-EMF cancels, and the less is left to push current. That's why a motor stops speeding up.
 
-**Putting them together (Kirchhoff's voltage law).** Walk around the circuit: the voltage $V$ you apply is
-split between pushing current through the windings' resistance $R$ and fighting the back-EMF:
+**Putting them together.** Go around the circuit. The voltage $V$ you apply has two jobs: push current
+through the resistance $R$ of the windings, and overcome the back-EMF:
 
 $$
 V = \underbrace{I\,R}_{\text{across the windings}} + \underbrace{k_e\,\omega}_{\text{back-EMF}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'V', meaning: 'voltage applied to the motor terminals', unit: 'volts'},
-    {symbol: 'I', meaning: 'current through the motor windings', unit: 'amps'},
-    {symbol: 'R', meaning: 'electrical resistance of the windings', unit: 'ohms'},
-    {symbol: 'k_e', meaning: 'back-EMF constant: how many volts the spinning motor generates per angular speed', unit: 'V*s/rad'},
-    {symbol: 'omega', meaning: 'motor shaft angular speed', unit: 'rad/s'},
-  ]}
-/>
-
-That one equation is the entire electrical model of the motor. Read it three ways and the whole
-torque–speed story falls out.
+That equation is the whole electrical model of the motor, and the torque–speed curve comes straight
+out of it.
 
 ### The torque–speed line
 
@@ -201,46 +186,34 @@ I = \frac{V - k_e\,\omega}{R}, \qquad
 = \underbrace{\frac{k_t V}{R}}_{\text{stall torque}} - \underbrace{\frac{k_t k_e}{R}}_{\text{slope}}\,\omega
 $$
 
-<EquationLegend
-  title="Torque-speed symbols"
-  items={[
-    {symbol: 'tau', meaning: 'motor torque, the twisting force available at the motor shaft', unit: 'N*m'},
-    {symbol: 'k_t', meaning: 'torque constant: torque produced per amp of winding current', unit: 'N*m/A'},
-    {symbol: 'omega', meaning: 'motor shaft angular speed; higher speed creates more back-EMF', unit: 'rad/s'},
-    {symbol: 'R', meaning: 'winding resistance, which turns high current into heat', unit: 'ohms'},
-  ]}
-/>
-
-A straight line: maximum torque at zero speed, zero torque at top speed. Drive it below — set the voltage
-and the load, and the green dot shows where the motor actually settles (where its line meets the load).
-Watch **current**, **efficiency**, and **heat** as you push toward stall.
-
-The interactive model shows only the first quadrant: positive voltage, positive speed, and motoring
-torque with current clamped nonnegative. Reverse rotation, electrical braking, and regenerative operation
-need a signed four-quadrant model and are intentionally not represented by this plot.
+It's a straight line: the most torque at zero speed and no torque at top speed. In the demo, set the
+voltage and the load, and the green dot shows where the motor settles, which is where its line meets
+the load. Watch the current, efficiency, and heat as you push toward stall. (The demo only covers
+positive voltage and forward rotation. Braking and running backwards aren't modeled.)
 
 <MotorCurve />
 
-Read off the two ends — the only points most datasheets list:
+The two ends of the line are usually the only points a datasheet lists:
 
 | Operating point | Speed | Torque | Current | What's happening |
 |---|---|---|---|---|
 | **Stall** ($\omega = 0$) | 0 | max, $\tau_\text{stall} = \frac{k_t V}{R} =$ **0.19 N·m** | max, $I_\text{stall} = \frac{V}{R} =$ **11 A** | no back-EMF, so current — and heat — peak |
 | **Free run** (external load $\tau_\text{load} \approx 0$) | max, $\omega_\text{free} \approx \frac{V}{k_e} =$ **5900 RPM** | load torque ≈ 0 | ≈ **0.3 A** | back-EMF nearly cancels the supply; the small current covers internal friction |
 
-Two facts fall straight out of the algebra. **Voltage slides the line, it doesn't tilt it:** stall torque
-and free speed both scale with $V$, but the slope $-k_t k_e/R$ has no $V$ in it. When your code sets power
-to `0.5`, it applies ~half the voltage, sliding the motor onto a lower, *parallel* line (the faint line in
-the demo is full 12 V).
+Two things follow from the algebra. First, changing the voltage slides the line without tilting it.
+Stall torque and free speed both scale with $V$, but the slope $-k_t k_e/R$ doesn't contain $V$. Setting
+power to `0.5` applies about half the voltage and moves the motor onto a lower, parallel line. (The
+faint line in the demo is full 12 V.)
 
-**Maximum power is at half speed:** output power $P_\text{out}=\tau\omega$ is zero at both ends, so it
-peaks in the middle — for this motor, **29 W at ~2950 RPM**, exactly half of 5900.
+Second, the motor puts out the most power at half its free speed. Output power $P_\text{out}=\tau\omega$
+is zero at both ends of the line, so it peaks in the middle. For this motor that's **29 W at about
+2950 RPM**, half of 5900.
 
 <Formula>
   out <Teal>P = τ·ω</Teal> &nbsp;·&nbsp; in <Blue>P = V·I</Blue> &nbsp;·&nbsp; heat <Rose>P = I²·R</Rose>
 </Formula>
 
-<Callout type="note" title="About the numbers.">
+<Callout type="note" title="Where the numbers come from">
 The demo is the real <strong>goBILDA 5000-0002-0117 (MATRIX)</strong> motor at 12 V: free speed 5900 RPM,
 stall torque 0.19 N·m, stall current 11 A, free current ≈ 0.3 A, peak 29 W. From those three published
 numbers you get the constants: $R = 12/11 = 1.09\,\Omega$, $k_t = 0.19/11 = 0.0173$ N·m/A, and
@@ -250,13 +223,9 @@ they describe the same electromechanical coupling. (Data:
 <a href="https://gm0.org/en/latest/docs/power-and-electronics/motor-guide/motor-power.html">gm0's motor guide</a>.)
 </Callout>
 
-### Core checkpoint: calculate one loaded operating point
+### Working out one operating point
 
-The minimum useful artifact is a load-line calculation you can defend: convert the mechanism load through
-the gear ratio, find the motor's speed/current operating point, and reject a choice that lives too close
-to stall. The worked example below does exactly that before the control options continue.
-
-Say this motor drives a mechanism at 12 V against a steady **0.05 N·m** load. Where does it settle?
+Say this motor runs at 12 V against a steady **0.05 N·m** load at its shaft. Where does it settle?
 
 $$
 \omega = \frac{V - \tau R / k_t}{k_e}
@@ -277,84 +246,69 @@ P_\text{in} = VI \approx 34.7\ \text{W}, \quad
 P_\text{heat} = I^2 R \approx 9\ \text{W}
 $$
 
-Check the bookkeeping and you will find it does not quite close: $22.8 + 9.0 = 31.8\ \mathrm{W}$, about
-$3\ \mathrm{W}$ short of the $34.7\ \mathrm{W}$ going in. That gap is not an arithmetic slip — it is the
-price of the endpoint-fitted constants. An ideal motor has $k_t = k_e$ exactly; here they differ by 11%
-because friction depresses the measured free speed, and those missing watts are roughly that friction.
-The $66\%$ is therefore an efficiency *including* a loss the stated model does not contain.
+If you add it up, it doesn't quite balance: $22.8 + 9.0 = 31.8\ \mathrm{W}$, about $3\ \mathrm{W}$ short
+of the $34.7\ \mathrm{W}$ going in. That isn't an arithmetic mistake. An ideal motor has $k_t = k_e$
+exactly, but these constants were estimated from the two ends of the datasheet, and friction lowers the
+measured free speed enough that they come out 11% apart. The missing 3 W is roughly that friction, so
+the 66% efficiency includes a loss the simple model doesn't have a term for.
 
-<EquationLegend
-  items={[
-    {symbol: 'P_out', meaning: 'mechanical power actually delivered to the mechanism: torque times speed', unit: 'W'},
-    {symbol: 'P_in', meaning: 'electrical power drawn from the battery: voltage times current', unit: 'W'},
-    {symbol: '\u03b7 (eta)', meaning: 'efficiency, the fraction of what you drew that became motion. The rest became heat'},
-    {symbol: 'P_heat', meaning: 'power lost in the windings, I\u00b2R. Note it grows with the SQUARE of current, which is why a stalled motor cooks so quickly', unit: 'W'},
-  ]}
-/>
+Notice that heat is $I^2R$. It grows with the square of the current, which is why a stalled motor heats
+up so fast.
 
-A healthy operating point: fast, efficient, modest current. Now push the load to stall (0.19 N·m): speed
-→ 0, current → 11 A, output power → 0, and **all** 130 W of input becomes heat. That is the lift that
-"works empty." Set the demo's load slider to 0.05 and then to 0.19 and watch these exact numbers.
+This is a healthy operating point: fast, efficient, and a modest current. Now raise the load to stall,
+0.19 N·m. Speed drops to zero, current climbs to 11 A, output power falls to zero, and **all** 130 W
+going in becomes heat. That's the lift that works fine empty. Set the demo's load slider to 0.05 and
+then 0.19 to see these numbers.
 
-### Production extensions: feedback and current control
+### Feedback and current control
 
-You never command torque or current directly — you command **voltage** (the Control Hub does it by PWM:
-switching 12 V on and off fast, so `setPower(0.5)` delivers ~6 V on average). Three levels of control build
-on the model above:
+You never command torque or current directly. You command voltage. The Control Hub does it with PWM,
+switching 12 V on and off very quickly, so `setPower(0.5)` gives about 6 V on average. There are three
+levels of control built on the model above:
 
 1. **Open loop — `setPower`.** You pick a voltage and live with wherever the load puts you on the line.
    Simple, but speed sags with load and the battery.
-2. **Velocity feedback — `RUN_USING_ENCODER`.** A loop measures speed and nudges the voltage to hold a
-   target as the load changes — it slides the operating point along the curve for you. It still can't beat
-   the curve's limits: never faster than free speed, never stronger than stall.
-3. **Torque / current control.** Because **torque is current** ($\tau = k_t I$), commanding a current
-   *is* commanding a torque. Rearranging the voltage equation, to drive a chosen current $I^*$ at the
-   current speed $\omega$ you apply:
+2. **Velocity feedback, `RUN_USING_ENCODER`.** A loop measures speed and adjusts the voltage to hold a
+   target as the load changes. It still can't go faster than free speed or push harder than stall.
+3. **Torque or current control.** Since $\tau = k_t I$, commanding a current is the same as commanding a
+   torque. Rearranging the voltage equation, the voltage that drives a chosen current $I^*$ at the
+   present speed $\omega$ is:
 
 $$
 V_\text{cmd} = k_e\,\omega + I^*\,R
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'I*', meaning: 'the current you WANT to draw. The star marks a target, matching the convention used for target poses elsewhere', unit: 'A'},
-    {symbol: 'V_cmd', meaning: 'the voltage to command so that I* actually flows at the present speed \u03c9. It is the motor equation solved for V rather than for I'},
-  ]}
-/>
+   Read $\omega$ from the encoder, predict the back-EMF, add enough voltage to push the current you want
+   through $R$, and send it. Strictly speaking this is **open-loop** current control, a current
+   feedforward. It trusts $k_e$ and $R$ and never checks the actual current, so any model error, like the
+   higher resistance of a warm motor, shows up directly as current error.
 
-   You read $\omega$ from the encoder, predict the back-EMF, add the bit of voltage that pushes your
-   target current, and send it. Be precise about what this is: it is **open-loop, model-based** current
-   control — a current *feedforward*. It trusts the constants $k_e, k_t, R$ and never measures the actual
-   current, so any error in the model (a warm motor's higher $R$, a sagging battery) shows up directly as
-   current error.
+   **Closed-loop current control** measures the current every loop (`getCurrent()`) and runs feedback on
+   the error. Dedicated motor controllers do this internally. The FTC hub doesn't offer a fast current
+   loop, so the model-based version is what you can do, optionally backed up by the measured-current
+   limiter further down.
 
-   **True closed-loop current control** instead measures the current each loop (`getCurrent()`) and runs
-   a feedback controller on the error — what a dedicated motor controller or FOC drive does internally.
-   FTC's hub exposes no fast current loop to command, so the model-based version above is the practical
-   one, optionally backstopped by the *measured*-current limiter in the Deploy section below.
+   Limiting current this way is how good drivetrains avoid wheel slip, keep motors from overheating, and
+   survive defense. In a pushing match the wheels are stalled ($\omega = 0$), so full power draws about
+   $V/R$, tens of amps, and can trip the breaker. A current limit lowers the voltage to whatever gives a
+   safe current.
 
-   **Current-limiting** this way is how good drives stop wheel slip (cap the torque the tires can use),
-   avoid overheating motors, and survive defense. In a pushing match the wheels are stalled ($\omega = 0$),
-   so a raw full-power command pulls ~$V/R$ — tens of amps — and trips the breaker; a current limit instead
-   drops the applied voltage to whatever delivers the safe current.
-
-<Callout type="idea" title="This is the whole module in one equation.">
-$V = k_e\omega + IR$ is the seed of everything ahead. <strong>Feedforward</strong> is this equation solved
-for the voltage a target speed needs ($k_S, k_V, k_A$ are its terms). <strong>System identification</strong>
-or mechanism characterization usually measures the lumped gains $k_S, k_V, k_A$. Dedicated electrical
-and dynamometer tests are needed to identify $k_e$, $k_t$, and $R$ separately. <strong>Current control</strong>
-(model-based here, closed-loop on a real controller) is the voltage equation solved for a target torque.
-Learn the motor and the controllers stop being magic.
+<Callout type="idea" title="The same equation shows up again">
+$V = k_e\omega + IR$ comes back in several later lessons. <strong>Feedforward</strong> solves it for the
+voltage a target speed needs, and its $k_S$, $k_V$, $k_A$ terms come from it. <strong>System
+identification</strong> measures those lumped gains on your mechanism. (Measuring $k_e$, $k_t$, and $R$
+separately takes electrical and dynamometer tests.) <strong>Current control</strong> solves it for the
+voltage that gives a target torque.
 </Callout>
 
 </Theory>
 
 <Deploy>
 
-## Production extension: gearing, current, and code
+## Gearing, current limits, and code
 
-You bolt a gearbox to the motor to *move the useful part of the curve* to where your mechanism lives. A
-reduction $G$ divides output speed by $G$ and multiplies output torque by $G$ (minus losses):
+A gearbox moves the useful part of the curve to where your mechanism needs it. A reduction $G$ divides
+output speed by $G$ and multiplies output torque by $G$, minus losses:
 
 <Formula>
   output speed = <Blue>ω_free / G</Blue> &nbsp;·&nbsp; output torque = <Rose>τ_stall · G · η</Rose>
@@ -371,16 +325,15 @@ double gearedStallTorque = stallTorqueNm * G * eta;    // torque multiplies UP`}
 
 <Exercise title="Where the missing power went">
 
-One quantity divides and the other multiplies. Work out why, then check the result: speed times torque
-is power, and gears cannot create power. Where did the missing power go, and what is `eta` doing in
-that second line?
+Speed divides by `G` and torque multiplies by it. Speed times torque is power, and gears can't create
+power, so why does this work? And what is `eta` doing in the second line?
 
 <Solution>
 
-A reduction trades revolutions for torque: the output shaft turns $G$ times slower and delivers $G$
-times the torque, so the *product* — power — is unchanged. That is the ideal case. Real
-gears lose some of it to friction and meshing, which is `eta` — typically 0.8 to 0.95 per stage, and
-it compounds, so a three-stage box can be under 0.7. The missing power leaves as heat in the gearbox.
+The output turns $G$ times slower with $G$ times the torque, so the product, power, stays the same in
+an ideal gearbox. Real gears lose some to friction, and `eta` accounts for that. It's typically 0.8 to
+0.95 per stage and it multiplies, so a three-stage gearbox can end up under 0.7. The lost power becomes
+heat in the gearbox.
 
 </Solution>
 
@@ -388,23 +341,23 @@ it compounds, so a three-stage box can be under 0.7. The missing power leaves as
 
 <Exercise title="The number gearing cannot change">
 
-One of the three datasheet numbers is unaffected by `G`. Find it, and work out why that matters for a
-heavily geared mechanism.
+One of the three datasheet numbers doesn't change with `G`. Which one, and why does that matter for a
+heavily geared mechanism?
 
 <Solution>
 
-Stall current. Gears change the trade between speed and torque at the output shaft, but the motor
-still draws what the motor draws — stall current is set by the winding resistance and the rail, not by
-what is bolted to the shaft. This is why a heavily geared mechanism can quietly cook a motor while
-barely appearing to move: the output is slow and strong, and the current is exactly as high as an
-ungeared stall.
+Stall current. Gears change speed and torque at the output, but the motor still draws what it draws.
+Stall current depends on the winding resistance and the battery voltage, not on what's bolted to the
+shaft. That's how a heavily geared mechanism can overheat a motor while barely moving: the output is
+slow and strong, and the current is just as high as an ungeared stall.
 
 </Solution>
 
 </Exercise>
 
-At runtime, a motor near stall is the fastest way to overheat a mechanism and brown out the robot. The hub can
-read current, so guard it — or, better, command current directly using the model.
+At runtime, a motor sitting near stall is the fastest way to overheat something and brown out the
+robot. The hub can read current, so you can guard against it, or command current directly with the
+model:
 
 <JavaCode league="FTC" label="Model-based current command">{`// OPEN loop. Never reads actual current.
 void setCurrent(DcMotorEx motor, double targetAmps) {
@@ -413,10 +366,9 @@ void setCurrent(DcMotorEx motor, double targetAmps) {
     motor.setPower(vCmd / batteryVoltage());
 }`}</JavaCode>
 
-That middle line is the motor equation $V = k_e\omega + IR$ solved for $V$, and it is only as accurate
-as your `KE` and `R`. It commands the voltage that *should* produce `targetAmps`, and never checks. For
-a real closed loop, run a controller on the error between measured and target current instead — or, at
-minimum, cap it:
+The middle line is $V = k_e\omega + IR$ solved for $V$, so it's only as accurate as your `KE` and `R`. It
+sends the voltage that should produce `targetAmps` and never checks. To actually close the loop, run a
+controller on measured current, or at least cap it:
 
 <JavaCode league="FTC" label="Measured-current limiter">{`// CLOSED loop. This one reads the sensor.
 void driveSafely(DcMotorEx motor, double command, double maxAmps) {
@@ -429,16 +381,14 @@ void driveSafely(DcMotorEx motor, double command, double maxAmps) {
 
 <Exercise title="Derive the voltage command">
 
-Derive $V = k_e\omega + IR$ rather than memorising it. A spinning motor generates a back-EMF
-proportional to its speed; the applied voltage has to overcome that *and* push current through the
-winding resistance. Write the loop equation and solve for $V$.
+A spinning motor makes a back-EMF proportional to its speed, and the applied voltage has to overcome
+that and also push current through the winding resistance. Write that as an equation and solve for $V$.
 
 <Solution>
 
-The winding sees the applied voltage $V$ opposed by the back-EMF $k_e\omega$, and whatever is left
-drives current through the resistance: $V - k_e\omega = IR$. Rearranged, $V = k_e\omega + IR$. At
-stall $\omega = 0$ and the whole rail goes into $IR$ — which is why stall current is $V/R$ and why
-stall is a thermal event. Look up "DC motor back-EMF".
+The back-EMF $k_e\omega$ opposes the applied voltage, and what's left drives current through the
+resistance: $V - k_e\omega = IR$, so $V = k_e\omega + IR$. At stall $\omega = 0$ and the whole battery
+voltage goes into $IR$, which is why stall current is $V/R$ and why stalling mostly makes heat.
 
 </Solution>
 
@@ -446,55 +396,51 @@ stall is a thermal event. Look up "DC motor back-EMF".
 
 <Exercise title="Why the limiter scales instead of stepping down">
 
-Work out why the correction is a *ratio* rather than a fixed step down. At 1.5 times the budget, what
-fraction of the command survives? Then work out why this is a safety net and not a controller: what
-does it do when the current is comfortably under the budget?
+Why is the correction a ratio instead of a fixed step down? At 1.5 times the budget, how much of the
+command is left? And what does the limiter do when the current is well under budget?
 
 <Solution>
 
-At 1.5× the budget, `maxAmps / current` is 0.67, so two-thirds of the command survives. A fixed step
-would take a different number of loops depending on the overshoot; the ratio scales its response to the
-size of the problem. Under the budget it does nothing at all — it has no notion of a target, only of a
-ceiling, which is exactly what makes it a net rather than a loop.
+At 1.5 times the budget, `maxAmps / current` is 0.67, so two-thirds of the command is left. A fixed step
+would take more loops for a big overshoot than a small one. The ratio scales with how far over you are.
+Under budget it does nothing, because it has a ceiling but no target. That makes it a safety net, not a
+controller.
 
-**It only lands exactly on the budget at stall.** That is the case the limiter is really for — a
-pushing match, where $\omega \approx 0$, back-EMF is zero, and current genuinely is proportional to
-voltage. At speed it *undershoots*, because $I = (V - k_e\omega)/R$ is affine, not proportional:
-scaling $V$ by $s$ leaves
+It only lands exactly on the budget at stall, which is the case it's mostly for: a pushing match, where
+$\omega \approx 0$, there's no back-EMF, and current really is proportional to voltage. At speed it
+undershoots, because $I = (V - k_e\omega)/R$ has an offset. Scaling $V$ by $s$ gives
 
 $$
 I_\text{new} = \frac{sV - k_e\omega}{R} = s\,I - (1-s)\frac{k_e\omega}{R} \;<\; s\,I = I_\text{max}.
 $$
 
-On the motor from this lesson at $\omega = 300\ \mathrm{rad/s}$, a command scaled by 0.67 lands near
-$2\ \mathrm{A}$ against a $3.77\ \mathrm{A}$ cap — roughly half the budget, not on it. That is the safe
-direction to be wrong, but it means the limiter really does hunt: next loop the current reads under the
-cap, the full command returns, and it cuts again. Anything better closes the loop on measured current
-error instead of scaling the command open-loop.
+On this lesson's motor at $\omega = 300\ \mathrm{rad/s}$, a command scaled by 0.67 lands near
+$2\ \mathrm{A}$ against a $3.77\ \mathrm{A}$ cap, about half the budget. Being low is the safe way to be
+wrong, but the limiter will hunt: next loop the current reads under the cap, the full command comes
+back, and it cuts again. A better version runs feedback on the measured current instead.
 
 </Solution>
 
 </Exercise>
 
-<Callout type="warn" title="Stall is a thermal event, not just a slow one.">
-A motor held near stall draws stall current <em>continuously</em>, and almost all of it becomes heat
-($I^2R$) — enough to demagnetize or melt the windings and to drag the battery down until the hub browns
-out. Never gear a mechanism so its normal load sits near stall, and never hold a pushing match at full
-power. Current control, or a current cap, is the fix.
+<Callout type="warn" title="A stalled motor is a heater">
+A motor held near stall draws stall current the whole time, and almost all of it becomes heat. That can
+damage the windings and pull the battery down until the hub browns out. Don't gear a mechanism so its
+normal load sits near stall, and don't hold a pushing match at full power. Limit the current instead.
 </Callout>
 
-The design move: take your motor's three datasheet numbers, pick $G$ so the mechanism's real load lands in
-the fast, efficient stretch of the line — not crammed against stall — and current-limit so a jam can't
-exceed the heat budget. Next, [**Feedforward**](./feedforward.mdx) turns this same model around to ask:
-given the speed I *want*, what voltage do I send before any error even appears?
+In practice: take your motor's three datasheet numbers, pick $G$ so the mechanism's normal load sits in
+the fast, efficient part of the line rather than near stall, and limit current so a jam can't overheat
+anything. The next lesson, [Voltage Compensation](./voltage-compensation.mdx), deals with the fact that
+the battery voltage feeding all of this isn't constant.
 
 </Deploy>
 
-<Admonition type="warning" title="The ideal model, and where it bends">
+<Admonition type="warning" title="Where the ideal model is off">
 
-Real motors add friction (so free current isn't quite zero and free speed is a touch lower), winding
-inductance, and gearbox losses — the perfect straight line is slightly curved. It is still accurate enough
-to design with. Measuring the *real* constants for your specific motor is its own lesson:
+Real motors have friction (so free current isn't zero and free speed is a little lower), winding
+inductance, and gearbox losses, so the straight line is slightly curved. It's still close enough to
+design with. Measuring the real constants for your motor is covered in
 [system identification](./system-identification.mdx).
 
 </Admonition>

@@ -13,12 +13,6 @@ import {Abstract} from '@site/src/components/kit/Abstract';
 import {Difficulty} from '@site/src/components/kit/Difficulty';
 import {EquationLegend} from '@site/src/components/kit/EquationLegend';
 import {VideoEmbed} from '@site/src/components/kit/VideoEmbed';
-import {
-  CalculusIllustration,
-  LinearAlgebraIllustration,
-  DifferentialEquationsIllustration,
-  StateSpaceIllustration,
-} from '@site/src/components/kit/MathIllustrations';
 import {Problem, Theory, Deploy} from '@site/src/components/kit/Steps';
 import {Callout, Analogy} from '@site/src/components/kit/Callout';
 import {Exercise, Solution} from '@site/src/components/kit/Exercise';
@@ -45,10 +39,6 @@ export default {
   Difficulty,
   EquationLegend,
   VideoEmbed,
-  CalculusIllustration,
-  LinearAlgebraIllustration,
-  DifferentialEquationsIllustration,
-  StateSpaceIllustration,
   // clean titled lesson sections
   Problem,
   Theory,

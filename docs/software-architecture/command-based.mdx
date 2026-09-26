@@ -12,18 +12,16 @@ import CommandScheduler from '@site/src/components/simulations/software-architec
 <Difficulty level="Medium" />
 
 <Abstract>
-Command-based programming builds robot behavior from small reusable command objects, then lets a scheduler run, sequence, interrupt, and compose them.
-It scales the non-blocking discipline of state machines from one subsystem to the whole robot, especially during autonomous.
+Command-based code builds robot behavior out of small, reusable command objects and lets a scheduler
+run, sequence, interrupt, and combine them. It takes the non-blocking habits of a state machine and
+applies them to the whole robot, which matters most in autonomous.
 </Abstract>
 
-A state machine is excellent when one subsystem has clear modes. Command-based programming becomes
-useful when the robot needs to coordinate several subsystems at once.
+State machines are great for one subsystem with clear modes. Command-based programming earns its keep
+when several subsystems have to work together. A command is one reusable action, like "drive to this
+pose" or "raise the lift," and an autonomous routine is a combination of commands.
 
-The key difference is composition. A command is not "the whole autonomous." A command is one reusable
-action: drive to a pose, or raise the lift. The autonomous routine is built by combining those
-actions.
-
-## FTC example: the step-counter autonomous
+## The step-counter autonomous
 
 Most teams eventually write something like this:
 
@@ -44,35 +42,28 @@ Most teams eventually write something like this:
         break;
 }`}</JavaCode>
 
-This works until you need the lift to rise while the drivetrain is still moving. Now `step == 0` is
-not only "drive." It is "drive while maybe lifting." Then you want to aim while lifting. Then you want
-to cancel the routine if localization fails. The step counter becomes a pile of special cases.
+This works until you want the lift to rise while the drivetrain is still moving. Now `step == 0` means
+"drive, and maybe lift." Then you want to aim while lifting, and cancel everything if localization
+fails, and the step counter turns into a pile of special cases.
 
-Command-based programming changes the question from:
+Command-based code stops asking "which numbered step am I on?" and asks "which commands are running
+right now, and which subsystems does each one need?" That second question copes with two things
+happening at once on different subsystems and finishing at different times, which a step counter
+can't.
 
-> "What numbered step am I on?"
+## The scheduler's view
 
-to:
-
-> "Which commands are currently scheduled, and which subsystems do they require?"
-
-The second question survives the case the step counter cannot: two things happening at once, on
-different subsystems, finishing at different times.
-
-## Visual intuition
-
-The demo below shows the scheduler's view of an autonomous routine. Each bar is a command. Commands
-that require different subsystems can run in parallel. Commands that require the same subsystem cannot
-fight over it.
+Each bar in the demo is a command. Commands that need different subsystems can run at the same time.
+Commands that need the same subsystem can't both control it.
 
 <CommandScheduler />
 
-Flip the lift-and-aim section between sequential and parallel. The robot is not doing less work in
-parallel mode. It is using independent subsystems at the same time.
+Switch the lift-and-aim section between sequential and parallel. The robot does the same work either
+way. In parallel mode it just uses independent subsystems at the same time.
 
-## Theoretical rigor
+## What a command is
 
-A command has a lifecycle:
+Every command goes through the same four calls:
 
 | Method | Called | Purpose |
 |---|---|---|
@@ -81,51 +72,19 @@ A command has a lifecycle:
 | `isFinished()` | every loop after `execute()` | report whether the command is done |
 | `end(interrupted)` | once, after finish or cancellation | stop motors, hold position, clean up |
 
-Let $C_k$ be the set of commands scheduled at loop $k$. The scheduler runs each active command once:
+Each loop, the scheduler goes through every running command once: call `execute()`, then ask
+`isFinished()`. Because it visits every command every loop, one command that blocks stalls all of them.
 
-$$
-\forall c \in C_k:
-\quad
-c.\texttt{execute}()
-\quad\text{then check}\quad
-c.\texttt{isFinished}()
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'C_k', meaning: 'the SET of commands scheduled at loop k. A set, not a count: order is not what matters, membership is'},
-    {symbol: 'c', meaning: 'any one command drawn from that set'},
-    {symbol: '\u2200', meaning: '"for every". The scheduler touches each active command exactly once per loop, which is why no command may block'},
-  ]}
-/>
-
-Here, $c$ is one command object, and $C_k$ is the active command set during the current robot loop.
-
-The scheduler also enforces subsystem requirements. If command $a$ and command $b$ both require the
-same subsystem, they cannot safely run together:
-
-$$
-\operatorname{req}(a) \cap \operatorname{req}(b) \ne \varnothing
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'req(a)', meaning: 'the set of subsystems command a needs exclusive control of'},
-    {symbol: '\u2229', meaning: 'set intersection: the subsystems the two commands have in COMMON'},
-    {symbol: '\u2260 \u2205', meaning: '"is not empty". If they share even one subsystem, two commands would be writing to the same motor in the same loop, and the scheduler must choose between them'},
-  ]}
-/>
-
-Here, $\operatorname{req}(a)$ means "the set of subsystems required by command $a$." If the
-intersection is not empty, both commands want at least one of the same subsystems.
-
-That one rule prevents two commands from writing conflicting motor outputs to the same mechanism in
-the same loop.
+The scheduler also keeps commands from fighting. Each command lists the subsystems it needs. Say
+`DriveToPose` needs `{drive}` and `RaiseLift` needs `{lift}`. They share nothing, so they can run
+together. A second command that also needs `{lift}` can't run alongside `RaiseLift`, because both would
+write to the lift motor in the same loop, so the scheduler has to pick one. (In set notation, two
+commands conflict when $\operatorname{req}(a) \cap \operatorname{req}(b) \ne \varnothing$.)
 
 ### Groups are commands too
 
-Groups share the same lifecycle as ordinary commands, so a group can be scheduled, interrupted, and
-checked for subsystem conflicts exactly like a single action.
+A group has the same four calls as a single command, so it can be scheduled, interrupted, and checked
+for conflicts the same way.
 
 | Group | Behavior | FTC use case |
 |---|---|---|
@@ -134,13 +93,12 @@ checked for subsystem conflicts exactly like a single action.
 | Race | the first child to finish ends the group and interrupts every unfinished child | drive or timeout, whichever finishes first |
 | Deadline | one designated child ends the group and interrupts the rest; other children may finish early without ending it | drive to pose while running intake |
 
-Because groups are commands, groups can contain groups. That is how a full autonomous routine becomes
-readable without becoming one huge class.
+And since groups are commands, groups can contain groups. That's how a full autonomous stays readable
+without turning into one enormous class.
 
-## Engineering implementation
+## Writing commands
 
-A minimal command interface is small. The complexity belongs in the scheduler and the reusable command
-objects, not in a giant OpMode.
+The interface itself is small:
 
 <JavaCode league="FTC" label="The Command interface">{`public interface Command {
     void initialize();                  // once, when the command starts
@@ -150,12 +108,12 @@ objects, not in a giant OpMode.
     Set<Subsystem> getRequirements();   // subsystems it needs exclusively
 }`}</JavaCode>
 
-Read WPILib's abstract `Command` class alongside this interface; it carries the same five ideas. (WPILib
-made `Command` a class rather than an interface in 2024 so it could ship the decorator methods on it.)
+WPILib's `Command` has the same five pieces. (It became an abstract class rather than an interface in
+2024 so WPILib could put decorator methods on it.)
 
 <Exercise title="What breaks without each of the five">
 
-Every one of the five earns its place. Work out what fails if you delete each:
+What breaks if you delete each one?
 
 - no `initialize()` — where does one-time setup go, and what happens if you put it at the top of `execute()`?
 - no `isFinished()` — how does anything ever move on?
@@ -198,16 +156,16 @@ A command should do one job and expose its requirement clearly:
     public boolean isFinished()        { return lift.atTarget(); }
     public void end(boolean cancelled) { lift.holdCurrentPosition(); }
 
-    public Set<Subsystem> getRequirements() { return Set.of(lift); }
+    public Set<Subsystem> getRequirements() { return Collections.singleton(lift); }
 }`}</JavaCode>
 
-Notice what it does *not* contain: no PID math, no motor calls, no encoder conversion. It sequences a
-subsystem that already knows how to control itself, which is what lets the same class raise to a low
-junction, a high junction, or back to the floor.
+There's no PID math, no motor call, and no encoder conversion in it. It tells a subsystem that already
+knows how to control itself what to do, so the same class can raise to a low junction, a high junction,
+or back to the floor.
 
 <Exercise title="Which side of the boundary?">
 
-Each of these has to live either in `RaiseLift` or in `Lift`. Place them, and say why:
+Each of these belongs either in `RaiseLift` or in `Lift`. Which, and why?
 
 - the target height for the high junction
 - `kP` for the lift controller
@@ -216,10 +174,10 @@ Each of these has to live either in `RaiseLift` or in `Lift`. Place them, and sa
 
 <Solution>
 
-The high-junction height and the decision to raise now belong to the command — they are about *this*
-routine. `kP` and the inch-to-tick conversion belong to `Lift` — they are facts about the hardware and
-do not change between routines. The test is whether the answer would differ for a second command
-targeting the same mechanism.
+The high-junction height and the decision to raise now belong to the command, because they're about
+this particular routine. `kP` and the inch-to-tick conversion belong to `Lift`, because they're facts
+about the hardware that don't change between routines. A useful test: would a second command using
+the same mechanism need a different answer?
 
 </Solution>
 
@@ -227,15 +185,14 @@ targeting the same mechanism.
 
 <Exercise title="Why end() holds rather than cuts power">
 
-Trace a lift that is interrupted at full extension with `end()` setting power to zero instead of
-holding.
+A lift gets interrupted at full extension, and `end()` sets the power to zero instead of holding. What
+happens?
 
 <Solution>
 
-It falls. Gravity is still there, and a lift with no feedforward and no controller running has nothing
-opposing it — the mechanism slams down under its own weight, usually onto whatever the claw was about
-to score on. `holdCurrentPosition()` leaves the controller running with the current height as its
-target, which costs a small standing current and keeps the mechanism where the driver left it.
+It falls. Gravity is still there and nothing is pushing back, so the lift slams down, usually onto
+whatever the claw was about to score on. `holdCurrentPosition()` keeps the controller running with the
+current height as the target. That costs a little current and keeps the lift where it was.
 
 </Solution>
 
@@ -260,22 +217,19 @@ while (opModeIsActive()) {
     telemetry.update();
 }`}</JavaCode>
 
-That routine says what the robot should do without hiding the timing inside a pile of step numbers.
-Drive and lift overlap because they require different subsystems. Scoring waits because it comes after
-the parallel group.
-
-The composed preload above is the beginner endpoint: lifecycle, requirements, sequential composition,
-and parallel composition are enough to build a non-blocking autonomous routine.
+The routine reads like a description of what the robot does. Driving and lifting overlap because they
+use different subsystems, and scoring waits because it comes after the parallel group. With the four
+lifecycle calls, requirements, and sequential and parallel groups, you can already write a complete
+non-blocking autonomous.
 
 <Exercise title="When is a parallel group finished?">
 
-Two composition rules do all the work here. `SEQUENTIAL` runs each command in turn and starts the next
-when the previous finishes. `PARALLEL` runs all of them at once and finishes when… when what, exactly?
-Work out at least two defensible answers, find a case where each is the one you want, then look up what
-WPILib actually offers — you should find more than two.
+A sequential group starts each command when the previous one finishes. A parallel group runs them all
+at once and finishes when... when what? Come up with at least two reasonable answers and a situation
+where each one is right. Then check what WPILib provides.
 
-Then the scheduler's side of it: two scheduled commands both require the lift. What are its options,
-and which would you want mid-match?
+Also: two scheduled commands both need the lift. What can the scheduler do, and which would you want
+in the middle of a match?
 
 <Solution>
 
@@ -284,21 +238,19 @@ cancel a lift that is merely opportunistic; "one designated command finishes" is
 drive is the real task and the lift is along for the ride. WPILib ships exactly these three:
 `ParallelCommandGroup`, `ParallelRaceGroup`, and `ParallelDeadlineGroup`.
 
-For the conflict, the scheduler can refuse the new command or cancel the old one. Mid-match you almost
-always want the newest to win, because it reflects what the driver just asked for — but then a command
-must survive being cancelled cleanly, which is what `end(interrupted)` is for.
+For the conflict, the scheduler can refuse the new command or cancel the old one. During a match you
+almost always want the newest one to win, since it's what the driver just asked for. That means every
+command has to handle being cancelled cleanly, which is what `end(interrupted)` is for.
 
 </Solution>
 
 </Exercise>
 
-## Optional reference: FTC command frameworks
+## FTC command frameworks
 
-You can write a scheduler yourself, but most serious teams should at least study the existing FTC
-frameworks. They encode the same architecture this lesson has been building: commands, subsystem
-requirements, command groups, trigger bindings, and a scheduler that runs every loop.
-
-This is not a ranking. It is a map of tradeoffs.
+You can write your own scheduler, but it's worth looking at the existing FTC frameworks first. They
+all implement the same ideas as this lesson: commands, requirements, groups, trigger bindings, and a
+scheduler that runs every loop. The table below isn't a ranking, just the tradeoffs.
 
 | Framework | Best fit | Main idea | Cost |
 |---|---|---|---|
@@ -344,28 +296,26 @@ Use SolversLib or Mercurial when your main architecture question is broader:
 
 > "How do I organize the whole robot's teleop, autonomous, triggers, and subsystems around commands?"
 
-<Admonition type="tip" title="Framework choice is an architecture decision">
+<Admonition type="tip" title="Match the framework to the team">
 
-Pick the framework whose complexity matches the team's maturity. A simple scheduler used correctly is
-better than an advanced framework used as a maze. The goal is not to collect abstractions; the goal is
-to make robot behavior composable, inspectable, and hard to accidentally break.
+Pick the framework your programmers can actually read and debug. A simple scheduler used well beats a
+powerful framework nobody on the team understands.
 
 </Admonition>
 
-## Hardware reality
+## Common mistakes
 
 <Admonition type="warning" title="Requirements are not optional">
 
-The scheduler can only prevent command conflicts if commands declare their subsystem requirements. If
-two commands both write to the drivetrain but one forgot to require `drive`, the scheduler cannot save
-you.
+The scheduler only knows about conflicts that commands declare. If two commands both drive the
+drivetrain and one forgot to require `drive`, they will fight and nothing will stop them.
 
 </Admonition>
 
 <Admonition type="warning" title="Commands must be non-blocking">
 
-`execute()` should do one loop of work and return. Do not put `sleep()`, long `while` loops, or
-blocking sensor waits inside a command. Use `isFinished()` to express completion conditions.
+`execute()` should do one loop's worth of work and return. No `sleep()`, no long `while` loops, no
+waiting on a sensor. Put the "am I done?" check in `isFinished()`.
 
 </Admonition>
 
@@ -377,18 +327,15 @@ commands like `RunIntakeUntilLoaded`.
 
 </Admonition>
 
-## Choosing the architecture
+## Which one to use
 
-Use a state machine when one subsystem has a few exclusive modes. Use command-based programming when
-you need to sequence, parallelize, cancel, and reuse behaviors across multiple subsystems.
+Use a state machine when one subsystem has a few exclusive modes. Use commands when you need to
+sequence, overlap, cancel, and reuse actions across several subsystems. Most good FTC code does both:
+state machines inside the complicated subsystems, and commands on top for autonomous and driver
+actions.
 
-In practice, strong FTC code often uses both:
-
-- state machines inside complex subsystems,
-- commands for autonomous and operator actions,
-- measured loop time and telemetry everywhere.
-
-That last point is why the next lesson is [From Math to a Loop](./discretization.mdx).
+Either way, everything depends on knowing how long your loop takes, which is where the next lesson,
+[From Math to a Loop](./discretization.mdx), picks up.
 
 <Admonition type="info" title="Sources & references">
 

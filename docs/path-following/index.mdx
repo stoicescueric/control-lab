@@ -1,34 +1,32 @@
 ---
 title: Path Following & Kinematics
-description: How autonomous movement actually works — the pipeline from pose estimate to wheel powers, and the progression from PID-to-point up through pure pursuit and guided vector fields.
+description: How autonomous driving works, from pose estimate to wheel powers, and the progression from PID-to-point up through pure pursuit and guided vector fields.
 tags: [kinematics, mecanum, pure-pursuit, splines, path-following, autonomous]
 ---
 
 # Module 4 · Path Following & Kinematics
 
-Autonomous movement is where localization and control finally pay off. A great autonomous routine does
-two things well: it can **drive to any pose on the field**, and it can **follow a smooth path** through
-many poses at speed without stopping to re-aim. Everything in this module builds toward those two
-capabilities.
+A good autonomous routine needs two abilities: driving to any pose on the field, and following a smooth
+path through many poses at speed without stopping to re-aim. This module builds up to both.
 
 <Admonition type="note" title="Prerequisites">
 
-This module *composes* the two before it, so have them in hand first:
+This module builds on two earlier pieces:
 
 - **[Pose Estimation Contract](./pose-estimation-contract.mdx)**: configure one maintained external
   localization stack, then verify its frame, units, freshness, and once-per-loop update boundary.
 - **[Control Theory](../control-theory/index.mdx)**: the [PID](../control-theory/pid.mdx) and
   [feedforward](../control-theory/feedforward.mdx) loops that turn an error into a motor command.
 
-If a follower misbehaves, the bug is usually in the *pose estimate* or the *underlying controller*, not
-the path logic on top.
+When a follower misbehaves, the bug is usually in the pose estimate or the controller underneath, not
+in the path logic.
 
 </Admonition>
 
-## The autonomous-movement pipeline
+## Five steps every loop
 
-Every method in this module — from the simplest go-to-pose to a guided vector field — is the same five
-steps run every loop. The methods differ only in *how* they do steps 2 and 3.
+Every follower in this module, from the simplest go-to-pose to a guided vector field, runs the same five
+steps every loop. They only differ in how they do steps 2 and 3.
 
 | Step | What happens | Where it lives |
 |---|---|---|
@@ -38,63 +36,57 @@ steps run every loop. The methods differ only in *how* they do steps 2 and 3.
 | 4. **Mix & correct** | convert the chassis command to wheel powers, desaturate, re-run next loop | [Mecanum kinematics](./mecanum-kinematics.mdx) |
 | 5. **Resolve outcome** | stop on `REACHED` or `TIMED_OUT`, then advance or recover explicitly | [Common Implementation](./common-implementation.mdx) |
 
-<Admonition type="tip" title="Step 5 is not optional">
+<Admonition type="tip" title="Don't skip step 5">
 
-A follower that never decides it is "done" will wander around the target forever, and one that trusts only
-position will report done while still coasting. Always gate completion on **pose tolerance AND low
-velocity**. A **timeout** is a distinct failure/recovery outcome, never a successful arrival.
+A follower that never decides it's done will wander around the target forever, and one that only checks
+position will say it's done while still coasting through. Check that the robot is **close enough and
+slow enough**. A **timeout** is a separate outcome, a failure to recover from, never a successful arrival.
 
 </Admonition>
 
-Every follower below shares a small set of primitives — the `Pose2d`/`Vector2d` geometry types, `wrap`,
-the `MoveStatus` completion outcome, `kStatic`, and the `drive` entry point.
-They are defined once in [**Common Implementation**](./common-implementation.mdx); each lesson links there
-rather than repeating them, so the code blocks show only what is new to that technique.
+All the followers share a few building blocks: the `Pose2d` and `Vector2d` types, `wrap`, the
+`MoveStatus` result, `kStatic`, and `drive`. They're defined once in
+[Common Implementation](./common-implementation.mdx), so each lesson's code only shows what's new.
 
 ## See it on a real robot
 
-Before the math, watch a competitive team walk through their own movement code — the same pipeline,
-running on hardware, with the practical decisions called out.
+Before the math, here's a competitive team walking through their own movement code on real hardware.
 
 <VideoEmbed
   title="Wolfpack Movement Breakdown"
   src="https://www.youtube.com/embed/ri06orPFaKo?start=266"
   href="https://www.youtube.com/watch?v=ri06orPFaKo&t=266s">
-  Wolfpack &amp; Lupine (Waring Robotics) break down their autonomous movement stack end to end — a good
-  concrete anchor for the techniques formalized in this module.
+  Wolfpack &amp; Lupine (Waring Robotics) walk through their autonomous movement code from start to
+  finish.
 </VideoEmbed>
 
-## From simple to advanced
+## Lessons, simplest first
 
-The honest way to learn this is in order of capability. Start with the follower you can debug by eye, and
-only add machinery when a real limitation forces you to.
+Start with the follower you can debug by watching it, and only add more when you hit a real limit.
 
-1. **[Mecanum kinematics](./mecanum-kinematics.mdx)** *(Easy)* — the matrix that turns one chassis command
-   into four wheel powers, plus field-centric driving, joystick scaling, and a dead zone. *This is step 4
-   of the pipeline; build it first so every later method has a drivetrain to command.*
-2. **[Angle wrapping](./angle-wrapping.mdx)** *(Easy)* — the small, mandatory fix that stops the robot
-   spinning the long way around. Do it before any pose controller, since they all act on a heading error.
-3. **[Pose Estimation Contract](./pose-estimation-contract.mdx)** *(Easy)* — configure one supported
-   external localizer and verify the frame, units, freshness, and loop boundary its consumers require.
-4. **[Common Implementation](./common-implementation.mdx)** *(Medium)* — adopt the geometry, angle,
-   drivetrain, and explicit completion contracts used by every follower.
-5. **[PID-to-point](./pid-to-point.mdx)** *(Medium)* — the simplest complete follower: three PID loops
-   drive the robot to a single target pose, hardened with a kStatic nudge and **predictive deceleration**
-   so it eases on without overshooting. Most autonomous routines are just a list of these.
-6. **[Splines](./quintic-splines.mdx)** *(Hard)* — the ways to *describe* a smooth, curvature-continuous
-   path: Bézier control points (approximation), quintic Hermite waypoints, and natural cubic interpolation.
-7. **[Pure pursuit](./pure-pursuit.mdx)** *(Hard)* — chase a lookahead "carrot" along a path, with the
-   adaptive curvature-based speed plan and the spline-following velocity planning (resample, curvature
-   speed cap, centripetal feedforward); fixed versus dynamic lookahead.
-8. **[Guided vector fields](./guided-vector-fields.mdx)** *(Hard)* — follow a path as a flow that
-   converges onto the path, rather than chasing a moving point.
+1. **[Mecanum kinematics](./mecanum-kinematics.mdx)** *(Easy)*: turning one drive command into four
+   wheel powers, plus field-centric driving, joystick shaping, and a dead zone. This is step 4, and it
+   comes first so everything later has a drivetrain to command.
+2. **[Angle wrapping](./angle-wrapping.mdx)** *(Easy)*: the small fix that stops the robot turning the
+   long way around. Every pose controller needs it.
+3. **[Pose Estimation Contract](./pose-estimation-contract.mdx)** *(Easy)*: set up one localization
+   library and check its frame, units, and timing.
+4. **[Common Implementation](./common-implementation.mdx)** *(Easy)*: the shared types and helpers every
+   follower uses.
+5. **[PID-to-point](./pid-to-point.mdx)** *(Medium)*: the simplest complete follower. Three PID loops
+   drive to one target pose, with a friction nudge and braking that starts on time. Most autonomous
+   routines are just a list of these.
+6. **[Splines](./quintic-splines.mdx)** *(Hard)*: ways to describe a smooth path, with Bézier curves,
+   quintic Hermite splines, and natural cubic splines.
+7. **[Pure pursuit](./pure-pursuit.mdx)** *(Hard)*: chase a point a fixed distance ahead on the path,
+   and plan speed around the curves.
+8. **[Guided vector fields](./guided-vector-fields.mdx)** *(Hard)*: follow a path as a field of arrows
+   that pulls the robot onto it, instead of chasing a point.
 
-Steps 1–5 give you a debuggable autonomous checkpoint today; 6–8 add continuous paths and speed.
+Lessons 1 to 5 get you a working, debuggable autonomous. Lessons 6 to 8 add smooth paths and speed.
 
-**Optional mechanism branch:** [Inverse Kinematics](./inverse-kinematics.mdx) translates claw targets
-into arm-joint angles. It shares geometry vocabulary with drivetrains but is not a prerequisite for the
-follower chain.
+**Side branch:** [Inverse Kinematics](./inverse-kinematics.mdx) turns a claw target into arm joint
+angles. It uses the same geometry but isn't needed for the followers.
 
-The heavier mathematics is split out into the optional **[Advanced Topics](../advanced-topics/index.mdx)**
-section — the guided-vector-field convergence proof, take-back-half, and the full natural-cubic spline
-derivation — so the core path above stays approachable. Reach for it once you are comfortable here.
+Longer derivations, like Jacobian inverse kinematics and how Pedro Pathing works, are in
+[Advanced Topics](../advanced-topics/index.mdx).

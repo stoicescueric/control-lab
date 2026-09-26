@@ -1,6 +1,6 @@
 ---
 title: From Math to a Loop
-description: "The bridge from continuous control theory to embedded reality: discretization, encoder-tick unit conversion, the measured time step, and the Nyquist sampling limit."
+description: "How a robot loop turns rates of change into differences and running totals into sums, converts encoder ticks to real units, and why loop time must be measured."
 sidebar_position: 3
 tags: [discretization, loop-time, sampling, nyquist, units]
 ---
@@ -12,94 +12,101 @@ import LoopRate from '@site/src/components/simulations/software-architecture/Loo
 <Difficulty level="Medium" />
 
 <Abstract>
-Control theory is written in continuous time, but a robot runs it as a repeating loop over discrete
-samples, so derivatives become differences, integrals become running sums, and raw encoder counts
-become real-world units. This lesson bridges the math to the loop: the measured time step, unit
-conversion, and the Nyquist limit on how fast you must sample.
+A robot doesn't run continuous math. It runs a loop, a few dozen times a second, on encoder counts.
+This lesson shows how rates of change become differences between loops, how running totals become
+sums, how ticks become real units, and why the time between loops has to be measured every time.
 </Abstract>
 
-Every formula in this curriculum is written in continuous time: integrals, derivatives, smooth
-curves. The hardware does none of that. This page is the bridge between the analysis and the
-embedded reality, and skipping it is the single most common reason "correct" control code
-misbehaves on a real robot.
+Control lessons are full of velocities, accelerations, and accumulated error. The Control Hub never
+sees any of those directly. It sees a number from an encoder each time through the loop, and it has to
+build everything else out of those numbers. Getting this translation wrong is one of the most common
+reasons controller code that looks right misbehaves on a real robot.
 
 <Problem>
 
-## The hub runs discretely, in the wrong units, at a variable rate
+## What the hub actually gives you
 
-Three hardware facts break the clean continuous math:
+Four facts about the hardware shape everything else:
 
-- **It loops.** A Control Hub executes *read -> compute -> actuate* perhaps 20-50 times per second.
-  It cannot integrate or differentiate; it can only work with discrete samples.
-- **It counts ticks.** A motor encoder reports dimensionless counts, not meters or radians. Nothing
-  downstream, including PID gains, feedforward, and odometry, is meaningful until those counts are converted.
-- **The loop time wobbles.** Vision frames, logging, and garbage collection make each iteration take
-  a slightly different amount of time. Assuming a fixed period silently corrupts every time-based term.
-- **Hardware I/O costs time.** Encoder, IMU, and sensor reads travel to a hub; motor and servo commands
-  travel back. Before blaming the math, measure the control period and count avoidable hub transactions.
+- **It loops.** The Control Hub runs *read → compute → write* somewhere around 20 to 50 times a
+  second. Between loops it knows nothing new.
+- **It counts ticks.** An encoder reports counts, not inches or radians. PID gains, feedforward, and
+  odometry mean nothing until those counts are converted.
+- **The loop time wobbles.** Vision frames, logging, and garbage collection make some loops longer than
+  others. Code that assumes a fixed period gets every time-based calculation slightly wrong.
+- **Hardware access takes time.** Every encoder, IMU, and sensor read is a trip to the hub, and so is
+  every motor command. Before blaming the math, measure the loop period and count the hub trips.
 
-Get these three things right and the rest of the site's math drops onto hardware unchanged. Get
-them wrong and even a perfect controller drifts, lags, or oscillates.
+Handle those four and the math in the rest of the site carries over to the robot as written.
 
 </Problem>
 
 <Theory>
 
-## Discretization, units, and the sampling limit
+## Rates of change from two readings
 
-**Time step.** Replace "an instant" with "one loop." A derivative becomes a difference; an integral
-becomes a running sum; a state is advanced with forward Euler:
+Start with a number you can check. On one loop the lift encoder converts to 12.0 in. On the next loop,
+0.020 s later, it reads 12.5 in. The lift moved 0.5 in in 0.020 s, so it's moving at
 
 $$
-\frac{dx}{dt} \approx \frac{x_k - x_{k-1}}{\Delta t}, \qquad
-\int x\,dt \approx \sum_k x_k\,\Delta t, \qquad
-x_{k+1} = x_k + \dot{x}_k\,\Delta t
+\frac{12.5 - 12.0}{0.020} = 25 \text{ in/s}.
 $$
 
-Every term carries a $\Delta t$, so $\Delta t$ must be the *measured* elapsed time, never a constant.
+That's the slope formula from algebra, rise over run, with position as the rise and time as the run.
+Calculus writes the exact version as $dx/dt$, the slope at a single instant. The robot can't measure a
+single instant, so it uses the slope across one loop:
 
-**Units.** The most important conversion in the codebase turns encoder ticks into real distance:
+$$
+\frac{dx}{dt} \approx \frac{x_k - x_{k-1}}{\Delta t}
+$$
+
+where $x_k$ is this loop's reading, $x_{k-1}$ is last loop's, and $\Delta t$ is the time between them.
+
+Running totals go the other way. Suppose a controller wants to add up how much error it has seen over
+time. If the error is 2 in for one 0.020 s loop, that loop contributes $2 \times 0.020 = 0.04$ in·s.
+If the next loop has an error of 1.5 in and lasts 0.025 s, it adds $0.0375$. Keep adding one rectangle
+per loop and you have the integral, $\int e\,dt$:
+
+$$
+\int e\,dt \approx \sum_k e_k\,\Delta t_k
+$$
+
+Predicting forward uses the same idea. If the lift is at 12.5 in and moving at 25 in/s, then one
+0.020 s loop later it should be near $12.5 + 25 \times 0.020 = 13.0$ in. In symbols,
+$x_{k+1} = x_k + v_k\,\Delta t$. This is called forward Euler, and it's how most robot code steps a
+model ahead.
+
+Every one of these has $\Delta t$ in it. If the loop took 35 ms and your code assumes 20 ms, every
+velocity, integral, and prediction is wrong by the same factor, which is why $\Delta t$ is always
+measured.
+
+## Ticks to real units
+
+The conversion you'll use most turns encoder ticks into distance. One full turn of a wheel covers its
+circumference, $2\pi r$, so each tick covers that distance divided by the ticks in one turn:
 
 $$
 \text{meters} = \text{ticks} \times \frac{2\pi r}{N_{\text{out}}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'r', meaning: 'the wheel RADIUS here, not a setpoint. So 2\u03c0r is the distance covered by one full wheel revolution', unit: 'm'},
-    {symbol: 'N_out', meaning: 'encoder ticks per revolution of the OUTPUT shaft: the one that actually turns the wheel'},
-  ]}
-/>
+Here $r$ is the wheel radius and $N_{\text{out}}$ is the encoder counts per turn of the output shaft,
+the one the wheel is on. Datasheets often give counts per turn of the motor shaft instead. With a 20:1
+gearbox the motor turns 20 times for every output turn, so the output sees 20 times as many counts:
+$N_{\text{out}} = N_{\text{motor}} \times G$, with $G = 20$. If a vendor writes the ratio the other way
+around, flip it once here and nowhere else.
 
-where $r$ is the wheel radius and $N_{\text{out}}$ is encoder counts per output-shaft revolution.
-If your datasheet gives encoder counts per motor revolution instead, multiply by the gearbox ratio
-first:
-
-$$
-N_{\text{out}} = N_{\text{motor}}G
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'N_motor', meaning: 'ticks per revolution of the MOTOR shaft, which is what a datasheet usually quotes'},
-    {symbol: 'G', meaning: 'the gearbox reduction. The motor turns G times for one turn of the output, so the output shaft sees G times as many ticks'},
-  ]}
-/>
-
-where $N_{\text{motor}}$ is counts per motor revolution and this lesson defines
-$G$ as **motor turns per one output-shaft turn**. For a 20:1 reduction, $G=20$, so the output needs
-20 motor revolutions' worth of ticks. If a vendor publishes the inverse convention, invert it once here.
-
-<Callout type="math" title="Worked example (motor configuration)">
-Suppose your selected motor configuration or datasheet gives <strong>537.7 encoder counts per output revolution</strong>
-and the wheel diameter is <strong>96 mm</strong>, so $r = 0.048\ \text{m}$. One wheel revolution covers
+<Callout type="math" title="Worked example">
+Say the motor configuration gives <strong>537.7 counts per output revolution</strong> and the wheel is
+<strong>96 mm</strong> across, so $r = 0.048\ \text{m}$. One revolution covers
 <code>2*pi*0.048 ~= 0.3016 m</code>, so
 <code>METERS_PER_TICK = 0.3016 / 537.7 ~= 0.000561 m/tick</code>.
 </Callout>
 
-**Sampling rate.** Between loops the robot is blind: it acts on the last sample until the next
-arrives. Increase **dt** below and watch the smooth signal degrade into a coarse staircase and,
-past the limit, alias into nonsense.
+## How fast you have to sample
+
+Between loops the robot is blind and acts on its last reading. Increase **dt** in the demo and watch a
+smooth signal turn into a staircase and then, past a certain point, into something that doesn't
+resemble the original at all.
 
 <LoopRate />
 
@@ -107,25 +114,25 @@ past the limit, alias into nonsense.
   title="Advanced Motion Control & Loop Time Optimization"
   src="https://www.youtube.com/embed/EqF2Zp8R9qM?start=912"
   href="https://www.youtube.com/watch?v=EqF2Zp8R9qM&t=912s">
-  24033 Alphatronic's FLYSET workshop is a useful FTC-specific companion for the practical loop-time
-  budgeting side of this lesson.
+  24033 Alphatronic's FLYSET workshop covers the practical side of loop-time budgeting on an FTC robot.
 </VideoEmbed>
 
-<Callout type="math" title="The Nyquist limit.">
-To capture a motion that repeats <code>f</code> times per second, you must sample faster than
-<code>2f</code>. Below that threshold the motion <em>aliases</em>: it appears slower than reality
-or disappears entirely. A loop that is too slow cannot control a fast, springy mechanism regardless
-of how well its gains are tuned.
+<Callout type="math" title="The Nyquist limit">
+To see a motion that repeats <code>f</code> times a second at all, you have to sample faster than
+<code>2f</code>. Below that, the motion <em>aliases</em>: it looks slower than it is, or disappears.
+Seeing a motion isn't the same as controlling it, though. Controllers usually need to run many times
+faster than the motion they're correcting, so a loop that's too slow can't control a fast, springy
+mechanism no matter how the gains are tuned.
 </Callout>
 
 </Theory>
 
 <Deploy>
 
-## Measure dt; define the unit conversion once
+## Measure dt and convert units in one place
 
-Read the true loop time every iteration, and centralize the tick conversion so every downstream
-controller speaks real units.
+Measure the loop time every iteration, and do the tick conversion in exactly one place so every
+controller downstream works in real units.
 
 <JavaCode league="FTC" label="Units, defined once">{`// Never recomputed inline, never retyped in a subsystem.
 static final double WHEEL_R = 0.048;                 // meters
@@ -134,7 +141,7 @@ static final double METERS_PER_TICK =
         2 * Math.PI * WHEEL_R / TICKS_PER_OUTPUT_REV;
 static final double MAX_VALID_DT = 0.25;      // s; beyond this, something stalled`}</JavaCode>
 
-Then measure the loop time every iteration, and seed before differentiating anything:
+Then measure the loop time every loop, and grab a first reading before computing any velocity:
 
 <JavaCode league="FTC" label="Real loop time, with a seed and a dt guard">{`private final ElapsedTime timer = new ElapsedTime();
 private boolean havePreviousSample;
@@ -167,15 +174,15 @@ void update(double error) {
 
 <Exercise title="What the seed prevents">
 
-Delete the `havePreviousSample` branch. `lastMeters` starts at 0, and the encoder might already read
-4000 ticks when the OpMode starts. Work out the velocity that implies on the first loop, and what the
-controller does with it.
+Delete the `havePreviousSample` branch. `lastMeters` starts at 0, but the encoder might already read
+4000 ticks when the OpMode starts. What velocity does the first loop compute, and what does the
+controller do with it?
 
 <Solution>
 
-4000 ticks is 2.24 m, and the first `dt` is about 20 ms, so the derivative comes out around
-**112 m/s** — roughly 250 mph. A D term sees that once and slams the output to its limit before the
-mechanism has moved at all. The seed costs one loop and removes the entire failure.
+4000 ticks is 2.24 m, and the first `dt` is about 20 ms, so the computed velocity is around
+**112 m/s**, roughly 250 mph. A D term sees that once and slams the output to its limit before the
+mechanism has moved. Waiting one loop for a real first reading avoids it.
 
 </Solution>
 
@@ -183,16 +190,16 @@ mechanism has moved at all. The seed costs one loop and removes the entire failu
 
 <Exercise title="Why re-seed instead of skip">
 
-A debugger pause, a slow vision frame, or a stalled loop produces a `dt` far outside the valid band.
-Suppose the loop stalls for 2 seconds while a mechanism keeps moving at 1 m/s. Work out what happens
-on the *next* loop if the guard skips without re-seeding `lastMeters`.
+A debugger pause, a slow vision frame, or a stalled loop gives a `dt` far outside the valid range.
+Suppose the loop stalls for 2 seconds while the mechanism keeps moving at 1 m/s. What happens on the
+loop *after* the stall if the guard just skips without updating `lastMeters`?
 
 <Solution>
 
-The stall itself is survivable — 2 m of travel divided by 2 s is the right answer. The damage comes
-one loop later: `lastMeters` is still from before the stall, so the next update divides 2 m of travel
-by a 20 ms `dt` and reports **100 m/s** instead of 1 m/s. Re-seeding throws away one derivative;
-skipping without re-seeding poisons the one after it.
+The stalled loop itself is skipped, which is fine. The problem is the next one: `lastMeters` is still
+from before the stall, so the code divides 2 m of travel by a 20 ms `dt` and reports **100 m/s**
+instead of 1 m/s. Re-seeding throws away one velocity reading. Skipping without re-seeding corrupts
+the next one.
 
 </Solution>
 
@@ -200,36 +207,33 @@ skipping without re-seeding poisons the one after it.
 
 <Exercise title="Why the integral cannot use an average dt">
 
-Every `dt` above is measured. It is tempting to log the loop times, average them at the end, and
-multiply once. Work out why that is not the same number.
+It's tempting to average the loop times and multiply by that once instead of using each measured
+`dt`. Why isn't that the same number?
 
 <Solution>
 
-The integral is $\sum e_i \Delta t_i$, and replacing each $\Delta t_i$ with the mean gives
-$\bar{\Delta t} \sum e_i$. Those agree only if the error is uncorrelated with the loop time — and it
-is not: loops run longest exactly when the robot is doing the most work, which is when the error is
-largest. The bias is systematic, not noise. The practical objection is simpler still: the controller
-needs the integral *this* loop, not after the match.
+The integral is $\sum e_i \Delta t_i$. Using the average gives $\bar{\Delta t} \sum e_i$, and the two
+only match if the error has nothing to do with loop time. It usually does: the slowest loops happen
+when the robot is busiest, which is often when the error is largest. There's also a simpler problem.
+The controller needs the integral now, not after the match.
 
 </Solution>
 
 </Exercise>
 
-<Callout type="warn" title="Hard-coding dt is a classic, invisible bug.">
-If you assume <code>dt = 0.02</code> but the loop actually runs at 35 ms, the two time-dependent terms
-break by the same factor of 1.75 — in <strong>opposite directions</strong>. The integral accumulates
-about 1.75 times too <em>slowly</em>, because you add 0.02 s of area every 0.035 s of real time. The
-derivative reads about 1.75 times too <em>large</em>, because you divide a 35 ms change by a 20 ms
-interval. Neither produces an error message, and the pair is easy to misread as integral windup when it
-is the opposite. Measuring <code>dt</code> costs almost nothing.
+<Callout type="warn" title="What a hard-coded dt does">
+If you assume <code>dt = 0.02</code> but the loop really takes 35 ms, the integral and the derivative
+are both off by a factor of 1.75, in <strong>opposite directions</strong>. The integral grows about 1.75
+times too <em>slowly</em>, because you add 0.02 s of area for every 0.035 s that actually passed. The
+derivative reads about 1.75 times too <em>large</em>, because you divide a 35 ms change by 20 ms.
+Nothing throws an error, and the symptoms are easy to mistake for integral windup.
 </Callout>
 
 ## Treat loop time as a measured hardware budget
 
-The `dt` above belongs inside every controller calculation. It does **not** tell you whether the robot
-is consistently responsive. For that, record a short window of complete control periods. A single slow
-loop may be harmless; a high average, a high worst case, or a wide gap between them is evidence to
-investigate.
+The `dt` above goes into every controller calculation, but one loop's `dt` doesn't tell you whether the
+robot is consistently responsive. For that, keep a short window of loop periods. One slow loop is
+usually harmless. A high average, a bad worst case, or a big gap between the two is worth chasing.
 
 <JavaCode league="FTC" label="Loop-time window: average and worst period">{`private static final int LOOP_WINDOW = 100;
 private final ElapsedTime loopTimer = new ElapsedTime();
@@ -269,17 +273,16 @@ void recordLoopPeriod(double periodMs) {
     }
 }`}</JavaCode>
 
-This is a diagnostic, not a controller clock: keep using the individual measured `dt` for derivatives,
-integrals, observers, and rate limits. The window is for finding jitter and regressions after adding
-vision, logging, or a new subsystem.
+This is for diagnosis only. Controllers should keep using each loop's own `dt`. The window is how you
+notice that adding vision, logging, or a new subsystem made the loop slower or less steady.
 
-### Bulk caching has one owner
+### One owner for bulk caching
 
-Many loop-time problems are hub communication, not arithmetic. Eligible reads from the same REV hub can
-share a bulk-read cache; I2C devices are a separate case. The simplest starting point is SDK
-`BulkCachingMode.AUTO`. Use `MANUAL` only when one well-defined robot root owns the cache and clears it
-before **every** hardware cycle. If Road Runner, Pedro, or another framework already owns this policy,
-do not configure it again inside a subsystem.
+A lot of slow loops are slow because of hub communication, not arithmetic. Reads from the same REV hub
+can share one bulk read (I2C devices are separate). Start with the SDK's `BulkCachingMode.AUTO`. Only
+switch to `MANUAL` when one piece of code clearly owns the cache and clears it before **every**
+hardware cycle. If Road Runner, Pedro, or another framework already manages this, don't set it again in
+a subsystem.
 
 <JavaCode league="FTC" label="Manual bulk caching: one clear at the start of each cycle">{`private List<LynxModule> hubs;
 
@@ -303,20 +306,19 @@ void updateRobot() {
     writeActuators();
 }`}</JavaCode>
 
-Forgetting the clear is worse than being slow: the next loop can consume stale encoder or IMU data.
-Do not hide `clearBulkCache()` in several subsystem updates, and do not switch to `MANUAL` merely because
-it sounds faster. First profile, then make one component responsible for the cache lifecycle.
+Forgetting to clear is worse than being slow, because the next loop reads old encoder or IMU data.
+Don't scatter `clearBulkCache()` across subsystems, and don't switch to `MANUAL` just because it sounds
+faster. Profile first, then give one component the job.
 
-### Optimize writes only after profiling
+### Caching motor writes, if you need to
 
-Repeatedly sending an unchanged motor power or servo position can add hub traffic without changing the
-robot. That makes command caching a possible later optimization, but it also introduces a deadband if a
-wrapper ignores small changes. Keep the direct command path until measurements identify writes as the
-bottleneck; then document the threshold, test its effect on a closed-loop mechanism, and keep the
-wrapper at the hardware boundary rather than scattering it through controllers.
+Sending the same motor power or servo position every loop adds hub traffic without changing anything.
+Skipping repeated writes can help, but a wrapper that ignores small changes also adds a deadband to
+every controller behind it. Only add one after measurements show writes are the bottleneck, write down
+the threshold, test it on a closed-loop mechanism, and keep it at the hardware boundary.
 
-With the bridge built - discrete time, real units, adequate rate - the rest of the curriculum is
-deployable. The most useful controller of all comes next: [PID](../control-theory/pid.mdx).
+That's the end of Module 1. Module 2 starts with the actuator all of this is controlling:
+[How a Motor Works](../control-theory/how-a-motor-works.mdx).
 
 </Deploy>
 

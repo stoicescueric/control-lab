@@ -12,11 +12,11 @@ import RstPolePlacement from '@site/src/components/simulations/control-theory/Rs
 <Difficulty level="Hard" />
 
 <Abstract>
-An RST controller is discrete pole placement written as three polynomials, $R$, $S$ and $T$, acting on
-the measurement, the past command, and the reference. Instead of three gains with no physical meaning
-it asks for a description of the plant, which [system identification](../control-theory/system-identification.mdx)
-already measured, and a description of the response you want, expressed as a time constant in seconds,
-then solves for its own coefficients from those.
+An RST controller is a velocity controller built from three small formulas, $R$, $S$, and $T$, that act
+on the measurement, the past command, and the target. Instead of asking you for gains, it asks for a
+model of the mechanism, which [system identification](../control-theory/system-identification.mdx)
+already gave you, and how quickly you want it to respond, in seconds. It works out its own coefficients
+from those.
 </Abstract>
 
 [System identification](../control-theory/system-identification.mdx) measures $k_S$, $k_V$, and $k_A$
@@ -74,11 +74,10 @@ design produces whatever coefficients that requires.
 
 <RstPolePlacement />
 
-The reference alternates every 1.6 s, because the interesting behaviour is on a **change** and not on
-the first move from rest. Drag `tauClosedLoop` and watch the readout: the green trace reaches 63% of
-each change in about the time you asked for, and the number is measured off the simulation rather than
-asserted. That is the whole appeal. `tauClosedLoop = 0.1` is a claim about the robot that a graph can
-confirm or refute, in a way that `kP = 0.004` is not.
+The target switches every 1.6 s, because the interesting part is how it responds to a change. Drag
+`tauClosedLoop` and watch the readout: the green trace reaches 63% of each change in about the time you
+asked for, measured from the simulation. `tauClosedLoop = 0.1` is something you can check on a graph,
+which `kP = 0.004` isn't.
 
 Two things are worth doing before reading the derivation:
 
@@ -127,8 +126,7 @@ $$
   ]}
 />
 
-Nothing new was measured here. A feedforward and a first-order plant are the same three numbers
-written two ways.
+Nothing new was measured. The feedforward constants already describe the mechanism's response.
 
 ### Discretise it once, in the loop
 
@@ -163,9 +161,9 @@ $$
   ]}
 />
 
-Two degrees of freedom, which a PID does not have: $R$ decides how disturbances are rejected and $T$
-decides how the reference is followed, separately. Substituting the plant into the controller gives
-the closed loop:
+That gives two separate choices, which a plain PID doesn't: $R$ decides how the controller fights
+disturbances, and $T$ decides how it follows the target. Putting the mechanism model into the controller
+gives the closed loop:
 
 $$
 \bigl(A S + B R\bigr)\,v = B\,T\,v^{*}
@@ -311,12 +309,10 @@ double calculate(double reference, double measurement, double dt) {
 }
 `}</JavaCode>
 
-Three of those lines are guards rather than algebra, and each one is a failure mode. The $b$ check is
-the interesting one: $b = k_{dc}(1 - a)$ goes to zero as $\Delta t$ does, so on an implausibly short
-loop, or with a mistyped $k_V$, every coefficient divides by something near zero. Returning the
-previous command is a better answer than an infinite gain. The `4 * dt` floor on $\tau_{cl}$ is the
-same idea applied to ambition: no pole placement usefully beats a handful of loop periods, however
-good the model.
+Three of those lines are guards. The $b$ check matters most: $b = k_{dc}(1 - a)$ goes to zero as
+$\Delta t$ does, so on a very short loop, or with a mistyped $k_V$, every coefficient divides by nearly
+zero. Returning the previous command is better than an enormous gain. The `4 * dt` floor on $\tau_{cl}$
+stops you asking for a response faster than a few loop periods, which no model can deliver.
 
 Storing the clamped `output` is the anti-windup, and it is the only anti-windup this controller needs.
 
@@ -363,11 +359,9 @@ retunes itself as the pack sags.
 }
 `}</JavaCode>
 
-The `peak` division matters more than it looks. Clamping each wheel on its own changes the ratios
-between them, and the ratios are the direction: a robot asked for a fast diagonal answers with a
-command that is no longer diagonal, and the harder it is pushed the further off course the correction
-points. Scaling gives up speed and keeps the direction, which is the trade a follower can reason
-about.
+The `peak` division keeps the ratio between the two sides, which is what sets the direction. Clipping
+each side on its own would change the ratio, so the robot would curve off course, and more so the harder
+it's pushed. Scaling gives up speed and keeps the direction.
 
 :::warning[Static friction is not part of this plant]
 The model solved above is linear, and $k_S$ is not: it is a fixed voltage that must be paid before
@@ -375,11 +369,10 @@ anything moves at all, and no choice of poles produces it. The controller can on
 integrating error, which means waiting. Feed $k_S$ forward ahead of the loop and leave the rest to
 the design; the integrator absorbs whatever the estimate got wrong.
 
-On a holonomic drive, apply it as **one vector along the direction of travel**, not as
-$k_S\operatorname{sgn}(v)$ per axis. A robot driving down a path holds a small lateral correction that
-changes sign as it wanders across the line, and an independent lateral term answers every one of those
-crossings with the full lateral $k_S$. The correction that should have been an ounce of voltage becomes
-a shove, and the robot weaves at the frequency of its own sign changes.
+On a mecanum drive, apply it as **one push in the direction of travel**, not as
+$k_S\operatorname{sgn}(v)$ on each axis separately. A robot following a path makes small sideways
+corrections that flip direction as it wanders across the line. A separate sideways $k_S$ turns each of
+those tiny corrections into a full $k_S$ push, and the robot weaves back and forth.
 :::
 
 :::tip[Log the reference against the measurement]
@@ -424,7 +417,5 @@ differencing window on a 20 ms loop leaves less headroom than the loop rate alon
   fit that scores well can still be unusable.
 - [Feedforward](../control-theory/feedforward.mdx): the same three constants, and what $k_S$ is doing outside the
   linear plant.
-- [State Feedback](../state-space-control/state-feedback.mdx): the same idea of placing closed-loop
-  poles, written in state space rather than in polynomials.
 - [Actuator Saturation and Anti-Windup](../control-theory/actuator-saturation-anti-windup.mdx): what the clamped
   `previousOutput` is standing in for.

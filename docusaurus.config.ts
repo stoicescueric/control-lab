@@ -178,7 +178,7 @@ const config: Config = {
         {
           title: 'Curriculum',
           items: [
-            {label: 'Preface - Why Math Matters', to: '/docs/preface/why-math-matters'},
+            {label: 'Preface - Control & Feedback', to: '/docs/preface/control-and-feedback'},
             {label: 'Signal Processing', to: '/docs/signal-processing'},
             {label: 'Control Theory', to: '/docs/control-theory'},
           ],

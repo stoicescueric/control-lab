@@ -1,6 +1,6 @@
 ---
 title: Kalman Filter
-description: The optimal linear state estimator under linear-Gaussian assumptions — predict then correct, blending model and measurement by covariance while tracking uncertainty.
+description: Predict, then correct, weighting the model and the measurement by how uncertain each one is. A one-number Kalman filter worked by hand, then the matrix version and a short look at the Extended Kalman Filter.
 sidebar_position: 7
 tags: [filter, kalman, state-estimation, sensor-fusion]
 ---
@@ -14,78 +14,60 @@ import useBaseUrl from '@docusaurus/useBaseUrl';
 <Difficulty level="Hard" />
 
 <Abstract>
-The Kalman filter is the optimal linear state estimator under the usual linear-Gaussian assumptions:
-it predicts the state from a motion model, then corrects with each measurement in the proportion that
-minimises variance, all while tracking its own uncertainty. This lesson derives that predict-correct
-cycle and the gain that decides how far to trust the model versus the measurement.
+A Kalman filter predicts where something should be from a model, then corrects that prediction with a
+measurement. How far it corrects depends on how uncertain the prediction is compared with the sensor,
+and it keeps track of its own uncertainty as it goes. This lesson works a one-number filter by hand,
+then shows the matrix version and what changes in an Extended Kalman Filter.
 </Abstract>
 
-<Admonition type="note" title="Prerequisites and a starting path">
+<Admonition type="note" title="Before you start">
 
-You do **not** need a probability course before starting. Begin with
-[Signals & Noise](./signals.mdx) to learn mean, standard deviation, and what a sensor measurement
-actually contains; then read the [Complementary Filter](./complementary.mdx) for the predict/correct
-idea with a fixed blend. Here, a **Gaussian** is simply the bell-shaped uncertainty model summarized by
-its mean and variance. The matrix form later in the lesson is optional depth; first make the one-state
-predict/correct loop work.
-
-**Math used:** mean, variance, and a bell-shaped Gaussian in the scalar route; matrix multiplication,
-transpose, and covariance in the matrix route. If variance or the normal distribution is new, read
-[Essential background I](https://kalmanfilter.net/background.html) on kalmanfilter.net; for covariance,
-read [Essential background II](https://kalmanfilter.net/background2.html). The Extended Kalman Filter
-section also uses partial derivatives and Jacobians; it is optional after the linear filter.
+You don't need a probability course. [Signals & Noise](./signals.mdx) covers the average and the
+standard deviation, which is enough, and the [Complementary Filter](./complementary.mdx) introduces the
+predict-then-correct idea with a fixed blend. The matrix section later in the lesson is optional; get the
+one-number filter working first. If you want more background on variance and the bell curve,
+[kalmanfilter.net](https://kalmanfilter.net/background.html) has a good introduction.
 
 </Admonition>
 
-The Kalman filter is the optimal linear state estimator when the model is linear, the noise is
-Gaussian, the covariances are honest, and that noise is **zero-mean and uncorrelated from loop to
-loop**: given a motion model and noisy measurements, it produces the minimum-variance estimate of the
-true state, and tracks its own uncertainty while doing so. It is the principled successor to the
-hand-tuned complementary filter.
+The complementary filter blends two sources with a weight you pick once. A Kalman filter works out the
+weight itself, every loop, from how uncertain each source is right now. Under the right conditions
+(a linear model, and noise that's random, bell-shaped, and not correlated from one loop to the next),
+that weight is the best possible one.
 
-That last assumption is the one real sensors break. A camera with a bent mount or a miscalibrated tag
-carries a *constant offset*, not zero-mean noise — changing $R$ alone does not estimate that bias.
-Calibrate the sensor, or explicitly model an observable bias state with enough independent information
-to estimate it. The unmodified filter can converge confidently onto a biased answer.
-
-<Admonition type="info" title="Where this leads: the Extended Kalman Filter">
-
-Kou and Haggenmiller's FTC-focused paper, *Extended Kalman Filter State Estimation for Autonomous
-Competition Robots*, starts from the same predict-correct loop and extends it to a mecanum robot whose
-body-to-field motion contains $\sin\theta$ and $\cos\theta$. One way to handle that nonlinearity is an
-**Extended Kalman Filter (EKF)**: predict with nonlinear functions, then use their local Jacobians to
-propagate uncertainty. Finish the linear filter first; the EKF bridge later in this lesson shows exactly
-what changes.
-
-</Admonition>
+The last condition is the one real sensors break most often. A camera on a bent mount, or a tag
+measured in the wrong place, is off by the same amount every time. That's a bias, not random noise, and
+a Kalman filter will settle confidently on the biased answer. Calibrate the sensor first.
 
 <Problem>
 
-## A fixed blend is not the optimal blend
+## How much should you trust the camera?
 
-The complementary filter blends two sources with a *constant* weight $\alpha$. But the right amount
-to trust a measurement is not constant — it depends on how uncertain your prediction currently is
-versus how noisy the sensor is. On a robot this is concrete: dead reckoning from a pose source verified
-against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx) is smooth but
-drifts, while an absolute fix (an AprilTag pose, a beacon) is noisy and intermittent. Early after a
-correction the model is trustworthy; after a long blind stretch it is not. A fixed weight cannot
-express that, and it cannot report how confident the resulting estimate is.
+Say your robot tracks its position with odometry, which is smooth but drifts, and sometimes sees an
+AprilTag, which gives a noisy but absolute position. Right after a good tag sighting, odometry is very
+trustworthy. After ten seconds without seeing a tag, it's much less so. A fixed blend weight can't tell
+those situations apart, and it can't tell you how confident the result is.
 
 </Problem>
 
 <KalmanGainExplorer />
 
-This Desmos-style graph is the Kalman filter in one dimension. The blue curve is the model's
-prediction, the pink curve is the sensor measurement, and the green curve is the corrected estimate.
-Wide curves mean high variance: the value could plausibly be far from the center. Narrow curves mean
-low variance: that source is confident. Move the variance sliders and watch the corrected estimate
-move toward the narrower curve.
+The graph shows one dimension. The blue curve is the prediction, the pink curve is the measurement, and
+the green curve is the combined estimate. A wide curve means that source is uncertain, and a narrow one
+means it's confident. Change the widths and watch the estimate move toward whichever curve is narrower.
 
-## Core checkpoint: one persistent scalar filter
+## A one-number Kalman filter
 
-Start with one quantity, such as an $x$ coordinate. The random-walk model below predicts by adding the
-measured motion increment `delta`, adds process variance `Q`, then corrects whenever an absolute
-measurement arrives. `xHat` and `P` are fields, so every loop starts from the previous corrected result.
+Track one number, say the robot's $x$ position. The filter keeps two things: the estimate `xHat`, and
+its variance `P`, which is how uncertain the estimate is (the standard deviation squared). Each loop it
+does two steps.
+
+**Predict.** Move the estimate by the measured motion `delta`, and add `Q` to `P`, because every
+prediction adds some uncertainty.
+
+**Correct**, whenever a measurement `z` arrives. Work out a gain `K` between 0 and 1 from how uncertain
+the prediction is (`P`) compared with the sensor (`R`). Move the estimate that fraction of the way
+toward the measurement, and shrink `P`, since you now know more.
 
 <JavaCode league="FTC" label="Persistent scalar predict/correct loop">{`private double xHat;   // the estimate; start at your best guess
 private double P;      // its variance; start LARGE if the guess is poor
@@ -105,8 +87,12 @@ void correct(double z) {
     P = (1 - K) * P;
 }`}</JavaCode>
 
-Starting from $\hat x_0 = 0$ and $P_0 = 4$, with `delta = 1`, `Q = 1`, `R = 4`, and measurements
-`1.2, 2.1, 2.9`, three complete loops are:
+Run it by hand. Start at $\hat x = 0$ with $P = 4$. Each loop the robot moves `delta = 1`, with `Q = 1`
+and `R = 4`, and the measurements are 1.2, 2.1, and 2.9.
+
+Loop 1: predict $\hat x = 1$ and $P = 4 + 1 = 5$. The gain is $5 / (5 + 4) = 0.556$. The measurement is
+0.2 above the prediction, so move $0.556 \times 0.2 = 0.111$ toward it: $\hat x = 1.111$. Then
+$P = (1 - 0.556) \times 5 = 2.222$. Carrying on:
 
 | Loop | prediction $\hat x^-$ | gain $K$ | corrected $\hat x$ | corrected $P$ |
 |---:|---:|---:|---:|---:|
@@ -114,70 +100,70 @@ Starting from $\hat x_0 = 0$ and $P_0 = 4$, with `delta = 1`, `Q = 1`, `R = 4`, 
 | 2 | 2.111 | 0.446 | 2.106 | 1.785 |
 | 3 | 3.106 | 0.410 | 3.022 | 1.642 |
 
-If you can trace `predict` then `correct` and explain why a larger `P` produces a larger gain, the required
-artifact is complete. The external [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx)
-can supply an example motion increment, but this scalar filter is not itself a localization system.
+The gain starts high, because the starting guess was poor, and settles lower as the filter becomes more
+confident. If you can trace a loop like this and explain why a bigger `P` gives a bigger gain, you
+understand the Kalman filter. Everything else is the same idea with more numbers.
 
 <Exercise title="The two extremes of the gain">
 
-Everything interesting is in $K = P/(P+R)$. Work out what $\hat x$ becomes when $P$ is far larger than
-$R$, and again when $R$ is far larger than $P$. Then take the second case further: an FTC robot might
-run `predict` at 50 Hz off odometry but only `correct` when an AprilTag comes into view. Trace what $P$
-does across a long blind stretch, and what that means for the gain on the next correction.
+What does $\hat x$ become when $P$ is much bigger than $R$? When $R$ is much bigger than $P$? Now picture a
+robot that runs `predict` at 50 Hz from odometry but only runs `correct` when an AprilTag is in view.
+What happens to $P$ during a long stretch without a tag, and to the gain when a tag finally shows up?
 
 <Solution>
 
-With $P \gg R$ the gain approaches 1 and $\hat x \to z$: the filter throws away its own estimate and
-believes the sensor. With $R \gg P$ the gain approaches 0 and $\hat x$ barely moves: the measurement is
-ignored. Between corrections `predict` adds $Q$ every loop, so $P$ grows without bound. The longer the
-robot goes without a tag, the larger $P$ is when one finally appears, and the harder the filter snaps to
-it. That is the behavior you want, and it is also why a tag seen at a bad angle can yank the pose.
+With $P \gg R$ the gain approaches 1 and $\hat x \to z$: the filter drops its own estimate and believes the
+sensor. With $R \gg P$ the gain approaches 0 and the measurement barely matters. Between tags, `predict`
+adds $Q$ every loop, so $P$ keeps growing. The longer the robot goes without a tag, the bigger $P$ is when
+one appears, and the harder the estimate snaps to it. That's what you want, and it's also why one
+tag seen from a bad angle can yank the pose.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Where alpha came from">
+<Exercise title="Where the low-pass α came from">
 
-Put this beside the low-pass filter you already wrote. Both compute
-`estimate + gain * (measurement - estimate)`; the only difference is where the gain comes from. You
-picked $\alpha$ by hand, and $K$ is derived. Work out what $K$ *converges to* over many loops when $Q$
-and $R$ are held constant: solve the fixed point of $P^- = (1-K)P^- + Q$. Then set $Q = 0$ and redo it.
+The low-pass filter and this one both compute `estimate + gain * (measurement - estimate)`. The only
+difference is where the gain comes from. With $Q$ and $R$ held constant, what does $K$ settle to after many
+loops? (Look for the value of the predicted $P$ that stays the same from one loop to the next.) Then try
+$Q = 0$.
 
 <Solution>
 
-With $Q$ and $R$ constant the gain settles on a constant. Writing $p$ for the steady-state $P^-$, the
-fixed point is $p = \frac{Rp}{p+R} + Q$, or $p^2 - Qp - QR = 0$, so
+Call the steady predicted variance $p$. Staying the same means $p = \frac{Rp}{p+R} + Q$, which
+rearranges to $p^2 - Qp - QR = 0$, so
 
 $$
 p = \frac{Q + \sqrt{Q^2 + 4QR}}{2}, \qquad K_\infty = \frac{p}{p + R}.
 $$
 
-For the $Q = 1$, $R = 4$ used above that is $p = 2.562$ and $K_\infty = 0.390$ — exactly where the
-three-loop table is heading (0.556, 0.446, 0.410). **That is where $\alpha$ came from.** A settled
-scalar random-walk Kalman filter with $A = H = 1$ *is* a first-order low-pass filter; its blend factor was computed
-from your noise estimates instead of guessed.
+With $Q = 1$ and $R = 4$ that's $p = 2.562$ and $K_\infty = 0.390$, which is where the table above was
+heading (0.556, 0.446, 0.410). Once it settles, this Kalman filter *is* a low-pass filter. Its $\alpha$
+just came from your noise numbers instead of a guess.
 
-Now set $Q = 0$. Nothing re-inflates $P$ after each correction shrinks it, so $1/P_k = 1/P_0 + k/R$ and
-$K \to 0$: each new measurement receives progressively less weight. That is appropriate for a truly
-constant state, but makes the filter increasingly slow to follow unmodeled changes. The gain approaches
-zero asymptotically; it does not stop updating after a finite number of measurements. A positive $Q$
-keeps a nonzero steady gain in this scalar model, although an underestimated $Q$ can still cause lag.
+With $Q = 0$, nothing ever makes $P$ grow again, so $1/P_k = 1/P_0 + k/R$ and $K$ keeps shrinking toward
+zero. Each new measurement counts for less and less. That's right for something that truly never
+changes, but it makes the filter slower and slower to notice anything the model didn't expect. It never
+quite stops updating, though; the gain only approaches zero.
 
 </Solution>
 
 </Exercise>
 
-Set $R$ from the noise standard deviation you measured in
-[Signals and noise](./signals.mdx) — it is that number squared. $Q$ is the honest guess of the two:
-start with the drift you can actually observe between corrections and tune from there.
+Set $R$ from the standard deviation you measured in [Signals & Noise](./signals.mdx): it's that number
+squared. $Q$ is the harder one to pick. Start from how much drift you actually see between corrections
+and adjust from there.
 
 <Theory>
 
-## Optional continuation: many states and the optimal gain
+## More than one number (optional)
 
-The filter maintains a state estimate $\hat{x}$ and a covariance $P$ (its uncertainty), and repeats
-two steps. **Predict** advances the state through the motion model; process noise $Q$ adds uncertainty:
+A robot's state is usually more than one number, for example position and velocity together. The
+matrix version tracks all of them at once, along with how their uncertainties are related. The steps
+are the same.
+
+**Predict** the state with a model, and grow the uncertainty:
 
 $$
 \hat{x}^- = A\hat{x} + Bu, \qquad P^- = A P A^\top + Q
@@ -185,53 +171,18 @@ $$
 
 <EquationLegend
   items={[
-    {symbol: 'the superscript minus', meaning: 'a PRIOR: after prediction, before any measurement has corrected it. Losing track of which values carry the minus is the most common way to misread these equations'},
-    {symbol: 'APA\u1d40', meaning: 'how the existing uncertainty is reshaped by the motion. Q is then ADDED on top, because the model is never perfect. Whether the total actually grows depends on A \u2014 see the note below the equation'},
+    {symbol: 'x̂⁻, P⁻', meaning: 'the prediction and its uncertainty, before any measurement. The minus sign always means "before correcting"'},
+    {symbol: 'A', meaning: 'how the state moves on its own from one loop to the next'},
+    {symbol: 'B, u', meaning: 'how the command u (like a commanded velocity) changes the state'},
+    {symbol: 'P', meaning: 'the covariance: the uncertainty of each state and how they relate'},
+    {symbol: 'Q', meaning: 'the uncertainty added each loop because the model is never perfect'},
   ]}
 />
 
-<EquationLegend
-  title="Prediction symbols"
-  items={[
-    {symbol: 'x-hat', meaning: 'the filter estimate of the state, such as position or velocity'},
-    {symbol: 'A', meaning: 'state-transition matrix: how the state naturally advances one loop'},
-    {symbol: 'B', meaning: 'input matrix: how the control command changes the state'},
-    {symbol: 'u', meaning: 'control input, such as commanded velocity or acceleration'},
-    {symbol: 'P', meaning: 'state covariance: uncertainty attached to the estimate'},
-    {symbol: 'Q', meaning: 'process-noise covariance: uncertainty added because the model is imperfect'},
-  ]}
-/>
+$APA^\top$ reshapes the existing uncertainty as the state moves, and $Q$ is added on top. With one state
+and $A = 1$, this is just $P + Q$ from the code above.
 
-Here $\hat{x}$ is the current best estimate of the state, such as position or velocity; $A$ is the
-state-transition matrix that advances the state by one loop; $u$ is the control input; $B$ maps that
-control input into state change; $P$ is the covariance matrix, meaning the uncertainty attached to
-the estimate; and $Q$ is process noise, the uncertainty added because the model is never perfect. Total
-covariance does not have to grow on every prediction: a contracting $A$ can shrink $APA^\top$ by more than
-$Q$ adds.
-
-The paper writes this as the prediction model $x_{a,t}=Ax_{a,t-1}+Bu_t+q_t$, where $q_t$ is
-Gaussian process noise with covariance $Q$.
-
-If the state has only one number, such as "robot x-position," covariance reduces to ordinary
-variance. In that scalar case the update gain becomes:
-
-$$
-K = \frac{P^-}{P^- + R}
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'P\u207b / (P\u207b + R)', meaning: 'the entire idea in one fraction. P\u207b is how much you doubt yourself, R how much you doubt the sensor. K is your doubt as a share of the total, so it always lands between 0 and 1'},
-  ]}
-/>
-
-That formula is the whole intuition. If $P^-$ is large, the prediction is uncertain, so $K$ moves
-toward $1$ and the measurement gets trusted. If $R$ is large, the sensor is noisy, so $K$ moves
-toward $0$ and the prediction stays mostly unchanged. The matrix equation is the same idea, except
-the filter can track uncertainty across several coupled state variables at once.
-
-**Update** folds in a measurement $z$ and *shrinks* the uncertainty, weighted by the **Kalman
-gain** $K$:
+**Correct** with a measurement $z$:
 
 $$
 K = P^- H^\top (H P^- H^\top + R)^{-1}, \qquad
@@ -239,91 +190,51 @@ K = P^- H^\top (H P^- H^\top + R)^{-1}, \qquad
 P = (I - KH)P^-
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'H', meaning: 'the measurement matrix: it maps a state into what a sensor would report. It is needed because the state and the measurement often are not the same quantity'},
-    {symbol: 'I \u2212 KH', meaning: 'the shrink factor on the covariance. A large K means the measurement was trusted, so more uncertainty is removed'},
-    {symbol: 'the inverse', meaning: 'in the scalar case this is ordinary division, giving exactly the simpler gain shown above'},
-  ]}
-/>
+$H$ turns a state into what the sensor would report, because the sensor often doesn't measure the state
+directly. A camera might see position but not velocity, for example. $R$ is the sensor's noise, and $I$ is
+the identity matrix. With one state and $H = 1$, the gain is $P^-/(P^- + R)$ again, and the matrix inverse
+is ordinary division.
 
-<EquationLegend
-  title="Update symbols"
-  items={[
-    {symbol: 'z', meaning: 'sensor measurement received this loop'},
-    {symbol: 'H', meaning: 'measurement matrix: maps state space into sensor space'},
-    {symbol: 'R', meaning: 'measurement-noise covariance: how noisy the sensor is'},
-    {symbol: 'K', meaning: 'Kalman gain: how strongly the innovation should correct the prediction'},
-    {symbol: 'I', meaning: 'identity matrix, used to shrink covariance after the correction'},
-  ]}
-/>
+The update reads the same way as before. $z - H\hat{x}^-$ is how surprised the filter is by the
+measurement, $K$ decides how much of that surprise to believe, and the new estimate is the prediction
+plus that much of the surprise. A noisy sensor (large $R$) gives a small $K$, so the estimate stays smooth.
+An uncertain prediction (large $P^-$) gives a large $K$, so the estimate jumps toward the measurement.
 
-In this update, $z$ is the sensor measurement, $H$ maps the state into whatever the sensor can
-observe, $R$ is measurement-noise covariance, and $I$ is the identity matrix. The term
-$(z-H\hat{x}^-)$ is the innovation: the part of the measurement the model did not already predict.
-
-Read the update in three pieces:
-
-$$
-\text{innovation} = z - H\hat{x}^-
-$$
-
-$$
-\text{correction} = K \cdot \text{innovation}
-$$
-
-$$
-\text{new estimate} = \text{prediction} + \text{correction}
-$$
-
-The innovation answers, "How surprised was the filter by this sensor reading?" The Kalman gain
-answers, "How much of that surprise should we believe?" The covariance update answers, "After
-seeing this measurement, how much uncertainty remains?"
-
-The update is the low-pass formula you already know — *estimate = prediction + K·(measurement −
-prediction)* — except $K$ is **derived optimally** from the prediction covariance $P^-$ and the
-measurement noise $R$, every step:
-
-- noisy sensor (large $R$) → small $K$ → trust the model, stay smooth;
-- shaky prediction (large $P^-$) → large $K$ → jump toward the measurement.
-
-In the demo, a target follows a smooth path reported only as noisy blips. The filter recovers a
-smooth estimate plus an uncertainty bubble. The sensor slider sets standard deviation $\sigma$
-in simulation distance units and sets the filter's $R = \sigma^2$ to match. It changes both the
-measurements and the filter's assumption, so this is not a test of an incorrectly specified $R$.
-The other slider sets assumed acceleration variance $q$. For each position/velocity axis, the demo
-uses $Q = q\begin{bmatrix}\Delta t^4/4 & \Delta t^3/2 \\\Delta t^3/2 & \Delta t^2\end{bmatrix}$,
-with $\Delta t = 0.06$ s: random acceleration held constant over one interval. The target follows a
-deterministic curved path, so this process model is an approximation.
-The bubble radius is twice the estimated position standard deviation (with a 4-pixel display minimum);
-it illustrates model uncertainty, not a guaranteed containment region or a 95% two-dimensional bound.
+In the demo, a target follows a curved path and is only reported as noisy dots. The filter recovers a
+smooth track and an uncertainty bubble around it. The sensor slider sets the noise's standard deviation
+$\sigma$, and the filter's $R = \sigma^2$ matches it. The other slider sets $q$, how much random
+acceleration the filter assumes. For each axis the demo uses
+$Q = q\begin{bmatrix}\Delta t^4/4 & \Delta t^3/2 \\\Delta t^3/2 & \Delta t^2\end{bmatrix}$ with
+$\Delta t = 0.06$ s. The bubble's radius is twice the estimated position standard deviation, as a
+picture of the uncertainty rather than a guaranteed boundary.
 
 <Kalman />
 
-<Callout type="warn" title="Q and R are the tuning.">
-Set <code>Q</code> very low and the estimate lags on sharp turns: you have told the filter its motion
-model is nearly perfect, so it over-believes its own prediction. Set it high and it chases every blip.
-Note the direction — <code>Q</code> is how much you <strong>distrust</strong> the model, so raising it
-makes the filter trust the sensor more, not less. Choosing <code>Q</code> and <code>R</code> to match
-the real process and sensor noise is the engineering of applying a Kalman filter.
+<Callout type="warn" title="Q and R are the tuning">
+Set <code>Q</code> very low and the estimate lags on sharp turns, because you've told the filter its
+model is nearly perfect. Set it high and it chases every noisy dot. <code>Q</code> is how much you
+<strong>distrust</strong> the model, so raising it makes the filter trust the sensor more. Picking
+<code>Q</code> and <code>R</code> to match the real process and sensor is most of the work of using a
+Kalman filter.
 </Callout>
 
 </Theory>
 
-## Introduction to the Extended Kalman Filter
+## The Extended Kalman Filter
 
-<Admonition type="note" title="Extra prerequisite for the EKF extension">
+<Admonition type="note" title="This section uses partial derivatives">
 
-The next section uses partial derivatives and Jacobian matrices. If they are new, Khan Academy's videos
-on [partial derivatives](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/partial-derivatives/v/partial-derivatives-and-graphs)
-and [the Jacobian matrix](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/jacobian/v/the-jacobian-matrix)
-cover what this section needs. Stop here if the linear Kalman loop is your goal; it is complete and
-practical on its own.
+It uses partial derivatives and Jacobian matrices. Khan Academy covers
+[partial derivatives](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/partial-derivatives/v/partial-derivatives-and-graphs)
+and [the Jacobian](https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/jacobian/v/the-jacobian-matrix).
+You can skip it. The linear filter above is complete on its own.
 
 </Admonition>
 
-A linear Kalman filter predicts with matrices $A$ and $B$ and predicts a measurement with matrix $H$.
-An EKF allows nonlinear functions instead:
+A robot's motion on the field involves $\sin\theta$ and $\cos\theta$, because moving forward means
+different things at different headings. That makes the model nonlinear, and the linear filter can't use
+it directly. An **Extended Kalman Filter** (EKF) handles it by predicting with the real nonlinear
+functions:
 
 $$
 \hat{\mathbf x}^{-}_k=f(\hat{\mathbf x}_{k-1},\mathbf u_k),
@@ -331,8 +242,8 @@ $$
 \hat{\mathbf z}_k=h(\hat{\mathbf x}^{-}_k).
 $$
 
-The mean follows the real nonlinear motion and sensor functions. Covariance still needs a linear map,
-so the EKF recalculates two Jacobians at the current estimate:
+The estimate follows the real motion. The uncertainty still needs a matrix, so each loop the EKF finds
+the best straight-line approximation of $f$ and $h$ around the current estimate. Those are the Jacobians:
 
 $$
 F_k=\left.\frac{\partial f}{\partial\mathbf x}\right|_{\hat{\mathbf x}_{k-1}},
@@ -340,7 +251,7 @@ F_k=\left.\frac{\partial f}{\partial\mathbf x}\right|_{\hat{\mathbf x}_{k-1}},
 H_k=\left.\frac{\partial h}{\partial\mathbf x}\right|_{\hat{\mathbf x}^{-}_k}.
 $$
 
-Then the familiar equations return with $F_k$ and $H_k$:
+Then the familiar equations come back with $F_k$ and $H_k$ in place of $A$ and $H$:
 
 $$
 P^-_k=F_kP_{k-1}F_k^\top+Q,
@@ -354,69 +265,64 @@ $$
 \hat{\mathbf x}_k=\hat{\mathbf x}^{-}_k+K_k(\mathbf z_k-h(\hat{\mathbf x}^{-}_k)).
 $$
 
-The cited FTC EKF paper's example state contains field position and heading plus body-frame velocities:
+Kou and Haggenmiller's FTC paper, linked below, uses an EKF on a mecanum robot with this state:
 
 $$
 \mathbf x=[x,\ y,\ \theta,\ v_x^{body},\ v_y^{body},\ \omega]^\top.
 $$
 
-Body velocity is rotated into the field frame during prediction, making $f$ nonlinear. Odometry supplies
-frequent velocity measurements, while landmark detections supply intermittent absolute position. The EKF
-can predict through the gaps and reduce accumulated drift when a valid landmark returns.
+Velocity is tracked in the robot's frame and rotated into the field frame during prediction, which is
+where the nonlinearity comes from. Odometry gives frequent velocity measurements, and landmark
+sightings give occasional absolute positions, so the EKF can predict through the gaps and remove drift
+when a landmark comes back.
 
-<Callout type="warn" title="An EKF is a local approximation, not a magic nonlinear optimum.">
+<Callout type="warn" title="An EKF is an approximation">
 
-The Jacobians are tangent-plane approximations around the current estimate. Large time steps, a poor
-initial estimate, severe nonlinearity, biased sensors, or dishonest $Q$ and $R$ can make the covariance
-misleading or make the filter diverge. The paper reports that larger update intervals degrade its
-linearization and notes that body-frame velocities are less nonlinear than global velocities for the
-modeled mecanum motion. Recompute Jacobians at every step, keep timestamps honest, wrap angles in the
-innovation, and reject invalid vision before correction.
+The Jacobians are only accurate close to the current estimate. Long time steps, a bad starting
+estimate, strongly nonlinear motion, biased sensors, or unrealistic $Q$ and $R$ can make the uncertainty
+wrong or make the filter diverge. The paper found its approximation got worse with longer update
+intervals. Recompute the Jacobians every loop, keep timestamps accurate, wrap angle differences, and
+reject bad vision readings before correcting.
 
 </Callout>
-
-The conceptual change is compact:
 
 | Linear KF | Extended KF |
 |---|---|
 | $A\mathbf x+B\mathbf u$ | nonlinear $f(\mathbf x,\mathbf u)$ |
 | $H\mathbf x$ | nonlinear $h(\mathbf x)$ |
-| fixed or scheduled $A,H$ | Jacobians $F_k,H_k$ at the current estimate |
-| optimal under linear-Gaussian assumptions | approximate for nonlinear systems |
+| fixed $A,H$ | Jacobians $F_k,H_k$ at the current estimate |
+| optimal under its assumptions | an approximation |
 
-For an FTC implementation, use a maintained pose-estimation library unless deriving and validating every
-frame, Jacobian, covariance, timestamp, and reset rule is itself the project. Read the cited FTC EKF paper
-after you can trace the matrix KF equations above; its simulation model, covariance choices, and fusion
-results make the EKF transition concrete.
+For an FTC robot, use a maintained localization library unless building and testing an EKF is itself the
+goal. Read the paper once you can follow the matrix equations above.
 
 <Deploy>
 
-## On a robot: retain the scalar state
+## Using it on the robot
 
-This example consumes motion from an external pose source. Verify its frame, units, update cadence, and
-freshness with the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx) first.
+For the one-number filter, create it once when the OpMode starts and keep it for the whole OpMode.
+Call `predict(deltaX)` every loop with the latest motion from your pose source, and call `correct(tagX)`
+only when a vision reading passes your timestamp, calibration, and geometry checks. Don't create a new
+filter inside the loop, or it forgets its estimate and uncertainty every time.
 
-Full matrix pose estimators should normally come from a maintained robotics library. For the scalar class
-above, keep one `ScalarKalman` object for the lifetime of the OpMode: call `predict(deltaX)` once from the
-current coherent motion sample, then call `correct(tagX)` only when vision passes timestamp, calibration,
-and geometry checks. Never reconstruct the object inside the loop, because that discards the last
-corrected estimate and covariance.
+Check your pose source against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx)
+first: frame, units, update rate, and freshness.
 
-<Callout type="tip" title="It extracts signal from noise.">
-In the demo the Kalman error is typically a fraction of the raw blip error — genuine information
-recovery, not just smoothing. That is why it underpins GPS, drone, and robot localisation.
+<Callout type="tip" title="More than smoothing">
+In the demo, the Kalman estimate's error is usually a fraction of the raw measurement error. It's
+combining the model and the measurement, not just averaging, which is why the same idea shows up in
+GPS, drones, and robot localization.
 </Callout>
 
-Full field localisation is nonlinear, so take the maintained estimator's absolute pose only after
-verifying it against the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx).
-Use this lesson's scalar filter for one-dimensional signals you intentionally fuse yourself.
+Full field localization is nonlinear, so for that, use a maintained library's pose estimate. Use this
+lesson's filter for one-dimensional signals you combine yourself.
 
 </Deploy>
 
 <Admonition type="info" title="Sources and further reading">
 
-- Kou, E., & Haggenmiller, A. (2023), *Extended Kalman Filter State Estimation for Autonomous Competition Robots* — <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>download the paper PDF</a> or open the [arXiv record](https://arxiv.org/abs/2310.04459). Read §§III-B and IV first for the Jacobian transition and the FTC mecanum state model, then §§VI–VII for limitations and next steps.
-- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) — maintained FRC implementations and the practical relationship between observers and pose estimators.
-- R. E. Kalman, [*A New Approach to Linear Filtering and Prediction Problems*](https://doi.org/10.1115/1.3662552) — the original linear filter after the scalar intuition in this lesson is comfortable.
+- Kou, E., & Haggenmiller, A. (2023), *Extended Kalman Filter State Estimation for Autonomous Competition Robots* — <a href={useBaseUrl('/papers/extended-kalman-filter-competition-robots.pdf')}>download the paper PDF</a> or open the [arXiv record](https://arxiv.org/abs/2310.04459). Sections III-B and IV cover the Jacobians and the mecanum state model; VI and VII cover limitations.
+- [WPILib State Observers and Pose Estimators](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/state-space/state-space-observers.html) — maintained FRC implementations of observers and pose estimators.
+- R. E. Kalman, [*A New Approach to Linear Filtering and Prediction Problems*](https://doi.org/10.1115/1.3662552) — the original paper.
 
 </Admonition>

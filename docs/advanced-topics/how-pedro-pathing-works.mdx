@@ -1,6 +1,6 @@
 ---
 title: How Does Pedro Pathing Work?
-description: "A research-to-robot explanation of Pedro Pathing's path follower: Bezier paths, closest-point projection, guided-vector-field correction, centripetal feedforward, heading control, and completion constraints."
+description: "How Pedro Pathing's path follower works: Bézier paths, finding the closest point, pulling back onto the path, centripetal correction, heading control, and deciding when a path is done."
 sidebar_position: 2
 tags: [pedro-pathing, guided-vector-field, path-following, centripetal-feedforward, ftc, advanced]
 ---
@@ -14,30 +14,25 @@ import PathProjection from '@site/src/components/simulations/path-following/Path
 <Difficulty level="Hard" />
 
 <Abstract>
-Pedro Pathing is best understood as a reactive path follower: it continuously measures the robot pose,
-finds where that pose belongs on a curve, and combines several correction vectors into a drive command.
-This page connects the public Pedro documentation and the supplied second-order GVF paper to the FTC
-mental model: projection, path progress, cross-track correction, centripetal feedforward, heading
-control, and completion logic.
+Pedro Pathing reacts to where the robot actually is. Every loop it finds the robot's place on the path
+and adds up a few correction vectors into one drive command. This lesson explains those pieces using
+Pedro's documentation and its developers' paper: finding the closest point, tracking progress, pulling
+back onto the path, leaning into curves, controlling heading, and deciding when it's done.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-First implement the [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx), then
-read [Guided Vector Fields](../path-following/guided-vector-fields.mdx) and
-[Mecanum Kinematics](../path-following/mecanum-kinematics.mdx). The calculus and whitepaper notation
-are optional: start by naming the robot-frame command, pose, tangent, and cross-track error.
-
-**Math used:** Bézier-curve derivatives, closest-point projection, vector addition, and curvature. The
-whitepaper's second-order field and convergence proof add calculus; begin with the builder checkpoint
-when that derivation is not your goal.
+Read [Guided Vector Fields](../path-following/guided-vector-fields.mdx) and
+[Mecanum Kinematics](../path-following/mecanum-kinematics.mdx) first, and set up your pose source with the
+[Pose Estimation Contract](../path-following/pose-estimation-contract.mdx). The first section needs no
+calculus. The later sections use derivatives of Bézier curves and some of the paper's notation.
 
 </Admonition>
 
-## Builder checkpoint: four vectors, then tune by symptom
+## Four jobs, and what goes wrong without each
 
-This page is an **architecture explainer**, not drop-in Pedro source. Each loop can be understood as four
-jobs combined before mecanum mixing:
+This lesson explains how the follower is put together. It isn't Pedro's source code. Each loop does four
+jobs and adds the results together before the mecanum mixer:
 
 | Component | Physical job | FTC symptom if wrong or missing |
 |---|---|---|
@@ -54,40 +49,35 @@ jobs combined before mecanum mixing:
 | Heading oscillates while translation is clean | heading controller tuning |
 | The robot reaches the end but stays busy | completion constraints and terminal velocity |
 
-Use Pedro's maintained [localization](https://pedropathing.com/docs/pathing/tuning/localization) and
-[tuning sequence](https://pedropathing.com/docs/pathing/tuning) before changing internals. If you can name
-the four jobs and choose the first tuner from a symptom, a builder may stop here. The remaining calculus
-and whitepaper notation are optional architecture/audit depth.
+Work through Pedro's own [localization](https://pedropathing.com/docs/pathing/tuning/localization) and
+[tuning](https://pedropathing.com/docs/pathing/tuning) guides before changing anything inside it. If you
+can name the four jobs and pick which tuner to try from a symptom, that's enough to use Pedro well. The
+rest of the lesson goes into the math.
 
 <Admonition type="info" title="Based on the Pedro Pathing whitepaper">
 
-This page is based on the whitepaper posted by the Pedro Pathing developers, *Second-Order
-Multidimensional Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints*
-(Havish Sripada & Baron Henderson, 2026), available on [Zenodo](https://zenodo.org/records/20725319).
+This lesson is based on the paper by the Pedro Pathing developers, *Second-Order Multidimensional
+Guiding Vector Field for Parametric Path-Following Under Holonomic Constraints* (Havish Sripada & Baron
+Henderson, 2026), on [Zenodo](https://zenodo.org/records/20725319).
 
 </Admonition>
 
 <Admonition type="note" title="Scope">
 
-This is not a line-by-line source-code audit of Pedro Pathing. It explains the control architecture at
-the level a strong FTC programmer needs before tuning or modifying a follower: what the follower is
-trying to compute, why the terms exist, and where the math sits underneath the API.
+This isn't a walk through Pedro's source code. It explains what the follower is trying to compute and
+why each part is there, which is what you need before tuning or changing a follower.
 
-The braking comparison below records the whitepaper and Pedro 2.1.x implementation. The maintained
-documentation now describes [Pedro 3](https://pedropathing.com/docs/pathing/pedro3), including Foresight,
-new configuration objects, and a redesigned path API. Use documentation matching your installed
-version; the historical comparison is not a claim about current Pedro 3 source.
+The braking section describes the paper and Pedro 2.1.x. The current documentation covers
+[Pedro 3](https://pedropathing.com/docs/pathing/pedro3), which added Foresight, new configuration, and a
+new path API, so use the docs for the version you have installed.
 
 </Admonition>
 
 ## The FTC problem Pedro is solving
 
-Pure Pursuit chases a point ahead of the robot. That is intuitive, but it has a weakness: when the
-robot is disturbed, the follower is always negotiating between "catch the moving target" and "get back
-onto the path." Pedro's public documentation describes a different goal: follow Bezier curves while
-maintaining speed, consistency, and correction for disturbances.
-
-The clean way to think about it is this:
+Pure pursuit chases a point ahead of the robot. When the robot gets bumped, it's torn between catching
+that point and getting back onto the path. Pedro aims to follow Bézier curves quickly and consistently
+and to recover from bumps. Each loop:
 
 1. The path is not just a list of waypoints. It is a smooth curve.
 2. The robot estimates its current pose from localization.
@@ -95,28 +85,25 @@ The clean way to think about it is this:
 4. It computes correction vectors around that point.
 5. It converts the desired field motion into mecanum drive power.
 
-That is why Pedro feels more "reactive" than a precomputed trajectory. The follower is not blindly
-replaying a timed script; it keeps asking, "Given where the robot actually is, what field should pull it
-back onto the path and keep it moving forward?"
+That's what makes Pedro reactive. It isn't replaying a plan timed in advance. Every loop, it starts from
+where the robot actually is.
 
-## Visual intuition: a path becomes a field
+## A path becomes a field of arrows
 
-The picture below is the first-order idea. Each arrow says where a robot would like to move if it were
-currently at that field position. Near the path, the arrow points mostly along the curve. Far from the
-path, the arrow leans back toward the curve.
+Each arrow shows which way a robot at that spot should move. Near the path, the arrows point along it.
+Farther away, they lean back toward it.
 
 <GuidedVectorField />
 
-The second-order Pedro paper takes this idea one level deeper. Instead of treating the field as only a
-desired velocity direction, it builds a field over pose plus velocity. The follower therefore cares
-about more than where the robot is: it also tracks how fast the robot is already moving, and whether it
-must brake, curve, or correct heading.
+The Pedro paper goes a step further. Its field depends on how fast the robot is already moving, not
+just where it is, so it can decide whether to brake, lean into a curve, or correct heading.
 
-## Optional architecture derivation
+## The pieces in more detail
 
 ### The path is a curve, not a waypoint list
 
-Pedro uses smooth curves, commonly Bezier-style path primitives. A generic path can be written as
+Pedro's paths are smooth curves, usually Bézier curves. Any such path can be written as a point that
+depends on a parameter $t$:
 
 $$
 \phi(t) =
@@ -127,97 +114,49 @@ y(t)
 \qquad 0 \le t \le 1
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03c6 (phi)', meaning: 'the PATH itself, as a function. Feed it a parameter and it hands back a point'},
-    {symbol: 't', meaning: 'the path parameter, running 0 to 1 from start to end. It is not time and not distance: t = 0.5 is not the halfway point by length'},
-    {symbol: '\u03c6\u2032(t)', meaning: 'the derivative with respect to t: which way the path is heading there, with a length that depends on how fast t sweeps the curve'},
-  ]}
-/>
-
-where:
-
-- $\phi(t)$ is the point on the path at parameter $t$.
-- $x(t)$ is the field x-coordinate of that point.
-- $y(t)$ is the field y-coordinate of that point.
-- $t$ is progress along this path segment, with $t = 0$ at the start and $t = 1$ at the end.
-
-The tangent direction is
+$t$ runs from 0 at the start to 1 at the end. It isn't time or distance; $t = 0.5$ isn't necessarily
+halfway along. The derivative $\phi'(t)$ points the way the path is going, and dividing by its length
+gives a length-1 direction, the tangent:
 
 $$
 \hat{\mathbf{T}}(t) = \frac{\phi'(t)}{\|\phi'(t)\|}
 $$
 
-where:
-
-- $\phi'(t)$ is the derivative of the path position with respect to $t$.
-- $\|\phi'(t)\|$ is the length of that derivative vector.
-- $\hat{\mathbf{T}}(t)$ is the unit tangent, meaning the "forward along the curve" direction.
-
-Once the path is a curve instead of a waypoint list, you can ask for its tangent, curvature, distance
-remaining, and desired heading at any point.
+Because the path is a formula instead of a list of points, you can ask for its direction, curvature,
+remaining length, and target heading anywhere along it.
 
 ### Projection: which point of the curve the robot belongs to
 
-Let the robot's current field position be
-
-$$
-\mathbf{p} =
-\begin{bmatrix}
-p_x \\
-p_y
-\end{bmatrix}
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'p', meaning: 'the robot\u2019s current field position, as a vector. Its components p_x and p_y are just its x and y'},
-    {symbol: 'T\u0302(t)', meaning: 'the UNIT tangent. Dividing \u03c6\u2032 by its own length throws away the parameterization speed and keeps only direction'},
-  ]}
-/>
-
-The follower needs the path parameter that best corresponds to the robot's current position. The paper
-writes this as a closest-point problem:
+With the robot at position $\mathbf{p}$, the follower needs the $t$ whose path point is closest. The paper
+writes that as making this as small as possible:
 
 $$
 D(t) = \frac{1}{2}\|\phi(t) - \mathbf{p}\|^2
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'D(t)', meaning: 'half the squared distance from the robot to the path point at t. Not the braking distance D(v) further down the page'},
-    {symbol: 'the one-half and the square', meaning: 'both are conveniences. Squaring removes the square root, and the half cancels when you differentiate. Whatever t minimizes this also minimizes true distance'},
-  ]}
-/>
-
-where:
-
-- $D(t)$ is the squared distance from the robot to the path point $\phi(t)$.
-- $\mathbf{p}$ is the robot position.
-- The factor $\frac{1}{2}$ does not change the closest point; it just makes the derivative cleaner.
-
-A candidate for the closest point occurs at an endpoint of the segment or where the derivative is zero:
+That's half the squared distance. Squaring avoids a square root, the half makes the derivative neater,
+and neither changes which $t$ is closest. The closest point is either at an end of the path or where the
+derivative is zero:
 
 $$
 D'(t) = \left(\phi(t) - \mathbf{p}\right) \cdot \phi'(t) = 0
 $$
 
-That dot product has a geometric meaning. At an *interior* closest point, the vector from the path to
-the robot is perpendicular to the path tangent. Because $D'(t) = 0$ is necessary but not sufficient —
-it also marks local *maxima* of distance — the follower takes the global minimum among the interior
-candidates and the two endpoints. It can use the previous loop's parameter as a seed, because in a
-normal FTC loop the robot cannot teleport from one part of the curve to another.
+A dot product of zero means perpendicular: at the closest point in the middle of the path, the line from
+the path to the robot meets the path at a right angle. That condition also holds at the *farthest*
+points, so the follower compares all the candidates and the two ends and keeps the closest. It can start
+its search from last loop's answer, since the robot can't jump to a different part of the path between
+loops.
 
-Drag the robot below. The green point is $\phi(\psi(\mathbf{p}))$: the path point the follower currently
-believes is closest to the robot. The yellow arrow is the tangent direction used for forward motion, and
-the blue arrow is the normal direction used for correction.
+Drag the robot below. The green point is the path point the follower thinks is closest, written
+$\phi(\psi(\mathbf{p}))$, where $\psi(\mathbf{p})$ is the closest $t$. The yellow arrow is the tangent,
+used for forward motion, and the blue arrow is the normal, used for correction.
 
 <PathProjection />
 
-<Callout type="idea" title="Projection is the hidden building block.">
-Projection is what makes every later term local. Once the follower knows "the robot belongs near this
-point on the curve," each correction can be computed from that one neighborhood: tangent, normal,
-curvature, heading target, and remaining distance.
+<Callout type="idea" title="Everything starts from the closest point">
+Once the follower knows which point on the path the robot is nearest, every other term comes from that
+spot: the tangent, the normal, the curvature, the target heading, and the distance left.
 </Callout>
 
 ### Cross-track error and its damped spring
@@ -228,77 +167,37 @@ $$
 \mathbf{e}_p = \phi(\psi(\mathbf{p})) - \mathbf{p}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03c8(p) (psi)', meaning: 'the PROJECTION: given the robot at p, which path parameter t is closest. It is the answer to the minimization just above'},
-    {symbol: 'e_p', meaning: 'the positional error VECTOR, pointing from the robot to its closest point on the path'},
-  ]}
-/>
-
-where:
-
-- $\psi(\mathbf{p})$ is the path parameter associated with the robot position.
-- $\phi(\psi(\mathbf{p}))$ is the closest path point.
-- $\mathbf{e}_p$ points from the robot back toward that path point.
-
-The attractive term is a spring-like acceleration back toward the curve. A simplified FTC reading is:
+This vector points from the robot to its closest point on the path. The pull-back term acts like a
+spring toward the path, with damping. Simplified:
 
 $$
 \mathbf{a}_{\text{attract}} \approx k_p^t\,\mathbf{e}_p - k_d^t\,\mathbf{v}_{\perp}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'k_p^t, k_d^t', meaning: 'proportional and derivative gains for TRANSLATION; the t superscript labels which loop they belong to, and the r superscript later marks the rotational pair'},
-    {symbol: 'v_\u22a5', meaning: 'the component of the robot\u2019s velocity PERPENDICULAR to the path: how fast it is drifting sideways. Damping this is what stops the pull-back from oscillating'},
-  ]}
-/>
-
-where:
-
-- $\mathbf{a}_{\text{attract}}$ is the correction acceleration toward the path.
-- $k_p^t$ is the translational proportional gain.
-- $k_d^t$ is the translational damping gain.
-- $\mathbf{v}_{\perp} = (\mathbf{v} \cdot \hat{\mathbf{N}})\,\hat{\mathbf{N}}$ is the component of robot
-  velocity along the path normal $\hat{\mathbf{N}}$ (positive when the robot is moving away from the
-  path), so the damping term opposes that motion.
-
-The exact paper expression is more careful about singular cases and dot products, but this is the
-physical story: if the robot is off the curve, push it back; if it is already moving back too
-aggressively, damp it.
+$k_p^t$ and $k_d^t$ are the translation gains (the superscript $t$ is for translation; heading gets its
+own pair later). $\mathbf{v}_{\perp}$ is the part of the robot's velocity sideways to the path, so the
+damping term resists drifting away and also keeps the robot from swinging back too hard. The paper's
+exact version handles more edge cases, but the idea is the same: if the robot is off the path, push it
+back, and if it's already heading back fast, ease off.
 
 ### Leaning into a bend before the robot drifts
 
-A robot on a curved path needs inward acceleration even if it has zero cross-track error. Without that
-term, it tends to cut wide or rely on feedback after it is already off the path.
-
-For a curve with curvature $\kappa$, the required normal acceleration is
+On a curve, the robot needs acceleration toward the inside even when it's exactly on the path. Without
+it, the robot runs wide and only corrects after it's already off. For curvature $\kappa$ at speed $v$,
+the inward acceleration needed is
 
 $$
 a_c = v^2 \kappa
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'a_c', meaning: 'the CENTRIPETAL acceleration a curve of curvature \u03ba demands at speed v. Nothing supplies it for free; the drivetrain must produce it', unit: 'in/s\u00b2'},
-  ]}
-/>
-
-where:
-
-- $a_c$ is centripetal acceleration.
-- $v$ is speed along the path tangent.
-- $\kappa$ is curvature, equal to $\frac{1}{R}$ for a circle.
-- $R$ is the radius of the turn.
-
-Drag the points below. Tighter curvature means smaller radius, larger $\kappa$, and more required inward
-acceleration for the same speed. (The demo fits a circle through three *separate* points — the Menger
-curvature — so it equals a path's true local curvature only in the limit as the points coincide; drag
-them close together to approximate the curvature at a single point.)
+At 40 in/s around a 20 in radius, that's $1600 / 20 = 80$ in/s². Drag the points below: a tighter curve
+has a smaller radius, a larger $\kappa$, and needs more inward acceleration at the same speed. (The demo
+fits a circle through three separate points, so it matches the path's curvature at one spot best when
+the points are close together.)
 
 <CurvatureCircle />
 
-The paper writes the centripetal component in the language of the path:
+The paper writes the same thing in terms of the path's formula:
 
 $$
 \xi_C(x) =
@@ -309,32 +208,16 @@ k_c
 \frac{\hat{\mathbf{T}}'(\psi(\mathbf{p}))}{\|\phi'(\psi(\mathbf{p}))\|}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03be (xi)', meaning: 'the paper\u2019s name for one component of its vector field. \u03be_C is the centripetal part, \u03be_P the positional, \u03be_R the rotational'},
-    {symbol: 'k_c', meaning: 'the centripetal gain, tuning how strongly the follower leans into a bend'},
-    {symbol: 'comp_T\u0302(v)', meaning: 'the COMPONENT of velocity along the tangent: how fast the robot is moving along the path rather than across it. Squaring it is the v\u00b2 of the line above'},
-    {symbol: 'T\u0302\u2032 / \u2016\u03c6\u2032\u2016', meaning: 'how fast the tangent is turning per unit of DISTANCE rather than per unit of t. That ratio is curvature, written without naming it'},
-  ]}
-/>
-
-where:
-
-- $\xi_C(x)$ is the centripetal acceleration component of the field.
-- $x$ is the full robot state, including pose and velocity.
-- $k_c$ is a tunable scale factor absorbing robot-specific effects.
-- $\operatorname{comp}_{\hat{\mathbf{T}}}(\mathbf{v})$ is the scalar component of robot velocity along
-  the tangent direction.
-- $\hat{\mathbf{T}}'$ measures how quickly the tangent direction changes along the curve.
-- $\|\phi'\|$ converts parameter-rate curvature into distance-rate curvature.
-
-If the path is bending and the robot is already moving fast along it, the follower applies an
-anticipatory sideways correction before the robot has drifted.
+$\xi_C$ is the paper's name for the centripetal part of its field, and $k_c$ is a tuning gain. The
+squared term is the robot's speed along the path, the $v^2$ from above. The fraction is how fast the
+path's direction turns per inch traveled, which is the curvature. So it's $k_c v^2 \kappa$, pointed
+toward the inside of the curve: when the path bends and the robot is moving fast, it leans in before it
+drifts out.
 
 ### Tangential speed from a measured braking model
 
-The follower also needs to decide how much to push along the tangent. The paper uses remaining path
-distance:
+The follower also decides how hard to push along the path, based on how much path is left. The paper
+measures that by adding up the path's length from the robot's point to the end:
 
 $$
 d =
@@ -342,100 +225,61 @@ d =
 \|\phi'(s)\|\,ds
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'd', meaning: 'the arc length still remaining, from where the robot projects onto the path to the end'},
-    {symbol: '\u2016\u03c6\u2032(s)\u2016 ds', meaning: 'the standard arc-length integral. Because equal steps in the parameter are not equal steps in distance, you have to integrate the speed of the parameterization to get real length'},
-    {symbol: 's', meaning: 'a dummy integration variable sweeping the parameter, not the robot\u2019s speed'},
-  ]}
-/>
+(The integral adds up small pieces of length, because equal steps in the parameter aren't equal
+distances.) The paper then uses $v = \sqrt{2ad}$, the constant-braking formula from
+[PID-to-point](../path-following/pid-to-point.mdx). The paper keeps it general on purpose, since it's
+meant for any kind of robot. The follower Pedro actually shipped goes further and uses how the robot
+really stops.
 
-where:
-
-- $d$ is remaining arc length along the path.
-- $s$ is a dummy integration variable.
-- $\psi(\mathbf{p})$ is the robot's current projected path parameter.
-- $\|\phi'(s)\|$ converts parameter change into physical distance.
-
-The paper writes the speed limit as $v_{\text{desired}} = \sqrt{2ad}$ — constant-deceleration
-kinematics. That form is deliberate: the algorithm is meant to work in any number of dimensions, so
-the paper does not commit to one drivetrain's physics. The shipped follower does something better. It
-**measures** how the robot actually stops.
-
-A real drivetrain braking is not a constant-deceleration object. The motors brake through back-EMF,
-which fades as the robot slows, and the drivetrain drags on itself through viscous friction. Fit
-braking distance against entry speed on a real robot and you get a quadratic with a linear term:
+Real drivetrains don't brake at a constant rate. Motor braking changes with speed, and friction adds
+more drag at higher speeds. Measure stopping distance against starting speed on a real robot and it
+fits a curve with a squared term and a straight term:
 
 $$
 D(v) = a v^2 + b v
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'D(v)', meaning: 'how far the robot ACTUALLY takes to stop from speed v, fitted on a real robot rather than derived'},
-    {symbol: 'a', meaning: 'the quadratic coefficient, capturing ideal constant-deceleration braking'},
-    {symbol: 'b', meaning: 'the linear coefficient, capturing what constant deceleration misses: viscous drag and the drivetrain fighting itself. Measure both; they are properties of your robot'},
-  ]}
-/>
+$D(v)$ is the distance to stop from speed $v$. The $a v^2$ part is the constant-braking piece; with
+constant deceleration $a_\text{decel}$ you'd have $a = 1/(2a_\text{decel})$. The $b v$ part covers the
+losses that grow with speed. On Pedro's test data $b$ was in the hundredths. It's small, but without it
+the model gets short stops wrong. The braking data came from Pedro Pathing and was collected by Jacob
+Ophoven.
 
-where:
+There are two ways to use it:
 
-- $D(v)$ is how far the robot travels before stopping, entering at speed $v$.
-- $a$ captures the inertia-versus-braking-torque part (this is what constant-deceleration kinematics
-  approximates as $\frac{1}{2a_{\text{decel}}}$).
-- $b$ captures the speed-proportional losses: back-EMF braking and viscous drag. On Pedro's test data
-  it lands in the hundredths. Small, but load-bearing — leave it out and the model misses short stops.
-
-The braking-distance regression data behind this comes from Pedro Pathing, collected by Jacob Ophoven.
-
-There are two ways to use the fit:
-
-- **The Pedro 2.1.x form** (introduced in v2.1.0) runs a position controller and simply subtracts the
-  braking distance from the error:
-  $e = \lVert \mathbf{x}_{\text{target}} - \mathbf{x} \rVert - D(v)$. When the remaining distance
-  equals the stopping distance, the error reads zero and the controller stops pushing.
-- **Inverting the fit**, described in the whitepaper as future work. Given remaining distance $d$,
-  solve $a v^2 + b v = d$ with the quadratic formula and keep the larger root:
+- **Pedro 2.1.x** (starting with v2.1.0) runs a position controller and subtracts the stopping distance
+  from the error: $e = \lVert \mathbf{x}_{\text{target}} - \mathbf{x} \rVert - D(v)$. When the distance
+  left equals the stopping distance, the error is zero and the controller stops pushing.
+- **Solving for speed**, which the paper describes as future work. Given the distance left, $d$, solve
+  $a v^2 + b v = d$ with the quadratic formula and keep the positive answer:
 
 $$
 v_{\text{desired}} = \frac{-b + \sqrt{b^2 + 4ad}}{2a}
 $$
 
-  then track that speed with a velocity PID. Same fit, used as a speed plan instead of an error offset.
-  In v2.1.2 this form was not in the released library: the whitepaper described inverting $D(v)$ to
-  recover a target speed, while that release used the error-offset controller above.
+  and track that speed with a velocity controller. It's the same fit, used as a speed target instead of
+  an error offset. As of v2.1.2 the released library used the error-offset version.
 
-:::warning[The coefficients depend on how you brake]
-Pedro brakes actively, at roughly $-0.2$ motor power. A driver who lets go of the sticks brakes at
-zero power and coasts farther. The $D(v) = av^2 + bv$ model holds either way, but the fitted $a$ and
-$b$ do not transfer between braking styles. Refit for the behavior you actually use.
+:::warning[The numbers depend on how you brake]
+Pedro brakes actively, at about $-0.2$ motor power. If you just let go and coast at zero power, the
+robot goes farther. The same $D(v) = av^2 + bv$ shape fits both, but the $a$ and $b$ values are different,
+so measure them for the way you actually brake.
 :::
 
-<Admonition type="tip" title="Why this feels different from fixed motion profiles">
+<Admonition type="tip" title="Why this differs from a timed motion profile">
 
-A timed trajectory decides speed as a function of planned time. A reactive follower can decide speed as
-a function of measured progress. If the robot gets bumped or slips, the follower still computes distance
-remaining from where the robot actually is.
+A timed trajectory decides speed from where the plan says you should be at this moment. Pedro decides it
+from where the robot actually is. If the robot gets bumped or slips, the distance left is still
+correct.
 
 </Admonition>
 
 ### Heading runs on its own controller
 
-FTC autos often need to move one direction while facing another: intake while strafing, score while
-rotating, or approach a stack with a fixed camera angle. Pedro's docs describe heading control as part of
-the path-following behavior, and the paper models the target heading as a smooth interpolation:
-
-$$
-\theta(t)
-$$
-
-where:
-
-- $\theta(t)$ is the desired robot orientation at path parameter $t$.
-- For FTC in the plane, this is usually a single heading angle.
-- In the paper's general setting, it lives in $SO(n)$, the space of rotation matrices.
-
-For FTC, you can read the rotational correction as the familiar heading loop:
+FTC autos often move one way while facing another: intaking while strafing, or approaching with a
+camera pointed a certain way. The paper gives the target heading as its own smooth function along the
+path, $\theta(t)$. (In the paper's general version it's a rotation matrix; on an FTC field it's just an
+angle.) The heading correction is the usual heading loop:
 
 $$
 \alpha_{\text{cmd}}
@@ -444,35 +288,16 @@ k_p^r\,\operatorname{wrap}(\theta(\psi(\mathbf{p})) - \theta_{\text{robot}})
 - k_d^r\,\omega
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03b1_cmd', meaning: 'the commanded angular acceleration. Here \u03b1 is a rotational command, not the filter blend factor used in signal processing'},
-    {symbol: 'k_p^r, k_d^r', meaning: 'the ROTATIONAL gain pair, separate from the translational ones above'},
-    {symbol: '\u03b8(\u03c8(p))', meaning: 'the target heading at the robot\u2019s projected point: read the projection first, then look up what heading the path wants there'},
-  ]}
-/>
+$k_p^r$ and $k_d^r$ are the heading gains, $\omega$ is the measured turn rate, and the target heading is
+looked up at the robot's closest point on the path. Translation and heading are handled separately, so
+the robot can follow the curve while facing whichever way the path asks.
 
-where:
-
-- $\alpha_{\text{cmd}}$ is commanded angular acceleration or rotational correction.
-- $k_p^r$ is the heading proportional gain.
-- $k_d^r$ is the heading damping gain.
-- $\theta_{\text{robot}}$ is the measured robot heading.
-- $\omega$ is measured angular velocity.
-- `wrap` maps the angle error into the shortest equivalent angle.
-
-The important architecture point is separation. Translation can follow the curve while heading follows
-its own interpolation.
-
-The four-vector checkpoint at the top is now fully specified: projection supplies a regular unit tangent,
-signed curvature selects the side of centripetal correction, remaining distance slows the endpoint, and
-heading remains its own wrapped controller. The final command still passes through
-[Mecanum Kinematics](../path-following/mecanum-kinematics.mdx).
+That fills in all four jobs from the table at the top. The combined command then goes through the
+[mecanum mixer](../path-following/mecanum-kinematics.mdx).
 
 ## Implementation shape
 
-The exact Pedro implementation has its own classes, tuners, and APIs. A clean FTC architecture inspired
-by the same decomposition would look like this:
+Pedro has its own classes and tuners. A follower built the same way would look something like this:
 
 <JavaCode league="FTC" label="Pedro-style follower decomposition">{`void startPath() {
     lastT = 0;
@@ -485,7 +310,7 @@ MoveStatus update(PoseSample sample) {
 
     lastT = path.project(pose.vec(), lastT);     // seeded from last loop
 
-    MoveStatus completion = moveStatus(sample, path.endPose(), timer);
+    MoveStatus completion = moveStatus(sample, path.endPose(), timer.seconds());
     boolean atEnd = lastT >= 1 - TERMINAL_TOL;
     if (completion == TIMED_OUT || (completion == REACHED && atEnd)) {
         drive(0, 0, 0);
@@ -517,14 +342,13 @@ MoveStatus update(PoseSample sample) {
 }
 `}</JavaCode>
 
-If the tangent's length is near zero the path has a cusp: stop and fail loudly rather than normalizing a
-zero vector. The three vectors each have one job — close the loop on speed *along* the path, pull back
-*onto* the path, and lean into the bend before drifting out of it.
+If the tangent's length is near zero, the path has a sharp point there, so stop and report it instead
+of dividing by zero. Each of the three vectors has one job: control speed along the path, pull back onto
+it, and lean into bends.
 
 <Exercise title="Delete each vector in turn">
 
-The decomposition is the lesson. Each vector can be tuned alone and switched off to see what it was
-doing. Work out what the robot does with each of the three deleted.
+What does the robot do with each of the three vectors removed?
 
 <Solution>
 
@@ -546,10 +370,9 @@ characteristic lag that gets worse the faster you go.
 
 <Exercise title="Heading as a scalar, and the squared speed">
 
-Work out why heading is a separate scalar rather than a fourth vector. What kind of drivetrain does that
-assume, and what would change on a differential drive? Then work out why the centripetal term uses
-`tangentSpeed` *squared* and the *signed* curvature — which of the two decides the size of the lean,
-and which decides its direction?
+Why is heading a separate number instead of a fourth vector? What kind of drivetrain does that assume,
+and what changes on a tank drive? And in the centripetal term, which part sets how hard the robot leans,
+`tangentSpeed` squared or the signed curvature, and which sets the direction?
 
 <Solution>
 
@@ -567,17 +390,16 @@ sets which side of the path to lean toward.
 
 <Admonition type="warning" title="This is architecture, not drop-in Pedro source">
 
-The snippet shows the decomposition, not the exact Pedro Pathing implementation. It deliberately uses one
-testable convention: a normalized tangent, its fixed **left** normal, and signed curvature. A positive
-left bend therefore commands left/inward acceleration; negative curvature reverses that vector for a
-right bend. It never chooses an already-inward normal and then multiplies it by a sign that could flip it
-outward. Real teams still need the official localization/tuning flow and the library's own constraints.
+The code shows how the pieces fit, not Pedro's real implementation. It uses one convention on purpose:
+the normal always points left of the path, and curvature is positive for left bends. A left bend then
+leans left, into the curve, and a right bend's negative curvature flips it to the right. For a real
+robot, still follow Pedro's own setup and tuning.
 
 </Admonition>
 
 ## What completion really means
 
-A path is not "done" just because $t$ reaches one. A reliable follower checks several kinds of completion:
+A path isn't done just because $t$ reached 1. A reliable follower checks several things:
 
 - path progress is at or near the end;
 - position error is small enough;
@@ -585,42 +407,24 @@ A path is not "done" just because $t$ reaches one. A reliable follower checks se
 - velocity has settled enough for the next action;
 - a timeout or correction window has elapsed.
 
-Pedro's docs describe completion constraints around `follower.isBusy()`. The architecture sketch tapers
-speed over the terminal distance, then uses the shared `MoveStatus`: both `REACHED` and `TIMED_OUT` stop
-the drive, while only `REACHED` advances autonomous policy normally. If you transition too early, the
-next mechanism action begins while the robot is still correcting; too late wastes match time.
+Pedro's docs describe these as end constraints, checked through `follower.isBusy()`. The sketch above
+slows down near the end and then uses the shared `MoveStatus`: `REACHED` and `TIMED_OUT` both stop the
+robot, but only `REACHED` lets the routine carry on normally. Moving on too early starts the next action
+while the robot is still settling, and too late wastes match time.
 
 ## What the second-order field adds
 
-The supplied paper, *Second-Order Multidimensional Guiding Vector Field for Parametric Path-Following
-Under Holonomic Constraints*, gives the theoretical version of this architecture. The big contribution is
-not merely "draw arrows around a path." It defines a smooth second-order vector field over the robot's
-configuration and velocity state:
+The paper gives the theory behind all of this. Its main idea is a field that depends on the robot's
+velocity as well as its position, so it says what acceleration to apply, not just which way to go:
 
 $$
 \xi(x) = (v, R\Omega, \xi_P(x), \xi_R(x))
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'x', meaning: 'the full CONFIGURATION AND VELOCITY state, not just position. This is why the paper calls the field second-order'},
-    {symbol: 'R\u03a9', meaning: 'the rotational part of the state: the robot\u2019s orientation R together with its angular velocity \u03a9'},
-    {symbol: '\u03be_P, \u03be_R', meaning: 'the positional and rotational components of the field. The next equation is exactly this line in plain English'},
-  ]}
-/>
-
-where the tuple is the commanded time-derivative of the state $x = (\mathbf{p}, R, \mathbf{v}, \Omega)$
-(position, rotation, translational velocity, angular velocity):
-
-- $\xi(x)$ is the complete second-order guiding vector field, i.e. the commanded state derivative
-  $(\dot{\mathbf{p}}, \dot{R}, \dot{\mathbf{v}}, \dot{\Omega})$.
-- $v$ is translational velocity, so $\dot{\mathbf{p}} = v$.
-- $R\Omega$ is the rotational kinematics term, where $\Omega$ is the skew-symmetric angular-velocity
-  matrix and $\dot{R} = R\Omega$.
-- $\xi_P(x)$ is the translational acceleration component $\dot{\mathbf{v}}$.
-- $\xi_R(x)$ is the rotational acceleration component $\dot{\Omega}$.
-
-For an FTC mecanum robot, the friendly version is:
+Here the state $x$ is position, rotation, velocity, and turn rate together. The four entries say how
+each of those should change: position changes by the velocity $v$, rotation changes by the turn rate
+($R\Omega$), and $\xi_P$ and $\xi_R$ are the commanded accelerations for moving and turning. For an FTC
+mecanum robot, in words:
 
 $$
 \begin{gathered}
@@ -633,10 +437,9 @@ $$
 \end{gathered}
 $$
 
-Each term in that sum is one of the four jobs from the checkpoint table, and each carries its own
-constants: $k_p^t$ and $k_d^t$ for the pull back, $k_c$ for the curve feedforward, $k_p^r$ and $k_d^r$
-for heading, and the fitted $D(v)$ for the drive-along speed. Those are the numbers a team actually
-tunes.
+Each term is one of the four jobs from the table at the top, with its own constants: $k_p^t$ and $k_d^t$
+for pulling back, $k_c$ for curves, $k_p^r$ and $k_d^r$ for heading, and the fitted $D(v)$ for speed along
+the path. Those are the numbers a team tunes.
 
 <Admonition type="info" title="Sources & references">
 

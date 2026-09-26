@@ -13,84 +13,59 @@ import adaptiveAutoDiagram from '@site/static/img/wolfpackmachina-power-play-sta
 <Difficulty level="Easy" />
 
 <Abstract>
-A finite state machine models a subsystem as one current mode plus a small set of legal transitions.
-For FTC robots, that makes sequencing code easier to debug because impossible combinations, like intaking and scoring at the same time, become impossible to represent.
+A state machine describes a subsystem as one current mode plus a short list of allowed changes between
+modes. Because the subsystem is only ever in one mode, combinations like intaking and scoring at the
+same time can't happen, which makes sequencing code much easier to debug.
 </Abstract>
 
-FTC code fails in boring ways before it fails in mathematically interesting ways. A good PID controller
-does not save an arm routine that is half blocked by `sleep()`, half controlled by stale booleans, and
-impossible to reason about from telemetry.
+A good PID controller won't rescue an arm routine that is half `sleep()` calls and half stale boolean
+flags. Robot code usually breaks in boring ways long before it breaks in interesting ones, and a state
+machine is the first tool for giving robot behavior a clear shape.
 
-A state machine is the first architecture tool that gives robot behavior a shape.
+## The boolean-flag scorer
 
-## FTC example: the boolean-flag scorer
-
-A scoring subsystem often starts clean:
+A scoring subsystem often starts out tidy:
 
 <JavaCode league="FTC" label="The innocent beginning">{`boolean isIntaking = false;
 boolean hasSample = false;
 boolean isLifting = false;
 boolean isScoring = false;`}</JavaCode>
 
-Then the robot gets more capable. The driver wants cancel. The intake has a beam-break sensor. The arm
-needs time to move. The claw needs to release after the arm reaches the top. Suddenly the robot has
-many flags, and the flags can disagree.
-
-What does this mean?
+Then the robot gets more capable. The driver wants a cancel button. The intake gets a beam-break sensor.
+The arm needs time to move, and the claw should only open once the arm is at the top. Now there are a
+lot of flags, and nothing stops them from disagreeing. What does this mean?
 
 <JavaCode league="FTC" label="Contradictory subsystem state">{`isIntaking = true;
 hasSample = true;
 isLifting = true;
 isScoring = false;`}</JavaCode>
 
-Maybe it means the robot is still pulling in a game element while the lift is already moving. Maybe it
-means the flags were not reset after the last cycle. Maybe it means the next `if` block will do
-something dangerous. The code can enter states the robot should never physically enter.
+Maybe the lift started moving while the intake was still pulling a piece in. Maybe a flag wasn't reset
+after the last cycle. Maybe the next `if` block is about to do something dangerous. The code can
+represent states the robot should never be in, and there's no single answer to "what is the subsystem
+doing right now?"
 
-The bug is not just "too many booleans." The bug is that the subsystem does not have one authoritative
-answer to the question: **what mode am I in right now?**
+## Try it
 
-## Visual intuition
-
-Try the machine below. Some driver requests work only from certain states. Illegal requests are not
-errors; they are ignored because the transition is not defined.
+In the demo, some driver requests only work from certain states. A request that isn't allowed from
+the current state isn't an error. It's just ignored, because no transition is defined for it.
 
 <StateMachine />
 
-That is the practical win. A state machine does not merely organize code. It narrows the set of things
-the robot is allowed to be.
+That's what you get from a state machine: the set of things the robot is allowed to be doing gets
+smaller, and every one of them has a name.
 
-## Theoretical rigor
+## States, events, and transitions
 
-A finite state machine has three pieces:
+A finite state machine has three parts:
 
-| Symbol | Meaning | FTC scorer example |
+| Symbol | Meaning | Scorer example |
 |---|---|---|
-| $S$ | set of states | `IDLE`, `INTAKING`, `LOADED`, `RAISING`, `SCORING` |
-| $E$ | set of events | driver button, sample detected, arm at target |
-| $\delta$ | transition function | rule that maps state plus event to next state |
+| $S$ | the set of states | `IDLE`, `INTAKING`, `LOADED`, `RAISING`, `SCORING` |
+| $E$ | the set of events | driver button, sample detected, arm at target |
+| $\delta$ | the transition function | given a state and an event, which state comes next |
 
-The transition function is:
-
-$$
-\delta : S \times E \rightharpoonup S
-$$
-
-<EquationLegend
-  title="Reading the transition function"
-  items={[
-    {symbol: 'S', meaning: 'the SET of all states the machine can be in: your enum, written mathematically'},
-    {symbol: 'E', meaning: 'the set of all EVENTS that can happen: a button press, a path finishing, a timer expiring'},
-    {symbol: '\u03b4 (delta)', meaning: 'the transition function itself: given a state and an event, which state comes next. Not \u0394 for a change in a quantity'},
-    {symbol: 'S \u00d7 E', meaning: 'every possible pairing of a state with an event'},
-    {symbol: 'the half arrow \u21c0', meaning: 'PARTIAL: not every state and event pairing is defined. Most events do nothing in most states, and that is the point rather than an oversight'},
-  ]}
-/>
-
-Here, $S \times E$ means "a state paired with an event." The half-arrow $\rightharpoonup$ means the
-function is partial: not every event is legal from every state.
-
-A small scorer can be written as a transition table:
+Written as a table, the scorer's transitions are:
 
 | Current state | Event | Next state |
 |---|---|---|
@@ -101,32 +76,22 @@ A small scorer can be written as a transition table:
 | `RAISING` | arm reaches target | `SCORING` |
 | `SCORING` | release timer expires | `IDLE` |
 
-Everything not listed is ignored. That is not laziness; it is the safety property. The machine cannot
-be `INTAKING` and `RAISING` simultaneously because `state` has exactly one value.
+Any state and event pair that isn't in the table does nothing. That's deliberate, and it's where the
+safety comes from. The machine can't be `INTAKING` and `RAISING` at once, because `state` holds exactly
+one value.
 
-State machines also make outputs easier to audit. In a simple Moore-style machine, hardware behavior
-comes from the current state:
+If you like notation, the transition function is written $\delta : S \times E \rightharpoonup S$. The
+half arrow means the function is *partial*: most state and event pairs aren't defined, as in the table.
 
-$$
-u_k = g(s_k)
-$$
+It also helps if the outputs depend only on the current state. `INTAKING` runs the intake, `RAISING`
+commands the arm target, `IDLE` holds everything still. When something looks wrong on the field, the
+state name on telemetry tells you exactly which block of code produced the motor commands. (A machine
+whose outputs depend only on the state is called a Moore machine.)
 
-<EquationLegend
-  items={[
-    {symbol: 's_k', meaning: 'which state the machine is in at loop k'},
-    {symbol: 'u_k', meaning: 'the actuator command chosen for that loop'},
-    {symbol: 'g(\u00b7)', meaning: 'the output function. That it depends on the state ALONE, not on the event that got you there, is what makes this a Moore machine and what makes the behaviour auditable'},
-  ]}
-/>
+## One enum, one transition gate
 
-Here, $s_k$ is the current state at loop $k$, and $u_k$ is the actuator command chosen for that state.
-For example, `INTAKING` runs the intake, `RAISING` commands the arm target, and `IDLE` stops or holds
-everything safely.
-
-## Core checkpoint: one enum, one transition gate
-
-This is the minimum useful pattern. `update()` performs one quick slice of work; `enter()` is the only
-place that changes state and resets state-local time.
+This is the smallest version worth using. `update()` does one quick slice of work per loop, and
+`enter()` is the only place the state changes, so the state timer always resets along with it.
 
 <JavaCode league="FTC" label="A scorer: one state field, one transition gate">{`enum State { IDLE, RAISING, RELEASING }
 
@@ -161,33 +126,33 @@ public void update() {
     }
 }`}</JavaCode>
 
-`ElapsedTime` is the FTC SDK's non-blocking clock: readable at any moment without waiting on it, which
-is exactly what `sleep()` is not.
+`ElapsedTime` is the FTC SDK's clock. You can read it at any moment without waiting, which is the
+opposite of what `sleep()` does.
 
 <Exercise title="Where the timer resets">
 
-`enter()` resets `timeInState`. Move that reset to the top of `update()` instead and trace both
-versions through three loops of `RELEASING`.
+`enter()` resets `timeInState`. Suppose you moved that reset to the top of `update()` instead. Trace
+three loops of `RELEASING` both ways.
 
 <Solution>
 
-Resetting at the top of `update()` restarts the clock every single loop, so `timeInState.seconds()`
-is never more than one loop period and `RELEASING` never exits — the claw stays open forever. The
-timer has to measure "time since this state began," and the only moment that fact changes is inside
-`enter()`. Every state-local variable follows the same rule.
+Resetting at the top of `update()` restarts the clock every loop, so `timeInState.seconds()` never
+gets past one loop period and `RELEASING` never ends. The claw stays open forever. The timer is
+supposed to mean "time since this state began," and the only moment that changes is inside `enter()`.
+Any variable that belongs to a state works the same way.
 
 </Solution>
 
 </Exercise>
 
-If you can trace the three legal transitions and confirm that no loop blocks, the core lesson is done.
+If you can trace the three legal transitions and see that no loop ever blocks, you have what you need
+for most subsystems. The rest of the lesson scales the same idea up to a whole autonomous routine.
 
-## Optional case study: adaptive autonomous control
+## Case study: an autonomous that can recover
 
-The same idea scales from one subsystem to a full autonomous routine. During the Power Play season,
-WolfPackMachina modeled autonomous as a graph of scoring, pickup, recovery, and parking states. The
-important architectural move is not the number of boxes; it is that every box represents one
-recoverable robot mode, and every arrow represents a condition that can be checked during the loop.
+During the Power Play season, WolfPackMachina wrote their autonomous as a graph of scoring, pickup,
+recovery, and parking states. What makes it work isn't the number of boxes. Each box is a mode the
+robot can recover from, and each arrow is a condition the code can check during the loop.
 
 <figure className="not-prose my-7 overflow-hidden rounded-xl border border-line bg-surface shadow-card">
   <img
@@ -204,25 +169,22 @@ recoverable robot mode, and every arrow represents a condition that can be check
   </figcaption>
 </figure>
 
-### Engineering implementation
+### How the machine is built
 
-The deployable FTC pattern is an `enum`, a `switch`, and a timer, but a real autonomous machine
-needs more than a pretty transition table. It needs **entry actions**, **timed exits**,
-**path-completion guards**, **interference recovery**, and **subsystem updates** that still run every
-loop.
+It's still an `enum`, a `switch`, and a timer, but a real autonomous needs a few more things: actions
+that run once when a state starts, timed exits, checks for when a path is done, a way to recover when
+another robot pushes you, and subsystem updates that keep running every loop.
 
-What follows is an adapted, teaching-oriented reconstruction of the WolfPackMachina `Auto.java`
-pattern — **not** the full file. The original uses `Paths.Path` objects directly as states; this
-version wraps the same idea in a smaller, named state set so the architecture is easier to read.
-
-It is all one machine, `AdaptiveAuto`. What follows is its shape, not its source: a state table, the
-loop and the gate that owns every transition, and the three handler shapes that keep recurring. Write
-the handlers yourself; there are nine of them and they are all variations on those three.
+The code below is a simplified reconstruction of WolfPackMachina's `Auto.java`, not the whole file.
+Their original uses `Paths.Path` objects directly as states. This version uses a smaller set of named
+states so the structure is easier to follow. It shows the state table, the loop, the one method that
+changes state, and the three kinds of handler that keep coming up. There are nine handlers in total,
+and each one is a variation on one of those three, so writing them is left to you.
 
 #### The state table: one field holds the mode
 
-A single `currentState` field is the one authoritative answer to "what is the robot doing right
-now?" Everything else is bookkeeping the handlers lean on.
+One `currentState` field answers "what is the robot doing right now?" Everything else is bookkeeping
+for the handlers.
 
 <JavaCode league="FTC" label="AdaptiveAuto: the state table">{`enum State {
     WAIT_FOR_PICKUP,      // hold the scoring pose until settled
@@ -248,14 +210,13 @@ private boolean pathComplete, parking, contracting, robotSettled;
 private ScoringState scoringState;
 private double slidesPositionAtEntry;`}</JavaCode>
 
-Notice what is absent: no step counter, no `sleep()`, no `phase2b` boolean. One field answers the
-question, and everything else is derived from it.
+There's no step counter, no `sleep()`, and no `phase2b` boolean.
 
 #### The loop and the gate
 
-The loop never blocks. It runs the current state's handler and then, whatever state it is in, updates
-every subsystem and logs the mode. One gate owns every mode change, so timing and flags always reset
-together.
+The loop never blocks. It runs the handler for the current state, then updates every subsystem and logs
+the mode no matter which state it's in. Only one method changes the state, so timers and flags always
+reset together.
 
 <JavaCode league="FTC" label="AdaptiveAuto: the loop">{`// Exactly one pass through. Never blocks.
 public void loop() {
@@ -286,17 +247,17 @@ public void requestPark() {           // an outside event, same gate
 
 <Exercise title="Why the flags reset in the gate">
 
-Every flag and timer resets in `transitionTo()` rather than in the handler that needs it. Add a tenth
-state to this machine on paper, writing the handler both ways, and count what you had to remember each
-time.
+Every flag and timer resets in `transitionTo()` instead of in the handler that uses it. Add a tenth
+state on paper, once with the resets in the handler and once with them in the gate. How much did you
+have to remember each time?
 
 <Solution>
 
-Resetting per handler means every new state must remember to clear every flag that any *other* state
-might have left set — so adding the tenth state is nine chances to forget one, and the bug it produces
-(`parking` still true, so the entry action silently never runs) appears only on one transition path.
-In the gate it is zero extra work: the new state starts from a known-clean set by construction. This
-is the same reason `enter()` existed in the scorer, scaled up.
+With resets in the handlers, every new state has to clear every flag that any other state might have
+left set. That's nine chances to forget one, and the resulting bug (say `parking` is still true, so
+the entry action never runs) only shows up on one particular path through the machine. With resets in
+the gate, a new state always starts clean and there's nothing to remember. It's the same reason the
+scorer had `enter()`.
 
 </Solution>
 
@@ -304,8 +265,7 @@ is the same reason `enter()` existed in the scorer, scaled up.
 
 #### Three handler shapes
 
-Every one of the nine handlers is one of these three. Once you can write these, the rest of the
-machine is repetition.
+Each of the nine handlers follows one of these three patterns.
 
 <JavaCode league="FTC" label="Shape 1: an entry action, then a non-blocking wait">{`private void alignPark() {
     if (!parking) {                 // true on the first loop in this state
@@ -355,50 +315,40 @@ And beneath all of it, every loop and in every state:
     depositor.tick();    // and so does the depositor
 }`}</JavaCode>
 
-Subsystems running their own machines underneath a top-level one is the standard structure — look up
-"hierarchical state machine" — and it is why the subsystem tick has to run in every state, not just
-the ones that happen to move a mechanism.
+Small state machines running inside a bigger one is a common structure, usually called a hierarchical
+state machine. It's also why the subsystem tick runs in every state and not just the ones that move a
+mechanism.
 
-This is what makes the example valuable. The state machine is not just replacing `sleep()` with
-`if`; it is creating a recoverable autonomous policy. `ALIGN_LEFT_RAM` can refuse to move until the
-robot is contracted. `LEFT_RAM` can branch into `CONTESTED_LEFT_RAM` if the robot is pushed off-line.
-`ALIGN_PARK` has first-entry logic so the parking target is chosen once, not recalculated every loop.
-Every transition resets local timing through the one gate, so `timeInState` always means "time
-since this state began" and never anything else.
+Compare this with a script that calls one action after another. `ALIGN_LEFT_RAM` can refuse to move
+until the robot has pulled in. `LEFT_RAM` can branch to `CONTESTED_LEFT_RAM` if the robot gets pushed
+off its line. `ALIGN_PARK` picks its parking target once, on the first loop, instead of recalculating
+it every loop. The events that drive transitions are no longer just button presses. They're things
+like "path finished," "650 ms elapsed," "we got pushed," or "slides are below a safe height." A script
+can only run forward. A state machine can send the robot into recovery or parking when the match
+doesn't go to plan.
 
-In mathematical language, this is still the same partial transition function:
-
-$$
-\delta(s_k, e_k) = s_{k+1}
-$$
-
-but now the event $e_k$ is not only a button press. It can be "path finished," "650 ms elapsed,"
-"robot was interfered with," "slides are below a safe threshold," or "parking has been requested."
-That is what an autonomous FSM buys you: a linear script only ever runs forward, while a transition
-function can also route the robot into a recovery or parking state when the match stops cooperating.
-
-## Hardware reality
+## Habits that keep state machines working
 
 <Admonition type="warning" title="Never block the OpMode loop">
 
-`sleep()` and long `while` waits freeze the entire robot. Driver control, sensor updates, telemetry,
-and other subsystems all stop. A state machine replaces "wait here" with "check whether the condition
-is true this loop."
+`sleep()` and long `while` loops freeze the whole robot: driver control, sensor updates, telemetry, and
+every other subsystem. A state machine replaces "wait here" with "check whether it's done yet, this
+loop."
 
 </Admonition>
 
 <Admonition type="tip" title="Telemetry should name the state">
 
-Print the current state and time-in-state every loop. During a match-debug session, "stuck in
-RAISING for 2.4 seconds" is vastly more useful than staring at four unrelated booleans.
+Print the current state and time in state every loop. "Stuck in RAISING for 2.4 seconds" tells you far
+more than four unrelated booleans.
 
 </Admonition>
 
 <Admonition type="tip" title="Use state machines inside subsystems">
 
-State machines are excellent for one mechanism with a few clear modes: intake, shooter, lift, claw,
-endgame latch. When the problem becomes composing many subsystems into a full autonomous routine, use
-[Command-Based Programming](./command-based.mdx) on top of those subsystem internals.
+State machines fit a single mechanism with a few clear modes: intake, shooter, lift, claw, endgame
+latch. When you need to coordinate many subsystems, [Command-Based Programming](./command-based.mdx)
+sits on top of those subsystem machines.
 
 </Admonition>
 
