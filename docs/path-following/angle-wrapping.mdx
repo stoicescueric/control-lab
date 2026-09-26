@@ -1,6 +1,6 @@
 ---
 title: Angle Wrapping
-description: Why a heading controller sometimes spins the long way around — and the small fix that wraps every angle error into [−π, π).
+description: Why a heading controller sometimes spins the long way around, and the small fix that wraps every angle error into [−π, π).
 sidebar_position: 2
 tags: [angle-wrapping, heading, atan2, control, autonomous]
 ---
@@ -13,30 +13,28 @@ import AngleWrap from '@site/src/components/simulations/path-following/AngleWrap
 <Difficulty level="Easy" />
 
 <Abstract>
-Headings live on a circle, so the same direction has infinitely many numeric labels and two angles can
-be numerically far apart while being physically adjacent. Wrapping every angle difference back into the
-range $[-\pi, \pi)$ is the small, mandatory step that stops a heading controller from taking the long
-way around.
+Headings go around a circle, so the same direction has many numeric labels, and two angles can be far
+apart as numbers while pointing almost the same way. Wrapping every angle difference into
+$[-\pi, \pi)$ stops a heading controller from turning the long way around.
 </Abstract>
 
-This is the shortest lesson in the module and the one that fixes the most baffling bug. Everything that
-*turns* a robot to a target heading — `turnTo`, a heading-hold PID, the rotation term of a
-[PID-to-point](./pid-to-point.mdx) controller — depends on it.
+This is a short lesson that fixes a confusing bug. Anything that turns the robot to a heading needs it:
+`turnTo`, a heading-hold PID, and the rotation part of [PID-to-point](./pid-to-point.mdx).
 
 <Problem>
 
 ## The robot spins 358° to turn 2°
 
-Your robot is facing $179°$. You command it to $-179°$ — a gentle $2°$ nudge across "straight back."
-The controller computes its error the obvious way:
+Your robot faces $179°$ and you ask it to turn to $-179°$. That's a $2°$ nudge across "straight back."
+The controller computes the error the obvious way:
 
 $$
 e = \theta_\text{target} - \theta_\text{current} = -179° - 179° = -358°
 $$
 
-and dutifully commands a giant $-358°$ rotation. The robot whips almost all the way around the wrong
-direction to reach a heading that was $2°$ away. Same bug, subtler symptom: near the seam the error
-*flips sign* every loop, and the robot oscillates instead of settling.
+and commands a huge $-358°$ turn. The robot spins almost all the way around the wrong way to reach a
+heading $2°$ away. A subtler version of the same bug: near that seam the error flips sign from loop to
+loop, and the robot wobbles instead of settling.
 
 </Problem>
 
@@ -44,38 +42,31 @@ direction to reach a heading that was $2°$ away. Same bug, subtler symptom: nea
 
 ## Angles are on a circle, not a number line
 
-Heading is **periodic**: $\theta$, $\theta + 360°$, and $\theta - 360°$ are the same direction. So
-$-179°$ and $+181°$ label the same heading — and now the error is an easy $+2°$. The subtraction wasn't
-wrong; we just forgot to read the answer *on the circle*, taking the shorter of the two ways around.
+Adding or subtracting $360°$ doesn't change a direction. So $-179°$ and $+181°$ are the same heading,
+and $181° - 179° = +2°$. The subtraction was fine. The answer just needs to be read as a turn around a
+circle, picking the shorter way.
 
 <AngleWrapIllustration />
 
 <AngleWrap />
 
-The fix is to **wrap** any angle (or angle difference) into the half-open interval $[-\pi, \pi)$. Explicit
-modulo normalization enforces that endpoint even at the signed-zero branch cut where raw
-$\operatorname{atan2}(\sin e,\cos e)$ can return either signed representation of $\pi$:
+The fix is to **wrap** every angle difference into the range $[-\pi, \pi)$, which is $-180°$ up to (but
+not including) $+180°$:
 
 $$
 \operatorname{wrap}(e) = ((e+\pi) \bmod 2\pi + 2\pi) \bmod 2\pi - \pi
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'e', meaning: 'the raw heading error before wrapping, computed as target minus current heading', unit: 'rad'},
-    {symbol: 'a mod b', meaning: 'the non-negative modulo operation after the second normalization'},
-    {symbol: 'wrap(e)', meaning: 'the shortest signed rotation the controller should command', unit: 'rad'},
-  ]}
-/>
+Try it in degrees on the $-358°$ error. Add $180°$ to get $-178°$. Reduce into one full turn, $0°$ to
+$360°$, by adding $360°$: that's $182°$. Subtract $180°$: $+2°$. The shift by $180°$ at the start and end
+is what makes the result land between $-180°$ and $+180°$ instead of between $0°$ and $360°$.
 
-Adding $\pi$, reducing by one full turn, then subtracting $\pi$ produces the shortest signed rotation.
-Exactly $+\pi$ and $-\pi$ describe the same physical turn; this convention chooses $-\pi$, giving a
-controller one deterministic direction at that otherwise unavoidable tie.
+An error of exactly $180°$ is a tie, since both ways around are the same distance. This version always
+picks $-180°$, so the controller behaves the same way every time.
 
-<Callout type="warn" title="Wrap the error, not just the setpoint.">
-It is the *difference* that has to be wrapped, every loop, right before it enters the controller.
-Wrapping only the target or only the measurement still leaves a difference that can land outside
-[-π, π).
+<Callout type="warn" title="Wrap the error, not just the target">
+Wrap the *difference*, every loop, right before it goes into the controller. Wrapping only the target
+or only the measurement still leaves a difference that can land outside [-π, π).
 </Callout>
 
 </Theory>
@@ -98,22 +89,21 @@ double headingPower(double target, double heading) {
 
 <Exercise title="Read the wrap right to left">
 
-Work out what each step of that expression buys you:
+Each step has a job:
 
-- `(a + pi)` — shift so the target range starts at 0 instead of $-\pi$
-- `mod turn` — collapse to one revolution, but the result may be negative
-- `+ turn`, `mod turn` — force it positive, whatever your language did
-- `- pi` — shift back
+- `(a + pi)` shifts so the range starts at 0 instead of $-\pi$
+- `% turn` reduces to one revolution, but in Java the result can be negative
+- `+ turn` then `% turn` forces it positive
+- `- pi` shifts back
 
-Then look up how your language's `mod` handles a negative left operand, and test $-3.0$ rad by hand.
+Why is the second `% turn` there? Try $-3.0$ rad by hand in Java.
 
 <Solution>
 
-The doubled `mod` exists only because Java, C and JavaScript return a remainder with the sign of the
-*dividend*, while Python's `%` always returns a non-negative result for a positive divisor. In Java,
-`-1.0 % 6.283` is `-1.0`, not `5.283` — so a single `mod` leaves values in $(-2\pi, 2\pi)$ and the
-final $-\pi$ shift lands them outside the intended range. In Python the second `mod` is a no-op; port
-the code without it and it breaks on the FTC hub.
+In Java, C, and JavaScript, `%` keeps the sign of the number being divided, so `-1.0 % 6.283` is `-1.0`,
+not `5.283`. With only one `%`, results can land anywhere in $(-2\pi, 2\pi)$, and after subtracting
+$\pi$ some fall outside the range you wanted. Python's `%` is always non-negative, so the second step
+does nothing there. That's why code copied from Python without it breaks on the robot.
 
 </Solution>
 
@@ -121,41 +111,38 @@ the code without it and it breaks on the FTC hub.
 
 <Exercise title="The 340-degree spin">
 
-Work both cases with real numbers before writing any code. The target is 170°, the heading is $-170°$.
-What is `target - heading`? What does `wrap` turn it into? Which way does the robot spin, and how far?
-Then delete the `wrap` and answer again.
+The target is 170° and the heading is $-170°$. What's `target - heading`, and what does `wrap` turn it
+into? Which way does the robot turn, and how far? Now answer again without `wrap`.
 
 <Solution>
 
-`target - heading` is $340°$. Wrapped, that is $-20°$ — so the robot turns 20° clockwise, which is the
-short way and obviously correct. Without the wrap, `kP * 340°` saturates the command and the robot
-spins 340° counter-clockwise to arrive at the same place. In a match that is roughly a second and a half
-of the robot rotating for no reason, usually into an opponent.
+`target - heading` is $340°$. Wrapped, that's $-20°$, so the robot turns 20° clockwise, the short way.
+Without the wrap, `kP * 340°` maxes out the command and the robot spins 340° counter-clockwise to end up
+in the same place, wasting a second or more of the match.
 
 </Solution>
 
 </Exercise>
 
-The same `wrap` call belongs anywhere two headings are compared: the rotation term of a go-to-pose
-controller, a `turnTo` action, or the heading feedback of a path follower. Make it a static utility and
-never subtract two angles without it again.
+Use the same `wrap` anywhere two headings are compared: the rotation part of a go-to-pose controller, a
+`turnTo`, or the heading feedback in a path follower. Make it a static helper and use it every time you
+subtract two angles.
 
 </Deploy>
 
 <Admonition type="note" title="Wrapping vs. unwrapping">
 
-Wrapping keeps an angle in $[-\pi, \pi)$ — correct for *control error*. The opposite operation,
-*unwrapping*, removes the jumps to make a continuous signal — what you want before
-**differentiating** heading for an angular-velocity estimate, since a $2\pi$ jump at the seam would
-otherwise read as an enormous spike in $\dot\theta$.
+Wrapping keeps an angle in $[-\pi, \pi)$, which is what you want for a control error. The opposite,
+*unwrapping*, removes the jumps to make a continuous signal. You want that before computing a turn rate
+from heading, or the $2\pi$ jump at the seam looks like an enormous spin.
 
 </Admonition>
 
-<Admonition type="warning" title="Hardware reality: know your IMU's range">
+<Admonition type="warning" title="Know your IMU's range">
 
-Some IMUs report heading in $[-180°, 180°]$, others in $[0°, 360°]$, and a few accumulate continuously.
-Read the docs, convert to radians once at the source, and wrap at every comparison — don't assume the
-sensor already did it.
+Some IMUs report heading from $-180°$ to $180°$, some from $0°$ to $360°$, and some keep counting past a
+full turn. Check the docs, convert to radians once where you read it, and wrap at every comparison
+rather than assuming the sensor did it.
 
 </Admonition>
 

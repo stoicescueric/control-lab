@@ -3,12 +3,11 @@
 This directory contains the live models embedded in lessons. Files are grouped
 by the curriculum concept they teach:
 
-- `foundations/`: introductory mathematics and feedback.
+- `foundations/`: introductory feedback.
 - `software-architecture/`: scheduling, state, and loop timing.
 - `control-theory/`: actuators, controllers, feedforward, and identification.
 - `signal-processing/`: filters and estimators.
 - `path-following/`: kinematics, geometry, splines, and followers.
-- `state-space/`: state feedback and optimal control.
 - `research/`: projectile and dynamic-targeting case studies.
 
 ## Component Contract

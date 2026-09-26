@@ -1,6 +1,6 @@
 ---
 title: Feedforward (kS, kV, kA, kG)
-description: Predict the effort instead of only reacting — model the mechanism so the controller commands the right voltage before the error appears, including gravity terms for arms and slides.
+description: Predict the effort instead of only reacting. Model the mechanism so the controller commands the right voltage before the error appears, including gravity terms for arms and slides.
 sidebar_position: 3
 tags: [feedforward, ks, kv, ka, kg, motor-model, arms, slides, characterisation]
 ---
@@ -13,40 +13,43 @@ import MechanismFeedforward from '@site/src/components/simulations/control-theor
 <Difficulty level="Medium" />
 
 <Abstract>
-Feedforward is the predictive half of a controller: instead of waiting for an error to appear, it uses
-a model of the mechanism to command most of the required effort up front, leaving feedback to mop up
-the rest. This lesson derives the kS, kV, and kA terms straight from the motor's physics and combines
-them with PID, then extends the model to gravity-loaded FTC mechanisms: slides/elevators and arms.
+Feedback waits for an error before it does anything. Feedforward uses a model of the mechanism to
+send most of the needed voltage right away, and leaves feedback to clean up what's left. This lesson
+builds the kS, kV, and kA terms from the motor model, pairs them with PID, and adds gravity terms for
+slides and arms.
 </Abstract>
 
-Feedback is reactive by construction. Feedforward is the predictive half: a model of the mechanism
-that supplies most of the required command immediately, leaving feedback to correct only the small
-residual. It is the difference between a sluggish velocity loop and a crisp one.
+A feedback controller only acts once something is already wrong. But for most mechanisms you know
+roughly what voltage a given speed needs before you ask for it. Feedforward sends that voltage up
+front, and feedback only has to handle the difference. It's usually what separates a sluggish velocity
+loop from a crisp one.
 
 <Problem>
 
-## A reactive controller must first fail to respond
+## Proportional control needs an error to hold a speed
 
-A proportional-only controller needs an error to produce a command. On a velocity-controlled
-mechanism — a flywheel or drivetrain at cruise — it therefore needs a steady error to supply the
-holding voltage. Integral feedback can remove that steady error by retaining an accumulated command;
-feedforward supplies the expected voltage immediately, reducing the correction feedback must learn.
-Raising proportional gain alone reduces the error but can increase sensitivity to noise and overshoot.
-The information to do better already exists: you *know* roughly what voltage a given speed requires.
+Take a flywheel you want at 300 rad/s. Holding that speed takes about 6 V. A proportional controller
+only outputs voltage when there's an error. With $k_P = 0.1$ V per rad/s, the flywheel settles where the
+error supplies just enough voltage for the speed it actually reached: about 250 rad/s, which needs 5 V,
+supplied by a 50 rad/s error. Raising $k_P$ shrinks the gap, but it also
+amplifies sensor noise and makes overshoot worse. An integral term can build up the missing voltage
+over time, but it's slow to do it.
+
+You already know the flywheel needs about 6 V at that speed, so you can just send it.
 
 <Analogy>
-<strong>Cresting a hill.</strong> A skilled driver presses the accelerator <em>as</em> the hill
-begins, anticipating the load. A reactive driver waits until the car has already slowed, then
-over-corrects. Feedforward is the anticipation; feedback only cleans up the difference.
+<strong>Driving up a hill.</strong> A good driver presses the accelerator as the road starts to climb.
+A purely reactive driver waits until the car has slowed down, then overcorrects. Feedforward is
+pressing early. Feedback is the small adjustment after.
 </Analogy>
 
 </Problem>
 
 <Theory>
 
-## A physical model of the required voltage
+## Where the voltage goes
 
-To hold a target velocity $v$ (and optionally accelerate at $a$), the predicted voltage is:
+The voltage to hold a velocity $v$ while accelerating at $a$ splits into three parts:
 
 $$
 V = \underbrace{k_S\,\operatorname{sign}(v)}_{\text{break friction}}
@@ -54,49 +57,61 @@ V = \underbrace{k_S\,\operatorname{sign}(v)}_{\text{break friction}}
   + \underbrace{k_A\,a}_{\text{accelerate}}
 $$
 
-<Formula>
-  V = <Amber>kS·sign(v)</Amber> + <Teal>kV·v</Teal> + <Blue>kA·a</Blue>
-</Formula>
+These come straight out of the [motor model](./how-a-motor-works.mdx), $V = IR + k_e\omega$. The
+back-EMF part grows with speed, which is the $k_V v$ term. The current part supplies torque, some of it
+a roughly constant amount to overcome friction ($k_S$) and some of it to accelerate the mechanism's
+inertia ($k_A a$).
 
-These constants are not fudge factors — they are the [motor's own physics](./how-a-motor-works.mdx).
-A DC motor obeys $V = IR + k_e\omega$: the back-EMF term $k_e\omega$ rises with speed (that is
-$k_V v$), while the
-current term supplies torque to overcome static friction (a constant, $k_S$) and to accelerate the
-inertia, $\tau = J\alpha$ (that is $k_A a$).
-
-| Term | Counteracts | Meaning |
+| Term | Pays for | Notes |
 |---|---|---|
-| **kS**: static | friction / stiction | the minimum voltage to start motion |
-| **kV**: velocity | back-EMF / drag | volts per unit speed — the bulk of the command |
-| **kA**: acceleration | inertia (mass) | extra volts to change speed; only while the target's velocity is changing — zero during cruise |
+| **kS**: static | friction | the minimum voltage to keep it moving; the sign follows the direction of travel |
+| **kV**: velocity | back-EMF and drag | volts per unit of speed; usually most of the command |
+| **kA**: acceleration | inertia | only nonzero while the target speed is changing |
 
-The usual $k_S$ model combines friction into one offset. A fit from moving samples estimates
-effective moving friction; actual breakaway stiction can be larger and direction-dependent.
+The $k_S$ you get from a fit is the friction while moving. The voltage needed to break a stationary
+mechanism loose can be a bit higher, and it can differ between directions.
 
-## Core checkpoint: calculate one velocity command
+## Working out one command
 
-Given identified $k_S$, $k_V$, and $k_A$, calculate the voltage for one target velocity and acceleration,
-then clamp it to the available battery voltage. That model-plus-limit is the reusable core; gravity terms
-below extend it for mechanisms whose load changes with pose.
+Say system identification gave a drivetrain $k_S = 0.9$ V, $k_V = 0.15$ V per in/s, and $k_A = 0.03$ V
+per in/s². You want 40 in/s while still speeding up at 20 in/s²:
 
-## Production extension: add mechanism gravity
+$$
+V = 0.9 + 0.15(40) + 0.03(20) = 0.9 + 6.0 + 0.6 = 7.5\ \text{V}
+$$
 
-The flywheel model is missing one thing many FTC mechanisms care about: **weight**. A flywheel does not
-need voltage to hold still against gravity. A vertical slide does. An arm definitely does, and the amount
-changes with angle.
+Once it reaches 40 in/s and stops accelerating, the $k_A$ term drops out and the command falls to
+6.9 V. Before sending either number, clamp it to what the battery can supply.
+
+In the demo the motor has to reach the dashed target speed. Turn feedforward on and off with the same
+gains. The bars show how the command splits between the
+<span style={{ color: "#5ce08a" }}>feedforward prediction</span> and the
+<span style={{ color: "#ffc24d" }}>feedback correction</span>.
+
+<Flywheel />
+
+<Callout type="idea" title="Three things to try">
+<ol>
+<li>Feedforward <strong>on</strong> with a tiny kP. It reaches and holds the target, and the green
+prediction bar does most of the work.</li>
+<li>Feedforward <strong>off</strong> with the same kP. It settles below the target. Raising kP to make
+up for it causes overshoot and twitching.</li>
+<li>Set <strong>kV</strong> too low. The prediction falls short and feedback has to cover the gap, so
+most of the benefit is gone.</li>
+</ol>
+</Callout>
+
+## Adding gravity
+
+A flywheel doesn't need any voltage to stay still. A vertical slide does, and an arm needs an amount
+that changes with its angle.
 
 <MechanismFeedforward />
 
-### Slides and elevators: gravity is mostly constant
+### Slides: gravity is roughly constant
 
-For a vertical slide, define:
-
-- $h$ as slide height.
-- $v = \dot h$ as slide velocity, positive upward.
-- $a = \ddot h$ as slide acceleration.
-- $k_G$ as the voltage needed to hold the slide still against gravity.
-
-The ideal vertical-slide feedforward is:
+For a vertical slide at height $h$, with velocity $v$ (positive up) and acceleration $a$, add a constant
+$k_G$, the voltage that holds the slide still:
 
 $$
 \boxed{
@@ -108,24 +123,14 @@ k_S\,\operatorname{sign}(v)
 }
 $$
 
-The important detail is that $k_G$ does **not** flip sign when the slide moves downward. Static friction
-depends on direction, so $k_S\operatorname{sign}(v)$ changes. Gravity still pulls down, so the motor still
-needs an upward holding term.
+$k_G$ doesn't change sign when the slide moves down. Friction always opposes the motion, so
+$k_S\operatorname{sign}(v)$ flips, but gravity always pulls down, so the motor always needs an upward
+holding term.
 
-Real FTC slides are not always ideal elevators. String wrap diameter, cable routing, elastic tension,
-carriage friction, arm coupling, or changing extension geometry can make the required hold voltage drift
-with height. When one constant $k_G$ is not enough, measure the hold voltage at several heights and
-interpolate:
-
-$$
-V_{slide} =
-k_S\,\operatorname{sign}(v)
-+ k_G(h)
-+ k_V\,v
-+ k_A\,a
-$$
-
-Between two calibration points $(h_i, k_{G,i})$ and $(h_{i+1}, k_{G,i+1})$:
+Real slides aren't always that tidy. Cable routing, stage engagement, elastic tension, and carriage
+friction can make the holding voltage change with height. If one $k_G$ isn't enough, measure it at
+several heights and interpolate between them. For a height $h$ between two measured heights $h_i$ and
+$h_{i+1}$:
 
 $$
 \boxed{
@@ -138,30 +143,15 @@ k_{G,i}
 }
 $$
 
-<EquationLegend
-  title="Symbols in the gravity interpolation"
-  items={[
-    {symbol: 'h', meaning: 'the slide height you are asking about right now', unit: 'in'},
-    {symbol: 'h_i, h_{i+1}', meaning: 'the two measured heights that BRACKET h. The subscript numbers a calibration point, not a loop'},
-    {symbol: 'k_G,i', meaning: 'the gravity hold at height h_i: the AVERAGE of the up-break and down-break commands, not the smallest command that holds. Stiction makes "holds still" a band, and its bottom edge is short by k_S', unit: 'V'},
-    {symbol: '(h \u2212 h_i)/(h_{i+1} \u2212 h_i)', meaning: 'how far between the two calibration points h sits, as a fraction from 0 to 1. This is ordinary linear interpolation'},
-  ]}
-/>
-
-where $h$ is the current or target slide height, $h_i$ and $h_{i+1}$ are the two measured heights around
-it, and $k_{G,i}$ / $k_{G,i+1}$ are the measured hold voltages at those heights.
+The fraction is how far $h$ sits between the two measured heights, from 0 to 1. For example, with
+$k_G = 1.2$ V at 10 in and $1.6$ V at 20 in, a height of 12.5 in is a quarter of the way along, so
+$k_G = 1.2 + 0.25(0.4) = 1.3$ V.
 
 ### Arms: gravity changes with angle
 
-For an arm, define:
-
-- $\theta$ as the arm angle measured from **horizontal**.
-- $\omega = \dot\theta$ as angular velocity.
-- $\alpha = \ddot\theta$ as angular acceleration.
-- $k_G$ as the voltage needed to hold the arm when it is horizontal.
-
-Gravity torque is largest when the arm is horizontal and nearly zero when the arm is vertical. That gives
-the arm feedforward:
+Measure the arm angle $\theta$ from **horizontal**, with $\omega$ its angular velocity and $\alpha$
+its angular acceleration. Gravity pulls hardest on a horizontal arm and not at all on a vertical one,
+and the factor that captures that is $\cos\theta$:
 
 $$
 \boxed{
@@ -173,72 +163,37 @@ k_S\,\operatorname{sign}(\omega)
 }
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03b8', meaning: 'the arm angle measured FROM HORIZONTAL, so cos\u03b8 is 1 when the arm sticks straight out and 0 when it points straight up'},
-    {symbol: '\u03c9, \u03b1', meaning: 'the arm\u2019s angular velocity and angular acceleration. For a rotating joint these replace the linear v and a', unit: 'rad/s, rad/s\u00b2'},
-    {symbol: 'k_G cos\u03b8', meaning: 'only the component of the arm\u2019s weight PERPENDICULAR to the link produces torque about the pivot, and that component scales with cos\u03b8'},
-  ]}
-/>
+Here $k_G$ is the voltage that holds the arm horizontal. At $\theta = 0$, $\cos\theta = 1$ and you get
+all of it. Pointing straight up, $\cos 90° = 0$ and you get none.
 
-This convention matters. If your encoder reads zero somewhere else, convert it first:
+If your encoder reads zero somewhere other than horizontal, convert it first:
 
 $$
 \theta_{horizontal} = \theta_{encoder} + \theta_{offset}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03b8_encoder', meaning: 'what the sensor reads, zeroed wherever the mechanism happened to be'},
-    {symbol: '\u03b8_offset', meaning: 'the fixed constant that moves that zero to horizontal. Measure it once and it never changes unless the arm is re-mounted'},
-  ]}
-/>
+where $\theta_{offset}$ is a constant you measure once. If the sign comes out wrong, don't flip the
+whole controller. Fix the angle convention and motor direction until a horizontal arm gets an upward
+holding voltage.
 
-Then use $\cos(\theta_{horizontal})$. If the sign is wrong, do not randomly negate the whole controller;
-fix the angle convention and motor direction until a horizontal arm receives the expected upward holding
-voltage.
-
-The deployable pattern is **feedforward + feedback**: the model does ~90 % of the work instantly,
-[PID](./pid.mdx) corrects the residual and rejects disturbances.
+In practice, feedforward and feedback run together: the model supplies most of the command right away,
+and [PID](./pid.mdx) corrects what's left and rejects disturbances.
 
 <Formula>
   output = <Teal>feedforward(goal)</Teal> + <Rose>PID(measurement, goal)</Rose>
 </Formula>
 
-In the demo, the motor must reach the dashed target speed. Toggle feedforward on and off with
-identical gains; the bars show how the command splits between the
-<span style={{ color: "#5ce08a" }}>feedforward prediction</span> and the
-<span style={{ color: "#ffc24d" }}>feedback correction</span>.
-
-<Flywheel />
-
-<Callout type="idea" title="Three experiments:">
-<ol>
-<li>Feedforward <strong>ON</strong>, tiny kP — it reaches and holds the target; the green prediction
-bar carries the load.</li>
-<li>Feedforward <strong>OFF</strong>, same kP — it settles below target (steady-state error).
-Raising kP to compensate makes it overshoot and twitch.</li>
-<li>Mistune <strong>kV</strong> low — the prediction under-shoots and feedback must cover the gap;
-the main benefit is lost. Accurate constants matter.</li>
-</ol>
-</Callout>
-
 </Theory>
 
 <Deploy>
 
-## Volts on a battery that sags
+## Feedforward in code, in volts
 
-FTC motors take power in `-1..1`, but the model is in volts. Dividing by the *measured* battery
-voltage keeps behaviour constant whether the pack is at 13 V or 11 V — see
-[voltage compensation](./voltage-compensation.mdx).
+FTC motors take a power from −1 to 1, but the model is in volts. Divide by the measured battery voltage,
+as in [voltage compensation](./voltage-compensation.mdx), so the behavior is the same at 13 V and 11 V.
 
-<JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`void setup() {
-    flywheel = hardwareMap.get(DcMotorEx.class, "flywheel");
-    flywheel.setMode(RUN_WITHOUT_ENCODER);   // this class closes its own loop
-}
-
-// goalVelocity and goalAccel are in real units, e.g. metres/second.
+<JavaCode league="FTC" label="Feedforward + feedback, battery-compensated">{`// goalVelocity and goalAccel are in real units, e.g. metres/second.
+// The motor runs in RUN_WITHOUT_ENCODER: this method closes its own loop.
 void run(double goalVelocity, double goalAccel) {
     double measured = flywheel.getVelocity() * UNITS_PER_TICK;
 
@@ -250,31 +205,30 @@ void run(double goalVelocity, double goalAccel) {
     flywheel.setPower((predict + correct) / batteryVoltage());
 }`}</JavaCode>
 
-Read those two lines against each other. `predict` is computed entirely from the goal — it never looks
-at the sensor, so it can act the instant you ask for a new speed. `correct` is computed from the error,
-so by definition it can only act once the mechanism is already wrong.
+Compare the two lines. `predict` only uses the goal. It never looks at the sensor, so it can act the
+moment you ask for a new speed. `correct` uses the error, so it can only act once the mechanism is
+already off.
 
-<Exercise title="What each term does, by deleting it">
+<Exercise title="Delete one term at a time">
 
-Work out each term's job on paper before tuning any of them:
+What happens without each term?
 
-- no `kS` — the flywheel never quite starts from rest. Why?
-- no `kV` — the command does not scale with the speed you asked for.
-- no `kA` — it tracks steady speeds fine but lags whenever the goal changes.
+- no `kS`: the flywheel never quite gets going from rest.
+- no `kV`: the command doesn't grow with the speed you ask for.
+- no `kA`: steady speeds are fine, but it lags whenever the goal changes.
 
-Then the consequence for tuning: with a good feedforward, what is left for `kP` to do, and why does
-that let you run a *smaller* `kP` than you could with feedback alone?
+Once all three are in, what's left for `kP` to do, and why does that let you use a *smaller* `kP` than
+with feedback alone?
 
 <Solution>
 
-`kS` is the voltage that buys nothing but breaking static friction, so without it every command is
-short by exactly the amount needed to start moving. `kV` is the back-EMF cost, which scales with speed —
-drop it and the model is a constant. `kA` covers the extra torque a *change* in speed demands, so
-without it the model is only correct in steady state.
+`kS` pays for friction, so without it every command comes up short by exactly that much. `kV` pays for
+back-EMF, which grows with speed, so without it the model is just a constant. `kA` pays for the extra
+torque it takes to change speed, so without it the model is only right when nothing is changing.
 
-With all three, `kP` is left correcting model error and disturbance — a few percent, not the whole
-command. A small `kP` is what you want: `kP` amplifies sensor noise and can only react after the fact,
-so the less work it has to do, the less noise reaches the motor and the less it can overshoot.
+With all three, `kP` only has to correct model error and disturbances, a few percent of the command.
+That's good, because `kP` amplifies sensor noise and can only react after the fact. The less it has to
+do, the less noise reaches the motor and the less it overshoots.
 
 </Solution>
 
@@ -293,43 +247,39 @@ double calculate(double angle, double velocity, double acceleration) {
             + kA * acceleration;
 }`}</JavaCode>
 
-<Exercise title="Derive the cosine">
+<Exercise title="Where the cosine comes from">
 
-The `cos(angle)` is the whole difference from a flywheel's feedforward. Derive it: gravity pulls
-straight down with force $mg$, but only the component *perpendicular* to the arm produces torque about
-the pivot. Draw the arm at some angle from horizontal, resolve the weight into components along and
-across the arm, and read off which one turns the joint. Then check the formula at three angles you can
-verify by eye — horizontal, straight up, and hanging straight down.
+Gravity pulls straight down with force $mg$, but only the part of that force perpendicular to the arm
+turns it around the pivot. Draw the arm at an angle $\theta$ above horizontal, split the weight into a
+part along the arm and a part across it, and find the one that makes torque. Then check your answer at
+horizontal, straight up, and hanging straight down.
 
 <Solution>
 
-The component along the arm is carried by the pivot bearing and does no work; the perpendicular
-component is $mg\cos\theta$, at a moment arm of the arm's length, so the holding torque goes as
-$\cos\theta$.
+The part along the arm just pushes on the pivot bearing. The part across the arm is $mg\cos\theta$, and
+it acts at the arm's length from the pivot, so the holding torque goes as $\cos\theta$.
 
-Horizontal ($\theta = 0$): $\cos = 1$, maximum hold voltage — correct, this is the worst case.
-Straight up ($90°$): $\cos = 0$, no hold voltage — correct, the weight is straight down through the
-pivot. Hanging down ($-90°$): $\cos = 0$ again, for the same reason. The two zeros are physically very
-different situations that happen to need the same voltage: straight up is an **unstable** equilibrium —
-nudge it and the gravity torque grows and pulls the arm over — while hanging down is the **stable** one,
-where gravity restores it. The feedforward is blind to that difference. Only feedback is not.
+Horizontal ($\theta = 0$): $\cos = 1$, the most holding voltage, which is the worst case. Straight up
+($90°$): $\cos = 0$, because the weight points straight through the pivot. Hanging down ($-90°$):
+$\cos = 0$ again, for the same reason. Those two zeros are very different situations, though. Straight
+up is unstable: nudge it and gravity pulls it over. Hanging down is stable: gravity pulls it back.
+Feedforward can't tell them apart. Feedback can.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Why zero the static term near rest">
+<Exercise title="Why the static term is zero near rest">
 
-`staticVolts` is forced to zero at near-zero velocity rather than just using `Math.signum(velocity)`.
-What is `Math.signum(0)`, and what would a stationary arm do with that term flickering?
+`staticVolts` is forced to zero at very low speeds instead of just using `Math.signum(velocity)`. What
+is `Math.signum(0)`, and what would a stationary arm do if this term kept flickering?
 
 <Solution>
 
-`Math.signum(0)` is 0, so the exact-zero case is already handled — the problem is the case *around*
-zero. A stationary arm still has encoder velocity jittering between small positive and negative values,
-so `signum` flips sign every few loops and the command jumps by $2k_S$ at loop rate. The mechanism
-buzzes. The `EPS` band decides that "not really moving" means "do not apply a friction-breaking term at
-all."
+`Math.signum(0)` is 0, so exactly zero is already handled. The problem is speeds *near* zero. A
+stationary arm's measured velocity jitters slightly positive and negative, so `signum` flips every few
+loops and the command jumps by $2k_S$. The arm buzzes. The `EPS` band treats "barely moving" as "not
+moving" and leaves the friction term off.
 
 </Solution>
 
@@ -364,71 +314,64 @@ double interpolateHoldVolts(double height) {
     return holdVolts[holdVolts.length - 1];   // clamp above the last sample
 }`}</JavaCode>
 
-Collect the table by measurement rather than derivation: drive the slide to each height and take **two**
-readings — the smallest voltage that just moves it up, and the largest at which it still creeps down.
-The **average** is $k_{G,i}$; half the difference is $k_S$ at that height. Do not use "the smallest
-voltage that holds it stationary": stiction means it holds anywhere in a band, and the bottom edge of
-that band is $k_G - k_S$, so the whole table comes out low and the separate $k_S$ term then
-double-counts. This is the same two-reading method the [PID lesson](./pid.mdx) uses for `kF` and `kL`.
-Five or six heights across the travel is plenty.
+Build the table by measuring. At each height, take **two** readings: the smallest voltage that just
+moves the slide up, and the largest at which it still creeps down. Their **average** is $k_G$ at that
+height, and half the difference is $k_S$. Don't use "the smallest voltage that holds it still." Friction
+lets it hold anywhere in a band, and the bottom of that band is $k_G - k_S$, so every entry would come
+out low and the separate $k_S$ term would count friction twice. The [PID lesson](./pid.mdx) uses the
+same two readings. Five or six heights across the travel is plenty.
 
 <Exercise title="Why clamp at both ends">
 
-That is linear interpolation, and the clamping at both ends is deliberate. Work out what extrapolating
-past your measured range would command, and why holding the endpoint value is the safer wrong answer.
+What would extrapolating past the ends of the table command, and why is holding the last measured value
+the safer choice?
 
 <Solution>
 
-Extrapolation continues the last segment's slope forever, so a height a little past the top of your
-table produces a voltage a little past the last one — and a sensor glitch reading far past it produces
-an arbitrarily large voltage, from a model that has no evidence out there at all. Clamping caps the
-command at the hold voltage of the nearest measured height. This prevents unbounded extrapolation;
-it does **not** bound the physical modeling error outside the calibrated range. Extend the calibration
-before relying on feedforward there, and enforce mechanism travel and voltage limits separately.
+Extrapolating carries the last segment's slope on forever. A height slightly past the top gives a
+voltage slightly past the last one, and a sensor glitch reading far past the top gives an enormous
+voltage, from a model with no data out there at all. Clamping caps the command at the nearest measured
+value. It stops the runaway, but it doesn't make the model right outside the measured range. If you
+need feedforward out there, measure out there, and enforce travel and voltage limits separately.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Is this worth the complexity?">
+<Exercise title="Do you need the table?">
 
-Measure the hold voltage at the bottom, middle and top of *your* slide.
+Measure the holding voltage at the bottom, middle, and top of your slide. What would tell you the
+table isn't worth it?
 
 <Solution>
 
-If the three agree within a few percent, a single `kG` is fine and this whole class is
-over-engineering — you have added a table, an interpolator, and a tuning session to reproduce a
-constant. The table earns its place when the numbers diverge noticeably, which typically means
-cascading rigging where stages engage at different heights.
+If the three agree within a few percent, one `kG` is fine, and the table just adds tuning work to
+reproduce a constant. It's worth it when the numbers differ noticeably, which usually means cascade
+rigging where stages engage at different heights.
 
 </Solution>
 
 </Exercise>
 
-The identical recipe in FRC is one line, because WPILib bundles it:
+In FRC, WPILib bundles the same recipe:
 
 <JavaCode league="FRC" label="WPILib equivalent">{`SimpleMotorFeedforward ff = new SimpleMotorFeedforward(kS, kV, kA);
 PIDController pid = new PIDController(kP, 0, 0);
 motor.setVoltage(ff.calculate(goalVel) + pid.calculate(measVel, goalVel));`}</JavaCode>
 
-The constants come from **measurement**, not guesswork. For velocity mechanisms, drive the mechanism
-through known voltages and fit the steady speeds. For gravity mechanisms, measure the hold voltage at the
-important positions: a slide at several heights, or an arm at known angles. A useful first estimate is
-$k_V \approx 12\,\text{V} \div v_{\max}$, but to get them right you measure them:
-[**system identification**](./system-identification.mdx) recovers $k_S$, $k_V$, and $k_A$ by
-least-squares fit, exactly as FRC's SysId does.
+The constants come from measurement. A rough first guess is $k_V \approx 12\,\text{V} \div v_{\max}$, but
+[system identification](./system-identification.mdx) measures $k_S$, $k_V$, and $k_A$ properly with a
+least-squares fit, the same way FRC's SysId does. For gravity, measure $k_G$ on the mechanism at the
+positions that matter.
 
-<Callout type="warn" title="Feedforward is only as good as its units.">
-<code>kV</code> in "volts per m/s" is meaningless unless <code>getVelocity()</code> is truly
-converted to m/s. A wrong ticks→units factor produces a wrong model — exactly the failure
-[Discretization &amp; Units](../software-architecture/discretization.mdx) guards against.
+<Callout type="warn" title="Check your units">
+<code>kV</code> in volts per m/s only means something if <code>getVelocity()</code> has really been
+converted to m/s. A wrong ticks-to-units factor gives a wrong model. See
+[From Math to a Loop](../software-architecture/discretization.mdx).
 </Callout>
 
-Feedforward is only ever half a controller, though — it is open-loop, blind to anything it didn't
-model: a jammed mechanism, a worn gear, a battery having a bad day. Those gains are also only as good as
-your measurement of them — so pair feedforward with [**system identification**](./system-identification.mdx)
-to measure $k_S, k_V, k_A$ from data, measure $k_G$ on the mechanism itself, and use [**PID**](./pid.mdx)
-for the feedback half that catches everything the model missed.
+Feedforward on its own is open loop, so it can't see anything the model left out: a jam, a worn gear, a
+tired battery. Pair it with [PID](./pid.mdx) to catch the rest.
 
 </Deploy>
 
@@ -440,8 +383,8 @@ for the feedback half that catches everything the model missed.
 - [WPILib ArmFeedforward API](https://github.wpilib.org/allwpilib/docs/release/java/edu/wpi/first/math/controller/ArmFeedforward.html) -
   documents the horizontal-angle convention used by the $\cos(\theta)$ arm term.
 - Tyler Veness, [*Controls Engineering in FRC*](https://file.tavsys.net/control/controls-engineering-in-frc.pdf) -
-  rigorous derivation of motor feedforward and feedback composition.
-- [System Identification](./system-identification.mdx) - the next Control Lab lesson that estimates
-  feedforward constants from measured data.
+  derivation of motor feedforward and how it combines with feedback.
+- [System Identification](./system-identification.mdx) - the Control Lab lesson that measures the
+  feedforward constants from data.
 
 </Admonition>

@@ -15,18 +15,18 @@ import FlywheelRecovery from '@site/src/components/simulations/research/Flywheel
 <Difficulty level="Medium" />
 
 <Abstract>
-The simulator's metres per second and degrees are not the robot's encoder ticks and servo positions.
-This lesson turns a selected trajectory into bounded wheel, hood, and flight-time tables, then defines
-the readiness evidence required before the feeder releases a ball.
+The simulator thinks in meters per second and degrees. The robot thinks in encoder ticks and servo
+positions. This lesson turns a chosen shot into tables of wheel speed, hood position, and flight time,
+and sets up the checks that have to pass before the feeder releases a ball.
 </Abstract>
 
 <Admonition type="note" title="Builder outcome and prerequisites">
 
-Build three bounded lookup tables: distance to wheel target, hood target, and rim-event flight time.
-Every query must return both a value and whether it was clamped. Add measured wheel and hood ready
-bands. The full analysis can use high-speed video, least-squares fitting, and Hermite interpolation;
-an FTC implementation mainly needs explicit units, table bounds, synchronized measurements, and
-honest validation.
+You'll build three lookup tables, from distance to wheel speed, hood position, and flight time. Each
+lookup returns a value and whether it ran off the end of the table. You'll also measure how close the
+wheel and hood have to be before firing. The full analysis uses high-speed video and curve fitting, but
+on an FTC robot what matters most is clear units, table limits, measurements taken at the same moment,
+and testing on shots you didn't tune with.
 
 </Admonition>
 
@@ -42,8 +42,8 @@ You have a trajectory that tolerates errors. Sending its 5.25 m/s exit speed dir
 4. Measure wheel and hood readiness instead of assuming a command has been reached.
 5. Log the requested values, measured values, release time, and result for every shot.
 
-Motion compensation depends on this layer. A moving-shot solver cannot repair a stationary table
-whose units, distance reference, or release timing are wrong.
+Shooting on the move builds on this. It can't fix a stationary table with the wrong units, distances
+measured from the wrong spot, or wrong timing.
 
 ## Worked example: encoder ticks to ball speed
 
@@ -53,7 +53,7 @@ $$
 v_{\rm wheel}=2\pi(0.0692)\frac{1500}{28}\approx23.29\ \mathrm{m/s}.
 $$
 
-Using the pilot mean transfer ratio, $\eta=0.259$, gives an estimated ball speed of $0.259\times23.29\approx\mathbf{6.03\ \mathrm{m/s}}$. This is an arithmetic example using the pilot mean, not a measured launch at this particular setting.
+The ball only picks up about a quarter of that. With the measured average ratio, $\eta=0.259$, the ball leaves at about $0.259\times23.29\approx\mathbf{6.03\ \mathrm{m/s}}$. (That's arithmetic with the average, not a measured shot.)
 
 :::tip[Predict the unit conversion]
 Increase the encoder reading from 1,500 to 1,650 ticks/s. Which speeds should increase by 10% if η stays fixed? Change the slider and check the conversion, then reset the example.
@@ -61,7 +61,7 @@ Increase the encoder reading from 1,500 to 1,650 ticks/s. Which speeds should in
 
 <TransferExperiment />
 
-The paper’s seven tracked launches gave mean η = **0.259**, sample standard deviation **0.031**, and a 95% t interval for the mean of **0.230–0.288**. Those shots varied in speed, angle, and distance. Their spread describes calibration scatter across configurations, not repeatability at one fixed command. The camera was not calibrated to the flight plane, so this pilot identifies the launcher’s conversion scale; it does not identify aerodynamic drag. Source: paper §9.
+Seven tracked shots in the paper averaged η = **0.259**, with a standard deviation of **0.031** (95% interval for the average: **0.230 to 0.288**). Those shots used different speeds, angles, and distances, so the spread shows how much η varies between settings, not how repeatable one setting is. The camera wasn't calibrated precisely enough to measure drag, just this ratio. Source: paper §9.
 
 ## Measure a stronger transfer estimate
 
@@ -72,9 +72,9 @@ $$
 {r\,\omega_{\text{wheel},j}}.
 $$
 
-This definition exposes the two measurements needed: wheel surface speed **at separation**, and ball speed **at the same event**. Averaging an encoder trace over a convenient interval can bias η if the wheel droops while transferring energy to the ball.
+You need two measurements at the same moment: the wheel's surface speed **when the ball leaves**, and the ball's speed then. Averaging the wheel speed over a longer stretch throws η off, because the wheel slows down while it pushes the ball.
 
-Several measurement methods improve on one uncalibrated video estimate:
+Several ways to measure better than one uncalibrated video:
 
 | Method | What it measures well | Main limitation |
 |---|---|---|
@@ -119,7 +119,7 @@ Each candidate release state is integrated **forward** to all observed frames. T
 4. Estimate exit speed with optical gates or the multi-frame fit. Use backward integration as a cross-check; disagreement larger than the stated uncertainty is a reason to inspect timing, camera geometry, or the model.
 5. Repeat each fixed configuration enough times to measure shot-to-shot spread, then validate the resulting command map on held-out distances and balls.
 
-Do not force every launch into one constant η. Fit or tabulate transfer against variables that physically change contact, such as wheel speed, hood position, compression, and ball condition. Randomize the order of configurations so battery temperature and mechanism warm-up do not masquerade as a speed-dependent coefficient. These methods are recommendations for a stronger follow-up experiment; the paper reports only the seven-launch pilot estimate above.
+Don't assume η is one fixed number. Measure how it changes with the things that affect contact, like wheel speed, hood position, squish, and ball wear. Shuffle the order of settings so the battery warming up doesn't look like η changing with speed. These are suggestions for a better experiment; the paper only has the seven-shot estimate above.
 
 ## Query three calibrated maps
 
@@ -127,36 +127,40 @@ The deployed pipeline is:
 
 **Estimated distance → flywheel target + hood position + rim flight time → ready bands → release.**
 
-The speed and hood knots combine simulator guidance with physical calibration. The time map stores the descending rim-event time. This is more faithful to the real mechanism than treating one constant η as a complete actuator calibration.
+The wheel and hood values started from the simulator and were then adjusted with real shots. The flight
+times are the time to reach the rim on the way down. That's more accurate than treating one η as the
+whole story.
 
-The simulator's **sweep_targets** and **build_lut** exports describe predicted release states and
-trajectory results. They are starting points for a calibration campaign. The robot's **Distances**,
-**velValues**, and **hoodValues** arrays contain actuator coordinates: inches, ticks/s, and servo
-position. A hood position of 0.3 is not 0.3 radians, and 5.25 m/s is not an encoder setpoint.
-Record the measured distance reference and event-time definition alongside each table.
+The simulator's `sweep_targets` and `build_lut` outputs are predictions, a starting point for test
+shots. The robot's `Distances`, `velValues`, and `hoodValues` arrays are in robot units: inches, ticks
+per second, and servo position. A hood position of 0.3 isn't 0.3 radians, and 5.25 m/s isn't an encoder
+setting. Write down where distances are measured from and what the flight time measures, next to each
+table.
 
-Treat a lookup as a data contract. Return `distance`, `wheelTarget`, `hoodTarget`,
-`rimTofSeconds`, `clamped`, and `calibrationRevision` together so downstream code can reject an
-unsupported request and logs can identify exactly which calibration produced a shot.
+Return everything from a lookup together: `distance`, `wheelTarget`, `hoodTarget`, `rimTofSeconds`,
+`clamped`, and `calibrationRevision`. Then later code can refuse a distance off the table, and the logs
+show exactly which table produced each shot.
 
-Between measured distances, the interpolant should preserve the data’s shape. A natural cubic spline can bulge between equal knots. A monotone cubic Hermite interpolant keeps a flat segment flat.
+Between measured distances, the in-between values should follow the shape of the data. A natural cubic
+spline can bulge upward between equal values. A monotone cubic Hermite interpolation keeps a flat
+stretch flat.
 
 <CalibrationLookup />
 
-The illustrated shelf comes from the [archived launcher map](https://github.com/stoicescueric/YaoMing/blob/75db349d/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Hardware/Outtake/Launcher.java): **100, 110, and 120 inches all request 1,700 ticks/s**. Compare the curves near 105 inches. A speed excursion created solely by interpolation was never part of that calibration. The experiment evaluates the full archived map and displays its 80–130 inch region.
+The flat stretch comes from the [season's launcher table](https://github.com/stoicescueric/YaoMing/blob/75db349d/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Hardware/Outtake/Launcher.java): **100, 110, and 120 inches all ask for 1,700 ticks/s**. Compare the curves near 105 inches. A bump there would be something the interpolation made up, not something anyone measured. The demo uses the whole table and shows the 80 to 130 inch part.
 
 <details>
 <summary>How monotone Hermite avoids the bulge</summary>
 
 First compute the secant slope between adjacent knots. Flat intervals get zero tangents at both ends; tangents opposing the secant are also zeroed. For a nonzero secant $s$, normalize the two endpoint tangents as $\alpha=m_0/s$ and $\beta=m_1/s$. The Fritsch–Carlson construction projects them into the sufficient monotonicity region $\alpha^2+\beta^2\le9$.
 
-This guarantees shape preservation within each interval, not that the measured data itself is correct. Source: paper §5.7 and its Fritsch–Carlson reference.
+That keeps each stretch between two measurements from overshooting. It doesn't make the measurements
+themselves right. Source: paper §5.7 and its Fritsch–Carlson reference.
 
-**Check the implementation:** archived Java computes $h=\sqrt{\alpha^2+\beta^2}$ but applies its
-limiter only for $h>9$, whereas the sufficient radius-three construction above requires $h>3$.
-The teaching interpolator uses the radius-three condition. Equal-value knots still zero their
-tangents in Java, preserving the illustrated shelf. That shelf alone does not establish a general
-monotonicity guarantee for arbitrary new tables; validate every interval when changing calibration.
+**A bug to know about:** the season's Java computes $h=\sqrt{\alpha^2+\beta^2}$ but only limits the slopes
+when $h>9$, when it should when $h>3$. The lesson's version uses 3. Equal values still get flat slopes
+in the Java, so the flat stretch above is fine, but other tables might overshoot. Check every stretch
+when you change the table.
 
 </details>
 
@@ -166,7 +170,7 @@ A shot removes energy from the wheel. A simplified plant makes that disturbance 
 
 <FlywheelRecovery />
 
-The demo’s gains, disturbance size, and motor dynamics are illustrative. They are not measurements from the paper. Use the [feedforward lesson](../control-theory/feedforward.mdx) for controller design and log real recovery before choosing your robot’s ready bands. Paper §5.7 describes waiting for flywheel and hood readiness before release.
+The demo's numbers are made up for illustration, not from the paper. Use the [feedforward lesson](../control-theory/feedforward.mdx) to design the controller, and log real recovery times before deciding how close the wheel has to be before firing.
 
 ## What the season motor controller actually does
 
@@ -180,13 +184,11 @@ With bang-bang enabled, a large error then **replaces** the combined command:
 | More than 50 ticks/s above target | −0.2 motor power |
 | Between those thresholds | PID + voltage-compensated feedforward |
 
-The defaults are $k_P=0.004$, $k_I=k_D=0$, $k_V=0.000336$, and $k_S=0.05$.
-These coefficients produce normalized motor power; they are not directly voltage gains.
-Negative commanded power is active braking, distinct from FLOAT behavior at zero commanded power.
+The defaults are $k_P=0.004$, $k_I=k_D=0$, $k_V=0.000336$, and $k_S=0.05$, all in motor power rather
+than volts. The −0.2 power actively brakes the wheel, which slows it faster than just coasting at zero.
 
-The launcher's **isReady()** checks wheel-speed error or delegates to an alternate controller.
-The combined wheel-and-hood gate below is a teaching contract, not a claim that this method measures
-hood angle. A commanded servo position alone is not feedback that the hood has arrived.
+The season's `isReady()` only checks the wheel speed. The wheel-and-hood check below is how it should
+work, but note that a commanded servo position doesn't tell you the hood actually got there.
 
 ## The newer robot is a different deployment
 
@@ -196,10 +198,8 @@ Team254 and legacy controllers. The newer distance table requests 1,950 ticks/s 
 127 inches, rather than the season's 1,700-tick shelf.
 
 The [RST implementation](https://github.com/stoicescueric/YaoMing/blob/8374312fa7ba75b87197c2dbaeee5c46624722fa/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/Util/Controllers/RSTFlywheelController.java)
-uses identified first-order dynamics and an incremental controller with stored previous command and
-measurement. Study it after [RST pole placement](../advanced-topics/rst-pole-placement.mdx).
-Changed controllers and tables require new validation; the paper's season outcomes do not measure
-this later default configuration.
+is built from measured feedforward constants, as in [RST pole placement](../advanced-topics/rst-pole-placement.mdx).
+With a new controller and new tables, the paper's season results don't apply until it's tested again.
 
 ## Java: request release only inside the ready bands
 
@@ -211,19 +211,19 @@ this later default configuration.
             && Math.abs(hoodTarget - hoodMeasured) <= hoodReadyBand;
 }`}</JavaCode>
 
-The bands are measured on the mechanism, in the same units as their signals. Equality to one exact encoder value is not a practical readiness condition. Validate map outputs before this check and account for the feeder delay after it; a readiness check is only one part of the release decision.
+Measure the bands on the mechanism, in the same units as the signals. Waiting for one exact encoder value would never happen. This is one part of the decision to fire; the table lookup has to be valid too, and the feeder delay comes after.
 
 ### The combined release gate
 
-The command that starts the feeder should require a valid in-range lookup, fresh pose and velocity
-when shooting on the move, a converged aim solution, measured wheel and hood readiness, turret
-readiness, and an allowed robot state. Log which condition blocked each attempted shot. This turns a
-vague “shooter was not ready” report into evidence the team can diagnose.
+Before starting the feeder, require a lookup that's on the table, a recent pose and velocity if the
+robot is moving, an aim calculation that settled, the wheel, hood, and turret all ready, and the robot in
+a state where firing is allowed. Log which check stopped each shot, so "the shooter wasn't ready" turns
+into something you can actually fix.
 
 <Exercise title="Read a point on the shelf">
 The measured targets at 100, 110, and 120 inches are all 1,700 ticks/s. What should a monotone table return at 105 inches? Does that tell you the ball’s exact exit speed?
 <Solution>
-1,700 ticks/s. It is a wheel command between equal calibrated knots. Exit speed still depends on the physical transfer at the chosen configuration; a lookup result is not an independent measurement of the ball.
+1,700 ticks/s. That's a wheel setting, though. The ball's actual speed still depends on how well the launcher passes speed to it, which the table doesn't measure.
 </Solution>
 </Exercise>
 

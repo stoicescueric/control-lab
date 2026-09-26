@@ -12,31 +12,28 @@ import AntiWindup from '@site/src/components/simulations/control-theory/AntiWind
 <Difficulty level="Medium" />
 
 <Abstract>
-Actuator saturation is what happens when the controller asks for more effort than the robot can physically
-deliver. Anti-windup is the controller design that prevents the integral term from accumulating fake
-authority while the motor, battery, servo, or mechanism is already pinned at its limit.
+Controllers can ask for more than a motor can give. When that happens, a PID integral term keeps
+adding up error for effort the motor never delivered, and the robot overshoots once it finally
+arrives. Anti-windup stops the integral from growing while the output is maxed out.
 </Abstract>
 
-PID is often written as if the output can be any number:
-
-$$
-u_{raw} = K_p e + K_i \int e\,dt + K_d\dot e
-$$
-
-FTC hardware cannot do that. A DC motor command is bounded, a battery can only supply so much voltage, a
-servo has a finite range, and a mechanism may hit a hard stop. The controller can ask for the impossible,
-but the robot will silently deliver the nearest possible command.
-
-That one nonlinearity is enough to break textbook integral control.
+PID is usually written as if its output could be any number. On an FTC robot it can't. Motor power
+stops at ±1, the battery has a fixed voltage, servos have a range, and mechanisms hit hard stops. The
+controller can ask for more, and the robot just delivers the closest thing it can. That one limit is
+enough to break the integral term.
 
 <Problem>
 
-## The controller asks for 19 volts. The motor gets 12.
+## The controller asks for 19 V and the motor gets 12
 
-The demo compares two identical position controllers. Both command the same saturated actuator. The pink
-controller keeps integrating while saturated, so its integral term stores a large command the motor never
-actually received. The green controller uses anti-windup: it clamps the integral contribution and pauses
-integration when the actuator is already pinned in the same direction as the error.
+Picture an arm 90° from its target. $k_P$ times that error already asks for 15 V, and the integral adds
+more every loop: 16, 17, 19 V. The battery has 12, so the motor sits at full power the whole way. By the
+time the arm reaches the target, the integral has piled up several volts of push that were never
+delivered, and it keeps pushing past the target until that pile unwinds.
+
+The demo runs two copies of the same position controller on the same motor. The pink one keeps
+integrating while the motor is maxed out. The green one uses anti-windup: it caps the integral's share
+and stops adding to it when the motor is already pinned in the direction the error is pushing.
 
 <AntiWindup />
 
@@ -44,32 +41,16 @@ integration when the actuator is already pinned in the same direction as the err
 
 <Theory>
 
-## Saturation is the real actuator model
+## Asked for versus delivered
 
-Write the controller output before limits as:
+Write what the controller asks for as the sum of its parts:
 
 $$
 u_{raw} = u_P + u_I + u_D + u_{FF}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'u_raw', meaning: 'what the controller ASKED for, before any limit is applied. This number can be anything, including values no motor could produce'},
-    {symbol: 'u_P, u_I, u_D', meaning: 'the three PID terms as separate contributions to that request, so the anti-windup rules below can reason about the integral term alone'},
-    {symbol: 'u_FF', meaning: 'any feedforward added on top: gravity hold, kV, kS'},
-    {symbol: 'K_p, K_i, K_d', meaning: 'the PID gains, written capitalized here; the same gains appear as k_P, k_I, k_D elsewhere on the site'},
-  ]}
-/>
-
-where:
-
-- $u_{raw}$ is the command the controller wants to send.
-- $u_P = K_p e$ is the proportional contribution.
-- $u_I = K_i I$ is the integral contribution, with $I = \int e\,dt$.
-- $u_D$ is the derivative contribution, usually computed from measurement velocity.
-- $u_{FF}$ is any feedforward prediction.
-
-The actuator applies a saturated command:
+with $u_I = k_I I$ and $I$ the running total of error, and $u_{FF}$ any feedforward. The motor then gets
+that value clipped to its limits:
 
 $$
 \boxed{
@@ -77,65 +58,26 @@ u = \operatorname{sat}(u_{raw}, u_{min}, u_{max})
 }
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'u', meaning: 'what the actuator actually RECEIVES. The gap between u and u_raw is the entire subject of this lesson'},
-    {symbol: 'sat(\u00b7)', meaning: 'saturate: pass the value through unchanged if it fits between the limits, otherwise return the limit it exceeded'},
-    {symbol: 'u_min, u_max', meaning: 'the physical output limits. For normalized motor power these are \u22121 and +1; for voltage code they are the measured battery rail'},
-  ]}
-/>
+$\operatorname{sat}$ passes the value through if it fits and returns the limit if it doesn't. For
+motor power the limits are $-1$ and $1$. If your code works in volts, they're the measured battery
+voltage, $\pm V_{battery}$, and the final power is $u / V_{battery}$.
 
-where $u_{min}$ and $u_{max}$ are the physical output limits. For normalized FTC motor power, those limits
-are usually $-1$ and $1$. For voltage-based code:
+The whole lesson is about the gap between $u_{raw}$ and $u$.
 
-$$
-u_{max} = V_{battery}, \qquad u_{min} = -V_{battery}
-$$
+### What windup is
 
-and the final motor power is:
+Each loop the integral grows by one rectangle, $I_{k+1} = I_k + e_k\Delta t$, using the measured
+$\Delta t$. Far from the target the error is large, so the controller asks for more than the motor has,
+$u_{raw} > u_{max}$, and the motor gets $u_{max}$. If the integral keeps growing anyway, $u_I$ gets
+bigger even though none of the extra reaches the motor. When the arm finally arrives, the error is near
+zero but the stored integral is still big, so the controller keeps pushing and overshoots.
 
-$$
-\text{power} = \frac{u}{V_{battery}}
-$$
+That's windup: the integral storing up a command the motor never had room to carry out.
 
-### What windup means
+### The first fix: don't integrate further into the limit
 
-The integral state evolves as:
-
-$$
-I_{k+1} = I_k + e_k\Delta t
-$$
-
-<EquationLegend
-  items={[
-    {symbol: 'I_k', meaning: 'the STORED integral at loop k: the running sum of every past error, not the current error'},
-    {symbol: 'e_k \u0394t', meaning: 'this loop\u2019s contribution: one rectangle of height e_k and width \u0394t. Using the measured \u0394t is what keeps the sum honest when the loop rate varies'},
-  ]}
-/>
-
-where $I_k$ is the stored integral at loop $k$, $e_k$ is the current error, and $\Delta t$ is the measured
-loop time. If the target is far away, $e_k$ is large. The controller may request:
-
-$$
-u_{raw} > u_{max}
-$$
-
-but the actuator only receives:
-
-$$
-u = u_{max}
-$$
-
-If the integrator continues to accumulate during that time, $u_I$ grows even though the robot cannot
-apply the extra effort. When the mechanism finally reaches the target, the error may be near zero, but the
-stored integral is still large. The controller keeps pushing and overshoots.
-
-That is integral windup: the integral term stores a command that the actuator never had the authority to
-execute.
-
-### Core checkpoint: choose an anti-windup rule
-
-Start with **conditional integration**. The failure and repair are compact:
+The most useful rule is to skip an integral update if it would push the output further past a limit
+it's already beyond:
 
 <JavaCode league="FTC" label="Conditional integration: the failure and the repair">{`// THE FAILURE: integrates regardless of whether the actuator can obey.
 integral += error * dt;
@@ -149,85 +91,68 @@ boolean pushesFarther = (candidateRaw > max && error > 0)
 
 if (!pushesFarther) integral = candidate;   // otherwise, discard it`}</JavaCode>
 
-<Exercise title="Read the two clauses">
+`nonIntegralVolts` is the P, D, and feedforward part of the command.
 
-Work out what each half of `pushesFarther` is protecting against, and — just as importantly — what it
-deliberately does *not* block.
+<Exercise title="Read the two conditions">
+
+What is each half of `pushesFarther` protecting against, and what does the rule deliberately still
+allow?
 
 <Solution>
 
-If the raw command already exceeds `max` and the error is still positive, more integral makes a number
-that is already unusable even more unusable, and every bit of it has to be unwound later before the
-output comes back under the limit. The negative clause is the mirror image.
+If the command is already above `max` and the error is still positive, more integral only makes an
+unusable number bigger, and all of it has to be unwound later. The second half is the same thing for
+the negative limit.
 
-What is not blocked is integration that would pull the command back *toward* the usable range. That is
-the whole design: the rule is not "stop integrating while saturated," it is "stop integrating in the
-direction that makes saturation worse." A frozen integrator would also be slow to recover once the
-error changes sign.
+What's still allowed is integration that pulls the command back toward the usable range. The rule
+isn't "stop integrating while saturated." It's "stop integrating in the direction that makes saturation
+worse." A fully frozen integrator would also be slow to respond once the error changes sign.
 
 </Solution>
 
 </Exercise>
 
-Here `nonIntegralVolts` is the current P + D + feedforward command. In the repaired form, if
-$u_{raw} > u_{max}$ and $e > 0$, more integration only pushes farther into the
-positive limit, so pause it. If $u_{raw} < u_{min}$ and $e < 0$, pause it in the negative direction. If
-the error changes sign and would pull the command back toward the valid range, integration resumes.
-
-The second tool is **integrator clamping**:
+### The second fix: cap the integral's share
 
 $$
-u_I = \operatorname{clamp}(K_i I, I_{min}, I_{max})
+u_I = \operatorname{clamp}(k_I I, I_{min}, I_{max})
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'I_min, I_max', meaning: 'limits on the integral\u2019s CONTRIBUTION in output units, not on the raw sum. Clamping K_i\u00b7I rather than I means retuning K_i does not silently change the limit'},
-  ]}
-/>
+Put the limits on the integral's *contribution*, in the same units as the output. If your command is in
+volts, cap the integral at, say, ±3 V. Capping $k_I I$ instead of $I$ itself means the cap still means
+the same thing after you retune $k_I$.
 
-where $I_{min}$ and $I_{max}$ are output-sized limits on the integral contribution. Do not think of them
-as error limits; think in actuator units. If your motor command is voltage, clamp the integral in volts.
-
-The third tool is an **I-zone**:
+### The third fix: only integrate near the target
 
 $$
 I = 0 \quad \text{when} \quad |e| > e_{zone}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'e_zone', meaning: 'the I-zone half-width. Outside this band the integral is reset to zero rather than merely frozen, on the reasoning that far from the target the integral has no business acting at all'},
-  ]}
-/>
+This is called an I-zone. Far from the target, let feedforward, P, and D do the moving, and reset the
+integral to zero. Only let it run close to the target, where it's correcting a small leftover error.
 
-where $e_{zone}$ is a chosen error threshold. This says: do not use integral control while the mechanism
-is far away. Let feedforward, proportional, and derivative control do the large movement; allow integral
-only near the setpoint where it is correcting a small persistent bias.
-
-<Callout type="idea" title="The strongest anti-windup is often no integral.">
-For gravity-loaded mechanisms, prefer a real [feedforward](./feedforward.mdx): $k_G$ for slides and
-$k_G\cos(\theta)$ for arms. Feedforward supplies the predictable holding effort directly, so the integral
-does not have to slowly discover it by accumulating error.
+<Callout type="idea" title="Often the best fix is no integral">
+For arms and slides, most of what the integral ends up doing is holding against gravity. A real
+[feedforward](./feedforward.mdx) term, $k_G$ for slides and $k_G\cos(\theta)$ for arms, supplies that
+directly, so the integral doesn't have to slowly work it out.
 </Callout>
 
-The required artifact is one saturating controller that logs raw and applied output and prevents the
-integrator from pushing farther into saturation. The Java block below combines clamping, an I-zone, and
-conditional integration; start with only the pieces your logged failure requires.
+You don't need all three fixes every time. The controller below combines them, but start with only
+what your logs show you need, and always log both the requested and the delivered output.
 
 </Theory>
 
 <Deploy>
 
-## A saturating PID controller with anti-windup
+## A PID controller with anti-windup
 
-This controller works in volts internally. That makes saturation physically meaningful: clamp the desired
-voltage to what the battery can deliver, then divide by measured battery voltage when commanding the
-motor. If your project still uses normalized power internally, the same pattern works with limits
-$[-1, 1]$.
+This controller works in volts, which makes the limit physically meaningful: clamp to what the battery
+can deliver, then divide by the battery voltage when you set the motor power. The same code works with
+limits of $[-1, 1]$ if you prefer to work in power.
 
-Five stages: gate on the I-zone, differentiate the measurement, propose an integral and clamp its
-contribution, decide whether to keep it, then build the output from the integral that survived.
+It does five things in order: check the I-zone, compute the rate of change of the measurement, propose
+a new integral and cap its contribution, decide whether to keep it, and build the output from the
+integral that was kept.
 
 <JavaCode league="FTC" label="PID with integrator clamp, I-zone, and conditional integration">{`private double integral, previousMeasurement;
 private boolean firstLoop = true;
@@ -263,52 +188,48 @@ void reset() {
     firstLoop = true;
 }`}</JavaCode>
 
-<Exercise title="Why the clamp is on kI * integral">
+<Exercise title="Why the cap is on kI * integral">
 
-Step 3 clamps `kI * candidate` and then divides back out, rather than clamping the raw integral
-directly. Work out which of the two has units you can reason about, and what happens to a raw-integral
-clamp the moment you retune `kI`.
+The code caps `kI * candidate` and then divides `kI` back out, instead of capping the raw integral.
+Which of the two has units you can reason about, and what happens to a cap on the raw integral when you
+retune `kI`?
 
 <Solution>
 
-`kI * integral` is in volts — the same units as the output and the same units as the limits, so
-`MIN_I_VOLTS` and `MAX_I_VOLTS` mean "the integrator may contribute at most this much of the command,"
-which is a sentence you can defend. The raw integral is in error-seconds, which is not a quantity
-anyone has intuition about.
+`kI * integral` is in volts, the same as the output and the limits, so `MAX_I_VOLTS = 3` means "the
+integral can contribute at most 3 V." The raw integral is in error times seconds, which nobody has a
+feel for.
 
-The practical consequence: a clamp on the raw integral silently changes meaning whenever `kI` changes.
-Double `kI` and the same clamp now permits double the voltage contribution, so a limit you tuned
-carefully stops doing what you tuned it to do. Clamping in volts is invariant to retuning.
+A cap on the raw integral also changes meaning whenever `kI` changes. Double `kI` and the same cap now
+allows twice the voltage, so a limit you tuned carefully stops doing its job.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Three defences, three failures">
+<Exercise title="Three situations, three fixes">
 
-There are three separate mechanisms here and they solve different problems. Work out which one each of
-these breaks without:
+Each of these is handled by a different part of the controller. Which one?
 
-- the arm is 90 degrees away for four seconds before you tune anything
-- the command sits pinned at max while a stuck mechanism frees itself
-- `kI` is raised, and an integral that was fine becomes enormous
+- the arm is 90° away for four seconds before it gets close
+- the output sits at maximum while a jammed mechanism works itself free
+- you raise `kI`, and an integral that used to be fine becomes huge
 
 <Solution>
 
-The first is the I-zone: four seconds of large error accumulates an integral that has nothing to do
-with the small residual bias the integrator exists to correct. The second is conditional integration:
-the output is saturated, so integration is buying nothing but a debt to unwind. The third is the
-voltage clamp, for exactly the reason the previous exercise gives.
+The first is the I-zone: four seconds of big error builds an integral that has nothing to do with the
+small leftover error it's meant to fix. The second is conditional integration: the output is maxed out,
+so integrating only stores up something to unwind later. The third is the voltage cap on the integral's
+contribution.
 
-A controller can need all three because they fire in different situations — I-zone is about *distance*,
-conditional integration about *saturation*, the clamp about *magnitude* — and none of the three catches
-the other two's case.
+They respond to different things, distance from the target, saturation, and size, and none of them
+covers the other two.
 
 </Solution>
 
 </Exercise>
 
-Use it from a subsystem by measuring both loop time and battery voltage:
+To use it from a subsystem, measure both the loop time and the battery voltage:
 
 <JavaCode league="FTC" label="Applying the saturated voltage to a motor">{`void update(double target) {
     double dt = timer.seconds();    // MEASURE it; never hardcode 0.02
@@ -327,45 +248,43 @@ Use it from a subsystem by measuring both loop time and battery voltage:
     motor.setPower(clamp(commandVolts / vbat, -1, +1));
 }`}</JavaCode>
 
-The important line is passing the battery in as the saturation limit. The controller's idea of "what
-the actuator can do" then tracks the real rail instead of a constant someone picked in the pits.
+Passing the battery voltage in as the limit means the controller's idea of "maxed out" follows the real
+battery instead of a number someone typed in.
 
-<Exercise title="Fresh pack versus sagging pack">
+<Exercise title="Fresh battery versus tired battery">
 
-Work out what the anti-windup logic does differently on a fresh 13.0 V pack versus a sagging 11.0 V
-one, given the same mechanism and the same error.
+Same mechanism, same error. What does the anti-windup logic do differently on a 13.0 V battery than on
+an 11.0 V one?
 
 <Solution>
 
-The saturation threshold moves with the pack, so on the sagging battery the controller decides it is
-out of authority two volts sooner — and stops integrating two volts sooner. With a hardcoded
-$\pm 12$ V limit it would keep integrating in a region where the motor demonstrably cannot deliver,
-building exactly the debt anti-windup exists to prevent, and the overshoot would appear only late in a
-match when the pack is tired. That is the hardest kind of bug to reproduce in the shop.
+The limit moves with the battery, so on the tired one the controller recognizes it's maxed out 2 V
+sooner and stops integrating 2 V sooner. With a fixed ±12 V limit it would keep integrating in a range
+the motor can't actually reach, and the overshoot would only show up late in matches when the battery
+is low, which is a hard bug to reproduce in the shop.
 
 </Solution>
 
 </Exercise>
 
-This pattern belongs anywhere the integral term is nonzero: slides, arms, heading hold, velocity hold,
-and any mechanism that can spend real time pinned at full output.
+Use this anywhere the integral term isn't zero: slides, arms, heading hold, velocity hold, anything that
+can spend time at full output.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: saturation is not only motor power">
+<Admonition type="warning" title="Saturation isn't only motor power">
 
-`setPower(1.0)` is the obvious saturation limit, but it is not the only one. Current limits, brownout
-protection, gear skipping, belt slip, servo travel, joint stops, and motion-profile velocity limits are
-also saturations. If the controller keeps asking for effort that the robot cannot deliver, the integral
-term can still wind up.
+`setPower(1.0)` is the obvious limit, but current limits, brownout protection, skipping gears, slipping
+belts, servo travel, hard stops, and motion-profile speed limits are all saturations too. Whenever the
+controller asks for effort the robot can't deliver, the integral can wind up.
 
 </Admonition>
 
-<Admonition type="tip" title="Tune the model before adding integral">
+<Admonition type="tip" title="Fix the model before adding integral">
 
-If a mechanism needs a lot of integral to hold position, it is usually missing feedforward. Add
-gravity/feedforward first, then use a small integral term only for residual bias. That keeps the integral
-small enough that anti-windup has an easy job.
+If a mechanism needs a lot of integral just to hold still, it's probably missing feedforward. Add the
+gravity term first, then use a small integral for whatever is left. A small integral gives anti-windup
+very little to do.
 
 </Admonition>
 

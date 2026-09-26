@@ -10,35 +10,36 @@ tags: [implementation, utilities, pose2d, vector2d, completion, reference]
 <Difficulty level="Easy" />
 
 <Abstract>
-Every follower in this module — <a href="./pid-to-point">PID-to-point</a>,
-<a href="./pure-pursuit">pure pursuit</a>, the <a href="./guided-vector-fields">guided vector field</a> —
-leans on the same handful of primitives: a pose and a vector type, angle wrapping, a single "are we there
-yet?" completion outcome, the kStatic friction nudge, and one drivetrain entry point. They are collected
-here, defined <em>once</em>, so each lesson can show only the logic that is actually new and link back here
-for the plumbing. Treat this as the module's small standard library.
+<a href="./pid-to-point">PID-to-point</a>, <a href="./pure-pursuit">pure pursuit</a>, and the
+<a href="./guided-vector-fields">guided vector field</a> all use the same few pieces: a pose type and a
+vector type, angle wrapping, one "are we there yet?" check, a small push to beat friction, and one call
+that drives the wheels. They're defined once here so each lesson can show only what's new.
 </Abstract>
 
-First verify and adapt your library with the [Pose Estimation Contract](./pose-estimation-contract.mdx).
-The algorithms throughout Modules 4–5 then call things like `robot.vec()`, `wrap(error)`, `moveStatus(...)`,
-and `drive(vx, vy, omega)` without re-deriving them every time. This page is where those names are defined.
-Production libraries (Road Runner, FTCLib) ship their own equivalents; these are the minimal versions the
-lessons assume.
+Set up your localization library with the [Pose Estimation Contract](./pose-estimation-contract.mdx)
+first. After that, the lessons in this module call things like `robot.vec()`, `wrap(error)`,
+`moveStatus(...)`, and `drive(vx, vy, omega)`, and this page is where those are defined. Libraries like
+Road Runner and FTCLib have their own versions; these are the minimal ones the lessons assume.
 
-These names are a contract, not source you can paste. The signatures below are the part that matters —
-write the bodies yourself, but keep the names exactly as spelled here, because every later lesson refers
-to them by name.
+What matters here are the names and signatures. Write the method bodies yourself, but keep the names as
+spelled, because later lessons refer to them.
 
 ## Geometry: `Vector2d`, `Pose2d`, and `PoseSample`
 
-A 2-D vector supplies the operations followers use (dot, cross, norm, rotate). A `Pose2d` is only
-position plus heading, so constructing a target cannot accidentally supply fake measured velocity. The
-pose-source adapter returns one atomic `PoseSample` containing the measured pose, its field-frame
-velocity, and the timestamp. Field coordinates are $+x$ toward the far wall, $+y$ left, and heading is
-CCW positive.
+A vector type supplies what the followers need: add, subtract, scale, dot, cross, length, and rotate.
+A `Pose2d` is just a position and a heading. The pose source returns one `PoseSample` holding the
+measured pose, its velocity in the field frame, and a timestamp, all from the same reading. Field
+coordinates are $+x$ toward the far wall, $+y$ to the left, and heading counter-clockwise.
 
-<JavaCode label="Vector2d">{`// A 2-D vector, in field or robot coordinates. The signatures are the
-// contract; the algebra behind them is not what needs teaching.
-record Vector2d(double x, double y) {
+The blocks below use plain Java 8 classes, since that's what the FTC SDK compiles by default.
+
+<JavaCode label="Vector2d">{`// A 2-D vector, in field or robot coordinates.
+final class Vector2d {
+    final double x, y;
+    Vector2d(double x, double y) { this.x = x; this.y = y; }
+    double x() { return x; }
+    double y() { return y; }
+
     Vector2d plus(Vector2d b)  { ... }
     Vector2d minus(Vector2d b) { ... }
     Vector2d times(double s)   { ... }
@@ -54,35 +55,37 @@ record Vector2d(double x, double y) {
 }
 `}</JavaCode>
 
-Those last two lines are exactly the rows of a rotation matrix.
+The comment above `rotate` is the rotation formula: each output coordinate is one row of a rotation
+matrix.
 
-<JavaCode label="Pose2d and PoseSample">{`// Position AND heading. Deliberately no velocity field.
-record Pose2d(double x, double y, double heading) {
+<JavaCode label="Pose2d and PoseSample">{`final class Pose2d {
+    final double x, y, heading;          // inches, inches, radians
+    // constructor and x(), y(), heading() accessors as in Vector2d
     Vector2d vec() { return new Vector2d(x, y); }
 }
 
-// One atomic reading from the pose source.
-record PoseSample(
-    Pose2d pose,               // where we are
-    Vector2d fieldVelocity,    // field frame, inches/second
-    double timestampSeconds    // when this reading was taken
-) {}
+// One reading from the pose source; all three fields from the same update.
+final class PoseSample {
+    final Pose2d pose;                   // where we are
+    final Vector2d fieldVelocity;        // field frame, inches/second
+    final double timestampSeconds;       // when this reading was taken
+    // constructor and pose(), fieldVelocity(), timestampSeconds() accessors
+}
 `}</JavaCode>
 
-All three `PoseSample` fields come from the same reading. Never assemble one from a pose read this loop
-and a velocity read two loops ago. And `Pose2d` deliberately has no velocity field: with one, a *target*
-pose could carry a fake measured velocity, and someone would eventually read it. Leaving it out makes
-that bug unwriteable.
+Never build a `PoseSample` from a pose read this loop and a velocity read two loops ago. `Pose2d` has no
+velocity on purpose. If it did, a *target* pose would carry a velocity that was never measured, and
+sooner or later some code would read it.
 
-<Exercise title="Verify rotate by eye">
+<Exercise title="Check rotate on an easy case">
 
-Check `rotate` on a case your eye can settle: rotating $(1, 0)$ by 90° must give $(0, 1)$.
+Rotating $(1, 0)$ by 90° has to give $(0, 1)$. Does it?
 
 <Solution>
 
 At $t = \pi/2$, $\cos t = 0$ and $\sin t = 1$, so the first row gives $1(0) - 0(1) = 0$ and the second
-gives $1(1) + 0(0) = 1$ — the vector $(0,1)$, pointing $+y$, which is left, which is counter-clockwise.
-If you get $(0,-1)$ a sine sign is flipped, and every heading in every follower will be mirrored.
+gives $1(1) + 0(0) = 1$. That's $(0, 1)$, pointing $+y$, to the left, which is counter-clockwise. If you
+get $(0, -1)$, a sine has the wrong sign, and every heading in every follower will be mirrored.
 
 </Solution>
 
@@ -90,8 +93,8 @@ If you get $(0,-1)$ a sine sign is flipped, and every heading in every follower 
 
 ## Angle wrapping
 
-Heading errors must be wrapped to $[-\pi, \pi)$ so the robot always turns the short way. This is the whole
-point of the [angle-wrapping lesson](./angle-wrapping.mdx); the standard one-liner:
+Heading errors are wrapped to $[-\pi, \pi)$ so the robot always turns the short way, as explained in
+[Angle Wrapping](./angle-wrapping.mdx):
 
 <JavaCode label="wrap(angle) -> [-pi, pi)">{`// The angle in [-pi, pi) pointing the same direction as a.
 static double wrap(double a) {
@@ -102,19 +105,14 @@ static double wrap(double a) {
 
 <Exercise title="Three values by hand">
 
-Work these out before writing any code. What should `wrap` give for $3.5\pi$, for $-3.0$ rad, and for
-exactly $\pi$?
+What should `wrap` give for $3.5\pi$, for $-3.0$ rad, and for exactly $\pi$?
 
 <Solution>
 
-$3.5\pi$ wraps to $-0.5\pi$, and $-3.0$ rad is already inside the range so it comes back unchanged.
-The last one is the interesting case: the interval is half-open, so exactly $\pi$ comes back as
-$-\pi$. Decide whether your heading controller cares — for a `kP * error` term it does not, since both
-produce the same magnitude of turn in opposite directions and the robot is equidistant either way. For
-anything that logs or compares headings for equality, it does.
-
-The doubled `mod` is not decoration: Java and C return a remainder with the sign of the dividend, while
-Python does not. That single difference is the most common bug in this function.
+$3.5\pi$ wraps to $-0.5\pi$. $-3.0$ rad is already in range (just under $\pi$ in size), so it comes back
+unchanged. Exactly $\pi$ comes back as $-\pi$, since the range includes $-\pi$ but not $+\pi$. For a
+`kP * error` term that doesn't matter, because both directions are the same distance. It does matter
+for code that logs headings or compares them for equality.
 
 </Solution>
 
@@ -122,9 +120,9 @@ Python does not. That single difference is the most common bug in this function.
 
 ## The completion outcome: `MoveStatus`
 
-This is **Step 5** of the [pipeline](./index.mdx) — and the one piece worth having exactly one copy of.
-A follower must distinguish reaching the target from timing out. Both outcomes stop the drivetrain, but
-only `REACHED` should advance autonomous policy normally.
+This is step 5 from the [module overview](./index.mdx). A follower has to tell the difference between
+reaching the target and running out of time. Both stop the drivetrain, but only `REACHED` should let
+the autonomous routine carry on as planned.
 
 <JavaCode label="One completion outcome, used by every follower">{`// Tolerances: tuned once, here, and nowhere else.
 static final double POS_TOL = 1.0;                        // inches
@@ -152,17 +150,15 @@ static MoveStatus moveStatus(PoseSample sample, Pose2d target,
 
 <Exercise title="Order of the two checks">
 
-The deadline is checked before `settled`. Construct a case where a late sample lands inside tolerance
-after the timeout expired. Which answer do you want, and what goes wrong if the routine treats that run
-as a success?
+The deadline is checked before `settled`. Suppose the robot drifts into tolerance just after the
+timeout. Which answer do you want, and what goes wrong if the routine calls it a success?
 
 <Solution>
 
-A robot pushed off its path recovers slowly and drifts into tolerance at 3.1 s on a 3.0 s deadline. You
-want `TIMED_OUT`, because the deadline exists to bound how long autonomous will spend on one move — and
-a `REACHED` here means the routine advances as though everything went to plan, on a schedule it has
-already blown. The rest of the routine then runs late with no signal that anything went wrong. Checking
-the deadline first makes the deadline mean what it says.
+Say a robot got pushed, recovered slowly, and reached tolerance at 3.1 s on a 3.0 s deadline. You want
+`TIMED_OUT`. The deadline is there to limit how long auto spends on one move, and calling it `REACHED`
+lets the routine carry on as if everything went to plan, already behind schedule, with nothing flagging
+that anything went wrong.
 
 </Solution>
 
@@ -170,35 +166,33 @@ the deadline first makes the deadline mean what it says.
 
 <Exercise title="Why velocity is in the settled test">
 
-Delete `sample.fieldVelocity().norm() < VEL_TOL` and describe what a robot crossing the target at full
-speed now reports.
+Delete `sample.fieldVelocity().norm() < VEL_TOL`. What does a robot crossing the target at full speed
+report now?
 
 <Solution>
 
-`REACHED`, for the one loop it happens to be within an inch of the target — while travelling at 40
-inches per second and about to be a foot past it. The next move starts from a pose the routine believes
-is settled and the robot is nowhere near. The velocity term is what makes "reached" mean *arrived and
-stopped* rather than *passed through*.
+`REACHED`, for the one loop it happens to be within an inch of the target, while moving at 40 inches per
+second and about to be a foot past it. The next move then starts from a place the robot isn't. The
+velocity check makes "reached" mean "arrived and stopped," not "passed through."
 
 </Solution>
 
 </Exercise>
 
-`TIMEOUT` is a hard safety deadline, so it takes precedence after it expires even if that same late sample
-happens to lie inside the pose tolerances. Choose the deadline with the expected move duration and settling
-margin; do not use a late spatial coincidence to mask a failed path.
+Pick `TIMEOUT` from how long the move should take plus some time to settle.
 
-<Callout type="idea" title="Why one copy matters.">
-Each follower used to inline its own version of this test, and they drifted apart — some checked velocity
-and heading, one checked only distance. With one <code>moveStatus</code>, every follower stops on both
-terminal outcomes while the autonomous routine can separately advance, retry, park, or abort.
+<Callout type="idea" title="Why only one copy">
+If every follower writes its own version of this check, they drift apart: one checks velocity and
+heading, another only distance. With one <code>moveStatus</code>, every follower stops the same way, and
+the autonomous routine decides separately whether to carry on, retry, park, or give up.
 </Callout>
 
 ## kStatic: the static-friction nudge
 
-Near the goal the proportional command shrinks below what it takes to overcome static friction, stranding
-the robot just short. A constant push *in the direction of the error*, applied **only inside a small
-band**, defeats it — see [PID-to-point](./pid-to-point.mdx) and [feedforward](../control-theory/feedforward.mdx).
+Near the target, the proportional command gets too small to overcome friction, and the robot stops just
+short. A small constant push toward the target, only within a few inches of it, fixes that. It's the
+$k_S$ term from [feedforward](../control-theory/feedforward.mdx), and
+[PID-to-point](./pid-to-point.mdx) uses it.
 
 <JavaCode league="FTC" label="kStatic(error)">{`static final double K_STATIC = 0.06;         // power units
 static final double K_STATIC_RANGE = 4.0;    // inches, outer edge of the band
@@ -215,15 +209,14 @@ static double kStatic(double error) {
 
 <Exercise title="Both edges of the band">
 
-The band has two edges and both earn their place. Work out what the robot does if you remove the inner
-one, remembering that `sign(error)` flips every time the robot crosses the target.
+What happens if you remove the inner edge of the band, the `POS_TOL` check? Remember that
+`sign(error)` flips every time the robot crosses the target.
 
 <Solution>
 
-The push never switches off, so once the robot is at the target the term alternates between $+0.06$ and
-$-0.06$ every time noise flips the sign of the error — at loop rate. The robot jitters back and forth
-across the target and never reports settled, because `fieldVelocity` never drops below `VEL_TOL`. It
-buzzes audibly and the move times out on a target it reached two seconds ago.
+The push never turns off, so at the target it flips between $+0.06$ and $-0.06$ whenever noise flips the
+error's sign, which can be every loop. The robot jitters back and forth, its velocity never drops below
+`VEL_TOL`, and the move times out on a target it reached two seconds earlier.
 
 </Solution>
 
@@ -231,10 +224,9 @@ buzzes audibly and the move times out on a target it reached two seconds ago.
 
 ## The drivetrain entry point: `drive(vx, vy, omega)`
 
-Every follower ends by handing a **chassis command** $(v_x, v_y, \omega)$ to the mecanum mixer, which
-converts it to four wheel powers and desaturates. That mixer — including field-centric rotation, joystick
-shaping, and the desaturation step — is derived in full in
-[Mecanum kinematics](./mecanum-kinematics.mdx); the followers just call its entry point:
+Every follower ends by handing a drive command $(v_x, v_y, \omega)$ to the mecanum mixer from
+[Mecanum Kinematics](./mecanum-kinematics.mdx), which turns it into four wheel powers and scales them
+down if needed:
 
 <JavaCode league="FTC" label="The one call every follower ends with">{`// A robot-frame chassis command in NORMALIZED POWER, each component in [-1, 1]:
 // vx forward, vy left, omega CCW. Writes four wheel powers to the motors.
@@ -250,24 +242,23 @@ void drive(double vx, double vy, double omega) {
 `}</JavaCode>
 
 :::warning[Convert to normalized power *before* you call this]
-The desaturator compares each wheel value against the literal `1`, which only means anything if the
-inputs are already fractions of full power. Divide physical speeds by `MAX_SPEED` and `MAX_TURN` at the
-call site. Pass raw inches per second instead and every command above about 1 in/s mixes to four equal
-values that all divide down to exactly `1.0` — so 5 in/s, 20 in/s, and 40 in/s all come out as full
-power, and the entire speed plan is silently discarded.
+The scaling step compares each wheel against `1`, which only makes sense if the inputs are fractions of
+full power. Divide physical speeds by `MAX_SPEED` and `MAX_TURN` before calling it. If you pass raw
+inches per second instead, almost every command has a wheel above 1, so everything gets scaled up to
+full power. Driving straight at 5, 20, or 40 in/s all come out as full speed, and your speed plan is
+thrown away without any error.
 :::
 
 <Exercise title="What desaturation protects">
 
-Desaturation is the step teams leave out. Work out what happens to a command of $(1.0, 1.0, 0.5)$
-without it.
+Teams often leave out the scaling step. What happens to a command of $(1.0, 1.0, 0.5)$ without it?
 
 <Solution>
 
-The mix produces wheel powers outside $[-1, 1]$, and `setPower` clips each one independently. Clipping
-changes the ratios between the four wheels, and the ratios are what encode direction and turn rate — so
-the robot's actual *direction* changes, not just its speed. It curves away from the commanded heading
-exactly when the command is largest, which is when the follower is trying hardest to correct.
+The mixer gives FL = −0.5, FR = 2.5, BL = 1.5, BR = 0.5, and `setPower` clips FR and BL to 1 separately.
+That changes the ratios between wheels, and the ratios set the direction and turn rate, so the robot
+goes somewhere different, not just slower. It happens when the command is biggest, which is when the
+follower is trying hardest to correct.
 
 </Solution>
 
@@ -275,14 +266,12 @@ exactly when the command is largest, which is when the follower is trying hardes
 
 <Admonition type="note" title="How the lessons use this page">
 
-When a lesson writes `robot.vec()`, `wrap(...)`, `moveStatus(...)`, `kStatic(...)`, or `drive(...)`, the
-definition is here. The lessons show only the part that is genuinely new to that technique — the control
-law, the geometry, the speed plan — and link back to this page for the shared plumbing. In your own
-codebase these belong in a small `util` package (or you adopt a library's equivalents), written once and
-imported by every OpMode rather than copy-pasted.
+When a lesson uses `robot.vec()`, `wrap(...)`, `moveStatus(...)`, `kStatic(...)`, or `drive(...)`, this
+is where it's defined. In your own code, put these in a small `util` package (or use a library's
+versions) and import them everywhere instead of copying them.
 
-Implement this page first. Every follower in the module assumes these exist and behave as described, and
-a subtle bug in `wrap` or `moveStatus` will look like a bug in the follower that calls it.
+Write these first. Every follower assumes they work, and a bug in `wrap` or `moveStatus` will look like a
+bug in whatever follower calls it.
 
 </Admonition>
 

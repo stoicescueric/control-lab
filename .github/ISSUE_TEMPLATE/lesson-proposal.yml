@@ -16,12 +16,11 @@ body:
     attributes:
       label: Curriculum area
       options:
-        - Preface · Why Math Matters
+        - Preface
         - Module 1 · Software Architecture & Loop Optimization
         - Module 2 · Motor Dynamics & Control Theory
         - Module 3 · Signal Processing
         - Module 4 · Path Following & Kinematics
-        - Module 5 · State-Space Control
         - Advanced Topics & Misc
         - Elective case study · Drag-aware launcher
     validations:

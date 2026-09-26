@@ -10,29 +10,22 @@ tags: [filter, debouncer, digital-input, limit-switch, ftc]
 <Difficulty level="Easy" />
 
 <Abstract>
-A debouncer filters a boolean signal, not a number. It accepts a new `true` or `false` value only
-after that value has persisted for a chosen time. Use it for a noisy limit switch, beam break, or
-digital sensor when a brief transition must not trigger an action.
+A debouncer filters a true/false signal instead of a number. It only accepts a new value once that value
+has held steady for a set time. Use it on a limit switch, beam break, or other digital sensor when a
+brief flicker shouldn't trigger anything.
 </Abstract>
 
-A low-pass filter answers “what number should I believe?” A debouncer answers “has this event really
-happened?” It is small, cheap, and one of the best protections against a robot acting on a one-loop
-glitch.
+A low-pass filter answers "what number should I believe?" A debouncer answers "did this actually
+happen?" It's a few lines of code and it stops the robot from reacting to one-loop glitches.
 
 <Problem>
 
 ## One press can look like many
 
-A physical switch does not close cleanly. Its contacts can vibrate between open and closed for a few
-milliseconds. Optical and magnetic sensors can also flicker because of electrical noise, a reflective
-surface, or a mechanism passing their edge. If an intake starts a state transition on every raw edge,
-one real event can look like several events.
-
-<Analogy>
-<strong>A receptionist waits for a complete answer.</strong> If someone says “yes—no—yes” in quick
-succession, the receptionist does not act on the first syllable. They wait until the answer has stayed
-the same long enough to be credible.
-</Analogy>
+A mechanical switch doesn't close cleanly. Its contacts bounce between open and closed for a few
+milliseconds. Optical and magnetic sensors flicker too, from electrical noise, a shiny surface, or a
+part sitting right at the edge of their range. If your intake changes state on every raw change, one
+game piece can look like three.
 
 </Problem>
 
@@ -40,15 +33,12 @@ the same long enough to be credible.
 
 ## Require an uninterrupted dwell time
 
-Let $u(t)$ be the raw boolean input and $y(t)$ the debounced output. When $u$ differs from $y$, start
-a timer. Change $y$ only if the input stays at that new value for the full debounce time $T_d$:
+Keep two values: the raw input and the debounced output. When the raw input changes to something
+different from the output, start a timer. Only copy the new value to the output if the input stays
+that way for the whole debounce time $T_d$. Any bounce back resets the timer.
 
-$$
-y(t) \leftarrow u(t) \quad \text{only when } u \text{ has been unchanged for at least } T_d
-$$
-
-Every bounce resets the timer. The resulting output has an intentional delay of up to $T_d$, but it
-never toggles on a shorter pulse.
+So the output lags the input by up to $T_d$, on purpose, and it never changes on a pulse shorter than
+$T_d$.
 
 | Raw input | Has it stayed changed for $T_d$? | Output |
 |---|---:|---|
@@ -58,22 +48,21 @@ never toggles on a shorter pulse.
 
 ### Choose which transition needs proof
 
-WPILib names three useful modes. They describe the **output transition that waits**:
+WPILib defines three modes, named for which change of the output has to wait:
 
 | Mode | Waits before | Changes immediately | FTC example |
 |---|---|---|---|
-| Rising | `false → true` | `true → false` | confirm a beam break sees a pixel |
+| Rising | `false → true` | `true → false` | confirm a beam break really sees a game piece |
 | Falling | `true → false` | `false → true` | confirm a released limit switch is truly released |
 | Both | either transition | neither | make the displayed state stable in both directions |
 
-Choose the transition whose false trigger is costly. A rising-only debouncer is often right for a
-beam break: wait before declaring an object present, but clear the state as soon as it leaves. Use
-both edges only when the extra delay in both directions is safe.
+Debounce the change where a false alarm is expensive. For a beam break, rising-only is often right:
+wait before deciding a piece is there, but clear it as soon as it leaves. Only debounce both ways if
+the extra delay in both directions is safe.
 
-<Callout type="warn" title="A debouncer is not a one-shot.">
-It produces a stable **level**. To run an action once, detect the debounced edge by comparing this
-loop’s output with the previous loop’s output. Do not repeatedly start the action while the output
-remains `true`.
+<Callout type="warn" title="A debouncer doesn't run things once">
+The output is a steady true or false. To run an action once, compare this loop's output with last
+loop's and act on the change. Don't start the action every loop while the output stays `true`.
 </Callout>
 
 </Theory>
@@ -82,9 +71,9 @@ remains `true`.
 
 ## A time-based FTC implementation
 
-Pass a monotonic timestamp in seconds on every robot loop. The constructor takes the sensor's current
-reading so startup does not invent an edge. This implementation is time-based, so a slow loop does not
-quietly make a 30 ms setting mean a fixed number of iterations.
+Pass in a timestamp in seconds every loop. The constructor takes the sensor's current reading so the
+robot doesn't see a fake change at startup. Because it's based on time rather than loop counts, 30 ms
+means 30 ms even when the loop slows down.
 
 <JavaCode league="FTC" label="Debounce a boolean input with rising, falling, or both edges">{`public final class BooleanDebouncer {
     public enum Mode { RISING, FALLING, BOTH }
@@ -127,67 +116,65 @@ quietly make a 30 ms setting mean a fixed number of iterations.
     }
 
     private boolean shouldWait(boolean from, boolean to) {
-        return switch (mode) {
-            case BOTH -> true;
-            case RISING -> !from && to;
-            case FALLING -> from && !to;
-        };
+        switch (mode) {
+            case RISING:  return !from && to;
+            case FALLING: return from && !to;
+            default:      return true;      // BOTH
+        }
     }
 }`}</JavaCode>
 
-Use exactly one debouncer instance per signal; construct it during initialization, then call `update`
-once per loop. Here a beam-break input is active-low, so `!beamBreak.getState()` gives the more useful
-meaning “a pixel is present.”
+Use one debouncer per signal, create it during init, and call `update` once per loop. This beam break
+reads low when blocked, so `!beamBreak.getState()` means "a piece is present."
 
 <JavaCode league="FTC" label="Trigger once when a debounced beam break becomes true">{`private final ElapsedTime runtime = new ElapsedTime();
 private DigitalChannel beamBreak;
-private BooleanDebouncer pixelDebouncer;
-private boolean hadPixel;
+private BooleanDebouncer pieceDebouncer;
+private boolean hadPiece;
 
 public void init() {
     beamBreak = hardwareMap.get(DigitalChannel.class, "beamBreak");
     beamBreak.setMode(DigitalChannel.Mode.INPUT);
 
-    boolean pixelPresent = !beamBreak.getState(); // invert only if your wiring is active-low
-    pixelDebouncer = new BooleanDebouncer(
-            pixelPresent, 0.030, BooleanDebouncer.Mode.RISING);
-    hadPixel = pixelPresent;
+    boolean piecePresent = !beamBreak.getState(); // invert only if your wiring is active-low
+    pieceDebouncer = new BooleanDebouncer(
+            piecePresent, 0.030, BooleanDebouncer.Mode.RISING);
+    hadPiece = piecePresent;
 }
 
 public void loop() {
-    boolean rawPixelPresent = !beamBreak.getState();
-    boolean pixelPresent = pixelDebouncer.update(rawPixelPresent, runtime.seconds());
+    boolean rawPiecePresent = !beamBreak.getState();
+    boolean piecePresent = pieceDebouncer.update(rawPiecePresent, runtime.seconds());
 
-    if (pixelPresent && !hadPixel) {
+    if (piecePresent && !hadPiece) {
         advanceIntakeState(); // runs once, after 30 ms of continuous detection
     }
-    hadPixel = pixelPresent;
+    hadPiece = piecePresent;
 }`}</JavaCode>
 
 <Exercise title="Size the delay from evidence">
 
-Log the raw input while you deliberately trigger the sensor many times. Suppose the longest false
-high pulse is 12 ms and real object detections remain high for at least 80 ms. Pick a starting
-debounce time, explain why it rejects the glitch, and name the response-time cost.
+You log the raw input while triggering the sensor over and over. The longest false pulse is 12 ms, and
+real detections stay high for at least 80 ms. What debounce time do you start with, and what does it
+cost you?
 
 <Solution>
 
-Try 20–30 ms. It is longer than the 12 ms false pulse, so that pulse cannot be accepted, while it
-still leaves at least 50 ms of margin before the shortest real detection ends. The cost is that the
-robot waits 20–30 ms after a real object arrives before acting. Test the complete mechanism; do not
-copy a delay merely because it worked on another robot.
+Around 20 to 30 ms. That's longer than the 12 ms glitch, so the glitch can't get through, and it still
+leaves 50 ms of margin before the shortest real detection ends. The cost is that the robot reacts 20 to
+30 ms later than it could. Test it on your mechanism instead of copying a number that worked somewhere
+else.
 
 </Solution>
 
 </Exercise>
 
-### Do not hide a wiring or state-machine bug
+### Don't use it to hide a wiring bug
 
-Debouncing removes short, unwanted transitions. It cannot fix a loose connector, incorrect active-low
-logic, or a sensor that never reaches a reliable state. First display the raw value and verify which
-physical condition maps to `true`. Then choose a delay from recorded glitches and the mechanism's
-time budget. For safety limits, make the conservative transition fast enough for the mechanism to
-remain safe; a long both-edge delay can be the wrong trade.
+Debouncing removes short flickers. It can't fix a loose connector, inverted logic, or a sensor that
+never settles. Put the raw value on telemetry first and check which physical situation reads `true`.
+Then pick the delay from the glitches you actually recorded. For safety limit switches, make sure the
+safe direction reacts fast enough; a long delay in both directions can be the wrong choice.
 
 </Deploy>
 

@@ -1,6 +1,6 @@
 ---
 title: Moving Average
-description: Equal-weight windowed smoothing — its strengths, its two failure modes (lag and outlier contamination), and why they motivate the Kalman filter.
+description: Averaging the last N readings equally. What it's good at, its two weaknesses (lag and outliers), and why it flattens peaks.
 sidebar_position: 4
 tags: [filter, moving-average, smoothing, ring-buffer]
 ---
@@ -13,29 +13,22 @@ import {WindowVsFadeExplorer} from '@site/src/components/simulations/signal-proc
 <Difficulty level="Easy" />
 
 <Abstract>
-A moving average smooths a signal by averaging the last N readings equally — excellent at suppressing
-random noise, but sluggish to react and easily dragged off by a single outlier. This lesson examines
-both failure modes and uses them to motivate the smarter estimator that follows.
+A moving average smooths a signal by averaging the last N readings equally. It's very good at removing
+random noise, but it reacts slowly and one bad reading can throw it off for a while. This lesson looks
+at both weaknesses and ends with a third one that the next lesson fixes.
 </Abstract>
 
-The moving average is the filter you already use intuitively — a "7-day average," a "50-day stock
-average." It is excellent at one job and instructively bad at another, which sets up why a smarter
-estimator is eventually required.
+You've probably used this filter already without calling it one: a "7-day average" of case counts, or
+a stock's 50-day average.
 
 <Problem>
 
 ## Steady jitter needs averaging; bursts and lag do not forgive it
 
-A signal buried in steady random jitter is best cleaned by averaging — but a simple average over *all*
-history can never track a moving signal. The fix is a **sliding window**: average only the most
-recent N readings, discarding the oldest as each new one arrives. The window size is a direct
-smooth-versus-responsive trade-off, and — as the demo will show — a single outlier contaminates the
-output for the full N samples.
-
-<Analogy>
-<strong>You have seen this.</strong> A rolling case count, a moving stock average, your phone's
-average step count — all sliding-window averages that turn a spiky series into a readable trend.
-</Analogy>
+Averaging is the natural way to clean up random jitter, but an average over *all* past readings can
+never follow a signal that moves. The fix is a **sliding window**: average only the last N readings,
+and drop the oldest each time a new one comes in. A bigger window is smoother but slower, and, as the
+demo will show, one bad reading affects the output for N loops.
 
 </Problem>
 
@@ -43,19 +36,17 @@ average step count — all sliding-window averages that turn a spiky series into
 
 ## The average of a sliding window
 
-Hold the last N readings; report their mean. Next loop, the window slides one step forward.
+Keep the last N readings and report their average. Next loop, the window slides forward one reading.
+With N = 4 and readings 10, 12, 11, 13, the output is $46/4 = 11.5$. When a 14 arrives, the 10 drops
+out, and the output becomes $50/4 = 12.5$.
 
 $$
 \hat{x}_k = \frac{1}{N}\sum_{i=0}^{N-1} z_{k-i}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'N', meaning: 'the WINDOW LENGTH: how many recent readings to average. Larger N smooths harder and lags more'},
-    {symbol: 'i', meaning: 'a counter walking backwards through the window, so z_{k-i} runs from this loop\u2019s reading back to the oldest one still inside it'},
-    {symbol: 'the 1/N', meaning: 'every reading in the window gets exactly the same weight, and everything older gets zero. This is the sharp contrast with the exponential filter, which never fully forgets'},
-  ]}
-/>
+Here $z_{k-i}$ runs from this loop's reading back to the oldest one in the window. Every reading inside
+the window gets the same weight, $1/N$, and everything older gets zero. That's the big difference from
+the low-pass filter, which never completely forgets anything.
 
 <figure className="my-7 text-center">
   <svg viewBox="0 0 640 130" className="mx-auto h-auto w-full" role="img" aria-label="A sliding window over a row of readings">
@@ -84,7 +75,7 @@ $$
   </figcaption>
 </figure>
 
-It is a close cousin of the low-pass filter, with a different memory model:
+Side by side with the low-pass filter:
 
 | | Moving average | Low-pass (EMA) |
 |---|---|---|
@@ -93,32 +84,28 @@ It is a close cousin of the low-pass filter, with a different memory model:
 | Setting | window size N | smoothing α |
 | Best at | killing steady jitter | cheap real-time smoothing |
 
-The cleanest way to *see* that difference in memory is to feed both filters one wild outlier and
-watch what the output does afterwards:
+The clearest way to see the difference is to feed both filters one wild reading and watch what happens
+afterwards:
 
 <WindowVsFadeExplorer />
 
-This Desmos-style graph is each filter's **impulse response**: which is nothing more than its weight
-function, replayed in time. The moving average gives the spike a weight of exactly $1/N$ for exactly
-$N$ samples, then drops it entirely: full poison, then total amnesia, with the hard edge at $k = N$.
-The EMA takes a *bigger* first hit ($\alpha > 1/N$ for typical settings) but fades it geometrically —
-a long, soft tail instead of a cliff. Grow $N$ and the moving average's contamination gets shallower
-but *longer*; there is no setting that makes it short *and* shallow. That fixed $N$-sample dwell is
-the "single outlier contaminates the output for the full window" failure from the introduction, now
-quantified.
+This graph is each filter's **impulse response**, which is just its weights played out over time. The
+moving average gives the spike a weight of exactly $1/N$ for exactly $N$ loops and then forgets it
+completely. The low-pass filter usually takes a bigger hit at first ($\alpha > 1/N$ for typical
+settings) and then fades it out gradually. Make $N$ bigger and the moving average's disturbance gets
+smaller but lasts longer. You can't make it both small and short.
 
-The demo below runs the window on a live signal — truth, sensor, and the windowed average. Grow N for
-smoothness, then run the step test to feel the lag a large window costs.
+The live demo runs the moving average on a noisy signal. Raise N to smooth it, then run the step test
+to see the lag a big window costs.
 
 <MovingAverage />
 
-<Callout type="warn" title="The two failure modes.">
-With a large window the step test ramps up slowly instead of snapping — pure lag. And a single wild
-spike shifts the average for the full N samples. A Kalman filter with a suitable motion model can
-track changing motion with less lag, but the advantage depends on the model and noise estimates.
-Linear smoothing alone does not reject outliers. A scalar Kalman correction takes a larger first hit
-than this average only when its gain exceeds $1/N$. Use a measurement-validity or innovation check to
-reject implausible readings, allowing for both physical motion and sensor uncertainty.
+<Callout type="warn" title="The two weaknesses">
+With a large window, the step test ramps up slowly instead of jumping: that's lag. And a single wild
+reading shifts the average for N loops. No averaging filter, this one or the low-pass or even a Kalman
+filter, gets rid of outliers by itself. For that, check each reading before it goes in and throw out
+ones that are physically impossible, like a distance that changed by more than the robot could have
+moved in one loop.
 </Callout>
 
 </Theory>
@@ -127,8 +114,8 @@ reject implausible readings, allowing for both physical motion and sensor uncert
 
 ## A fixed-cost ring buffer
 
-On a Control Hub, implement the window as a ring buffer with a running sum, so each update is O(1)
-regardless of N. The cost to weigh against the low-pass is the N-value memory.
+On the robot, store the window in a ring buffer and keep a running sum, so each update costs the same
+no matter how big N is. The tradeoff against the low-pass filter is storing N values instead of one.
 
 <JavaCode league="FTC" label="Moving average in constant time">{`private final double[] buffer = new double[N];
 private int index;
@@ -148,19 +135,17 @@ double update(double reading) {
 
 <Exercise title="Trace the ring buffer">
 
-The trick is that the slot you are about to overwrite holds exactly the sample that is now $N$ loops
-old, so one subtraction and one addition keep the running sum exact. Work through $N = 4$ with readings
-`1, 2, 3, 4, 5, 6` and write down `buffer`, `index`, `sum` and the returned average at every step. Then
-answer the second question: what does the average read on loop 2 if you divide by `N` instead of
-`count`, and where did those zeros come from?
+The slot you're about to overwrite always holds the reading from exactly $N$ loops ago, so one
+subtraction and one addition keep the sum correct. Run $N = 4$ with readings `1, 2, 3, 4, 5, 6` and
+write down `buffer`, `index`, `sum`, and the output at each step. Then: what would loop 2 output if you
+divided by `N` instead of `count`?
 
 <Solution>
 
-The averages are `1, 1.5, 2, 2.5, 3.5, 4.5`. On loop 5 the reading `1` leaves the window and the `5`
-enters, so the sum goes from 10 to 14 — one subtraction to evict the `1`, one addition to admit the `5`,
-and no re-walk of the buffer. Dividing by `N` on loop 2 gives `0.75` instead of `1.5`: the
-two untouched slots still hold their initial zeros, and those zeros are not measurements. `count`
-exists so the filter is honest before the window has filled.
+The outputs are `1, 1.5, 2, 2.5, 3.5, 4.5`. On loop 5 the `1` leaves and the `5` comes in, so the sum
+goes from 10 to 14 with one subtraction and one addition. Dividing by `N` on loop 2 gives `0.75` instead
+of `1.5`, because the two unused slots still hold zeros that were never measurements. `count` fixes
+that until the window fills up.
 
 </Solution>
 
@@ -168,17 +153,16 @@ exists so the filter is honest before the window has filled.
 
 <Exercise title="One wild outlier">
 
-Put this beside the low-pass filter from the previous lesson. This one forgets a sample completely
-after $N$ loops; the exponential filter never entirely forgets anything. Feed both a single wild spike
-and describe the two recoveries. Which behavior do you want on a distance sensor that occasionally
-reads through a gap in the field wall?
+This filter forgets a reading completely after $N$ loops, while the low-pass filter never quite does.
+Feed both one wild spike and describe how each recovers. Which would you rather have on a distance
+sensor that sometimes reads through a gap in the field wall?
 
 </Exercise>
 
-There is a second limit hiding in that equal weighting, and it is not about noise at all. Averaging a
-window asks which flat value best explains it, so on a signal that curves, the answer sits below the
-peak even with a perfect sensor. The [Savitzky-Golay filter](./savitzky-golay.mdx) keeps the window
-and fits a curve to it instead, for the same cost per loop.
+There's a third problem with equal weights, and it has nothing to do with noise. On a signal that
+curves, the average of a window sits below the peak even with a perfect sensor. The
+[Savitzky-Golay filter](./savitzky-golay.mdx) keeps the window but fits a curve to it, for the same cost
+per loop.
 
 </Deploy>
 

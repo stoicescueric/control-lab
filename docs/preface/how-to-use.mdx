@@ -8,78 +8,65 @@ tags: [preface, how-to, orientation]
 # How to Use Control Lab
 
 <Abstract>
-This page explains how every lesson is structured, what the two kinds of interactive demo
-are for, and how to track your progress. It also suggests a path through the curriculum depending on
-whether you're an FTC/FRC programmer or here for the theory.
+How the lessons are laid out, what the two kinds of demo are for, and how progress tracking works. The
+last section suggests a route through the site depending on whether you are building a robot this
+season or reading for the theory.
 </Abstract>
 
-## The anatomy of a lesson
+## How a lesson is laid out
 
-Every substantive lesson follows the same learning sequence:
+Most lessons move in the same direction. They open with something going wrong on a robot: an arm that
+sags, a drivetrain that arcs, a heading that drifts. Then there is a demo so you can see the behavior
+before any equations show up. After that comes the math, built up from numbers you can check by hand,
+then the Java that runs it, and finally the things the ideal model leaves out, like voltage sag,
+backlash, latency, and wheel slip.
 
-1. **Metadata and abstract.** The title, description, tags, and two-sentence abstract define the
-   lesson's scope before the reader commits to it.
-2. **Engineering context.** A concrete FTC mechanism, sensor, or autonomous failure gives the model a
-   reason to exist.
-3. **Visual intuition.** A diagram or interactive demo exposes the important behavior before formal
-   notation is introduced.
-4. **Theoretical explanation.** The lesson develops the equation from basic ideas, states its
-   assumptions, and defines every non-obvious variable near its first use.
-5. **Engineering implementation.** Focused Java shows how the model fits a non-blocking OpMode loop,
-   with explicit units and useful telemetry.
-6. **Hardware reality.** Tips and warnings identify the physical effects that the ideal model omits,
-   such as voltage sag, backlash, latency, saturation, or wheel slip.
+Section headings describe what the section is about, so you can skim the table of contents and jump to
+the part you need.
 
-Section titles follow the subject being taught. Lessons are not forced into generic
-"Problem / Theory / Deploy" acts.
+The badge under each title (Easy, Medium, Hard) rates how much math the lesson uses. It says nothing
+about how useful the lesson is. Some of the most important pages on the site are rated Easy.
 
-The **difficulty badge** under each title (Easy / Medium / Hard) rates the math, not the value — some
-of the most important lessons are Easy.
+## Two kinds of demo
 
-## Two kinds of interactive demo
+Each demo panel has a label in its corner.
 
-Look at the label in each panel's corner:
-
-- **Live demo**: a real-time simulation. Physics runs continuously; drag targets, fire disturbances,
-  tune gains, and watch the system respond. If it has sliders, move them — the demos are the lab bench.
-- **Math explorer**: a Desmos-style graph of one equation. Nothing animates on its own; the graph
-  responds instantly to the sliders so you can *feel* how the formula behaves before reading on.
+- **Live demo:** a running simulation. Drag targets, fire disturbances, change gains, and watch the
+  system respond. If there are sliders, move them. The demos are there to be poked at.
+- **Math explorer:** a graph of one equation. Nothing moves until you change a slider, and then the graph
+  updates immediately. Use these to get a feel for a formula before the text works through it.
 
 :::tip[Make it fullscreen]
-Every demo panel has an expand button (⛶) in its corner — useful on phones and when projecting for a
-team. Press <kbd>Esc</kbd> to close.
+Every demo panel has an expand button (⛶) in its corner. It helps on phones and when you are projecting
+for the team. Press <kbd>Esc</kbd> to close it.
 :::
 
-Some live demos carry a **Challenge**: a measurable goal graded by the simulation itself ("recover
-from the wind gust within 3.5 s"). Passed challenges turn gold and stay solved between visits.
+Some live demos include a **Challenge**, a goal the simulation grades itself, such as "recover from the
+wind gust within 3.5 s." Solved challenges turn gold and stay solved when you come back.
 
 ## Tracking your progress
 
-At the bottom of every lesson is a **"Mark lesson as complete"** button. Completed lessons get a green
-check in the sidebar, and the homepage shows a *Continue where you left off* card. Progress is stored
-in your browser only — nothing is uploaded, and clearing site data resets it.
+The bottom of every lesson has a **Mark lesson as complete** button. Finished lessons get a green check
+in the sidebar, and the homepage shows a *Continue where you left off* card. Progress lives in your
+browser only. Nothing is uploaded, and clearing site data resets it.
 
 ## Suggested paths
 
-**Building an FTC/FRC robot this season?** Go in module order, but don't stall in the preface:
-skim [Why Math Matters](./why-math-matters/index.mdx), bookmark
-[Conventions & Notation](../notation.mdx), then build
+**Building an FTC or FRC robot this season?** Read [Control & Feedback](./control-and-feedback.mdx),
+bookmark [Conventions & Notation](../notation.mdx), and then work through this sequence:
 [State Machines](../software-architecture/state-machines.mdx) →
 [Feedforward](../control-theory/feedforward.mdx) → [PID](../control-theory/pid.mdx) →
 [Mecanum Kinematics](../path-following/mecanum-kinematics.mdx) →
 [Angle Wrapping](../path-following/angle-wrapping.mdx) →
 [Pose Estimation Contract](../path-following/pose-estimation-contract.mdx) →
 [Common Implementation](../path-following/common-implementation.mdx) →
-[PID-to-Point](../path-following/pid-to-point.mdx). The remaining path followers, sensor-fusion
-derivations, and modern-control track are optional until your robot needs them.
+[PID-to-Point](../path-following/pid-to-point.mdx). The other path followers and the sensor-fusion
+lessons can wait until your robot needs them.
 
-**Here for the theory?** Read the preface fully (the math lenses matter), then go straight through
-the modules in order: controllers first, then the
-[Signal Processing](../signal-processing/index.mdx) track — which builds from a noisy sensor to the
-Kalman filter — and finish with
-[State-Space Control](../state-space-control/index.mdx), where the modeling threads reunite. The
-[Advanced Topics](../advanced-topics/index.mdx) section holds the proofs and derivations the main
-lessons reference.
+**Here for the theory?** Go through the modules in order. The controllers come first, then the
+[Signal Processing](../signal-processing/index.mdx) track, which starts from a single noisy sensor and
+ends at the Kalman filter, then path following. [Advanced Topics](../advanced-topics/index.mdx) has the
+longer derivations that the main lessons point to.
 
-**Lost in a symbol?** Every convention and recurring symbol lives on one page:
+**Lost in a symbol?** Every convention and recurring symbol is defined on
 [Conventions & Notation](../notation.mdx).

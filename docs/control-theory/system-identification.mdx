@@ -1,6 +1,6 @@
 ---
 title: System Identification
-description: Stop guessing your feedforward gains — measure them. Drive the mechanism through known voltages, log the response, and recover kS, kV, and kA by least-squares fit, exactly like FRC's SysId.
+description: Stop guessing your feedforward gains and measure them. Drive the mechanism through known voltages, log the response, and recover kS, kV, and kA by least-squares fit, the same way FRC's SysId does.
 sidebar_position: 6
 tags: [system-identification, sysid, least-squares, regression, characterisation, feedforward]
 ---
@@ -12,84 +12,95 @@ import SystemId from '@site/src/components/simulations/control-theory/SystemId';
 <Difficulty level="Hard" />
 
 <Abstract>
-System identification is how you replace guessed feedforward constants with measured ones. You drive the
-mechanism through a set of known voltages, record the velocity and acceleration it actually reaches, and
-fit the motor model $V = k_S\,\mathrm{sign}(v) + k_V v + k_A a$ to that data by ordinary least squares.
-The intercept of the fit is $k_S$, the slope is $k_V$, and a separate accelerating test gives $k_A$ —
-the same procedure FRC's SysId tool automates.
+System identification replaces guessed feedforward constants with measured ones. You drive the
+mechanism with known voltages, log the speed and acceleration it reaches, and fit
+$V = k_S\,\mathrm{sign}(v) + k_V v + k_A a$ to the data. A slow ramp gives $k_S$ and $k_V$ as the
+intercept and slope of a line, and a second, faster test gives $k_A$. FRC's SysId tool automates the
+same procedure.
 </Abstract>
 
-<Admonition type="note" title="Prerequisites and a starting path">
+<Admonition type="note" title="Before you start">
 
-Read [Feedforward](./feedforward.mdx) first, then [Signals & Noise](../signal-processing/signals.mdx)
-for the difference between repeatable variation, random noise, and bias. This lesson uses
-least-squares fitting, but you can begin by planning a safe voltage sweep and logging units correctly;
-the viewer explains the regression steps.
-
-**Math used:** scatter plots, a straight-line slope and intercept, residual error, and least squares.
-The lesson uses the fitted result; it does not require deriving normal equations or a matrix inverse.
+Read [Feedforward](./feedforward.mdx) first, and [Signals & Noise](../signal-processing/signals.mdx) for
+the difference between random noise and a steady bias. The math here is a line of best fit: a scatter
+plot, its slope and intercept, and how far the points sit from the line. The derivation of the fitting
+formulas is an optional exercise.
 
 </Admonition>
 
-The [feedforward](./feedforward.mdx) lesson left one thing on a promissory note: *where do $k_S$, $k_V$,
-and $k_A$ come from?* Guessing them, or copying another team's, gives a model that is wrong by an unknown
-amount — and a wrong model means feedback has to cover the gap, which was the whole problem feedforward
-set out to solve. The honest answer is to **measure** them from your own robot.
+The [feedforward](./feedforward.mdx) lesson left a question open: where do $k_S$, $k_V$, and $k_A$ come
+from? A guess, or another team's numbers, gives a model that's wrong by some unknown amount, and then
+feedback has to cover the difference, which is the problem feedforward was supposed to solve. The
+reliable answer is to measure them on your own robot.
 
 <Problem>
 
-## A model you guessed is a model you can't trust
+## You can't trust a guessed model
 
-You can hand-estimate $k_V \approx 12\,\text{V} \div v_\text{max}$ and call it a day, but real mechanisms
-have friction you didn't account for, a gearbox with its own losses, and a motor whose constants drift
-from the datasheet. If the feedforward prediction is 20% off, feedback silently makes up the difference —
-so the mechanism still works, but it is sluggish and you have no idea why. We want the *actual* constants
-for *this* robot, with a number that tells us how much to trust them.
+You can estimate $k_V \approx 12\,\text{V} \div v_\text{max}$ from the top speed, but real mechanisms
+have friction, gearbox losses, and motors that don't match the datasheet. If the feedforward is 20% off,
+feedback quietly makes up the difference. The mechanism still works, but it's sluggish and you won't
+know why. You want the actual constants for this robot, and some idea of how much to trust them.
 
 </Problem>
 
-## Safe acquisition workflow
+## Running the test safely
 
-Before the algebra, make the experiment safe and reproducible:
+Set the experiment up before worrying about the math:
 
-1. For a drivetrain, test on the floor in a clear, controlled lane. For a standalone mechanism, secure
-   its fixture while leaving the intended output free to move. Do not characterize a drivetrain lifted.
-2. Set a voltage limit and keep an immediate stop control available.
-3. Measure battery voltage instead of assuming a nominal value.
-4. Choose one physical velocity unit and log time, applied volts, velocity, and acceleration every loop.
-5. Discard the stuck/static regime before fitting the moving model.
-6. Fit all valid samples offline, then validate the constants on a separate run.
+1. Test a drivetrain on the floor, in a clear lane. For a mechanism, secure the robot but leave the part
+   you're measuring free to move. Don't characterize a drivetrain with its wheels in the air.
+2. Set a voltage limit and keep a way to stop immediately.
+3. Measure the battery voltage instead of assuming 12 V.
+4. Pick one velocity unit and log time, applied volts, velocity, and acceleration every loop.
+5. Throw out the samples from before the mechanism starts moving.
+6. Fit the data afterwards, then check the constants on a separate run.
 
-:::tip[Predict, run, inspect]
-Before pressing **Run a new test**, predict where the fitted intercept should land. Set **Noise level**
-to zero (which disables both voltage and velocity noise), run the accelerated display, then explain why the small residual intercept error is bounded by
-the real-time ramp rate times the plant lag rather than by the 12× presentation speed.
+:::tip[Predict first]
+Before pressing **Run a new test**, guess where the fitted intercept will land. Then set **Noise level**
+to zero (which turns off both voltage and velocity noise) and run it. There's still a small error in the
+intercept. It comes from how fast the ramp rises compared with how slowly the mechanism responds, not
+from the demo running at 12× speed.
 :::
 
 <Theory>
 
-## Optional derivation: fit the motor model to measured data
+## Fitting a line to the data
 
-Recall the model from [feedforward](./feedforward.mdx): to hold velocity $v$ and accelerate at $a$,
+From [feedforward](./feedforward.mdx), the voltage to hold velocity $v$ while accelerating at $a$ is
 
 $$
 V = k_S\,\operatorname{sign}(v) + k_V\,v + k_A\,a
 $$
 
-This is **linear in the unknowns** $k_S, k_V, k_A$ — which is exactly what makes it fittable. Run two
-kinds of test and the constants fall out.
+The unknowns, $k_S$, $k_V$, and $k_A$, only appear multiplied by things you can measure, so you can fit
+them with ordinary line fitting. The trick is designing tests that isolate them.
 
-### The quasistatic ramp → kS and kV
+### The slow ramp gives kS and kV
 
-Drive the mechanism with a *slowly* rising voltage, so slowly that acceleration voltage is negligible
-($k_Aa \approx 0$). The model collapses to a straight line:
+Raise the voltage very slowly, so slowly that the mechanism is barely accelerating and $k_A a$ is close
+to zero. Moving forward, the model becomes a straight line:
 
 $$
-V = k_S + k_V\,v \qquad (\text{moving forward, } a \approx 0)
+V = k_S + k_V\,v
 $$
 
-Log many $(v, V)$ pairs and fit the best line through them. With $n$ samples, **ordinary least squares**
-gives the slope and intercept in closed form:
+Plot every logged sample with velocity across and voltage up. The points fall roughly on a line. Its
+slope is $k_V$, the extra volts per unit of speed. Where it crosses $v = 0$ is $k_S$, the friction
+voltage.
+
+To see where the fitting formulas come from, take three samples: $(v, V) = (10, 2.4), (20, 3.9),
+(30, 5.4)$. The average velocity is $\bar v = 20$ and the average voltage is $\bar V = 3.9$. Each sample's
+distance from those averages is $(-10, -1.5)$, $(0, 0)$, $(10, 1.5)$. The slope is how much voltage
+changes per unit of velocity across the samples:
+
+$$
+k_V = \frac{(-10)(-1.5) + (0)(0) + (10)(1.5)}{(-10)^2 + 0^2 + 10^2} = \frac{30}{200} = 0.15
+$$
+
+and the line has to pass through the average point, so
+$k_S = \bar V - k_V \bar v = 3.9 - 0.15(20) = 0.9$ V. In general, with $n$ samples, that's the
+**ordinary least squares** fit:
 
 $$
 k_V = \frac{\sum (v_i - \bar v)(V_i - \bar V)}{\sum (v_i - \bar v)^2},
@@ -97,64 +108,49 @@ k_V = \frac{\sum (v_i - \bar v)(V_i - \bar V)}{\sum (v_i - \bar v)^2},
 k_S = \bar V - k_V\,\bar v
 $$
 
-<EquationLegend
-  title="Symbols in the least-squares fit"
-  items={[
-    {symbol: 'v_i, V_i', meaning: 'the i-th logged sample: a measured velocity and the voltage actually applied at that moment. The subscript numbers samples, not loops'},
-    {symbol: 'v\u0304, V\u0304', meaning: 'the bar means the MEAN over all n samples. Both formulas are written as deviations from those means'},
-    {symbol: 'n', meaning: 'how many samples you logged'},
-    {symbol: 'the numerator', meaning: 'how much v and V vary TOGETHER; the denominator is how much v varies on its own. Their ratio is the slope of the best-fit line'},
-  ]}
-/>
+The bars mean averages over all the samples, and the subscript $i$ numbers the samples. It's the line
+that makes the total of the squared vertical misses as small as possible.
 
-The **intercept is $k_S$** (the moving model's friction-voltage estimate, extrapolated to zero speed) and the
-**slope is $k_V$** (extra volts per unit speed — the back-EMF term). Below is the ramp test: each blue dot
-is one logged sample, the amber line is the least-squares fit, and the green dot where it crosses $v = 0$
-is $k_S$. Crank the noise up and watch the estimate wobble. More samples reduce random variation,
-but do not remove every bias: ordinary least squares assumes the velocity regressor is effectively
-noise-free. This viewer adds noise to both axes, so velocity noise can bias the slope toward zero.
-Turn noise off to compare with the disclosed ramp-lag tolerance; validate a real fit on separate runs.
+In the demo, each blue dot is a logged sample, the amber line is the fit, and the green dot where it
+crosses $v = 0$ is $k_S$. Turn the noise up and watch the estimate wobble. More samples help with
+random noise but not with everything. Least squares assumes the velocity readings are accurate. This
+demo adds noise to both axes, and noise in velocity tends to pull the slope toward zero. Turn noise off
+to see the small bias that's left from the ramp, and always check a real fit on a separate run.
 
 <SystemId />
 
-### The dynamic test → kA
+### A step test gives kA
 
-$k_A$ never appears at steady speed, so the ramp can't see it. Run a second test: a **step** to a fixed
-voltage and record the acceleration while the mechanism speeds up. Rearranging the model for the
-accelerating phase,
+At a steady speed $k_A$ does nothing, so the ramp can't see it. Run a second test: jump to a fixed
+voltage and log the acceleration as the mechanism speeds up. Rearranging the model,
 
 $$
 k_A = \frac{V - k_S - k_V\,v}{a}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'a', meaning: 'the measured acceleration during the step test. Everything else on the right is already known from the ramp test, so k_A is what is left over', unit: 'in/s\u00b2 or rad/s\u00b2'},
-  ]}
-/>
+Don't compute that for each sample, though. Near the end of the step the acceleration gets close to zero
+and the division blows up. Instead, fit all the accelerating samples at once, with columns
+$[\operatorname{sign}(v_i), v_i, a_i]$ and target $V_i$. One least-squares solve with three unknowns
+returns $k_S$, $k_V$, and $k_A$ together.
 
-Do **not** divide each sample by $a$. Instead, fit every valid accelerating sample jointly with a design
-row $[\operatorname{sign}(v_i),v_i,a_i]$ and response $V_i$; one multivariable least-squares solve returns
-$k_S,k_V,k_A$ without exploding near $a=0$. A dynamic voltage step supplies acceleration that the
-quasistatic ramp intentionally avoids. When combining forward and reverse data, the sign column keeps
-static friction pointed correctly.
+The sign column also lets you fit forward and reverse data together, since it flips $k_S$ with the
+direction of travel. That assumes friction is the same both ways. If you're not sure it is, fit each
+direction separately and compare. A big difference is worth knowing about.
 
-<Callout type="idea" title="This is just linear regression.">
-"System identification" sounds exotic; for a motor it is fitting a line (or a plane) to data. The same
-ordinary-least-squares machinery underlies the curve-fitting you may meet again in
-[state estimation](../signal-processing/kalman.mdx). The art is in the *test design* — isolating one term
-at a time — not the math.
+<Callout type="idea" title="It's just line fitting">
+For a motor, system identification is fitting a line, or a plane, to data. The math is the easy part.
+The skill is in designing tests that isolate one term at a time.
 </Callout>
 
 </Theory>
 
 <Deploy>
 
-## Run the test, fit the line
+## Running the ramp and fitting it
 
-The widget uses a real-time ramp of $0.10\ \mathrm{V/s}$ so its $0.35\ \mathrm{s}$ plant lag contributes
-at most about $0.035\ \mathrm{V}$ of intercept bias. Simulation time is displayed 12× faster only so the
-learner does not wait two minutes; the plant time constant and logged model remain unchanged.
+The demo ramps at $0.10\ \mathrm{V/s}$ in real time. With a mechanism that takes about $0.35\ \mathrm{s}$
+to respond, that adds at most about $0.035\ \mathrm{V}$ of error to the intercept. The display runs 12×
+faster so you don't have to wait two minutes, but the simulated mechanism runs at normal speed.
 
 <JavaCode league="FTC" label="Quasistatic ramp: collect (velocity, voltage) samples">{`// Raise the command slowly and log every loop.
 void rampStep(double elapsedSeconds) {
@@ -167,45 +163,44 @@ void rampStep(double elapsedSeconds) {
     samples.add(new Sample(v, volts));
 }`}</JavaCode>
 
-<Exercise title="How slow is quasistatic?">
+<Exercise title="How slow is slow enough?">
 
-"Quasistatic" means slow enough that acceleration is negligible, so the $k_A$ term drops out and what
-is left is only $k_S$ and $k_V$. Work out how slow that has to be for your mechanism, and what the fit
-would show if you ramped too fast.
+The ramp has to be slow enough that acceleration hardly matters. How slow is that for your mechanism,
+and what would the fit show if you ramped too fast?
 
 <Solution>
 
-Slow enough that $k_A a$ is small next to $k_V v$ — in practice, slow enough that the mechanism reaches
-its top speed over tens of seconds rather than one. Ramp too fast and the extra volts spent on
-acceleration never leave the fit, but watch *where* they land. Once the initial transient dies, a ramp
-at $c$ volts per second accelerates at a nearly constant $a \approx c/k_V$, so the unmodeled $k_A a$
-term is a **constant offset** — and a constant offset moves the line's **intercept**, not its slope:
+Slow enough that $k_A a$ is tiny next to $k_V v$. In practice that means reaching top speed over tens of
+seconds, not one. If you ramp too fast, the voltage spent on acceleration ends up in the fit, and it's
+worth seeing where. A ramp rising at $c$ volts per second settles into a nearly constant acceleration
+$a \approx c/k_V$, so the missing $k_A a$ term is a constant, and a constant shifts the line's
+**intercept**, not its slope:
 
 $$
-V = \underbrace{\left(k_S + \frac{k_A c}{k_V}\right)}_{\text{intercept, inflated by } c\,\tau} + k_V\,v
+V = \underbrace{\left(k_S + \frac{k_A c}{k_V}\right)}_{\text{intercept, too high by } c\,\tau} + k_V\,v
 $$
 
-So the symptom of a too-fast ramp is an inflated $k_S$, too large by roughly the ramp rate times the
-mechanism's time constant — the same $0.035\ \mathrm{V}$ the widget above quantifies. Every downstream
-feedforward then commands more voltage than the mechanism needs. The slope $k_V$ is barely affected,
-which is exactly why this bug is easy to miss: the number you would think to check looks fine. If your
-fitted $k_S$ comes out implausibly large, slow the ramp before you go hunting for friction.
+So a too-fast ramp gives a $k_S$ that's too high, by about the ramp rate times the mechanism's time
+constant $\tau = k_A/k_V$. That's the $0.035\ \mathrm{V}$ above. Every feedforward built on it then
+sends more voltage than the mechanism needs. The slope barely changes, which is why this is easy to
+miss: the number you'd think to check looks fine. If $k_S$ comes out suspiciously large, slow the ramp
+down before blaming friction.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Applied, not requested">
+<Exercise title="Why log the applied voltage">
 
-`volts` comes from the applied power times the measured battery, not from the voltage you asked for.
-Work out why those two differ.
+`volts` is the applied power times the measured battery voltage, not the voltage you asked for. Why are
+those different?
 
 <Solution>
 
-Two reasons, and both matter. The command is clamped at 1.0, so once the ramp passes full power you
-keep asking for more and the motor keeps receiving the same thing. And the rail is not 12 V — it sags
-under load, so the same duty cycle delivers different voltages over the test. Fitting against the
-requested voltage fits a line to a number the motor never saw.
+Two reasons. The command is clamped at 1.0, so past that point you keep asking for more and the motor
+keeps getting the same. And the battery sags under load, so the same power fraction gives different
+voltages during the test. Fitting against the requested voltage fits a line to numbers the motor never
+saw.
 
 </Solution>
 
@@ -235,69 +230,67 @@ double[] fitLine(List<Sample> samples) {
     return new double[] {kS, kV};
 }`}</JavaCode>
 
-<Exercise title="Derive the two lines">
+<Exercise title="Where the formulas come from (optional, uses derivatives)">
 
-Do not trust those formulas — derive them. Write the total squared error
-$\sum (V - k_S - k_V v)^2$, differentiate with respect to $k_S$ and $k_V$, set both derivatives to
-zero, and solve the pair. Then interpret the answers physically: what is $k_S$ in units, what is
-$k_V$, and what would a fitted $k_S$ of zero say about your mechanism?
+Write the total squared miss $\sum (V - k_S - k_V v)^2$. Find the $k_S$ and $k_V$ that make it smallest
+by taking its derivative with respect to each one and setting both to zero. Then say what $k_S$ and
+$k_V$ mean physically, and what a fitted $k_S$ of zero would tell you.
 
 <Solution>
 
-Setting $\partial/\partial k_S = 0$ gives $k_S = \bar V - k_V \bar v$ immediately; substituting that
-into $\partial/\partial k_V = 0$ leaves $k_V = S_{xy}/S_{xx}$. Those are the normal equations, and
-they are the two lines above.
+Setting the $k_S$ derivative to zero gives $k_S = \bar V - k_V \bar v$ right away. Substituting that
+into the $k_V$ equation leaves $k_V = S_{xy}/S_{xx}$, the two lines in the code.
 
-$k_S$ is the moving model's friction offset in volts. Breakaway stiction can differ from this fitted
-moving-friction term. $k_V$ is volts per unit of speed. A fitted $k_S$ near zero can reflect low friction,
-measurement uncertainty, or a poor fit; it does not prove that the mechanism has no breakaway threshold.
-Inspect residuals and check that the samples represent motion across a useful velocity range.
+$k_S$ is the friction voltage while moving, and $k_V$ is volts per unit of speed. A fitted $k_S$ near
+zero could mean low friction, or noisy data, or a poor fit. It doesn't prove the mechanism starts
+moving at zero volts. Look at how the points scatter around the line, and make sure the samples cover a
+useful range of speeds.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Why guard the spread">
+<Exercise title="Why check the spread">
 
-`sXX` is the spread of the velocity samples. Work out what a near-zero `sXX` does to the division
-below it, and why refusing to fit beats returning the number anyway.
+`sXX` measures how spread out the velocity samples are. What does a near-zero `sXX` do to the division
+after it, and why is refusing to fit better than returning a number?
 
 <Solution>
 
-Zero spread means every sample had the same velocity: the data cannot identify a unique slope and
-intercept. Division by zero produces a non-finite fit that can propagate into invalid motor commands.
-A `null` return makes the failure explicit so the caller can reject it before commanding hardware.
+Zero spread means every sample had the same velocity, so there's no way to tell the slope from the
+intercept. Dividing by zero gives a non-finite result that could end up as a motor command. Returning
+`null` makes the failure obvious so the caller can reject it.
 
 </Solution>
 
 </Exercise>
 
-In FRC this is one tool: **SysId** runs the quasistatic and dynamic tests, fits all three gains, and even
-reports an $R^2$ so you know how well the model fits. FTC teams either run a small ramp OpMode like the
-above or use a library tuner; the math underneath is identical.
+In FRC, **SysId** runs the ramp and step tests, fits all three gains, and reports an $R^2$ that says how
+well the model fits. In FTC, run a small ramp OpMode like the one above or use a library tuner. The math
+is the same.
 
-<Callout type="tip" title="Only fit the moving data.">
-Throw away samples where the mechanism hasn't broken static friction yet (velocity ≈ 0 while voltage
-climbs) — they sit on a different regime and bias your intercept. Start the fit from the first sample with
-clearly nonzero velocity.
+<Callout type="tip" title="Only fit the moving samples">
+Throw away samples where the mechanism hasn't started moving yet, with velocity near zero while the
+voltage climbs. They follow different physics and pull the intercept off. Start the fit from the first
+sample with clearly nonzero velocity.
 </Callout>
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: units, direction, and a fresh battery">
+<Admonition type="warning" title="Common ways a fit goes wrong">
 
-Three ways a fit goes wrong: velocity not converted to real units (so $k_V$ is in nonsense per tick — see
-[units](../software-architecture/discretization.mdx)); mixing forward and reverse samples (the
-$k_S\,\mathrm{sign}(v)$ flips, so fit each direction separately); and a sagging battery during the test
-(log `power × batteryVoltage`, not nominal 12 V). This is an applied-voltage estimate: driver losses,
-current limiting, and mismatched measurement timestamps can make it differ from motor-terminal voltage.
+Velocity that wasn't converted to real units, so $k_V$ ends up in volts per tick (see
+[units](../software-architecture/discretization.mdx)). Forward and reverse samples mixed without the sign
+column. And a sagging battery during the test, if you logged 12 V instead of `power × batteryVoltage`.
+Even that is an estimate of the voltage at the motor: wiring losses and timing differences between the
+voltage and velocity readings can make it a little off.
 
 </Admonition>
 
 <Admonition type="info" title="Sources & references">
 
 - **[WPILib SysId routines](https://docs.wpilib.org/en/stable/docs/software/advanced-controls/system-identification/creating-routine.html)**:
-  official quasistatic and dynamic test definitions and safety structure (least-squares fit
-  of $k_S/k_V/k_A$), the reference implementation this lesson mirrors.
+  the official ramp and step test definitions, safety structure, and least-squares fit of
+  $k_S/k_V/k_A$ that this lesson follows.
 
 </Admonition>

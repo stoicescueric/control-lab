@@ -171,6 +171,11 @@ Good demos expose the essential parameter:
 
 ### 4. Theoretical Rigor
 
+Build the idea before the notation. Work a concrete example with numbers the reader can check by
+hand (60 in in 2 s is 30 in/s) before writing the general formula ($dx/dt$), and connect new ideas to
+math the reader already has: the slope formula before a derivative, Pythagoras before a vector
+magnitude. Much of the audience is in middle or high school.
+
 Use KaTeX math:
 
 ```mdx
@@ -179,14 +184,13 @@ u = k_S\operatorname{sgn}(v) + k_V v + k_A a
 $$
 ```
 
-Explain every non-obvious variable immediately near the equation. For example:
+Explain each new symbol **once**, near its first use. Use either an `<EquationLegend>` or a sentence
+of prose, not both: a legend followed by a "Here, X is..." paragraph that repeats it reads as padding.
+Don't re-define symbols the reader has already met in the same lesson, and link to
+[Conventions & Notation](docs/notation.mdx) for recurring ones.
 
-- `$u$` is the motor command or requested voltage fraction.
-- `$k_S$` is the static-friction compensation term.
-- `$v$` is mechanism velocity.
-- `$a$` is mechanism acceleration.
-
-Do not leave readers to infer symbols from context when the equation introduces a new model.
+Write the way you'd explain it to a teammate. Avoid stacked caveats, slogans ("that is the whole
+trick"), and generic section titles; name sections after what they teach.
 
 Use punctuation deliberately. In lists and references, write `**Term:** explanation` rather than
 using an em dash as a default separator. Reserve em dashes for genuine interruptions in a sentence;

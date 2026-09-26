@@ -1,6 +1,6 @@
 ---
 title: Take-Back-Half
-description: The one-line upgrade to bang-bang flywheel control — integrate the error, and each time it changes sign give back half the accumulated drive — converging to a steady, ripple-free hold while keeping bang-bang's fast recovery after a shot.
+description: A small upgrade to bang-bang flywheel control. Integrate the error, and each time it changes sign, cut the output back halfway, so the flywheel settles on a steady speed while keeping bang-bang's fast recovery.
 sidebar_position: 3
 tags: [takeback-half, tbh, bang-bang, flywheel, control, advanced]
 ---
@@ -12,28 +12,36 @@ import BangBang from '@site/src/components/simulations/control-theory/BangBang';
 <Difficulty level="Medium" />
 
 <Abstract>
-Bang-bang recovers a flywheel's speed fast but chatters and never truly settles. <strong>Take-back-half</strong>
-(TBH) is a tiny modification — integrate the error like an integrator, and when the error changes sign, give
-back half the accumulated drive — that converges to a steady, ripple-free hold while keeping bang-bang's
-fast recovery after a shot. One gain, no derivative, no windup.
+Bang-bang gets a flywheel back up to speed quickly but never settles. <strong>Take-back-half</strong>
+(TBH) is a small change: add up the error like an integral, and every time the error changes sign, cut
+the output back halfway toward where it was the last time that happened. With a sensible gain, the
+flywheel settles on a steady speed and still recovers quickly after a shot. It has one gain to tune.
 </Abstract>
 
-<Admonition type="note" title="Prerequisite">
+<Admonition type="note" title="Read first">
 
-This page extends [**Bang-Bang Control**](../control-theory/bang-bang.mdx). It assumes you know why a
-high-inertia flywheel suits an on/off law and why plain bang-bang chatters in a limit cycle around the
-setpoint.
+This builds on [Bang-Bang Control](../control-theory/bang-bang.mdx), which explains why a heavy
+flywheel suits an on/off controller and why plain bang-bang keeps rippling around the target.
 
 </Admonition>
 
 <Theory>
 
-## Settle without giving up recovery
+## Settling without losing the fast recovery
 
-Take-back-half keeps an accumulating drive like an integrator, but adds one trick. Each loop, integrate the
-error into the drive. When the error **crosses zero**: the moment you pass the setpoint — you have
-integrated too far, so "take back half": set the drive to the average of its current value and its value
-at the *previous* crossing. Successive crossings bracket the true holding drive and converge onto it.
+Take-back-half keeps a running output, `drive`, and adds a little to it every loop in proportion to the
+error, like an integral term. When the flywheel is slow, `drive` climbs. When it overshoots, `drive`
+starts falling.
+
+The trick happens each time the speed crosses the target. Crossing means you've gone too far, so set
+`drive` to the average of its current value and its value at the *previous* crossing.
+
+Try it with numbers. Say the power that would hold the target speed exactly is 0.60, but you don't know
+that. The flywheel spins up with `drive` climbing, and at the first crossing `drive` has reached 0.80.
+There's no previous crossing yet, so remember 0.80. The flywheel overshoots, `drive` drifts down, and at
+the next crossing it's at 0.50. Average that with 0.80 to get 0.65, and remember 0.65. Next crossing,
+`drive` has drifted to 0.57, and averaging with 0.65 gives 0.61. The values close in on 0.60 from both
+sides.
 
 $$
 \begin{gathered}
@@ -43,25 +51,19 @@ $$
 \end{gathered}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'drive', meaning: 'the running output, from 0 to 1. It is pure integrator: nothing resets it except the take-back rule'},
-    {symbol: 'g', meaning: 'the single tuning gain. TBH exists because one gain is easier to get right than three', unit: 'power per (error \u00b7 s)'},
-    {symbol: 'drive_last-cross', meaning: 'the value drive held the PREVIOUS time the error changed sign. Averaging against it is what brackets the true holding value'},
-    {symbol: 'a sign change of e', meaning: 'the moment the mechanism crosses its target. Each crossing shrinks the remaining oscillation by at least half, which is why successive crossings converge'},
-  ]}
-/>
+$g$ is the one gain, and $\text{drive}_\text{last-cross}$ is `drive` at the previous crossing.
 
-The result (green below) recovers nearly as fast as bang-bang on the first approach, then quickly stops
-oscillating and holds the speed flat. One gain $g$, no derivative, no windup to manage. Run the demo:
-bang-bang chatters around the line forever; TBH locks on.
+In the demo, the green trace is TBH. It recovers almost as fast as bang-bang on the way up, then stops
+rippling and holds a flat speed, while bang-bang (red) keeps switching.
 
 <BangBang />
 
-<Callout type="idea" title="Why take back half?">
-At each zero crossing the true steady drive lies somewhere between the current over-driven value and the
-last under-driven one. Halving splits the difference — a bisection search on the holding voltage that
-converges geometrically. It is the cheapest possible way to find the steady command without a model.
+<Callout type="idea" title="Why halfway?">
+When the flywheel is below the target, the power was too low, and when it's above, the power was too
+high, so the right power is somewhere between the values at two crossings. Averaging them splits the
+difference, a bit like guessing a number by halving the range each time. It isn't a guarantee, though.
+If $g$ is too large, `drive` overshoots so far between crossings that it can keep bouncing instead of
+settling, so tune $g$ on the real mechanism.
 </Callout>
 
 </Theory>
@@ -89,65 +91,52 @@ double update(double measured, double target, double dt) {
 }
 `}</JavaCode>
 
-A zero error is skipped so it cannot fake a second crossing.
+An error of exactly zero is skipped so it can't look like an extra crossing.
 
-<Exercise title="Why halving converges">
+<Exercise title="Tracing the crossings">
 
-TBH is a pure integrator with one trick: whenever the error changes sign, it jumps the output halfway
-back toward whatever it was at the *previous* crossing. Sketch a flywheel overshooting, crossing,
-undershooting, crossing again, and mark `drive` at each crossing.
+Sketch a flywheel overshooting, crossing, undershooting, and crossing again. Mark `drive` at each
+crossing. Why does averaging bring it closer to the holding power?
 
 <Solution>
 
-Each crossing brackets the true holding voltage — one crossing happens with the output too high, the
-next with it too low. Halving between consecutive crossings is a bisection search on that bracket, so
-the oscillation shrinks by at least half at every crossing — often by much more, since the plant is also
-damping it between crossings — and the output converges geometrically on the command that holds the
-target speed. No model, no second gain.
+At one crossing `drive` is too high, and at the next it's too low, so the holding power is between them.
+Averaging lands in the middle of that range, and each new crossing narrows it. The flywheel's own
+inertia also smooths the speed between crossings, which helps. With a reasonable gain the output
+settles on the power that holds the target speed.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="Why a flywheel, and why [0, 1]">
+<Exercise title="Why a flywheel, and why 0 to 1">
 
-Work out why this suits a flywheel where a PID struggles: a flywheel has huge inertia and asymmetric
-authority, since the motor can push hard but can only coast down. What does an integrator with
-anti-windup have to be told to handle that, and how many gains did you tune to get there? Then work out
-why `drive` is clamped to $[0, 1]$ rather than $[-1, 1]$.
+A flywheel is heavy, and the motor can push it faster but can only let it coast slower. What would a PID
+controller need to handle that, and how many things would you tune? Why is `drive` clamped to
+$[0, 1]$ instead of $[-1, 1]$?
 
 <Solution>
 
-A PID needs `kP`, `kI`, `kD`, an I-zone, and an anti-windup rule to survive the asymmetry — five
-decisions, several of which interact. TBH needs `GAIN`. The clamp is $[0, 1]$ because a negative
-command means driving the flywheel backwards, which no shooter wants: the only way down is to stop
-pushing and let drag do it. Allowing negatives would let a single overshoot brake the wheel and cost
-far more recovery time than coasting.
+A PID would need `kP`, `kI`, `kD`, an I-zone, and anti-windup to cope, several of which affect each
+other. TBH needs `GAIN`. The clamp is $[0, 1]$ because negative power would drive the flywheel backwards,
+which no shooter wants. The only way to slow down is to stop pushing and let friction do it. Allowing
+negative values would let one overshoot brake the wheel hard and cost much more recovery time than
+coasting.
 
-Look up "take back half controller," originally from VEX flywheel control, and compare its step
-response to a tuned PI on the same mechanism.
+The technique came from VEX flywheel control. Comparing its step response with a tuned PI controller on
+the same mechanism is a good experiment.
 
 </Solution>
 
 </Exercise>
 
-Seed `driveAtZero` with a [feedforward](../control-theory/feedforward.mdx) estimate and TBH converges in
-a single oscillation instead of several — the two techniques compose nicely. Mind the units when you do:
-$k_V$ is defined in **volts** per unit speed, while `drive` here is normalized power in $[0, 1]$, so the
-seed is $k_V \cdot v_\text{target} / V_\text{bat}$. Skip that division and the seed lands far outside the
-variable's range — for a flywheel with $k_V = 0.02$ at 300 rad/s it evaluates to 6.0, six times full
-power, and TBH starts pinned at the ceiling instead of near the answer.
+Starting `driveAtZero` from a [feedforward](../control-theory/feedforward.mdx) estimate helps a lot:
+TBH then settles in about one crossing instead of several. Watch the units. $k_V$ is volts per unit of
+speed, but `drive` is a power from 0 to 1, so the starting value is $k_V \cdot v_\text{target} / V_\text{bat}$.
+For a flywheel with $k_V = 0.02$ at 300 rad/s on a 12 V battery that's $6 / 12 = 0.5$. Forget to divide by
+the battery and you get 6.0, six times full power, and TBH starts pinned at the maximum.
 
 </Deploy>
-
-<Admonition type="tip" title="When to reach for which">
-
-Use **[bang-bang](../control-theory/bang-bang.mdx)** when recovery speed is everything and the plant is
-high-inertia (a shooter you re-spin between shots). Use **take-back-half** when you also need a steady,
-repeatable speed (consistent shot distance). Use **[PID](../control-theory/pid.mdx) + feedforward** when
-you need both tight holding *and* controlled acceleration, or the mechanism isn't a flywheel.
-
-</Admonition>
 
 <Admonition type="info" title="Sources & references">
 
@@ -157,8 +146,8 @@ you need both tight holding *and* controlled acceleration, or the mechanism isn'
   to voltage source converter current control*, master's thesis, Mississippi State University, for an
   academic treatment of the algorithm outside robotics.
 - Woodward, S. (2005), "Take-back-half technique tempers temperature-control-loop overshoot," EDN
-  ("Design Ideas") - the original bisection technique, developed for temperature control and later adapted
-  by the FRC/VEX community for flywheel speed control.
+  ("Design Ideas") - the original technique, developed for temperature control and later adapted by the
+  FRC and VEX communities for flywheel speed control.
 
 This lesson is an independent reimplementation.
 

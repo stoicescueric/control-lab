@@ -12,39 +12,35 @@ import MotionProfile from '@site/src/components/simulations/control-theory/Motio
 <Difficulty level="Hard" />
 
 <Abstract>
-A motion profile replaces an instantaneous setpoint jump with a smooth, time-parametrized trajectory the
-mechanism can actually follow: ramp up at the acceleration limit, cruise at the speed limit, ramp down to
-stop exactly on target. Feeding the controller this trajectory — position, velocity, and acceleration at
-every instant — lets feedforward do the heavy lifting and leaves feedback only a small error to correct,
-giving fast moves that don't overshoot.
+A motion profile replaces a sudden jump in the target with a plan the mechanism can actually follow:
+speed up at its acceleration limit, cruise at its speed limit, and slow down to stop on the target.
+Because the plan gives a position, velocity, and acceleration for every moment, feedforward can do most
+of the work and feedback only has a small error to fix. The result is fast moves without overshoot.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-Start with [PID Control](./pid.mdx) and [Feedforward](./feedforward.mdx). You need to recognize
-position, velocity, acceleration, and physical units; this page supplies the profile mathematics.
-Do not begin by copying a trapezoid’s limits—measure a safe maximum velocity and acceleration on the
-real mechanism first.
-
-**Math used:** constant-acceleration kinematics and piecewise graphs. Calculus is optional: the profile
-is built from finite acceleration limits and measured timing, not a symbolic derivative exercise.
+Read [PID Control](./pid.mdx) and [Feedforward](./feedforward.mdx) first. The math is the
+constant-acceleration formulas from physics class, like $d = \tfrac12 a t^2$, and graphs made of
+straight pieces. Don't copy someone else's speed and acceleration limits. Measure safe ones on your own
+mechanism.
 
 </Admonition>
 
-[PID](./pid.mdx) and [feedforward](./feedforward.mdx) answer "what command *now*?" Motion profiling answers
-the question before it: *what should the target even be at this instant?* Instead of commanding the final
-position and hoping, you command a moving target that respects the mechanism's real limits.
+[PID](./pid.mdx) and [feedforward](./feedforward.mdx) decide what command to send right now. Motion
+profiling decides what the target should be right now. Instead of handing the controller the final
+position and hoping, you give it a target that moves at a pace the mechanism can keep up with.
 
 <Problem>
 
 ## A step command asks for infinite acceleration
 
-Tell a lift "go to the top" and your controller sees the full error immediately. A proportional term
-applies full power all at once, the lift jerks, the current spikes, and feedforward — which is fed the *target*
-velocity — has no idea how fast you actually intend to move, so it can't help. The mechanism either
-overshoots (if the gain is high) or crawls (if it's low). The setpoint asked for a jump no motor can
-deliver: an instantaneous change in position means infinite velocity, an instantaneous change in velocity
-means infinite acceleration. Real hardware has a top speed and a max acceleration. Plan within them.
+Tell a lift "go to the top" and the controller sees the whole error at once. The proportional term goes
+to full power immediately, the lift jerks, and the current spikes. Feedforward can't help either,
+because it works from the target's velocity, and a target that jumps doesn't have a sensible one. The
+lift either overshoots (high gain) or crawls (low gain). Jumping the target asks for an instant change
+in position, which would take infinite speed. Real mechanisms have a top speed and a top acceleration,
+so plan within them.
 
 </Problem>
 
@@ -52,11 +48,16 @@ means infinite acceleration. Real hardware has a top speed and a max acceleratio
 
 ## The trapezoidal profile
 
-The simplest profile that respects both limits is the **trapezoid**: accelerate at the limit $a_\text{max}$
-until you hit the cruise speed $v_\text{max}$, hold it, then decelerate at $a_\text{max}$ to arrive at the
-target with zero velocity. Plotted against time, the velocity traces a trapezoid — hence the name.
+The simplest profile that respects both limits is the **trapezoid**: accelerate at $a_\text{max}$ until
+you reach the cruise speed $v_\text{max}$, hold that speed, then slow down at $a_\text{max}$ so you arrive
+at the target stopped. Plot velocity against time and you get a trapezoid.
 
-The geometry is just kinematics. The ramp to cruise speed takes
+Try it with numbers first. A lift can accelerate at 20 in/s² and move at up to 10 in/s. Reaching 10 in/s
+from rest takes $10/20 = 0.5$ s, and during that half second the lift averages 5 in/s, so it covers
+2.5 in. Slowing down takes the same time and distance. For a 30 in move, that leaves $30 - 5 = 25$ in to
+cruise at 10 in/s, which takes 2.5 s. The whole move takes $0.5 + 2.5 + 0.5 = 3.5$ s.
+
+In general, the ramp up to cruise speed takes
 
 $$
 t_\text{ramp} = \frac{v_\text{max}}{a_\text{max}},
@@ -64,56 +65,38 @@ t_\text{ramp} = \frac{v_\text{max}}{a_\text{max}},
 d_\text{ramp} = \tfrac12 a_\text{max} t_\text{ramp}^2 = \frac{v_\text{max}^2}{2 a_\text{max}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 't_ramp', meaning: 'how long the acceleration phase lasts, from a standstill up to cruise speed', unit: 's'},
-    {symbol: 'd_ramp', meaning: 'how much DISTANCE that ramp consumes. The profile needs room for two of these, one at each end', unit: 'in'},
-    {symbol: 'v_max, a_max', meaning: 'the mechanism\u2019s real limits, measured rather than assumed'},
-  ]}
-/>
-
-If the move is long enough to fit both ramps ($2\,d_\text{ramp} \le d$), the middle is spent cruising for
+and if the move is long enough to fit both ramps ($2\,d_\text{ramp} \le d$), the middle is spent
+cruising for
 
 $$
 t_\text{cruise} = \frac{d - 2\,d_\text{ramp}}{v_\text{max}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'd', meaning: 'the total distance of this move', unit: 'in'},
-    {symbol: 't_cruise', meaning: 'how long is spent at constant v_max, after both ramps have taken their share. If 2\u00b7d_ramp exceeds d there is no cruise phase at all and the profile becomes a triangle', unit: 's'},
-  ]}
-/>
-
-If the move is **too short** to ever reach $v_\text{max}$, the trapezoid collapses to a **triangle**: you
-accelerate to a lower peak and immediately decelerate, peaking at $v_\text{peak} = \sqrt{a_\text{max}\,d}$.
-Drag the sliders below — shrink the distance or raise the cruise speed and watch the trapezoid become a
-triangle, while the total time and peak speed update.
+where $d$ is the length of the move. If the move is too short to reach $v_\text{max}$ at all, the
+trapezoid loses its flat top and becomes a **triangle**: speed up to a lower peak and immediately slow
+down again. The peak is $v_\text{peak} = \sqrt{a_\text{max}\,d}$. In the demo, shrink the distance or
+raise the cruise speed and watch the trapezoid turn into a triangle.
 
 <MotionProfile />
 
-For a short $5\ \mathrm{in}$ move with $a_\text{max}=20\ \mathrm{in/s^2}$ and
-$v_\text{max}=10\ \mathrm{in/s}$, each full-speed ramp requires $2.5\ \mathrm{in}$. There is no
-distance left to cruise, so the boundary case is triangular with
-$t_\text{acc}=\sqrt{5/20}=0.5\ \mathrm{s}$ and $v_\text{peak}=10\ \mathrm{in/s}$.
+With the same lift limits, a 5 in move is the boundary case. Each full ramp needs 2.5 in, so there's
+nothing left to cruise: $t_\text{acc}=\sqrt{5/20}=0.5\ \mathrm{s}$ and $v_\text{peak}=10\ \mathrm{in/s}$.
 
-At each instant the profile gives you a full target state — position $x(t)$, velocity $v(t)$, and
-acceleration $a(t)$. That triplet is exactly what the rest of the stack wants: feed $v(t)$ and $a(t)$ to
-[feedforward](./feedforward.mdx) ($k_V v + k_A a$) so it leads the motion, and feed $x(t)$ to
-[PID](./pid.mdx) so feedback only corrects the small tracking error. The mechanism follows a plan instead
-of chasing a cliff.
+At every moment the profile gives a full target: position $x(t)$, velocity $v(t)$, and acceleration
+$a(t)$. Send $v(t)$ and $a(t)$ to [feedforward](./feedforward.mdx) ($k_V v + k_A a$) so the voltage leads
+the motion, and send $x(t)$ to [PID](./pid.mdx) so feedback only corrects the small tracking error.
 
-<Callout type="idea" title="The braking cap you already met is the deceleration ramp.">
-The $v \le \sqrt{2 a d}$ speed cap from [PID-to-point](../path-following/pid-to-point.mdx) is the
-*decelerating half* of this trapezoid, evaluated on the fly from the distance left. A full profile is the
-same physics, planned ahead of time for the whole move instead of reacted to each loop.
+<Callout type="idea" title="The same idea, one loop at a time">
+The slowing-down half of the trapezoid obeys $v = \sqrt{2 a d}$, where $d$ is the distance left. You'll
+see that formula again in [PID-to-Point](../path-following/pid-to-point.mdx), where it's used on the fly
+each loop to cap a drivetrain's speed instead of being planned ahead for the whole move.
 </Callout>
 
-<Callout type="note" title="Beyond the trapezoid: S-curves.">
-A trapezoid's acceleration jumps instantly between $0$, $+a_\text{max}$, and $-a_\text{max}$ — those
-corners are infinite <em>jerk</em>, which can make a tall mechanism wobble. An <strong>S-curve</strong>
-profile rounds them by limiting jerk too, at the cost of a longer move. The trapezoid is the right default;
-reach for S-curves only when jerk visibly hurts.
+<Callout type="note" title="S-curves">
+A trapezoid's acceleration jumps straight between $0$, $+a_\text{max}$, and $-a_\text{max}$. Those
+sudden changes (infinite <em>jerk</em>) can make a tall mechanism wobble. An <strong>S-curve</strong>
+profile also limits jerk, which rounds the corners at the cost of a slightly longer move. Start with a
+trapezoid and switch only if the wobble is a real problem.
 </Callout>
 
 </Theory>
@@ -122,8 +105,8 @@ reach for S-curves only when jerk visibly hurts.
 
 ## Sample the profile each loop
 
-Build the profile once from your limits, then ask it for the target state at the current time every loop
-and hand that to your feedforward + PID controller.
+Build the profile once from your limits. Then, every loop, ask it for the target at the current time
+and hand that to your feedforward and PID.
 
 <JavaCode league="FTC" label="Trapezoidal profile: build once">{`private double sign, distance, aMax, tAcc, tFlat, vPeak, total;
 
@@ -179,15 +162,14 @@ ProfileState sample(double t) {
 
 <Exercise title="Derive the triangle case">
 
-If the move is too short to reach `vMax`, the profile is accelerate-then-decelerate with no cruise. Set
-"distance travelled accelerating + distance travelled decelerating = distance" and solve for `tAcc`.
-You should land on the square root above.
+If the move is too short to reach `vMax`, the profile speeds up and then slows down with no cruise. Set
+"distance while speeding up + distance while slowing down = total distance" and solve for `tAcc`.
 
 <Solution>
 
-Accelerating for $t_a$ at $a$ covers $\tfrac12 a t_a^2$, and the symmetric deceleration covers the
-same. So $a t_a^2 = d$, giving $t_a = \sqrt{d/a}$ — and the peak speed $a t_a$ is whatever that
-works out to, always below `vMax` (which is what put you in this branch).
+Accelerating for $t_a$ at $a$ covers $\tfrac12 a t_a^2$, and slowing down covers the same. So
+$a t_a^2 = d$ and $t_a = \sqrt{d/a}$. The peak speed $a t_a$ comes out below `vMax`, which is why the code
+took this branch.
 
 </Solution>
 
@@ -195,19 +177,17 @@ works out to, always below `vMax` (which is what put you in this branch).
 
 <Exercise title="Check it by hand">
 
-Every `x` line above is $x_0 + v_0 t + \tfrac12 a t^2$ applied to one phase; derive the cruising and
-decelerating lines yourself by asking where the mechanism already was when that phase began. Then check
-the whole thing on a case you can verify: `distance = 100`, `vMax = 10`, `aMax = 5`. Compute `tRamp` and
-`dRamp`, decide triangle or trapezoid, predict `total`, and confirm that `sample(total / 2)` sits at
-half the distance.
+Every `x` line is $x_0 + v_0 t + \tfrac12 a t^2$ for one phase, where $x_0$ is where the mechanism was
+when that phase began. Try `distance = 100`, `vMax = 10`, `aMax = 5`: compute `tRamp` and `dRamp`,
+decide triangle or trapezoid, predict `total`, and check that `sample(total / 2)` lands at half the
+distance.
 
 <Solution>
 
-`tRamp = 2 s`, `dRamp = 10`, and `2 * dRamp = 20 < 100`, so it is a full trapezoid:
-`tAcc = 2`, `vPeak = 10`, `tFlat = 8`, `total = 12 s`. At `t = 6` you are cruising, and
-$x = \tfrac12(5)(2^2) + 10(6-2) = 10 + 40 = 50$ — exactly half. The symmetry is not a coincidence:
-the accelerate and decelerate phases are mirror images, so the midpoint of time is the midpoint of
-distance whenever they are.
+`tRamp = 2 s`, `dRamp = 10`, and `2 * dRamp = 20 < 100`, so it's a full trapezoid: `tAcc = 2`,
+`vPeak = 10`, `tFlat = 8`, `total = 12 s`. At `t = 6` it's cruising, and
+$x = \tfrac12(5)(2^2) + 10(6-2) = 10 + 40 = 50$, exactly half. Speeding up and slowing down are mirror
+images of each other, so halfway through the time is halfway through the distance.
 
 </Solution>
 
@@ -226,22 +206,21 @@ distance whenever they are.
             && Math.abs(finalTarget - measuredPosition) < TOL;
 }`}</JavaCode>
 
-The feedforward is computed from the *profile*, not from the measurement. It is the open-loop guess at
-the voltage this motion needs, which is why the PID only has to clean up the difference — and why its
-gains end up so much smaller than they would be alone.
+The feedforward comes from the profile, not from the measurement. It's a prediction of the voltage this
+motion needs, so the PID only has to clean up the difference, and its gains can be much smaller than
+they would be on their own.
 
 <Exercise title="Why done checks two things">
 
-`done` requires both the clock and the position. Give a case where the profile has finished but the
-mechanism has not arrived, and say which of the two conditions catches it.
+`done` checks both the clock and the position. When would the profile be finished but the mechanism
+not there yet, and which check catches it?
 
 <Solution>
 
-Any case where the mechanism could not keep up: a sagging battery, an extra game piece, a jam. The
-profile is a plan, and `t >= duration()` only says the plan is over — the mechanism can be centimetres
-short with the controller still working on it. The position term catches that. The clock term catches
-the opposite case, where the mechanism passes through the target early and momentarily reads inside
-`TOL` while still moving fast.
+Whenever the mechanism can't keep up: a sagging battery, an extra game piece, a jam. `t >= duration()`
+only says the plan is over, and the mechanism can still be a few centimeters short. The position check
+catches that. The clock check catches the opposite case, where the mechanism passes through the target
+early and briefly reads inside `TOL` while still moving fast.
 
 </Solution>
 
@@ -249,20 +228,21 @@ the opposite case, where the mechanism passes through the target early and momen
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: profile within your *real* limits">
+<Admonition type="warning" title="Plan with limits the mechanism can really reach">
 
-The profile is only honest if $v_\text{max}$ and $a_\text{max}$ are achievable. Use ~80% of the
-mechanism's measured top speed and acceleration so a tired battery or extra game-piece load doesn't make
-the plan impossible to follow — the moment the mechanism can't keep up, the tracking error explodes and
-feedback saturates.
+A profile only works if the mechanism can follow it. Use about 80% of the measured top speed and
+acceleration, so a tired battery or an extra game piece doesn't make the plan impossible. Once the
+mechanism falls behind, the tracking error grows fast and feedback maxes out.
 
 </Admonition>
 
-<Admonition type="tip" title="This is what Road Runner and trajectories are">
+<Admonition type="tip" title="Profiles in path-following libraries">
 
 A drivetrain **trajectory** is a motion profile run along a [path](../path-following/quintic-splines.mdx):
-the spline says *where*, the profile says *how fast along it*. Road Runner and Pedro Pathing combine the
-two and add feedforward + PID — exactly the stack in this module, applied in 2-D.
+the path says where to go, and the profile says how fast to move along it. Road Runner works this way,
+with feedforward and PID on top, which is the same stack as this module in 2-D. Pedro Pathing takes a
+different approach and decides its speed from where the robot actually is on the path each loop (see
+[How Does Pedro Pathing Work?](../advanced-topics/how-pedro-pathing-works.mdx)).
 
 </Admonition>
 

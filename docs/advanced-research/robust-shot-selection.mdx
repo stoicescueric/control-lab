@@ -12,17 +12,17 @@ import RobustSelection from '@site/src/components/simulations/research/RobustSel
 <Difficulty level="Medium" />
 
 <Abstract>
-The selector asks which nominal scoring command survives the largest fraction of a declared
-speed–angle error box. This lesson turns that rule into an offline search, defines the artifact the
-robot receives, and explains why simulated coverage differs from measured entry rate.
+A shot that barely goes in when everything is perfect is a bad shot. This lesson picks the speed and
+angle that still go in across the widest range of small errors, turns that into a search you run on a
+laptop, and explains why the simulated score is a different number from the real scoring rate.
 </Abstract>
 
 <Admonition type="note" title="Builder outcome and prerequisites">
 
-Build an offline selector that accepts a reusable rim-event map, target distance, measured command
-envelope, and declared speed-angle error bounds. It returns an eligible nominal command, success
-count, tested count, and bounds. The full optimization uses a two-dimensional grid and prefix sums;
-the rule itself is simply “count nearby entries and keep the largest eligible count.”
+You'll build a selector that takes simulated shot results, a target distance, the speeds and angles
+your launcher can do, and how much error to allow for. It returns the best speed and angle and how many
+of the nearby shots went in. The rule is simple: count how many nearby shots go in, and keep the setting
+with the most.
 
 </Admonition>
 
@@ -58,31 +58,28 @@ The paper calls this a bounded make fraction. Here we label it **coverage**: the
 The stress box gives equal weight to every point across a deliberately wide range of errors. It was not fitted as a probability distribution for repeated shots. The physical result of 93/100 entries therefore does not contradict 0.280 coverage. The two numbers answer different questions.
 :::
 
-The ±0.7 m/s and ±1.5° limits are engineering stress allowances. In particular, variation across the seven pilot calibration configurations is not a measurement of repeated-shot scatter at one fixed command.
+The ±0.7 m/s and ±1.5° ranges are deliberately generous test margins, not measured shot-to-shot scatter.
 
 ## Why these bounds, and how much do they matter?
 
-Paper §5.5 relates the speed allowance to the roughly 12% spread of the scalar transfer estimate
-across different configurations. Over the observed speed range, that corresponds to roughly
-0.56–0.79 m/s. The angle allowance exceeds the approximately 0.3° variation of repeated video
-annotation to allow for hood and release variation as well. This explains a stress-test choice;
-it does not turn the bounds into fitted noise parameters.
+The speed margin comes from how much the launcher's wheel-to-ball speed ratio varied, about 12%, which
+is 0.56 to 0.79 m/s at these speeds (paper §5.5). The angle margin is bigger than the 0.3° difference
+between repeated video measurements, to leave room for the hood and release varying too.
 
-The paper repeated selection at 19 distances from 60 to 105 inches using four half-width pairs:
-$(0.3\ \mathrm{m/s},0.5^\circ)$, $(0.5,1.0^\circ)$, $(0.7,1.5^\circ)$, and
-$(0.9,2.0^\circ)$. Relative to the deployed box, selected speed changed by at most 0.125 m/s and
-angle by at most 0.7°. This is evidence that the command trend survives those tested choices,
-not proof that every possible uncertainty model gives the same answer.
+Does the choice of margins matter much? The paper reran the selection at 19 distances from 60 to 105
+inches with four different margin sizes, from $(0.3\ \mathrm{m/s}, 0.5^\circ)$ up to
+$(0.9\ \mathrm{m/s}, 2.0^\circ)$. The chosen speed changed by at most 0.125 m/s and the angle by at most
+0.7°, so the answer isn't very sensitive to the exact margins.
 
 ## Build it in two passes
 
-Start with a correctness version: visit each nominal command, reject nominal misses, enumerate every
-speed-angle perturbation, and count entries. Keep this version as an oracle for small grids.
+First write the simple version: for each setting, skip it if it misses, then try every nearby
+variation and count how many go in. Keep it around to check the fast version against.
 
-Then optimize the same calculation. Cache the rim event for every speed-angle pair, turn those events
-into an entry mask for the requested distance, and use a prefix sum to count rectangular error boxes.
-Both versions must select the same command and apply the same tie rule. This search runs on a laptop;
-the FTC Control Hub only reads the resulting calibration artifact.
+Then speed it up. Simulate each speed and angle once and save where it crosses the rim, mark which ones
+go in at the target distance, and use running totals to count any rectangle of settings quickly. Both
+versions should pick the same answer. This all runs on a laptop; the robot only gets the resulting
+table.
 
 ## Reuse the flight calculation
 
@@ -90,10 +87,9 @@ For fixed physical parameters, the descending crossing $X(v,\theta)$ depends on 
 
 A **prefix sum** makes the rectangular count cheap: store cumulative entry counts, then add and subtract four corners to obtain the count inside any box. This is a faster way to evaluate the same selection rule; it does not change which command wins.
 
-The important optimization is reuse, not a different definition of success. A target-distance change
-invalidates the entry mask and prefix sum, but not the flight events. A change to release height, wind,
-or the physics invalidates the events too. The Python module keeps physical constants outside its
-runtime cache key; restart the simulator after editing those constants, as its README instructs.
+Changing the target distance means recomputing which shots go in, but not re-simulating them. Changing
+the release height, wind, or physics means re-simulating. The Python simulator doesn't notice changes to
+its physical constants on its own, so restart it after editing them, as its README says.
 
 <details>
 <summary>Why the map extends beyond the command envelope</summary>
@@ -111,14 +107,11 @@ Read [physics.py](https://github.com/stoicescueric/Trajectory-Simulation/blob/09
 **_best_make_window_on_grid** ranks equal-sized windows. **find_optimal** wraps the winner in
 shot parameters, while **sweep_targets** evaluates a distance series for export.
 
-The response retains a legacy field named **p_make**, but it contains coverage. Likewise, some
-legacy **sigma** fields contain engineering half-widths. Follow the implementation's stated meaning,
-not a probability interpretation suggested by an old field name. Auxiliary geometric margins do not
-replace the maximum-coverage selection rule.
+The output has an old field called **p_make**. Despite the name, it's the coverage, not a probability.
+Some old **sigma** fields are the margin sizes, not standard deviations.
 
-The browser adaptation evaluates the same objective with the paper's rounded geometry. It uses a
-worker so integrating the event map does not block the controls. The Python program uses NumPy
-vectorization; its millisecond timings are not a benchmark of this browser or an FTC Control Hub.
+The browser version uses the same rule with the paper's rounded measurements, and runs the simulation in
+the background so the page stays responsive.
 
 ## Reference logic: rank candidates offline
 
@@ -135,14 +128,13 @@ Visit commands in ascending speed, then ascending angle. Updating only for a str
     return best;
 }`}</JavaCode>
 
-Every candidate must use the same number of perturbations. A null result means no nominal scoring command was found; it is not a request to extrapolate the motor command.
+Every candidate has to be tested with the same number of variations. A `null` result means nothing went in at all, not that you should guess a setting outside the table.
 
 ### Export the evidence with the command
 
-For each target distance, save the selected exit speed and angle, rim-event time, successful and
-tested perturbation counts, speed-angle bounds, geometry revision, and model revision. Also save
-whether any input was clamped and whether the nominal shot was valid. Keep the legacy `p_make` name
-only when compatibility requires it; label the value as coverage rather than a probability.
+For each distance, save the chosen speed and angle, the flight time, how many variations went in out of
+how many tried, the margins, and which version of the geometry and model you used, plus whether any
+input was clamped.
 
 <Exercise title="Which command wins?">
 A and B both enter and each has 1,767 perturbations. A succeeds on 410 and B on 494. C succeeds on 520, but its nominal trajectory misses. Which should the selector return?

@@ -12,7 +12,6 @@ const simulationDomains = new Set([
   'research',
   'signal-processing',
   'software-architecture',
-  'state-space',
 ]);
 const componentRoot = path.join(root, 'src', 'components');
 const libraryRoot = path.join(root, 'src', 'lib');

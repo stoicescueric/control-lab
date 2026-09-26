@@ -13,7 +13,6 @@ Audience: FTC and FRC programmers, robotics students, mentors, and self-directed
 - DC motor modeling, feedforward, PID, RST pole placement, saturation, and motion profiles
 - Low-pass, moving-average, Savitzky-Golay, complementary, and Kalman filters
 - Mecanum kinematics, point control, pure pursuit, splines, and vector fields
-- State-space models, state feedback, observers, and linear-quadratic regulation
 - Drag-aware launcher simulation, calibration, flywheel control, and shoot-on-the-move compensation
 
 Lessons distinguish calculated predictions, teaching examples, and reported physical observations. Advanced launcher results come from an author-reviewed technical manuscript; the site identifies the public source trail and the limits of independent reproduction.
@@ -21,15 +20,11 @@ Lessons distinguish calculated predictions, teaching examples, and reported phys
 ## Recommended entry points
 
 - Curriculum overview: https://stoicescueric.github.io/control-lab/#curriculum
-- Why the mathematics matters: https://stoicescueric.github.io/control-lab/docs/preface/why-math-matters
+- Control and feedback: https://stoicescueric.github.io/control-lab/docs/preface/control-and-feedback
 - How to use the guide: https://stoicescueric.github.io/control-lab/docs/preface/how-to-use
 - Control theory: https://stoicescueric.github.io/control-lab/docs/control-theory
 - Signal processing: https://stoicescueric.github.io/control-lab/docs/signal-processing
 - Path following and kinematics: https://stoicescueric.github.io/control-lab/docs/path-following
-- State-space control: https://stoicescueric.github.io/control-lab/docs/state-space-control
-- State observers: https://stoicescueric.github.io/control-lab/docs/state-space-control/observers
-- Model predictive control (MPC): https://stoicescueric.github.io/control-lab/docs/state-space-control/mpc
-- State-space decision guide for FTC: https://stoicescueric.github.io/control-lab/docs/state-space-control/ftc-decision
 - Advanced launcher research: https://stoicescueric.github.io/control-lab/docs/advanced-research
 - References and further reading: https://stoicescueric.github.io/control-lab/docs/references
 - XML sitemap: https://stoicescueric.github.io/control-lab/sitemap.xml

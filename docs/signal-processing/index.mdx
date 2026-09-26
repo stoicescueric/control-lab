@@ -1,23 +1,23 @@
 ---
 title: Signal Processing
-description: Turning noisy sensor streams into signals you can control on — filtering a single noisy sensor, then fusing two sensors whose failures cancel, up through the Kalman filter.
+description: Turning noisy sensor readings into signals you can control with. Filtering one sensor, then combining two sensors whose weaknesses cancel, up to the Kalman filter.
 tags: [filters, kalman, sensor-fusion, noise]
 ---
 
 # Module 3 · Signal Processing
 
-Every sensor lies a little. A distance sensor spikes, a vision pose jitters from frame to frame, an
-IMU heading drifts. A controller fed raw, noisy measurements amplifies that noise straight into your
-motors — the derivative term is especially merciless. This module is about *cleaning the signal
-before you control it*, and it comes in two distinct halves.
+Every sensor is a little bit wrong. A distance sensor spikes, a vision pose jitters from frame to frame,
+an IMU heading drifts. Feed raw readings into a controller and the noise goes straight into your motors,
+especially through a derivative term. This module is about cleaning up the signal before you control
+with it, and it has two halves.
 
-## Part 1 — Filtering: one sensor, less noise
+## Part 1: filtering one sensor
 
-A filter takes a single noisy stream and smooths it, trading a little lag for a lot of calm. Boolean
-signals need a different first tool: wait for an input to stay changed before treating it as an event.
+A filter takes one noisy stream and smooths it, at the cost of a little lag. True/false signals need a
+different tool: wait for the input to stay changed before treating it as real.
 
-- **[Signals & Noise](./signals.mdx)**: what sensor noise actually looks like, including encoder
-  quantization and velocity noise, and how to measure it before filtering anything.
+- **[Signals & Noise](./signals.mdx)**: what sensor noise looks like, which sensors actually need
+  filtering, and how to measure noise before filtering anything.
 - **[Debouncer](./debouncer.mdx)**: make a limit switch or beam break prove a boolean transition
   before it can advance your state machine.
 - **[Low-pass filtering](./low-pass.mdx)**: the exponential moving average, the one-line filter you
@@ -27,25 +27,25 @@ signals need a different first tool: wait for an input to stay changed before tr
 - **[Savitzky-Golay](./savitzky-golay.mdx)**: fit a small polynomial to the window instead of a flat
   line, so smoothing stops flattening the peaks, and read velocity off the same fit.
 
-Filtering has a hard limit: it fights *jitter*, not *drift*. If a sensor's center is walking away
-from the truth, no amount of smoothing brings it back — you need a second opinion.
+Filtering can only fight jitter. If a sensor's readings are slowly walking away from the truth, no
+amount of smoothing brings them back. For that you need a second sensor.
 
-## Part 2 — Fusion: two sensors, one estimate
+## Part 2: combining two sensors
 
-Fusion combines two imperfect sensors whose failures point in opposite directions:
+These combine two imperfect sensors that fail in opposite ways:
 
-- **[Complementary filter](./complementary.mdx)**: the simplest fusion: a fast-but-drifting motor
-  encoder anchored by a slow-but-honest absolute encoder, blended with one constant.
-- **[1-D Kalman filter](./kalman.mdx)**: the same blend, except the weight is computed optimally
-  every step from how uncertain each source actually is.
+- **[Complementary filter](./complementary.mdx)**: a fast motor encoder that drifts, corrected by a
+  slower absolute encoder that doesn't, blended with one constant.
+- **[Kalman filter](./kalman.mdx)**: the same idea, except the blend is worked out every loop from how
+  uncertain each source is.
 
-<Admonition type="tip" title="Filters and controllers are a team">
+<Admonition type="tip" title="You don't have to finish this module first">
 
-A controller is only as good as the signal it sees. The cleanest controller code in the world will
-still oscillate on a noisy distance sensor. Add the appropriate filtering or fusion tool when a measured
-signal limits a controller; you do not need to complete this module before using the core controllers.
+A controller can only be as good as the signal it gets, and even clean controller code will oscillate
+on a noisy distance sensor. But you don't need this whole module before using the controllers. Come
+back for the right tool when a sensor is what's holding a controller back.
 
 </Admonition>
 
-Start with [Signals & Noise](./signals.mdx), choose from the filtering tools when a sensor needs one,
-then cross into fusion with the complementary filter and the Kalman filter.
+Start with [Signals & Noise](./signals.mdx), use the filtering lessons as sensors need them, then move
+on to the complementary and Kalman filters.

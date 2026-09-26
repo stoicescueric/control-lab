@@ -12,40 +12,30 @@ import InverseKinematicsArm from '@site/src/components/simulations/path-followin
 <Difficulty level="Hard" />
 
 <Abstract>
-The core [Inverse Kinematics](../path-following/inverse-kinematics.mdx) lesson solves a two-link arm with
-triangle geometry. This advanced note explains the more general method: use a Jacobian to ask how a tiny
-change in joint angles changes the claw position, then repeatedly correct the angles until the mechanism
-reaches the target.
+The main [Inverse Kinematics](../path-following/inverse-kinematics.mdx) lesson solves a two-link arm with
+triangle geometry. This lesson covers a more general method: work out how a tiny change in each joint
+angle moves the claw, use that to correct the angles a little, and repeat until the claw reaches the
+target.
 </Abstract>
 
 <Admonition type="note" title="Readiness and prerequisite recap">
 
-Start with [Inverse Kinematics](../path-following/inverse-kinematics.mdx), then review
-[Linear Algebra](../preface/why-math-matters/linear-algebra.mdx) for matrix-vector multiplication and
-[Calculus](../preface/why-math-matters/calculus.mdx) for derivatives. This page assumes you already know
-the two-link forward equations and the difference between task space $(x, y)$ and joint space
-$(\theta_1, \theta_2)$. The arm widget below deliberately reuses the closed-form solver as a visual
-prerequisite recap; the numerical correction is calculated in the text, not animated by that widget.
-
-**Math used:** trigonometry for the two-link model; **partial derivatives** to build each Jacobian entry;
-and matrix-vector multiplication and transpose for one correction step. Damped least squares, matrix
-inverses, and gradient descent are later optional depth. Use the supplied small solver before trying to
-derive those operations by hand.
+Read [Inverse Kinematics](../path-following/inverse-kinematics.mdx) first. This lesson uses the two-link
+forward equations from there, plus derivatives (rates of change) and multiplying a matrix by a vector.
+The arm demo below is the same geometric solver as before, as a reminder; the step-by-step method is
+worked out in the text.
 
 </Admonition>
 
-The closed-form two-link solution is beautiful because it collapses into one triangle. Real mechanisms
-are often messier: an arm has a wrist, a linkage is offset, a turret rotates the coordinate frame, or a
-slide changes the effective link length. Once the geometry stops fitting on a napkin, the useful question
-becomes local instead of global:
-
-> If I nudge each joint by a tiny amount, which way does the claw move?
-
-That question is answered by a **Jacobian**.
+The two-link solution is neat because everything fits in one triangle. Real mechanisms are often
+messier: there's a wrist, an offset linkage, a turret that rotates everything, or a slide that changes a
+link's length. Once the geometry gets that complicated, it's easier to ask a smaller question: if I nudge
+each joint a tiny bit, which way does the claw move? The answer to that is a table of numbers called
+the **Jacobian**.
 
 ## Where Jacobians fit among IK algorithms
 
-The Quality Control workshop separates IK methods by how much structure the mechanism gives you:
+The Quality Control workshop groups IK methods by how much structure the mechanism has:
 
 | Method | Best when | Core idea |
 |---|---|---|
@@ -54,24 +44,22 @@ The Quality Control workshop separates IK methods by how much structure the mech
 | Cyclic coordinate descent | You can adjust one joint at a time and want a simple iterative solve. | Rotate each joint so the end effector points closer to the target, then repeat. |
 | Jacobian transpose / pseudoinverse | You want a general local solver that also connects to control theory. | Use derivatives to turn a small end-effector error into small joint corrections. |
 
-FABRIK stands for **Forward And Backward Reaching Inverse Kinematics**. It is popular in graphics and
-robotics demos because it is intuitive: pull the end of the chain to the target, rebuild the chain toward
-the base, then rebuild it back out toward the target. CCD is similarly intuitive but works by rotating
-joint angles one at a time.
+FABRIK (Forward And Backward Reaching Inverse Kinematics) is popular in graphics because it's easy to
+picture: pull the end of the chain to the target, rebuild the chain back toward the base, then back out
+again. CCD rotates one joint at a time.
 
-The problem is that iterative methods need a **configuration policy**. If the same target has many valid
-solutions, the solver may jump between them or curl into an awkward pose unless you add constraints:
-joint limits, a fixed wrist angle, "keep the claw parallel to the floor," "prefer elbow-up," or "stay near
-the previous solution." A virtual four-bar is the hardware version of such a constraint: it removes a
-degree of freedom so the end of the mechanism stays parallel to the base.
+Step-by-step methods need a rule for choosing between answers. If many poses reach the same target, the
+solver can jump between them or curl into something awkward unless you add constraints: joint limits, a
+fixed wrist angle, "keep the claw level," "prefer elbow up," or "stay close to the last pose." A virtual
+four-bar linkage is a hardware version of that: it removes a degree of freedom so the end stays level.
 
 <Problem>
 
-## Keep the same picture, change the question
+## Same arm, different approach
 
-In the demo below, the closed-form solver jumps directly to the exact two-link answer. A numerical IK
-solver would do something more iterative: start from the current arm pose, measure the claw error, use the
-Jacobian to estimate a joint-angle correction, move a little, and repeat.
+The demo jumps straight to the exact two-link answer. A step-by-step solver would instead start from the
+current pose, see how far off the claw is, use the Jacobian to estimate a small correction to the
+angles, move a little, and repeat.
 
 <InverseKinematicsArm />
 
@@ -90,16 +78,9 @@ y &= L_1\sin(\theta_1) + L_2\sin(\theta_1 + \theta_2)
 \end{aligned}
 $$
 
-where:
-
-- $x$ is the claw's horizontal position.
-- $y$ is the claw's vertical position.
-- $L_1$ is the shoulder-to-elbow link length.
-- $L_2$ is the elbow-to-claw link length.
-- $\theta_1$ is the shoulder angle.
-- $\theta_2$ is the elbow angle relative to the first link.
-
-The Jacobian collects the partial derivatives of position with respect to joint angles:
+Now ask: if only $\theta_1$ changes a tiny bit, how fast do $x$ and $y$ change? And the same for $\theta_2$.
+Each of those rates is a *partial derivative*, the rate of change when one input moves and the others
+stay put. The Jacobian is the table of all four:
 
 $$
 J(\theta_1,\theta_2) =
@@ -109,15 +90,8 @@ J(\theta_1,\theta_2) =
 \end{bmatrix}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'J', meaning: 'the JACOBIAN: a table of "if I nudge this joint, how far does the claw move". Rows are task-space directions, columns are joints'},
-    {symbol: '\u2202x/\u2202\u03b8\u2081', meaning: 'a partial derivative: how x changes when \u03b8\u2081 alone moves and everything else is held still'},
-    {symbol: 'L_1, L_2', meaning: 'the two fixed link lengths, as in the geometric solution', unit: 'in'},
-  ]}
-/>
-
-For this arm:
+Rows are directions the claw can move, and columns are joints. Differentiating the two forward
+equations gives, for this arm:
 
 $$
 \boxed{
@@ -131,32 +105,16 @@ J =
 }
 $$
 
-Read each column as a physical experiment:
-
-- Column 1 asks: if only the shoulder angle changes a little, how does the claw move?
-- Column 2 asks: if only the elbow angle changes a little, how does the claw move?
-
-In differential form:
+Each column is an experiment: the first says how the claw moves if only the shoulder turns a little,
+the second if only the elbow does. For small moves:
 
 $$
 \Delta \mathbf{x} \approx J\,\Delta\boldsymbol{\theta}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u0394x', meaning: 'a small desired change in TASK space: where you want the claw to move'},
-    {symbol: '\u0394\u03b8', meaning: 'the corresponding small change in JOINT space: how much each motor must turn'},
-    {symbol: 'the \u2248', meaning: 'this holds only for SMALL steps. J is recomputed at the current pose, and it stops describing the arm once you move far from it'},
-  ]}
-/>
-
-where:
-
-- $\Delta \mathbf{x} = \begin{bmatrix}\Delta x & \Delta y\end{bmatrix}^T$ is a small desired change in
-  claw position.
-- $\Delta\boldsymbol{\theta} =
-  \begin{bmatrix}\Delta\theta_1 & \Delta\theta_2\end{bmatrix}^T$ is the small joint-angle change that
-  should cause it.
+$\Delta\mathbf{x}$ is a small change in claw position and $\Delta\boldsymbol{\theta}$ the small change in
+joint angles that causes it. The $\approx$ matters: it only holds for small steps, and $J$ has to be
+worked out again at each new pose.
 
 ### One numerical correction
 
@@ -171,11 +129,11 @@ J^{-1}=\begin{bmatrix}0&1\\-1&-1\end{bmatrix},\qquad
 =\begin{bmatrix}0.1\\0\end{bmatrix}\ \text{rad}.
 $$
 
-One small step therefore raises the shoulder target by about $0.1$ rad while leaving the elbow target
-unchanged. Recompute $J$ after moving; the linear approximation is local, so a numerical solver repeats
-rather than applying one large correction.
+So one small step raises the shoulder by about 0.1 rad and leaves the elbow alone. That makes sense if
+you picture it: the arm goes right along the first link and straight up along the second, and rotating the whole thing slightly
+counter-clockwise moves the claw left and up. After moving, recompute $J$ and repeat.
 
-Forward velocity kinematics is easy:
+The same table relates speeds, too. Going from joint speeds to claw speed is easy:
 
 $$
 \dot{\mathbf{x}} = J\,\dot{\boldsymbol{\theta}}
@@ -187,16 +145,14 @@ $$
 \dot{\boldsymbol{\theta}} = J^{-1}\dot{\mathbf{x}}
 $$
 
-when $J$ is square and invertible. That is the advanced version of the same idea behind mecanum wheel
-mixing: desired task-space motion becomes actuator-space motion.
+when $J$ is square and has an inverse. It's the same idea as mecanum mixing: a desired motion goes in,
+motor commands come out.
 
 ### What if the matrix cannot be inverted?
 
-Near singularities, $J^{-1}$ becomes unstable or does not exist. A two-link arm is singular when it is
-nearly straight or nearly folded: the claw loses an easy direction of motion, so the solver demands huge
-joint changes for tiny target changes.
-
-The practical fix is a damped pseudoinverse:
+When the arm is almost straight or almost folded, the claw can't easily move in one direction, and
+$J^{-1}$ blows up or doesn't exist. These poses are called singularities, and near them the solver asks
+for huge joint changes to make tiny claw movements. The usual fix is to add damping:
 
 $$
 \Delta\boldsymbol{\theta}
@@ -204,56 +160,27 @@ $$
 J^T\left(JJ^T + \lambda^2 I\right)^{-1}\Delta\mathbf{x}
 $$
 
-<EquationLegend
-  title="Symbols in the damped pseudoinverse"
-  items={[
-    {symbol: '\u03bb (lambda)', meaning: 'the DAMPING factor. It is the whole point: near a singularity JJ\u1d40 becomes uninvertible, and adding \u03bb\u00b2 to the diagonal keeps it solvable at the cost of a slightly wrong direction'},
-    {symbol: 'I', meaning: 'the identity matrix, so \u03bb\u00b2I adds \u03bb\u00b2 down the diagonal and nothing elsewhere'},
-    {symbol: 'J\u1d40', meaning: 'the transpose of the Jacobian. For a square invertible J this whole expression collapses back to J\u207b\u00b9 as \u03bb goes to zero'},
-    {symbol: 'a singularity', meaning: 'a pose where the arm is fully extended or fully folded and the joints can no longer move the claw independently. A plain inverse demands infinite joint motion there'},
-  ]}
-/>
-
-where:
-
-- $J^T$ is the transpose of the Jacobian.
-- $I$ is the identity matrix.
-- $\lambda$ is a damping constant. Larger $\lambda$ makes the correction safer but slower.
-- $\Delta\mathbf{x}$ is the current claw-position error.
-
-This is called **damped least squares**. It gives up on the perfect correction when the math is fragile,
-and instead chooses a correction that is stable enough for hardware.
+$J^T$ is the transpose (rows and columns swapped), $I$ is the identity matrix, and $\lambda$ is a damping
+constant. Adding $\lambda^2$ keeps the matrix invertible even at a singularity. The correction comes out
+slightly less accurate but never enormous, and a larger $\lambda$ is safer but slower. With
+$\lambda = 0$ and an invertible $J$, it's the same as $J^{-1}$. This is called **damped least squares**.
 
 ### Jacobian transpose: the gradient-descent view
 
-The workshop also frames Jacobian transpose as a form of gradient descent. Instead of solving a matrix
-inverse, compute the target error and push the joints in the direction that most reduces that error:
+An even simpler option skips the inverse entirely and nudges the joints in whichever direction reduces
+the error fastest:
 
 $$
 \Delta\boldsymbol{\theta} = \alpha J^T\mathbf{e}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03b1', meaning: 'a small step size. Here \u03b1 is a learning rate, not a filter blend factor or an angular acceleration'},
-    {symbol: 'e', meaning: 'the task-space error: target position minus current position'},
-    {symbol: 'J\u1d40e', meaning: 'the transpose used INSTEAD of an inverse. It points roughly downhill on the error rather than solving for the exact step, so it never blows up, but it converges more slowly'},
-  ]}
-/>
-
-where:
-
-- $\mathbf{e} = \mathbf{x}_{target} - \mathbf{x}_{current}$ is the end-effector error.
-- $J^T$ is the transpose of the Jacobian.
-- $\alpha$ is a small step size chosen so the mechanism moves smoothly instead of overshooting.
-
-This is less exact than the pseudoinverse, but it is conceptually clean: the Jacobian says how joints
-affect the claw; the transpose turns "move the claw this way" into "nudge the joints this way." For FTC,
-that simplicity can be valuable when the mechanism is slow and the solver runs every loop.
+$\mathbf{e}$ is the claw error (target minus current) and $\alpha$ is a small step size. This is a kind of
+gradient descent. It's less exact than the damped version and takes more steps, but it never blows up,
+and it's simple enough to run every loop on a slow mechanism.
 
 ### Numerical IK loop
 
-The loop is short:
+Each loop:
 
 1. Compute the current claw position with forward kinematics.
 2. Compute the error $\mathbf{e} = \mathbf{x}_{target} - \mathbf{x}_{current}$.
@@ -262,7 +189,7 @@ The loop is short:
 5. Add the correction to the joint targets.
 6. Clamp joint limits and repeat next loop.
 
-That is not just a math trick. It is a control loop in geometry space.
+It's a control loop, just working on geometry instead of motor speed.
 
 </Theory>
 
@@ -270,8 +197,7 @@ That is not just a math trick. It is a control loop in geometry space.
 
 ## A practical numerical IK skeleton
 
-This is intentionally a skeleton rather than a copy-paste subsystem. The point is the separation:
-geometry computes small angle corrections; your real subsystem still owns encoder offsets, feedforward,
+This only computes the angle correction. Your subsystem still handles encoder offsets, feedforward,
 limits, and motor commands.
 
 <JavaCode label="Damped least-squares IK step">{`// One small joint delta from the current angles toward a target wrist
@@ -306,33 +232,27 @@ double[] step(double theta1, double theta2, double targetX, double targetY) {
 }
 `}</JavaCode>
 
-The first two lines are forward kinematics; `j00` through `j11` are the manipulator Jacobian
-$J = \begin{bmatrix} \partial x/\partial\theta_1 & \partial x/\partial\theta_2 \\ \partial y/\partial\theta_1 & \partial y/\partial\theta_2\end{bmatrix}$;
-the `a` entries are $JJ^\top + \lambda^2 I$; and the last four lines solve $Aw = e$ and set
-$\Delta\theta = J^\top w$.
+The first two lines are forward kinematics, `j00` through `j11` are the Jacobian, the `a` values are
+$JJ^\top + \lambda^2 I$, and the last lines solve $Aw = e$ and return $\Delta\theta = J^\top w$.
 
 <Exercise title="Derive the four Jacobian entries">
 
-They are nothing more than the derivatives of the two forward-kinematics lines above. Differentiate $x$
-with respect to $\theta_1$, then $\theta_2$, and do the same for $y$.
+Differentiate the two forward-kinematics equations: $x$ with respect to $\theta_1$ and then $\theta_2$, and
+the same for $y$. Check your answers against `j00` to `j11`.
 
 </Exercise>
 
 <Exercise title="What LAMBDA is protecting">
 
-`LAMBDA` is the whole reason this is called *damped* least squares. Without it you would invert
-$JJ^\top$ directly, which blows up near a singularity — where the arm is fully extended or fully
-folded and the two joints can no longer move the wrist independently. Work out what determinant you get
-for a fully extended arm, and what step size a plain inverse would then demand.
+Without `LAMBDA`, the code would invert $JJ^\top$ directly. What is its determinant for a fully
+extended arm, and what size step would a plain inverse ask for?
 
 <Solution>
 
-Fully extended, both links point the same way, so the two Jacobian columns become parallel and the
-determinant of $JJ^\top$ goes to zero. A plain inverse divides by it: the solver demands an
-arbitrarily large joint step to chase an error component the arm physically cannot produce in that
-configuration. Adding $\lambda^2$ to the diagonal keeps the matrix invertible at the cost of a
-slightly wrong direction — a small, bounded error instead of an unbounded one. Look up "damped least
-squares" and "Levenberg-Marquardt."
+Fully extended, both links point the same way, so the two columns of the Jacobian are parallel and the
+determinant of $JJ^\top$ is zero. A plain inverse divides by it, so the solver asks for an enormous joint
+step to chase a direction the arm can't move in. Adding $\lambda^2$ keeps the matrix invertible, trading
+a slightly wrong direction for a step that stays a reasonable size.
 
 </Solution>
 
@@ -340,22 +260,21 @@ squares" and "Levenberg-Marquardt."
 
 <Exercise title="What MAX_STEP is for">
 
-This is *one* iteration of a loop that runs every control cycle; it does not have to arrive this loop.
-Work out what a single unclamped step could do to a real arm.
+This is one step of a loop that runs every cycle, so it doesn't have to get there this loop. What could a
+single unlimited step do to a real arm?
 
 <Solution>
 
-Near a singularity, or with a target far outside the workspace, the solved delta can be several
-radians. Commanded as a joint target in one control cycle, that is the arm attempting to slew its full
-travel instantly — into a hard stop, into the robot, or into whatever is in front of it. Clamping turns
-the solver into something that converges over tens of loops, which at 50 Hz is still a fraction of a
-second.
+Near a singularity, or with a target out of reach, the step can come out as several radians. Sent as a
+joint target in one loop, that's the arm trying to swing its whole range instantly, into a hard stop,
+the robot, or whatever's in front of it. Limiting the step means it gets there over tens of loops, which
+at 50 Hz is still well under a second.
 
 </Solution>
 
 </Exercise>
 
-In FTC, this becomes useful when the mechanism has more variables than the clean two-link formula:
+In FTC this is useful when the mechanism has more going on than the two-link formula covers:
 
 - a turret plus an arm, where the turret chooses the plane and the arm solves within that plane;
 - an arm plus slides, where extension changes the reachable workspace;
@@ -364,19 +283,19 @@ In FTC, this becomes useful when the mechanism has more variables than the clean
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: numerical IK can chase noise">
+<Admonition type="warning" title="It can chase noise">
 
-A numerical solver is only as good as its measured joint angles. Encoder quantization, backlash, flex, and
-loose chain tension make the computed claw position wiggle. Use damping, step-size limits, and reasonable
-target tolerances; do not let an IK loop spam large corrections into a compliant mechanism.
+The solver is only as good as the measured joint angles. Backlash, flex, and loose chain make the
+computed claw position wiggle. Use damping, step limits, and a reasonable tolerance so the loop doesn't
+keep sending big corrections into a floppy mechanism.
 
 </Admonition>
 
-<Admonition type="tip" title="Start with the closed-form solver">
+<Admonition type="tip" title="Use the geometric solution when you can">
 
-If your mechanism is a simple two-link arm, use the closed-form solution in the core
-[Inverse Kinematics](../path-following/inverse-kinematics.mdx) lesson. Reach for Jacobians when the
-mechanism gets coupled, redundant, constrained, or too awkward to solve cleanly by geometry.
+For a simple two-link arm, use the geometric solution from
+[Inverse Kinematics](../path-following/inverse-kinematics.mdx). Use Jacobians when the mechanism is too
+complicated to solve cleanly with geometry.
 
 </Admonition>
 

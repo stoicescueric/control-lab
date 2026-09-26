@@ -1,6 +1,6 @@
 ---
 title: PID-to-Point
-description: Run a PID loop on the error to a target pose, rotate it into the robot frame, beat stiction with kStatic, and brake on time with predictive deceleration — the smallest complete autonomous follower.
+description: Run PID on the error to a target pose, rotate it into the robot frame, beat friction with kStatic, and start braking on time. The smallest complete autonomous follower.
 sidebar_position: 5
 tags: [pid-to-point, go-to-pose, predictive-deceleration, braking, autonomous, control, mecanum]
 ---
@@ -13,30 +13,28 @@ import PredictiveBraking from '@site/src/components/simulations/path-following/P
 <Difficulty level="Medium" />
 
 <Abstract>
-PID-to-point drives the robot toward a target pose by running feedback controllers on the position and
-heading error, expressed in the robot's own frame, and handing the result to the drivetrain mixer. It is
-the smallest complete autonomous follower — here we also harden it with a kStatic nudge to beat friction
-and **predictive deceleration** to brake on time, leaving only the "aim at one point" limit that splines
-and pure pursuit remove.
+PID-to-point drives the robot to a target pose by running feedback on the position and heading errors,
+turned into the robot's own frame, and sending the result to the mecanum mixer. It's the smallest
+complete autonomous follower. This lesson also adds a small push to beat friction and braking that
+starts early enough to stop on the target.
 </Abstract>
 
-You now have the three pieces autonomous needs: a pose source verified against the
-[Pose Estimation Contract](./pose-estimation-contract.mdx),
-a [mecanum mixer](./mecanum-kinematics.mdx) that turns a chassis command
-into wheel powers, and [angle wrapping](./angle-wrapping.mdx) so heading errors behave. PID-to-point is
-the loop that connects them.
+You now have what autonomous needs: a pose source checked against the
+[Pose Estimation Contract](./pose-estimation-contract.mdx), a [mecanum mixer](./mecanum-kinematics.mdx)
+that turns a drive command into wheel powers, and [angle wrapping](./angle-wrapping.mdx) for heading.
+PID-to-point connects them.
 
 <Problem>
 
 ## Get to a target pose, with nothing but feedback
 
-The task: drive from wherever the robot is to a target pose $(x^*, y^*, \theta^*)$ and stop there.
-No precomputed path, no velocity plan — just look at how far off you are and push toward the goal each
-loop.
+Drive from wherever the robot is to a target pose $(x^*, y^*, \theta^*)$ and stop there. The star marks
+the target. No planned path, no speed plan: each loop, look at how far off you are and push toward the
+goal.
 
-The simple version "drive toward the point at full power until you're close" overshoots, then reverses,
-then overshoots again, circling the target like a moth. We want it to *converge*: approach quickly when
-far, ease in when close, and hold the final heading without spinning the long way around.
+"Drive at the point at full power until you're close" overshoots, reverses, overshoots again, and
+circles the target. You want it to come in fast when it's far, ease off when it's close, and end at the
+right heading without spinning the long way around.
 
 </Problem>
 
@@ -44,24 +42,20 @@ far, ease in when close, and hold the final heading without spinning the long wa
 
 ## Feedback on the error, in the robot's frame
 
-Start with the **field-frame error**: how far the target is from the robot right now:
+Start with how far the target is from the robot, measured along the field's axes. Say the robot is at
+$(10, 20)$ facing $90°$ (toward $+y$), and the target is $(10, 50)$ facing $90°$:
 
 $$
 e_x = x^* - x, \qquad e_y = y^* - y, \qquad e_\theta = \operatorname{wrap}(\theta^* - \theta)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'x*, y*, \u03b8*', meaning: 'the TARGET pose. A star always marks the value you want, never the one you measured'},
-    {symbol: 'e_x, e_y', meaning: 'position error in the field frame: how far the target sits from the robot along each field axis', unit: 'in'},
-    {symbol: 'e_\u03b8', meaning: 'heading error, wrapped so the robot always turns the short way', unit: 'rad'},
-  ]}
-/>
+Here $e_x = 0$, $e_y = 30$ in, and $e_\theta = 0$. The heading error is wrapped, as in
+[Angle Wrapping](./angle-wrapping.mdx).
 
-The heading error is wrapped into $[-\pi, \pi)$ so the robot always turns the short way — exactly the
-[angle-wrapping](./angle-wrapping.mdx) lesson. But the drivetrain does not take field commands; it takes
-forward/strafe in the **robot frame**. So rotate the translational error by $-\theta$, the same rotation
-as field-centric driving:
+The drivetrain doesn't take field directions, though. It takes forward and sideways in the **robot's**
+frame. The robot is facing $+y$, so that 30 in along the field's $y$ axis is straight ahead of it: 30 in
+forward, 0 sideways. In general, rotate the error by $-\theta$, the same rotation as field-centric
+driving:
 
 $$
 \begin{bmatrix} e_x^\text{robot} \\ e_y^\text{robot} \end{bmatrix}
@@ -70,20 +64,15 @@ $$
 \begin{bmatrix} e_x \\ e_y \end{bmatrix}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'e_x^robot', meaning: 'the same error expressed FORWARD of the robot rather than along the field axis'},
-    {symbol: 'e_y^robot', meaning: 'the same error expressed to the robot\u2019s LEFT'},
-    {symbol: '\u2212\u03b8', meaning: 'the rotation is by minus the heading. The robot sits at +\u03b8 in the field, so undoing that puts a field vector into its frame'},
-  ]}
-/>
+Check it with the numbers: $\cos 90° = 0$ and $\sin 90° = 1$, so
+$e_x^\text{robot} = 0 \cdot 0 + 1 \cdot 30 = 30$ and $e_y^\text{robot} = -1 \cdot 0 + 0 \cdot 30 = 0$.
+Thirty inches forward, as expected.
 
 <PidToPointIllustration />
 
-That rotation is the whole trick: the same field error becomes a **forward** distance and a **strafe**
-distance in the robot's own axes — the two numbers the drivetrain can act on. Now run an independent
-controller on each axis. A proportional term is often enough for the translation, with the heading on its
-own gain:
+Now there's a forward distance and a sideways distance, which the drivetrain can act on directly. Run a
+controller on each. Proportional control is often enough for the two translation directions, with
+heading on its own gain:
 
 $$
 v_x = k_p^{xy}\, e_x^\text{robot}, \qquad
@@ -91,93 +80,59 @@ v_y = k_p^{xy}\, e_y^\text{robot}, \qquad
 \omega = k_p^{\theta}\, e_\theta
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'k_p^xy', meaning: 'one proportional gain shared by both translation axes, so forward and sideways respond identically'},
-    {symbol: 'k_p^\u03b8', meaning: 'a SEPARATE gain for heading, because its error is in radians and its actuator authority differs'},
-    {symbol: 'v_x, v_y, \u03c9', meaning: 'the chassis command handed to the mecanum mixer: forward, left, and counter-clockwise'},
-  ]}
-/>
+Translation uses one gain $k_p^{xy}$ for both directions so forward and sideways respond the same way.
+Heading gets its own gain, because its error is in radians and the drivetrain turns and translates with
+different strength. Those three numbers are exactly the $(v_x, v_y, \omega)$ command the
+[mecanum mixer](./mecanum-kinematics.mdx) takes, and its scaling step keeps the robot heading the right
+way when the gains ask for more than full power.
 
-If a plain proportional term leaves the robot drifting short of the goal or overshooting, promote each
-axis to a full discrete PID — proportional on the error, integral on its running sum, derivative on its
-change per loop:
+If proportional alone overshoots, add a D term on each axis. As in the [PID lesson](../control-theory/pid.mdx),
+take the rate of change of the *measurement* (here, the robot's velocity along that axis) so a new
+target doesn't cause a kick:
 
 $$
-u_k = k_p\, e_k \;+\; k_i \sum_{j=0}^{k} e_j\,\Delta t \;+\; k_d\,\frac{e_k - e_{k-1}}{\Delta t}
+u = k_p\, e - k_d\, v_\text{measured}
 $$
-
-<EquationLegend
-  title="Symbols in the discrete PID"
-  items={[
-    {symbol: 'u_k', meaning: 'the command this loop. Lowercase k gains here are the same PID gains written as k_P, k_I, k_D elsewhere'},
-    {symbol: 'e_k, e_{k-1}', meaning: 'the error this loop and the error last loop'},
-    {symbol: 'j', meaning: 'a summation counter running over every past loop from 0 to now. It is not a separate quantity'},
-    {symbol: '\u03a3 e_j \u0394t', meaning: 'the integral, approximated as a stack of rectangles: each loop contributes its own error times its own measured \u0394t'},
-    {symbol: '(e_k \u2212 e_{k-1}) / \u0394t', meaning: 'the derivative, approximated as the change in error across one loop'},
-  ]}
-/>
-
-where $\Delta t$ is the measured loop time. In practice the derivative term damps the approach, while a
-small, clamped integral defeats the static friction that strands a proportional-only controller just
-short of the target.
 
 ### kStatic: getting over the last bit of friction
 
-There is a cleaner fix for that "stranded just short" problem than an integral term. Near the goal the
-error is tiny, so the $k_p\,e$ command shrinks below the voltage needed to overcome **static friction**
-and the robot simply stops moving while still a centimetre off. A **static feedforward**: a constant
-push in the *direction* of the error — defeats it directly:
+Near the target the error is tiny, so $k_p e$ drops below what it takes to overcome friction, and the
+robot stops a centimeter short. You could add an integral term, but there's a simpler fix: a small,
+constant push in the direction of the error, only when the robot is already close:
 
 $$
-u_k = k_p\, e_k + k_d\,\dot e_k + \underbrace{k_S\,\operatorname{sign}(e_k)}_{\text{only when } |e_k| \text{ is small}}
+u = k_p\, e - k_d\, v_\text{measured} + \underbrace{k_S\,\operatorname{sign}(e)}_{\text{only when } |e| \text{ is small}}
 $$
 
-The method most FTC implementations use is to apply $k_S$ **only when the error is already small** (inside
-a threshold), so it acts as a final nudge rather than a constant bias that would cause limit-cycling far
-from the target. This is exactly what production drive code does — for example the SimplicityFTC
-`PDFSController` adds `sign(error) * kStatic` once `|error| < threshold`, and FTCclueless's drivetrain
-adds a flat `0.05 * sign(error)` near the goal. It is the same $k_S$ term you met in
-[feedforward](../control-theory/feedforward.mdx), now applied to a positional drive.
+Only applying it near the target keeps it from acting as a constant bias the rest of the time. Real FTC
+code does this: SimplicityFTC's `PDFSController` adds `sign(error) * kStatic` once `|error|` is under a
+threshold, and FTCclueless's drivetrain adds a flat `0.05 * sign(error)` near the goal. It's the $k_S$
+from [feedforward](../control-theory/feedforward.mdx), used for position. In code it's called
+`kStatic`, from [Common Implementation](./common-implementation.mdx).
 
-Those three numbers — $v_x$, $v_y$, $\omega$ — are precisely the chassis command
-$\mathbf{u} = (v_x, v_y, \omega)$ that the
-[mecanum mixer](./mecanum-kinematics.mdx) expects — including its desaturation step, which keeps the
-approach direction straight when the gains ask for more than full power. The full PID adds the usual
-integral and derivative terms per axis, but on a well-localized drive the proportional + derivative pair
-usually does the job; integral mainly fights steady-state friction near the goal.
-
-<Callout type="idea" title="Three little loops, one drivetrain.">
-PID-to-point is just three 1-D controllers — forward, strafe, heading — sharing one mixer. Tune them
-roughly independently: heading first (so the frame is right), then translation.
+<Callout type="idea" title="Three small loops, one drivetrain">
+PID-to-point is three one-dimensional controllers, forward, sideways, and heading, sharing one mixer.
+Tune heading first, so the robot frame is right, then translation.
 </Callout>
 
 ### Braking on time: predictive deceleration
 
-Proportional control has one stubborn flaw. The command $v = k_p\,e$ is large when far and small when
-near — which sounds right, but the robot has a maximum deceleration. Far out, $k_p\,e$ is *way* above the
-speed from which the robot could still stop in time, so it charges in, brakes too late, and sails past.
-Lower $k_p$ to kill the overshoot and the whole approach turns sluggish. No single gain is both fast and
-clean.
+Proportional control still has a problem. $v = k_p e$ is large when far and small when close, which
+sounds right, but the robot can only slow down so fast. Far out, $k_p e$ is well above the speed the
+robot could stop from in time, so it charges in, brakes too late, and sails past. Lowering $k_p$ fixes
+the overshoot and makes the whole approach sluggish. No single gain is fast and clean.
 
-Ask a better question: *given the distance left, how fast am I allowed to go?* Constant-acceleration
-kinematics answers it. To bring speed $v$ to zero over distance $d$ at deceleration $a$:
+Ask a different question: given how far there is to go, how fast is the robot allowed to be moving?
+Say it can slow down at 60 in/s². From 30 in/s, braking takes $30/60 = 0.5$ s, at an average of 15 in/s,
+so it covers 7.5 in. So at 7.5 in from the target, the robot shouldn't be going faster than 30 in/s. In
+general, stopping from speed $v$ over distance $d$ at deceleration $a$ gives:
 
 $$
 v^2 = 2 a d \quad\Longrightarrow\quad v_\text{cap} = \sqrt{2 a d}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'd', meaning: 'the distance still to travel', unit: 'in'},
-    {symbol: 'a', meaning: 'the braking deceleration, taken as a positive magnitude', unit: 'in/s\u00b2'},
-    {symbol: 'v_cap', meaning: 'the fastest you may currently be going and still stop within d'},
-  ]}
-/>
-
-That is the fastest speed from which you can still stop on the point. Make the commanded speed the
-smallest of three limits — the braking cap, the robot's top speed, and the proportional term for a soft
-final approach:
+Check: $\sqrt{2 \times 60 \times 7.5} = \sqrt{900} = 30$ in/s. Command the smallest of three speeds: the
+braking cap, the robot's top speed, and the proportional term for a gentle final approach:
 
 $$
 v_\text{cmd} = \min\big(\sqrt{2 a d},\ v_\text{max},\ k_p\, d\big)
@@ -185,83 +140,65 @@ $$
 
 <BrakingProfileIllustration />
 
-Far out the square-root cap exceeds $v_\text{max}$, so the robot cruises; as it nears the point the cap
-drops below $v_\text{max}$ and throttles it smoothly to zero at the target in the ideal model. Once the
-cap is active, following it corresponds to a constant-magnitude deceleration; it is the maximum speed
-compatible with stopping over the remaining distance, not a command whose braking grows near the end.
+Far from the target, the braking cap is bigger than $v_\text{max}$, so the robot cruises. Closer in, the
+cap drops below $v_\text{max}$ and brings the speed down to zero at the target. Following the cap means
+slowing down at a steady rate the whole way in.
 
-<Callout type="idea" title="This is motion profiling, lazily.">
-A full motion profile precomputes position, velocity, and acceleration for every instant. The
-$\sqrt{2 a d}$ cap is the same physics evaluated on demand from the current distance — cheaper to write,
-and enough for point-to-point moves.
+<Callout type="idea" title="A motion profile, one loop at a time">
+This is the slowing-down half of a [motion profile](../control-theory/motion-profiling.mdx). A full
+profile plans position, speed, and acceleration for the whole move in advance. The $\sqrt{2 a d}$ cap
+works it out each loop from the distance left, which is simpler and enough for point-to-point moves.
 </Callout>
 
-:::note[The constant-deceleration model is an idealization]
-$v = \sqrt{2ad}$ assumes the robot brakes at one fixed rate. Measure a real drivetrain and its
-stopping distance fits $D(v) = av^2 + bv$ instead — back-EMF braking fades as the robot slows, and
-viscous drag adds the linear term. The idealization is the right way to *learn* the technique. When
-you want the production version, [the Pedro Pathing deep-dive](../advanced-topics/how-pedro-pathing-works.mdx)
-shows how Pedro fits the real curve and inverts it with the quadratic formula.
+:::note[Real braking isn't quite constant]
+$v = \sqrt{2ad}$ assumes the robot always brakes at the same rate. Measure a real drivetrain and its
+stopping distance fits $D(v) = av^2 + bv$ better, because of drag and the way motor braking changes with
+speed. The constant-rate version is the right one to learn with. The
+[Pedro Pathing lesson](../advanced-topics/how-pedro-pathing-works.mdx) shows how Pedro fits the real
+curve.
 :::
 
-**The slicker version: predict where you'll glide to.** The same physics solves for *distance* instead of
-speed: a robot moving at speed $v$ needs $d_\text{glide} = v^2/2a$ to coast to a stop. So don't cap the
-speed at all — add that glide vector to the current pose to get a **predicted stopping pose**, and run the
-ordinary PID against *that*:
+**Another way: predict where the robot would coast to.** Flip the same formula around to solve for
+distance: a robot moving at $v$ needs $v^2/2a$ to stop. From 30 in/s at 60 in/s², that's 7.5 in. Add that
+distance, in the direction the robot is moving, to its current position. That's where it would stop if
+you cut the power now. Then run the ordinary controller as if the robot were already there:
 
 $$
 \mathbf{p}_\text{predicted} = \mathbf{p}_\text{now} + \frac{\mathbf{v}\,\lVert\mathbf{v}\rVert}{2 a}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'p_now', meaning: 'the measured pose right now, as a vector'},
-    {symbol: 'v', meaning: 'measured field velocity. Filter this: raw velocity is noisy, and it is squared below'},
-    {symbol: 'v \u2016v\u2016 / 2a', meaning: 'the glide vector. Its LENGTH is the braking distance \u2016v\u2016\u00b2/2a and its DIRECTION is the way the robot is travelling'},
-    {symbol: 'p_predicted', meaning: 'where the robot would coast to a stop if you cut power now'},
-  ]}
-/>
+The fraction $\mathbf{v}\lVert\mathbf{v}\rVert/2a$ is just "the stopping distance, pointed the way the
+robot is moving." Filter the velocity first, because it's noisy and gets squared.
 
-While the robot races in, the predicted pose sits ahead of it; as it slows, the prediction pulls back onto
-the target. Going too fast, the predicted pose overshoots the goal, the error flips sign, and the
-controller brakes — automatically, with no separate cap. This is how Cyliis's `Odo` computes its
-`predictedX/Y` (from low-pass-filtered velocity) and how FTCclueless feeds an `expected` pose into a
-"predictive PID."
+While the robot races in, the predicted stopping point is ahead of it. If it's going too fast, the
+predicted point passes the target, the error flips sign, and the controller brakes on its own, with no
+separate speed cap. Cyliis's `Odo` class computes `predictedX/Y` this way from filtered velocity, and
+FTCclueless feeds an `expected` pose into what they call a "predictive PID."
 
 <PredictiveBraking />
 
 ### Chaining points: follow a list without stopping
 
-A real autonomous routine is a *list* of poses, not one. The simple approach — `goToPose` each one and
-wait for it to settle — works, but the robot decelerates to a halt at every intermediate point, which is
-slow and jerky. The fix is **point-advance sequencing**: keep an index into the list, drive toward the
-current target, and **advance to the next point as soon as you are within an advance radius** of this one
-(rather than fully settling). Only the *final* point uses the strict settle test.
+A real autonomous is a list of poses. Driving to each one and waiting to settle works, but the robot
+stops at every point along the way, which is slow and jerky. Instead, keep an index into the list, drive
+toward the current point, and **move on to the next one as soon as you're within some radius** of it,
+without settling. Only the last point uses the full "arrived and stopped" check.
 
 $$
 \text{if } \lVert \mathbf{p}_\text{target}^{(i)} - \mathbf{p}_\text{robot}\rVert < r_\text{advance}
 \ \text{ and not last } \Rightarrow\ i \leftarrow i + 1
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'superscript (i)', meaning: 'which point in the target list, counting along the path'},
-    {symbol: 'r_advance', meaning: 'the advance radius: get this close and move on. It is deliberately looser than the settle tolerance, so the robot never stops mid-path', unit: 'in'},
-  ]}
-/>
+The advance radius is looser than the final tolerance, so the robot switches targets while still
+moving and only brakes for the last point. SimplicityFTC's `PidToPointFollower` (`pointAdvanceRadius`)
+and FTCclueless's drivetrain (`pathRadius`) both work this way. It's also how a
+[spline](./quintic-splines.mdx), once turned into a list of points, can be followed with PID-to-point.
 
-Because the robot switches targets while still moving, it flows through the intermediate points and only
-brakes for the last — turning a list of stop-and-go moves into one continuous motion. This is exactly how
-SimplicityFTC's `PidToPointFollower` (`pointAdvanceRadius`) and FTCclueless's drivetrain (`pathRadius`)
-sequence their waypoints, and it is what turns a [spline](./quintic-splines.mdx) — once resampled into a
-list of points — into something PID-to-point can follow.
+### What's still missing
 
-### What comes next
-
-kStatic and predictive deceleration fix how PID-to-point *arrives*; the remaining limit is that it always
-aims straight at one distant target. To thread many waypoints along a smooth, drivable curve, you move on
-to **[splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)**: following a path
-instead of chasing a point.
+kStatic and early braking fix how the robot arrives. What's left is that it always aims straight at
+one point. To follow a smooth curve through many waypoints, later lessons cover
+**[splines](./quintic-splines.mdx)** and **[pure pursuit](./pure-pursuit.mdx)**.
 
 </Theory>
 
@@ -269,11 +206,9 @@ instead of chasing a point.
 
 ## A go-to-pose loop
 
-### Core checkpoint
-
-This is the required artifact: one pose sample becomes wrapped field error, robot-frame P commands, a
-mecanum command, and an explicit `MoveStatus`. Length is inches, speed is inches per second, heading is
-radians, and the mixer input is normalized power.
+One pose sample becomes a wrapped field error, robot-frame commands, a mecanum drive call, and a
+`MoveStatus`. Lengths are in inches, speeds in inches per second, heading in radians, and the mixer takes
+normalized power.
 
 <JavaCode league="FTC" label="PID-to-point (proportional core)">{`void startMove(Pose2d target) {
     activeTarget = target;
@@ -312,39 +247,37 @@ void commandToward(Pose2d target, Pose2d poseForError) {
 }
 `}</JavaCode>
 
-Note the signature of `commandToward`: the desired target and the pose that *supplies* the error are
-separate arguments. They are the same thing here, and the predictive version below is exactly this
-function with a different second argument — which is the whole reason it is written this way.
+`commandToward` takes the target and the pose to measure the error from as separate arguments. Here
+the second one is just the robot's pose. The predictive version further down passes the predicted
+stopping point instead, and nothing else changes.
 
 <Exercise title="Why rotate by minus the heading">
 
-The robot sits at $+\text{heading}$ in the field, so expressing a field vector in the robot's frame
-undoes that. Check it: the robot faces $+90°$ and the target is straight ahead of it, which in the field
-is $+y$. What must `exBot` and `eyBot` come out to?
+The robot faces $+90°$ and the target is straight ahead of it, which on the field is the $+y$
+direction. What should `exBot` and `eyBot` come out to? What would happen if you rotated by
+$+\text{heading}$ instead?
 
 <Solution>
 
-`exBot` must be the full distance and `eyBot` zero, because "straight ahead" in the robot frame is
-$+x$. Substituting $\text{heading} = 90°$ gives $c = 0$, $s = 1$, so `ex_bot = ey` and
-`ey_bot = -ex` — and with the target purely at $+y$ in the field, that is exactly the distance in
-`exBot` and nothing in `eyBot`. Rotating by $+\text{heading}$ instead would send the robot
-sideways, at right angles to the target, at full commanded speed.
+`exBot` should be the whole distance and `eyBot` zero, since straight ahead is $+x$ for the robot. With
+$\text{heading} = 90°$, $c = 0$ and $s = 1$, so `exBot = ey` and `eyBot = -ex`. The target is purely in
+$+y$, so that's the full distance in `exBot` and nothing in `eyBot`. Rotating by $+\text{heading}$
+would send the robot sideways, at right angles to the target.
 
 </Solution>
 
 </Exercise>
 
-The settle test matters as much as the controller: check position **and** heading **and** that the robot
-is actually slow, or an action will report "done" while the robot is still coasting through the point. Add
-a **timeout** as a backstop so a stuck move — jammed on a wall, or a bad pose estimate — still yields the
-field instead of hanging the routine. That trio (pose tolerance, low velocity, timeout) is exactly the
-shared [`MoveStatus` outcome](./common-implementation.mdx) every follower in this module calls. A reached
-move and a timed-out move both stop, but only the reached move is success.
+The "done" check matters as much as the controller. Check position, heading, and that the robot is
+actually slow, or a move will report done while the robot coasts through the point. The timeout keeps a
+stuck move, jammed on a wall or confused by a bad pose, from hanging the routine. That's the shared
+[`MoveStatus`](./common-implementation.mdx) check. Both outcomes stop the robot, but only `REACHED` is a
+success.
 
-To follow a *list* of poses continuously, wrap that loop in point-advance sequencing:
+To follow a list of poses without stopping at each one:
 
 <JavaCode league="FTC" label="Following a list of poses (point-advance)">{`void startPath(List<Pose2d> newPoints) {
-    points = List.copyOf(newPoints);
+    points = new ArrayList<>(newPoints);
     index = 0;
     timer.reset();
 }
@@ -366,7 +299,7 @@ MoveStatus follow() {
         last = index == points.size() - 1;
     }
 
-    MoveStatus status = commandTowardAsInUpdateMove(points.get(index));
+    MoveStatus status = moveTowardTarget(sample, points.get(index));   // as in updateMove()
 
     if (status == TIMED_OUT) return TIMED_OUT;
     if (last) return status;              // only the last leg may say REACHED
@@ -374,27 +307,25 @@ MoveStatus follow() {
 }
 `}</JavaCode>
 
-Advancing *early* through intermediate points is what keeps the robot from having to stop in the middle
-of a path.
+`moveTowardTarget` is the body of `updateMove()` above with the target passed in: check `moveStatus`,
+stop if it's done, otherwise call `commandToward`.
 
 <Exercise title="Why ADVANCE_RADIUS is looser than POS_TOL">
 
-Trace a robot that has to settle inside `POS_TOL` at every intermediate point, and describe how the
-path looks and sounds.
+What would the robot do if it had to settle inside `POS_TOL` at every point along the way?
 
 <Solution>
 
-`POS_TOL` also requires the robot to be *slow* — that is the velocity term in `moveStatus` — so
-settling at every waypoint means decelerating to a stop, waiting to fall inside tolerance, then
-accelerating again. The path becomes a series of lurches with a pause at each point, it takes several
-times as long, and each stop-start is a current spike. `ADVANCE_RADIUS` says "close enough to start
-aiming at the next one," which lets the corners round off and the robot flow through.
+Settling also means being slow, because of the velocity check in `moveStatus`, so the robot would slow
+to a stop at every point, wait, and speed up again. The path turns into a series of lurches, takes
+several times as long, and every stop and start pulls a current spike. `ADVANCE_RADIUS` means "close
+enough to start aiming at the next one," so corners round off and the robot keeps moving.
 
 </Solution>
 
 </Exercise>
 
-For an overshoot-free approach, shape the command's *magnitude* by the braking cap before the mixer:
+To use the braking cap, limit the size of the command before the mixer:
 
 <JavaCode league="FTC" label="Distance-capped approach speed">{`static final double MAX_SPEED = 40;   // inches/second
 static final double MAX_DECEL = 60;   // inches/second^2, positive magnitude
@@ -415,29 +346,27 @@ void driveCapped(double exBot, double eyBot, double w) {
 
 <Exercise title="Derive the braking cap">
 
-`vStop` is $v^2 = 2as$ solved for $v$. Derive it: a robot at speed $v$ braking at `MAX_DECEL` needs
-$v^2/(2a)$ inches to stop. Invert that into "the fastest I may be going, given I am this far out."
+A robot at speed $v$ braking at `MAX_DECEL` needs $v^2/(2a)$ inches to stop. Turn that around into "the
+fastest I can be going when I'm this far away."
 
-Then work out why the direction is computed once and the *speed* is capped, rather than capping
-`exBot` and `eyBot` separately. Take `ex_bot = 30`, `ey_bot = 40`, and clamp each to 20.
+Then: why does the code work out the direction once and cap the *speed*, instead of capping `exBot` and
+`eyBot` separately? Try `exBot = 30`, `eyBot = 40`, and cap each at 20.
 
 <Solution>
 
-Setting the stopping distance equal to the distance remaining gives $v^2/(2a) = s$, so
-$v = \sqrt{2as}$ — the speed from which the robot can still stop exactly on the target.
+Set the stopping distance equal to the distance left: $v^2/(2a) = s$, so $v = \sqrt{2as}$.
 
-For the second half: $(30, 40)$ points at 53.1° off the robot's nose. Clamped componentwise to
-$(20, 20)$ it points at 45°. The robot drives somewhere it was never asked to go, and the error grows
-with how lopsided the two components are. Capping the magnitude and rebuilding from `dir` leaves the
-direction untouched — the same reason the mecanum mixer desaturates all four wheels together.
+$(30, 40)$ points 53.1° off the robot's nose. Capped separately to $(20, 20)$, it points at 45°, so the
+robot drives somewhere it wasn't asked to go. Capping the size and rebuilding from `dir` keeps the
+direction, for the same reason the mecanum mixer scales all four wheels together.
 
 </Solution>
 
 </Exercise>
 
-### Production extension: predictive stopping
+### Predictive stopping
 
-The predicted-pose variant changes the **robot state used to calculate error**, never the desired target:
+The predictive version changes the pose the error is measured from, never the target:
 
 <JavaCode league="FTC" label="Glide-distance predicted pose">{`// Where this sample says the robot will coast to a stop.
 Pose2d predictedPose(PoseSample sample) {
@@ -467,25 +396,25 @@ MoveStatus updatePredictiveMove() {
 }
 `}</JavaCode>
 
-Read that last call carefully: the *target* is unchanged, and only the pose supplying the error is
-predicted. Worked example — target $x = 10$, actual robot $x = 2$, predicted $x = 8$. The error becomes
-$+2$ rather than $+8$, so the robot eases off early instead of charging the target and overshooting.
+In that last call the target is the same, and only the pose the error comes from is predicted. Say the
+target is at $x = 10$, the robot is at $x = 2$, and its predicted stopping point is $x = 8$. The error is
+$+2$ instead of $+8$, so the robot eases off early instead of charging in and overshooting.
 
 <Exercise title="The unit vector, and a noisy velocity">
 
-Work out why `v` is divided by `speed`, and what the prediction does if you forget. Then work out what
-this controller does when `fieldVelocity()` is noisy and briefly reads twice its true value.
+Why is `v` divided by `speed`, and what happens if you forget? And what does this controller do when
+`fieldVelocity()` is noisy and briefly reads double the true value?
 
 <Solution>
 
-`v / speed` is the unit vector along travel, so multiplying by `glide` moves exactly `glide` inches in
-the direction of motion. Skip the division and you move `speed * glide` inches — a prediction that
-scales with the *cube* of speed and puts the robot's imagined position across the field.
+`v / speed` is a length-1 vector pointing the way the robot is moving, so multiplying by `glide` moves
+exactly `glide` inches in that direction. Skip the division and you move `speed * glide` inches, which
+grows with the cube of the speed and puts the predicted point across the field.
 
-A doubled velocity reading quadruples `glide`, since it goes as $v^2$. The predicted pose leaps past
-the target, the error changes sign, and the robot brakes hard or reverses for one loop. That is why the
-filter note is not optional: the prediction amplifies velocity noise quadratically, and velocity is the
-noisiest thing the pose source produces.
+A doubled velocity reading makes `glide` four times bigger, since it depends on $v^2$. The predicted
+point jumps past the target, the error flips sign, and the robot brakes hard or even reverses for a
+loop. That's why the velocity needs filtering: the prediction amplifies its noise, and velocity is the
+noisiest thing the pose source gives you.
 
 </Solution>
 
@@ -493,28 +422,27 @@ noisiest thing the pose source produces.
 
 </Deploy>
 
-<Admonition type="warning" title="Hardware reality: integral windup and the dead band">
+<Admonition type="warning" title="If you use an integral term">
 
-Static friction means a small position error produces a command too weak to move the robot, so it sits
-just short of the target. An integral term cures that — but if you keep integrating while saturated or
-stuck against a wall, the term winds up huge and the robot lurches when it frees. Clamp the integral and
-only accumulate it near the goal.
+An integral can also fix stopping short, but if it keeps adding up while the robot is maxed out or
+stuck against a wall, it grows huge and the robot lurches when it comes free. Cap it and only let it run
+near the target, as in [Anti-Windup](../control-theory/actuator-saturation-anti-windup.mdx).
 
 </Admonition>
 
 <Admonition type="tip" title="Tune heading first">
 
-A wrong heading rotates your whole translational command, so a heading bug looks like a translation bug.
-Get $k_p^{\theta}$ holding heading cleanly, then tune the translational gain.
+A wrong heading rotates the whole translation command, so a heading bug looks like a translation bug.
+Get $k_p^{\theta}$ holding heading cleanly before tuning translation.
 
 </Admonition>
 
-<Admonition type="warning" title="Hardware reality: your real decel is smaller than you think">
+<Admonition type="warning" title="Real braking is weaker than you'd think">
 
-`MAX_DECEL` is limited by traction, battery voltage, and weight transfer, not the motors. Measure it,
-then choose and validate a conservative margin on the actual surface so changing traction does not turn
-your computed stop into a slide. **Filter the velocity** before computing glide — it is squared, so encoder noise gets
-amplified into a jittery predicted pose (Cyliis low-pass-filters the pod velocity first).
+`MAX_DECEL` is limited by traction, battery voltage, and weight shifting, not by the motors. Measure it
+on the actual field surface and leave some margin so a slippery tile doesn't turn your planned stop
+into a slide. And filter the velocity before computing the glide distance, since it gets squared.
+(Cyliis filters their odometry velocity first.)
 
 </Admonition>
 

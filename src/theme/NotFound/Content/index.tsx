@@ -20,16 +20,16 @@ interface Destination {
 const DESTINATIONS: Destination[] = [
   {
     kind: 'Preface',
-    title: 'Why Math Matters',
+    title: 'Control & Feedback',
     description:
-      'The preface. Calculus, linear algebra, differential equations, and state-space models, built from robotics examples.',
-    to: '/docs/preface/why-math-matters',
+      'The preface. Open-loop versus closed-loop control, error, disturbances, and the control-loop skeleton.',
+    to: '/docs/preface/control-and-feedback',
   },
   {
     kind: 'Module 1',
     title: 'Start of the curriculum',
     description:
-      'Software architecture and loop optimization, then motors, estimation, path following, and state-space control.',
+      'Software architecture and loop optimization, then motors, estimation, and path following.',
     to: '/docs/software-architecture',
   },
   {

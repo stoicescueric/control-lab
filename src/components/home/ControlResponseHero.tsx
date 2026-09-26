@@ -349,7 +349,7 @@ export default function ControlResponseHero() {
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link
-              to="/docs/preface/why-math-matters"
+              to="/docs/preface/control-and-feedback"
               className="cl-home-action inline-flex min-h-11 items-center rounded-[10px] bg-accent-fill px-5 py-2.5 font-semibold text-on-accent no-underline hover:bg-brand-dk">
               Start the course
             </Link>

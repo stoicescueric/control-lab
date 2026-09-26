@@ -1,6 +1,6 @@
 ---
 title: Guided Vector Fields
-description: Follow a path as a flow field instead of chasing a moving point. Blend onto-path and along-path terms, state the local convergence conditions, cap speed, and handle the endpoint.
+description: Follow a path as a field of arrows instead of chasing a moving point. Blend "along the path" with "back onto the path," slow down for curves, and handle the endpoint.
 sidebar_position: 9
 tags: [guided-vector-field, gvf, path-following, convergence, advanced]
 ---
@@ -14,32 +14,23 @@ import PathProjection from '@site/src/components/simulations/path-following/Path
 <Difficulty level="Hard" />
 
 <Abstract>
-A guided vector field (GVF) assigns, to **every** point of the field, a desired direction of travel that
-both pulls the robot **onto** the path and pushes it **along** the path. In a regular neighborhood where
-the closest point is unique, the ideal field has a clean convergence argument. We build it two ways (the
-closest-point form you'll code, and the implicit level-set form used in the proof), add curvature and
-endpoint speed caps, and ship a working FTC follower.
+A guided vector field (GVF) gives every point on the field a direction to travel, one that both pushes
+the robot **along** the path and pulls it back **onto** it. This lesson builds the field from the closest
+point on the path, adds speed limits for curves and the endpoint, and ends with a working FTC follower.
 </Abstract>
 
 <Admonition type="note" title="Prerequisites and a starting path">
 
-Begin with [Pure Pursuit](./pure-pursuit.mdx) and [Splines](./quintic-splines.mdx), then confirm that
-your localization meets the [Pose Estimation Contract](./pose-estimation-contract.mdx). The closest-point
-implementation is the starting point; implicit curves, gradients, and convergence proofs are optional
-mathematical depth.
-
-**Math used:** vectors, normalization, dot products, and closest-point projection. The proof later adds
-an implicit path function, a **gradient**, and a local-convergence argument; those are optional for the
-deployed closest-point follower.
+Read [Pure Pursuit](./pure-pursuit.mdx) and [Splines](./quintic-splines.mdx) first, and check your
+localization with the [Pose Estimation Contract](./pose-estimation-contract.mdx). The math is vectors,
+unit vectors, dot products, and finding the closest point on a path.
 
 </Admonition>
 
-[Pure pursuit](./pure-pursuit.mdx) follows a path by chasing a carrot a fixed distance ahead. It works, but
-it tracks the *carrot*, not the path, so it cuts corners and its behavior swings with the lookahead
-distance. Guided vector fields reframe following entirely: instead of a point to chase, build a field of
-arrows the robot flows along. Drag the robot around the demonstrated path and watch the sampled flow line
-bend onto it. This picture illustrates recovery on both sides; the convergence claim is local to the
-unique-projection neighborhood stated below.
+[Pure pursuit](./pure-pursuit.mdx) chases a point a fixed distance ahead. It works, but it's following
+the point, not the path, so it cuts corners and behaves differently as you change the lookahead. A
+guided vector field replaces the point with a field of arrows the robot follows. Drag the robot around
+in the demo and watch the flow line bend back onto the path.
 
 <GuidedVectorField />
 
@@ -47,16 +38,13 @@ unique-projection neighborhood stated below.
 
 ## Chasing a point is not the same as being on the path
 
-A lookahead follower only ever aims at a point ahead of itself. On a curve, the straight line to that point
-lies *inside* the curve, so the robot drifts to the inside and cuts the corner. Shorten the lookahead to hug
-the path and the robot oscillates; lengthen it to smooth the oscillation and it cuts more. You are trading
-one error for another, because the controller never has "distance from the path" as a quantity it directly
-drives to zero.
+A lookahead follower aims at a point ahead of itself. On a curve, the straight line to that point runs
+inside the curve, so the robot cuts the corner. Shorten the lookahead and it weaves; lengthen it and it
+cuts more. The controller never directly works on "how far am I from the path."
 
-A GVF fixes exactly that: the cross-track error becomes the thing the field cancels. Knock the robot
-sideways mid-run and it simply re-enters the flow and slides back on — *"you could run up and kick the robot
-during auto, and it will move back to the programmed path automagically"* (the THOR library's own
-description of the behavior).
+A GVF does. The distance from the path is exactly what the field works to remove. Knock the robot
+sideways and it just follows the arrows back. The THOR library describes it as: *"you could run up and
+kick the robot during auto, and it will move back to the programmed path automagically."*
 
 </Problem>
 
@@ -64,106 +52,78 @@ description of the behavior).
 
 ## Two desires, blended into one direction
 
-At the robot's current position $\mathbf{p}$, find the **closest point** $\mathbf{c}$ on the path. That
-gives two local facts: the path's unit **tangent** $\hat{\mathbf{t}}$ (the along-track direction) and the
-signed **cross-track error**: how far, and which side, the robot is off the path — measured along the unit
-**normal** $\hat{\mathbf{n}}$ (the tangent rotated 90°):
+Start from the robot's position $\mathbf{p}$ and find the **closest point** $\mathbf{c}$ on the path. At
+that point you know which way the path is going, a length-1 **tangent** $\hat{\mathbf{t}}$, and which way
+is sideways, the tangent turned 90°, called the **normal** $\hat{\mathbf{n}}$. The **cross-track error**
+is how far the robot is off the path along the normal, with a sign that says which side:
 
 $$
 e = (\mathbf{p} - \mathbf{c}) \cdot \hat{\mathbf{n}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'p', meaning: 'the robot\u2019s position'},
-    {symbol: 'c', meaning: 'the closest point on the path to the robot, found by projection'},
-    {symbol: 'n\u0302', meaning: 'the unit NORMAL: the path\u2019s tangent rotated 90\u00b0. The hat means unit length'},
-    {symbol: 'e', meaning: 'cross-track error. Dotting with n\u0302 makes it SIGNED, so its sign says which side of the path the robot is on', unit: 'in'},
-  ]}
-/>
+For a straight path along the $x$ axis, the tangent is $(1, 0)$ and the normal is $(0, 1)$. A robot at
+$(5, -3)$ has its closest point at $(5, 0)$, so $e = (0, -3) \cdot (0, 1) = -3$: three inches off, on the
+right-hand side.
 
-Projection is the geometric step the controller depends on. Drag the query point and first make sure the
-highlighted closest point, tangent, and signed normal behave as you expect:
+Everything depends on finding that closest point correctly. Drag the point in the demo and check that
+the closest point, tangent, and normal do what you expect:
 
 <PathProjection />
 
-For a regular path (nonzero tangent), that closest point is unique only inside a local **tubular
-neighborhood**. A self-approaching spline or a robot far from the path can have multiple equally plausible
-projections, so production code constrains the search around its previous progress.
+The closest point is only clearly defined when the robot is fairly near the path. If the path doubles
+back close to itself, or the robot is far away, two points can be equally close, so real code only
+searches near where it was last loop.
 
-A GVF combines two urges into one desired direction of travel:
+The field combines two directions into one:
 
 $$
 \boldsymbol{\chi} \;=\; \underbrace{\hat{\mathbf{t}}}_{\text{flow along}} \;-\; \underbrace{k_N\,e\,\hat{\mathbf{n}}}_{\text{converge onto}}
 $$
 
-<EquationLegend
-  items={[
-    {symbol: '\u03c7 (chi)', meaning: 'the guiding vector field: the direction the robot should travel right now. It is not a speed; the next equation supplies that'},
-    {symbol: 't\u0302', meaning: 'the unit tangent, pointing along the path. On its own it would make the robot fly parallel to the path without ever joining it'},
-    {symbol: 'k_N', meaning: 'the CONVERGE gain: how hard cross-track error bends \u03c7 back toward the path. Large k_N approaches steeply, small k_N approaches gently', unit: '1/in'},
-  ]}
-/>
+$\boldsymbol{\chi}$ is the direction to travel. With the robot 3 in to the right of the path ($e = -3$) and
+$k_N = 0.2$ per inch, $\boldsymbol{\chi} = (1, 0) - 0.2(-3)(0, 1) = (1, 0.6)$: mostly forward, leaning 31°
+back toward the path.
 
 <GuidedVectorFieldIllustration />
 
-When the robot is on the path ($e = 0$) the field is pure tangent — it flows along. When it drifts off, the
-second term turns the arrows back toward the path, harder the farther off it is. The gain $k_N$ (units of
-$1/\text{length}$) sets how aggressively the field reels the robot in: too small and it converges lazily; too
-large and the field points nearly straight at the path, so the robot overshoots and zig-zags across it.
-That trade-off is the one setting worth tuning — slide $k_N$ in the demo and watch the flow line go from a long
-graceful merge to a tight, slightly overshooting snap.
+On the path, $e = 0$ and the arrow points straight along it. The farther off the robot is, the more the
+arrow leans back toward the path. $k_N$ sets how hard it leans. Too small and the robot merges back
+lazily. Too large and the arrows point almost straight at the path, so the robot overshoots and
+zig-zags. It's the one setting really worth tuning, so move $k_N$ in the demo and watch the merge go from
+long and gentle to sharp.
 
-### Provable convergence (in brief)
+### Why it converges
 
-This is GVF's headline property, with important conditions. Inside a regular tubular neighborhood where
-projection is smooth and unique, treat the cross-track error as an energy $V = \tfrac12 e^2$: the ideal
-converging term makes it nonincreasing ($\dot V \propto -k_N e^2 \le 0$). This is a **local** result for the
-modeled field, not a global promise for an arbitrary spline, projection search, or saturated drivetrain.
-The full Lyapunov proof, and the cleaner **implicit / level-set** formulation
-$\boldsymbol{\chi} = E\nabla\varphi - k\varphi\nabla\varphi$ it is usually proved with, are in
-Kapitanyuk, Proskurnikov and Cao's [*A Guiding Vector Field Algorithm for Path Following
-Control*](https://arxiv.org/abs/1610.04391). Normalize
-$\boldsymbol{\chi}$ and scale by your commanded speed to get the chassis velocity:
+Near the path, the leaning term always pushes the robot toward it, so the distance from the path keeps
+shrinking and never grows. That holds close to the path, where the closest point is clearly defined,
+for the ideal field. It isn't a promise for any spline from any starting point, or for a drivetrain
+that's already at full power. The full proof is in Kapitanyuk, Proskurnikov, and Cao's
+[*A Guiding Vector Field Algorithm for Path Following Control*](https://arxiv.org/abs/1610.04391).
+
+To turn the direction into a velocity, make $\boldsymbol{\chi}$ length 1 and multiply by the speed you want:
 
 $$
 \mathbf{u}_{xy} = v\,\frac{\boldsymbol{\chi}}{\lVert \boldsymbol{\chi}\rVert}, \qquad
 v = k_S\,v_{\max}\,s_{\mathrm{end}}(t)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'u_xy', meaning: 'the translational chassis command. \u03c7 divided by its own length is direction only, so v alone sets the speed'},
-    {symbol: 'k_S', meaning: 'speed scale, a fraction from 0 to 1 of the mechanism\u2019s maximum'},
-    {symbol: 's_end(t)', meaning: 'a slowdown factor that eases from 1 to 0 over the last stretch of the path, so the follower arrives rather than crashes'},
-  ]}
-/>
+$k_S$ is a fraction of top speed, from 0 to 1, and $s_{\mathrm{end}}$ eases from 1 down to 0 over the last
+stretch of the path so the robot slows as it arrives. At the very end, hand over to the shared terminal
+controller, which reports `REACHED` or `TIMED_OUT`.
 
-Here $s_{\mathrm{end}}(t)$ smoothly falls from 1 to 0 near $t=1$. At the endpoint, hand control to the
-shared terminal pose controller and report `REACHED` or `TIMED_OUT`; do not force a minimum through-speed
-past the end of the path.
+### Slowing down for curves
 
-### Slow down for the bends: the curvature speed cap
-
-Convergence says *where* to go, not *how fast*. Just like [adaptive pure pursuit](./pure-pursuit.mdx), real
-GVF followers cap speed where the path bends so the robot can physically make the turn. With path curvature
-$\kappa = 1/R$ and a lateral-acceleration budget $a_{\max}$, the fastest feasible speed through a bend is
-$v \le \sqrt{a_{\max}/|\kappa|}$. KookyBotz's follower writes this as a tunable cap
+The field says which way to go, not how fast. As in [adaptive pure pursuit](./pure-pursuit.mdx), limit
+speed where the path bends so the robot can actually make the turn. With curvature $\kappa$ and a
+sideways-acceleration limit $a_{\max}$, the fastest safe speed is $\sqrt{a_{\max}/|\kappa|}$. KookyBotz's
+follower adds a tuning factor $k_C$:
 
 $$
 v_{\max} \;=\; \min\!\left(v_{\max},\;\sqrt{\frac{a_{\max}}{k_C\,|\kappa|}}\right)
 $$
 
-<EquationLegend
-  items={[
-    {symbol: 'k_C', meaning: 'the CURVATURE CAUTION gain, distinct from k_N above. It inflates the apparent curvature so the cap bites earlier; larger k_C means slower through every bend'},
-    {symbol: 'a_max', meaning: 'the lateral-acceleration budget: how much sideways grip the tires have before sliding', unit: 'in/s\u00b2'},
-    {symbol: '\u03ba', meaning: 'the path\u2019s curvature at the current point. Its absolute value is used, because a left and a right bend cost the same'},
-  ]}
-/>
-
-where $k_C$ trades cornering speed against grip. On a straight ($\kappa\to 0$) the cap lifts and you run at
-full $v_{\max}$; in a tight arc it clamps the speed down automatically.
+A larger $k_C$ makes the robot slower through every bend. On a straight, $\kappa$ is zero and the limit
+goes away. In a tight curve it pulls the speed down.
 
 </Theory>
 
@@ -171,8 +131,8 @@ full $v_{\max}$; in a tight arc it clamps the speed down automatically.
 
 ## Sampling the field each loop
 
-Three pieces every loop: **project** the robot onto the path (closest point + tangent + curvature), **blend**
-the field and cap the speed, then **rotate** the field-frame velocity into wheel commands.
+Each loop: find the closest point on the path (with its tangent and curvature), build the field direction
+and limit the speed, then rotate the field-frame velocity into the robot's frame for the mixer.
 
 <JavaCode league="FTC" label="Gains and path lifecycle">{`// kN  converge gain, 1/inch: how hard the field pulls back to the path
 // kS  speed scale, 0..1;  kC  curvature caution: bigger is slower in bends
@@ -219,58 +179,53 @@ Vector2d gvfVelocity(Pose2d robot) {
 }
 `}</JavaCode>
 
-A zero tangent means the path has a cusp or a duplicated point: there is no "forward" there, so the
-follower stops rather than normalizing a zero vector and picking a direction at random.
+A zero tangent means the path has a sharp point or a duplicated waypoint, where there's no "forward." The
+follower stops instead of dividing by zero and heading off in a random direction.
 
 <Exercise title="Why the projection is seeded and clamped">
 
-Seeding from last loop's $t$ and then clamping to a window is what keeps the projection *local*. Work
-out what an unseeded global search does on a path that doubles back near itself — which of the two
-nearby points does it pick, and what does the robot then do?
+The search starts from last loop's $t$ and only accepts a small change. What would a search over the
+whole path do on a path that doubles back near itself?
 
 <Solution>
 
-Whichever is closer by a hair, which can be the *later* branch even though the robot has not driven the
-loop yet. The follower jumps its parameter forward, decides it is nearly finished, and cuts across the
-loop it was supposed to drive. Worse, a wobble of a few millimetres can flip the answer back and forth
-between the two branches on consecutive loops, so the commanded direction oscillates. The window makes
-progress physically continuous: $t$ can only move as far in one loop as the robot could actually travel.
+It picks whichever branch is closer by a hair, which can be the later one even though the robot hasn't
+driven the loop yet. The follower jumps ahead, thinks it's nearly done, and cuts across. A few
+millimeters of wobble can also flip the answer between branches from one loop to the next, so the
+direction swings back and forth. Limiting the change keeps progress realistic: $t$ can only move as far
+in one loop as the robot could actually travel.
 
 </Solution>
 
 </Exercise>
 
-<Exercise title="The one line that is the whole field">
+<Exercise title="The two extremes of chi">
 
-Work through the two extremes of `chi`. With $e = 0$ the robot is on the path — what is `chi`? With
-large $e$, which term dominates and where does `chi` point? Then work out what happens as `kN` grows
-without bound, and compare the approach angle for `kN = 0.1` against `kN = 5`.
+What is `chi` when the robot is on the path ($e = 0$)? When $e$ is large? What happens as `kN` gets very
+large? Compare the lean for a 1 in error with `kN = 0.1` and with `kN = 5`.
 
 <Solution>
 
-At $e = 0$ the normal term vanishes and `chi` is exactly the tangent: pure flow along the path. For
-large $e$ the normal term dominates and `chi` points almost straight at the path, so the robot attacks
-it perpendicularly. `kN` sets how sharply it trades one for the other.
+At $e = 0$ the sideways term is zero and `chi` is just the tangent. For large $e$ the sideways term wins
+and `chi` points almost straight at the path.
 
-As `kN` grows the approach angle goes to 90° for any nonzero error, so the robot dives at the path,
-overshoots because it arrives with all its speed across the path rather than along it, and oscillates
-about the line. At `kN = 0.1` a one-inch error produces a lean of about 6° off tangent — a gentle,
-slow convergence. At `kN = 5` the same inch produces roughly 79°, which is nearly a right-angle attack.
-Look up "vector field guidance."
+As `kN` grows, the lean approaches 90° for any error, so the robot dives at the path, arrives moving
+across it instead of along it, overshoots, and oscillates. With `kN = 0.1`, a 1 in error leans the arrow
+about 6°, a slow, gentle merge. With `kN = 5`, the same inch leans it about 79°, nearly straight at the
+path.
 
 </Solution>
 
 </Exercise>
 
-Progress is driven by geometry, not a clock. The snippet both seeds from last loop's $t$ and clamps the
-accepted result to a small backward/forward window. Choose those bounds from maximum motion per loop; they
-keep an ambiguous curve branch from silently teleporting progress.
+Progress comes from where the robot is, not from a clock. Pick `MAX_BACKTRACK` and `MAX_FORWARD` from how
+far the robot can move in one loop.
 
-Heading is its own controller, and a nice touch from KookyBotz is to profile it: instead of a raw P term on
-heading error, command $\omega = \min\!\big(\omega_{\max}, \sqrt{2\,a_\theta\,|\Delta\theta|}\big)$, the
-speed a constant-deceleration stop would need — it eases into the target heading without overshoot. A small
-**kStatic** feedforward, $\operatorname{sign}(u)\cdot k_{\text{static}}$, breaks stiction so tiny corrections
-near the path don't stall.
+Heading has its own controller. KookyBotz uses a nice trick: instead of a plain P term, command
+$\omega = \min\!\big(\omega_{\max}, \sqrt{2\,a_\theta\,|\Delta\theta|}\big)$, the fastest turn rate that
+can still stop on the target heading. It's the same braking formula as
+[PID-to-point](./pid-to-point.mdx), for turning. A small `kStatic` push on the strafe axis also keeps tiny
+corrections from getting stuck on friction.
 
 <JavaCode league="FTC" label="Lifecycle-aware GVF update and terminal handoff">{`MoveStatus update(PoseSample sample) {
     Pose2d robot = sample.pose();
@@ -305,20 +260,19 @@ near the path don't stall.
 }
 `}</JavaCode>
 
-The GVF speed goes to zero at $t = 1$, so it can approach the end but never settle on it. That is what
-the handoff to a point controller is for.
+The field's speed goes to zero at $t = 1$, so it approaches the end but never settles there. That's why
+it hands off to a point controller.
 
 <Exercise title="Read the terminal condition closely">
 
-A timeout is terminal anywhere, but `REACHED` is only honoured once the path parameter says the robot is
-actually at the end. Work out the failure that prevents.
+A timeout ends the move anywhere, but `REACHED` only counts once `lastT` says the robot is actually at
+the end of the path. What does that prevent?
 
 <Solution>
 
-A path that loops back near its own start would otherwise report `REACHED` on loop one: the robot is
-within `POS_TOL` of the end pose and not yet moving, so every condition in `moveStatus` is satisfied
-before the robot has driven anywhere. Requiring `last_t >= 1 - TERMINAL_TOL` says the robot must have
-travelled the path, not merely be standing near where it finishes.
+A path that ends near where it starts would report `REACHED` on the first loop: the robot is within
+`POS_TOL` of the end and not moving yet, so `moveStatus` is satisfied before it has driven anywhere.
+Requiring `lastT >= 1 - TERMINAL_TOL` means the robot has to have actually driven the path.
 
 </Solution>
 
@@ -326,25 +280,22 @@ travelled the path, not merely be standing near where it finishes.
 
 <Exercise title="Why the turn uses a square root">
 
-That `sqrt` is $v^2 = 2as$ again, applied to the rotational axis: the fastest turn rate that can still
-stop on the target heading. Work out what a plain proportional turn does differently on a large heading
-error.
+That `sqrt` is $v^2 = 2as$ again, for turning. What does a plain proportional turn do differently on a
+large heading error?
 
 <Solution>
 
-A proportional turn commands rate in *linear* proportion to the error, so on a large error it saturates
-and then decelerates far too late — the robot arrives at the target heading still turning fast and
-overshoots. The square-root profile is the braking curve: at every heading error it commands exactly
-the rate from which it can still decelerate to zero at `A_THETA`. Large errors get a much lower
-commanded rate than proportional would give, which is the point.
+A proportional turn commands a rate proportional to the error, so on a big error it maxes out and then
+starts slowing far too late, reaching the target heading while still turning fast. The square root
+follows the braking curve: at each error it asks for the fastest rate that can still slow to zero at
+`A_THETA`. On big errors that's much slower than proportional would ask for.
 
 </Solution>
 
 </Exercise>
 
-Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); use
-[angle wrapping](./angle-wrapping.mdx) on the heading error so it always turns the short way. The
-`Vector2d`/`Pose2d` types and the `MoveStatus` completion outcome come from
+`drive` sends `fwd`, `str`, and `turn` through the [mecanum mixer](./mecanum-kinematics.mdx), and the
+heading error uses [angle wrapping](./angle-wrapping.mdx). The types and `MoveStatus` come from
 [Common Implementation](./common-implementation.mdx).
 
 </Deploy>
@@ -359,24 +310,22 @@ Feed `fwd`/`str`/`turn` through your [mecanum mixer](./mecanum-kinematics.mdx); 
 | Direction becomes zero or undefined | degenerate/near-zero path tangent | repair or reject that path segment |
 | Robot sails through the endpoint | no terminal slowdown/handoff | taper $s_{\mathrm{end}}$ and use `MoveStatus` |
 
-<Admonition type="warning" title="Hardware reality: projection and path regularity">
+<Admonition type="warning" title="Finding the closest point reliably">
 
-The whole method rests on the projection. Finding the closest point on a spline every loop is a small
-optimization — **seed it from last loop's parameter** and take a few local iterations, or the cost adds up
-and (worse) it can jump to a far branch of a self-approaching path. In the closest-point field the unit
-tangent and normal terms are orthogonal, so they do not cancel each other. A zero direction instead signals
-a degenerate tangent; discontinuities usually signal a nonunique or jumping projection. Reject those path
-segments rather than hiding them with a minimum speed. And don't let $k_N$ run away: a huge gain makes the
-field point almost straight at the path, so the robot overshoots and zig-zags.
+Everything depends on finding the closest point. On a spline that's a small search every loop, so
+**start from last loop's value** and take a few steps from there. Otherwise it's slow, and worse, it can
+jump to a far part of a path that comes back near itself. If the direction ever comes out as zero, the
+path has a bad spot, like a duplicated point, and if it jumps suddenly, the closest-point search jumped.
+Fix those path segments rather than hiding the problem. And keep $k_N$ reasonable, since a huge value
+makes the robot zig-zag.
 
 </Admonition>
 
 <Admonition type="tip" title="Where GVF sits in the toolbox">
 
-For point-to-point moves, [PID-to-point](./pid-to-point.mdx) is plenty. For pre-planned curves at speed, GVF
-(or a well-tuned pure pursuit over a [quintic spline](./quintic-splines.mdx)) gives the tightest, most
-repeatable tracking — and GVF's disturbance rejection (get bumped, slide right back on) is its standout
-trait. The difference between a routine that scores and one that clips the structure.
+For point-to-point moves, [PID-to-point](./pid-to-point.mdx) is plenty. For planned curves at speed, a
+GVF, or a well-tuned pure pursuit on a [quintic spline](./quintic-splines.mdx), tracks most tightly and
+repeatably. What GVF does especially well is recover: bump it and it slides right back onto the path.
 
 </Admonition>
 

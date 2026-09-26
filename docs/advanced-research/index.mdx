@@ -10,10 +10,10 @@ import {Workflow} from '@site/src/components/simulations/research/ResearchFigure
 # Build a Robust Moving Shooter
 
 <Abstract>
-This elective turns a research system into an FTC implementation path. You will see what runs offline,
-what runs every robot loop, what must be measured on your own launcher, and what evidence tells you the
-system is ready to fire. The goal is to understand the algorithms well enough to build and challenge your
-own version, not to copy one season's constants.
+This elective walks through a shooter that fires accurately while the robot is moving, from the physics
+model to the robot code. You'll see what runs on a laptop ahead of time, what runs every loop, what you
+have to measure on your own launcher, and how to tell the system is ready. The aim is to understand it
+well enough to build your own, not to copy one season's numbers.
 </Abstract>
 
 <figure>
@@ -22,27 +22,26 @@ own version, not to copy one season's constants.
 </figure>
 
 :::note[A note from Eric]
-I developed this launcher pipeline and wrote the paper behind the case study. The paper records the
-model, implementation, and evidence precisely; these lessons explain the engineering choices in the
-order an FTC team would need them. Rebuild the measurements for your robot, keep the safety and validity
-checks, and treat every constant here as a starting question rather than a value to copy.
+I built this launcher system and wrote the paper it's based on. The paper has the full model and
+results. These lessons explain the choices in the order an FTC team would need them. Measure everything
+again on your own robot, keep the safety checks, and treat every number here as a starting point.
 :::
 
 ## The whole shooter in one pass
 
-The robot launches a light, perforated ball through a raised opening. A useful shot must survive more
-than one ideal calculation: the ball varies, the launcher transfers wheel speed imperfectly, the chassis
-moves, and the goal can reject a ball that entered geometrically.
+The robot launches a light ball with holes in it through a raised opening. A perfect calculation isn't
+enough: balls vary, the launcher doesn't pass all of the wheel's speed to the ball, the robot moves, and
+a ball that goes in can still bounce out.
 
 <Workflow />
 
-The first three steps produce a recommendation **offline**. The robot does not run thousands of
-trajectories during a control loop. It queries calibrated tables, solves a small moving-target update,
-controls the mechanism, checks readiness, and releases.
+The first three steps happen **ahead of time** on a laptop. The robot doesn't simulate thousands of
+shots in its loop. It looks up values in measured tables, adjusts the aim for motion, controls the
+mechanism, checks that everything's ready, and fires.
 
 ## Adopt the system in layers
 
-You do not need the complete research pipeline before the first useful implementation.
+You don't need the whole system to get something useful.
 
 | Level | Build | What it gives the team |
 |---|---|---|
@@ -50,11 +49,11 @@ You do not need the complete research pipeline before the first useful implement
 | Shoot while moving | field-frame velocity, virtual-target iteration, convergence and range status | aim correction for inherited chassis motion |
 | Model-guided selection | drag-aware flight solver, geometric entry test, bounded make-window search | fewer physical candidates and an explanation of why one command is less fragile than another |
 
-Start with the static layer if your team needs a competition result quickly. Add motion compensation
-only after pose, velocity, release delay, and flight time are trustworthy. Add the offline model when you
-want to reduce calibration search or study sensitivity.
+If you need results soon, start with the stationary shooter. Add shooting on the move only once your
+pose, velocity, feeder delay, and flight times are reliable. Add the physics model when you want to cut
+down on test shots or understand why some settings are more forgiving than others.
 
-## Five lessons, five build artifacts
+## Five lessons, five things to build
 
 1. **[Build the Offline Flight Model](./trajectory-simulation.mdx).** Produce a function that maps exit
    speed, angle, and geometry to a descending rim crossing, entry velocity, and time of flight.
@@ -81,17 +80,16 @@ The first two lessons share the paper's **70-inch (1.778 m) front-lip distance**
 | Actuation | table targets → flywheel, hood, turret, and feeder commands | every robot loop |
 | Validation | physical launches → entered, bounced out, or missed | logged test and match data |
 
-A CSV of ideal ball speed and angle is not a motor table. The calibrated launcher maps absorb wheel
-slip, compression, surface condition, motor response, and mechanism geometry that the flight model does
-not know.
+A list of ideal ball speeds and angles isn't a motor table. The measured launcher tables account for
+wheel slip, ball squish, surface wear, motor response, and mechanism geometry, none of which the flight
+model knows about.
 
 ## Prerequisites for full understanding
 
-The builder route assumes basic Java, vectors and coordinate frames, consistent units, interpolation,
-and timestamped sensor logging. The complete derivations additionally use ordinary differential
-equations, RK4 integration, cubic Hermite interpolation, bounded optimization, and fixed-point
-iteration. Those topics are prerequisites for reproducing the mathematics; the lessons still expose
-the inputs, outputs, invariants, and tests needed to implement each stage with a trusted library.
+To build it you need basic Java, vectors and coordinate frames, consistent units, interpolation, and
+timestamped logging. The full derivations also use differential equations, numerical integration (RK4),
+curve fitting, optimization, and repeated-estimate methods. You need those to reproduce the math, but
+each lesson lists the inputs, outputs, and tests you'd need to build that stage with a library instead.
 
 Before motion compensation, complete [measured loop timing](../software-architecture/discretization.mdx),
 [feedforward](../control-theory/feedforward.mdx), and the
@@ -122,10 +120,10 @@ The reported season results belong to robot revision **75db349d**, frozen by pap
 has different tables, radial and lateral motion weights, and an RST controller enabled by default. The
 lessons explain those changes without assigning the season's measured outcomes to untested newer settings.
 
-:::note[Keep three results separate]
-**Numerical verification** asks whether code solves the stated equations. **Target entry** asks whether
-the physical ball reaches the opening. **Retained score** asks whether it stays scored after contact. A
-bounce-out is an entry, and the flight model does not simulate the contact that caused it.
+:::note[Three different questions]
+Does the code solve the equations correctly? Does the real ball go through the opening? Does it stay
+in? A ball that bounces out still went in, and the flight model doesn't simulate what happens after it
+hits the goal.
 :::
 
 ## Research paper and source
@@ -139,10 +137,7 @@ Mobile Robot*, technical manuscript, 2026.
   <a href={useBaseUrl('/papers/drag-aware-trajectory-planning.pdf')} download="drag-aware-trajectory-planning.pdf">Download the PDF</a>
 </div>
 
-The implementation trail includes the
-[trajectory simulator](https://github.com/stoicescueric/Trajectory-Simulation) and
-[season firmware at commit 75db349d](https://github.com/stoicescueric/YaoMing/tree/75db349d). The
-manuscript is author reviewed rather than peer reviewed. It is the source for reported experiments; the
-pinned firmware supplies the deployed lookup knots. The supplementary experiment archive described by
-the manuscript is not published with this site, so readers can inspect the public code and stated
-methods but cannot independently replay every physical trial from this repository alone.
+The code is public: the [trajectory simulator](https://github.com/stoicescueric/Trajectory-Simulation)
+and the [season robot code at commit 75db349d](https://github.com/stoicescueric/YaoMing/tree/75db349d).
+The paper hasn't been peer reviewed. The raw experiment data it describes isn't published here, so you
+can read the code and methods but can't re-run every physical test from this site.

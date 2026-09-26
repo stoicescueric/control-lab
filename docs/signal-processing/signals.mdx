@@ -13,58 +13,58 @@ import {NoiseAnatomyExplorer} from '@site/src/components/simulations/signal-proc
 <Difficulty level="Easy" />
 
 <Abstract>
-Every sensor reports the true value plus noise, slow drift, and the occasional wild spike, and the
-shape of that corruption decides which filter you should reach for. This lesson characterises exactly
-how sensor data lies before we build anything to clean it up.
+Every sensor reading is the true value plus some error: random jitter, a fixed offset, slow drift, or
+the occasional wild spike. Which kind you have decides which fix you need, so this lesson looks at each
+one before building any filters.
 </Abstract>
 
-A filter is only worth building if the raw data is untrustworthy. It is. This page characterises
-exactly *how* sensor data is corrupted, because the structure of the noise determines which filter
-you reach for next.
+Before building a filter it helps to know what's wrong with the data, because different problems need
+different fixes.
 
 <Problem>
 
 ## Every sensor reports the truth plus garbage
 
-A **signal** is a value that changes over time — an arm angle, a distance to the wall, a wheel
-velocity. You never observe it directly; you observe a **sensor reading**, which is the true value
-plus error. Feed that raw reading into a controller and the error propagates: a PID derivative term
-amplifies jitter into motor chatter, a distance sensor's momentary spike trips an autonomous state
-transition, a slow bias steers odometry off the field.
+A **signal** is a value that changes over time: an arm angle, the distance to a wall, a wheel's speed.
+You never see it directly. You see a **sensor reading**, which is the true value plus some error. Feed
+the raw reading to a controller and the error comes along with it. A PID derivative term turns jitter
+into motor chatter, a single spike from a distance sensor triggers an autonomous transition too early,
+and a small bias slowly steers odometry off course.
 
 <Formula>
   <Amber>measurement</Amber> = <Teal>true value</Teal> + <Rose>noise</Rose>
 </Formula>
 
-Four distinct corruptions, each demanding a different defence:
+Say a distance sensor is pointed at a wall exactly 50.0 cm away. Here are four ways its readings can go
+wrong:
 
-- **Jitter**: fast, small, random wobble around the truth. The common case.
-- **Spikes (outliers)**: occasional wild readings: a loose connector, a reflection, a glitch.
-- **Bias**: a fixed offset, present in full from the first sample and constant thereafter. Averaging
-  never sees it; only calibration removes it.
-- **Drift**: an error that *grows* over time as small relative errors accumulate. No amount of averaging
-  removes it either — you need a second, absolute reference, and that reference had better not be biased.
+- **Jitter**: 49.8, 50.1, 50.0, 50.2, 49.9. Small, fast, random wobble around the truth. This is the
+  common case, and averaging helps.
+- **Spikes**: 50.0, 50.1, 212.0, 49.9. One wild reading from a loose connector, a reflection, or a
+  glitch.
+- **Bias**: 51.5, 51.4, 51.6, 51.5. Steady, but off by the same amount every time. Averaging can't see
+  it, only calibration can.
+- **Drift**: 50.0, then 50.4 a minute later, then 51.1. The error grows as small mistakes add up.
+  Averaging doesn't help here either. You need a second sensor that doesn't drift.
 
 :::tip[Which sensors actually need this?]
-Quadrature-encoder position is often cleaner than an analog reading, but it is quantized and can still
-miss edges or count false edges because of wiring, electrical noise, or excessive rate. Filtering a
-healthy encoder position often adds unnecessary lag; encoder *velocity* is different because
-differencing positions amplifies tick quantization and timing jitter. The signals
-genuinely worth filtering are the ones with real, roughly bell-shaped noise: **analog sensors** —
-distance sensors, analog absolute encoders, current sensors — and **vision**, where a tag's reported
-pose jitters from frame to frame. Those are the running examples in this module.
+A healthy encoder's position count is exact. It can miss or double-count edges if the wiring is bad,
+but it isn't noisy the way an analog sensor is, and filtering it just adds lag. Encoder *velocity* is
+different: computing it from the difference between two counts turns one tick of rounding into a
+visible jump. The signals really worth filtering have roughly bell-shaped noise: **analog sensors**
+like distance sensors, analog absolute encoders, and current sensors, and **vision**, where a tag's
+reported position jitters from frame to frame. Those are the examples this module uses.
 :::
 
 <NoiseAnatomyExplorer />
 
-This Desmos-style graph gives each corruption its own slider, so you can study its *shape* in
-isolation. **Jitter** scatters the amber readings symmetrically around the center — it carries no
-information, and averaging cancels it. **Drift** scatters nothing: it moves the *center itself* (the
-dashed line walks away from the truth), so no amount of averaging will ever remove it — you need a
-second, absolute reference. A **spike** is neither: one absurd reading that any average will happily
-swallow and be wrong about for a while. Three shapes, three different defences — which is why the
-lessons ahead are a toolbox, not one magic filter: smoothing attacks jitter, sensor fusion attacks
-drift, and outlier rejection handles spikes.
+The graph gives jitter, drift, and spikes each a slider so you can see their shapes separately.
+**Jitter** scatters the amber readings evenly on both sides of the truth, so averaging cancels it.
+**Drift** doesn't scatter anything. It moves the center itself, so the dashed line walks away from the
+truth and no amount of averaging brings it back. A **spike** is one absurd reading that an average
+swallows and stays wrong about for a while. That's why the lessons ahead are a set of tools rather
+than one filter: smoothing handles jitter, combining two sensors handles drift, and rejecting
+impossible readings handles spikes. (Bias you fix by calibrating.)
 
 </Problem>
 
@@ -72,21 +72,20 @@ drift, and outlier rejection handles spikes.
 
 ## Sampling, and what noise looks like
 
-A Control Hub does not read sensors continuously; it **samples** them tens to hundreds of times per
+A Control Hub doesn't read sensors continuously. It **samples** them, tens to hundreds of times a
 second (see [From Math to a Loop](../software-architecture/discretization.mdx) for why the rate
-matters). Every filter in this track operates on that stream of samples and answers one question:
-*given the readings so far, what is the best estimate of the true value?*
+matters). Every filter in this module works on that stream of samples and tries to answer one
+question: given the readings so far, what's the best guess at the true value?
 
-The demo synthesises a known true signal (green) and a sensor that reports it with the three
-corruptions above (amber dots). Increase the noise until the truth disappears into the scatter —
-then consider controlling a mechanism from those dots alone.
+The demo shows a known true signal in green and a noisy sensor reading it in amber. Turn the noise up
+until you can't see the green line in the dots, then imagine trying to control a mechanism from the
+dots alone.
 
 <SignalNoise />
 
-<Callout type="idea" title="Your eye is already filtering.">
-You can still perceive the green wave through the scatter because your visual system averages the
-dots. The next lessons give the Control Hub the same capability, in real time and in one or two
-lines of code.
+<Callout type="idea" title="Your eye is already filtering">
+You can still make out the green wave through the scatter because your eyes average the dots together.
+The next lessons give the Control Hub a way to do the same, in a line or two of code.
 </Callout>
 
 </Theory>
@@ -95,8 +94,14 @@ lines of code.
 
 ## Measure your sensor before you filter it
 
-Good filtering starts with knowing how noisy a sensor actually is. Sample it while the mechanism is
-held still and compute the standard deviation — that number sizes every filter that follows.
+Start by measuring how noisy the sensor actually is. Hold the mechanism still, take a batch of
+readings, and work out how far they typically sit from their average. That number, the standard
+deviation, tells you how much filtering you need.
+
+Try it by hand on the jitter readings from above: `49.8, 50.1, 50.0, 50.2, 49.9 cm`. The average is
+50.0. The distances from it are −0.2, 0.1, 0, 0.2, and −0.1. Square them, average the squares
+($0.10 / 5 = 0.02$), and take the square root: about **0.14 cm**. The code below does the same thing
+one reading at a time, without storing the readings.
 
 <JavaCode league="FTC" label="Characterise a sensor's noise without blocking the loop">{`private static final int N = 200;     // samples to collect
 private int count;
@@ -122,18 +127,16 @@ void update(double x) {
 
 <Exercise title="Why not sum and sum-of-squares?">
 
-That is Welford's algorithm. The obvious alternative — accumulate $\sum x$ and $\sum x^2$, then use
-$\operatorname{Var} = E[x^2] - E[x]^2$ — can suffer catastrophic cancellation when the mean is much
-larger than the spread, especially in lower-precision arithmetic. Compare readings around 3000 with a
-spread of 0.5 in `float` and `double`.
+This is Welford's algorithm. The obvious shortcut is to keep a running $\sum x$ and $\sum x^2$ and
+compute the variance as (average of the squares) minus (square of the average). Try that with readings
+around 3000 that vary by about 0.5, in both `float` and `double`. What goes wrong?
 
 <Solution>
 
-$E[x^2] \approx 9{,}000{,}000$ and $E[x]^2 \approx 9{,}000{,}000$, while the variance is about 0.25.
-Those are seven-digit quantities. Java `double` has roughly 15–16 decimal digits, so this particular
-example still resolves the variance well. A `float` has only about seven decimal digits, so subtracting
-the two large terms can erase it. Even `double` becomes vulnerable when the mean is much larger relative
-to the spread. Welford is the stable default because it never forms that large, nearly equal subtraction.
+Both terms come out around 9,000,000, and the answer you want, about 0.25, is their tiny difference. A
+`double` keeps about 15 to 16 digits, so it still gets this one right. A `float` keeps about 7, so the
+difference can vanish entirely. Even a `double` runs into trouble when the average is much bigger than
+the spread. Welford never subtracts two big, nearly equal numbers, so it doesn't have the problem.
 
 </Solution>
 
@@ -141,19 +144,16 @@ to the spread. Welford is the stable default because it never forms that large, 
 
 <Exercise title="The two deltas">
 
-`delta` uses the mean from *before* the update and `delta2` the mean from *after*. That asymmetry is
-not a typo — it is what makes the recurrence exact. Verify it on three samples by hand against the
-textbook variance formula.
+`delta` uses the average from *before* the update and `delta2` the average from *after*. That's
+deliberate. Check it by running three readings through by hand and comparing with the ordinary variance
+formula.
 
 </Exercise>
 
-For five stationary readings `49.8, 50.1, 50.0, 50.2, 49.9 cm`, the mean is `50.0 cm` and the population
-standard deviation is about `0.14 cm`. That small hand check tells you what the running code's two
-numbers mean before you collect 200 samples.
-
-A large `std` means aggressive smoothing (or a Kalman filter) is justified; a small one means a light
-touch will do. Whatever it comes out to is also what a Kalman filter's $R$ has to be sized against.
-Measure it once per sensor and per mounting; do not copy a number out of a lesson. With the noise quantified, the simplest effective filter is next: the low-pass.
+A large standard deviation means heavier smoothing, or a Kalman filter, is worth it. A small one means
+a light touch will do. It's also the number a Kalman filter's $R$ is built from. Measure it for each
+sensor as it's actually mounted, rather than copying a number from somewhere. Next up is the simplest
+filter that works well: the low-pass.
 
 </Deploy>
 

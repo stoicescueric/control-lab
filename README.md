@@ -12,7 +12,6 @@ behavior to a visual model, the math, and deployable Java.
 - Motor dynamics, feedforward, feedback, and motion profiles
 - Signal processing, sensor fusion, and Kalman filtering
 - Path following and mecanum kinematics
-- State-space control, observers, and LQR
 - A drag-aware launcher case study and advanced references
 
 The guide assumes basic Java and FTC robot-programming experience. It does not

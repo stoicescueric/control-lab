@@ -67,12 +67,6 @@ const CORE_MODULES: Module[] = [
     description: 'Mecanum kinematics, point control, pure pursuit, splines, and vector fields.',
     to: '/docs/path-following',
   },
-  {
-    number: '05',
-    title: 'State-Space Control',
-    description: 'System models, state feedback, observers, and linear-quadratic regulation.',
-    to: '/docs/state-space-control',
-  },
 ];
 
 const ELECTIVE: Module = {
@@ -121,7 +115,6 @@ const STRUCTURED_DATA = {
         'FTC robotics',
         'signal processing',
         'path following',
-        'state-space control',
       ],
       license: 'https://opensource.org/license/mit',
     },
@@ -158,8 +151,8 @@ function ReaderEntry() {
     return subscribe(load);
   }, []);
 
-  const destination = state.last?.path ?? '/docs/preface/why-math-matters';
-  const title = state.last?.title ?? 'Why Math Matters';
+  const destination = state.last?.path ?? '/docs/preface/control-and-feedback';
+  const title = state.last?.title ?? 'Control & Feedback';
 
   return (
     <section aria-label="Your next lesson" className="border-y border-line bg-surface">
@@ -215,11 +208,11 @@ function Curriculum() {
             Learn in the order the robot depends on it.
           </h2>
           <p className="m-0 mt-5 max-w-lg leading-relaxed text-ink-soft">
-            Begin with the mathematical vocabulary, then follow the dependency chain from software
-            structure and motors to estimation, path following, and state-space control.
+            Start with feedback itself, then follow the dependency chain from software structure and
+            motors to estimation and path following.
           </p>
           <p className="m-0 mt-5 font-mono text-xs leading-relaxed text-ink-faint">
-            5 core modules · 1 elective · 1 math preface
+            4 core modules · 1 elective · 1 preface
           </p>
         </div>
 
@@ -228,10 +221,10 @@ function Curriculum() {
             kind="Preface"
             module={{
               number: '00',
-              title: 'Why Math Matters',
+              title: 'Control & Feedback',
               description:
-                'Calculus, linear algebra, differential equations, and state-space models through concrete robotics examples.',
-              to: '/docs/preface/why-math-matters',
+                'Open-loop versus closed-loop control, error, disturbances, and the loop skeleton every later controller builds on.',
+              to: '/docs/preface/control-and-feedback',
             }}
           />
           {CORE_MODULES.map((module) => (
@@ -389,7 +382,7 @@ function Closing() {
           </p>
         </div>
         <Link
-          to="/docs/preface/why-math-matters"
+          to="/docs/preface/control-and-feedback"
           className="cl-home-action inline-flex min-h-11 items-center justify-center rounded-[10px] bg-accent-fill px-5 py-2.5 font-semibold text-on-accent no-underline hover:bg-brand-dk">
           Open the preface
         </Link>
